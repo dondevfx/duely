@@ -78,48 +78,48 @@ function Shell() {
 
   const tosPending = session && !tosAccepted;
   const { mfaPending } = useAuth();
-  // Only block UI for mfaPending when there's an active session (mid-login MFA step)
-  const blocked = tosPending || (mfaPending && !!session);
+  // Block nav/sidebar during ToS or MFA — main content stays interactive so forms work
+  const navBlocked = tosPending || (mfaPending && !!session);
 
   return (
     <div className="min-h-screen bg-bg">
-      {/* Block all UI clicks when ToS or MFA is pending */}
-      <div className={blocked ? 'pointer-events-none select-none' : ''}>
+      {/* Navbar + sidebars blocked when ToS/MFA pending */}
+      <div className={navBlocked ? 'pointer-events-none select-none' : ''}>
         <Navbar />
         <div className="flex pt-14">
           <LeftSidebar />
-          <main className={`flex-1 lg:ml-56 min-h-[calc(100vh-56px)] overflow-y-auto transition-[margin] duration-300 ${chatOpen ? 'lg:mr-80' : 'lg:mr-0'}`}>
-            <Routes>
-              <Route path="/"                  element={<Home />} />
-              <Route path="/leaderboard"        element={<Leaderboard />} />
-              <Route path="/login"              element={<Login />} />
-              <Route path="/signup"             element={<Signup />} />
-              <Route path="/profile"            element={<Profile />} />
-              <Route path="/wallet"             element={<Wallet />} />
-              <Route path="/tip"                element={<Tip />} />
-              <Route path="/game/block-blast"   element={<BlockBlastGame />} />
-              <Route path="/game/quick-match"   element={<QuickMatch />} />
-              <Route path="/game/scrabble"      element={<ScrabbleGame />} />
-              <Route path="/game/coin-flip"     element={<CoinFlipGame />} />
-              <Route path="/game/blackjack"     element={<BlackjackGame />} />
-              <Route path="/game/word-vs"       element={<ScrabbleGame />} />
-              <Route path="/spectate/:gameId"   element={<SpectateView />} />
-              {/* Legacy random redirect */}
-              <Route path="/game/random"        element={<Navigate to="/game/quick-match" replace />} />
-              <Route path="/transactions"       element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
-              <Route path="/rewards"            element={<Rewards />} />
-              <Route path="/tos"                element={<ToS />} />
-              <Route path="/admin"              element={<ProtectedRoute><Admin /></ProtectedRoute>} />
-              <Route path="*"                   element={<Navigate to="/" replace />} />
-            </Routes>
-          </main>
           <ChatSidebar open={chatOpen} onToggle={handleChatToggle} />
         </div>
-        <GeoWarningModal />
-        <PWAInstallPrompt />
-        <ForfeitToast />
-        <ReconnectOverlay />
       </div>
+      {/* Main content always interactive */}
+      <main className={`absolute top-14 bottom-0 right-0 overflow-y-auto transition-[left,right] duration-300 lg:left-56 ${chatOpen ? 'lg:right-80' : 'right-0'}`}>
+        <Routes>
+          <Route path="/"                  element={<Home />} />
+          <Route path="/leaderboard"        element={<Leaderboard />} />
+          <Route path="/login"              element={<Login />} />
+          <Route path="/signup"             element={<Signup />} />
+          <Route path="/profile"            element={<Profile />} />
+          <Route path="/wallet"             element={<Wallet />} />
+          <Route path="/tip"                element={<Tip />} />
+          <Route path="/game/block-blast"   element={<BlockBlastGame />} />
+          <Route path="/game/quick-match"   element={<QuickMatch />} />
+          <Route path="/game/scrabble"      element={<ScrabbleGame />} />
+          <Route path="/game/coin-flip"     element={<CoinFlipGame />} />
+          <Route path="/game/blackjack"     element={<BlackjackGame />} />
+          <Route path="/game/word-vs"       element={<ScrabbleGame />} />
+          <Route path="/spectate/:gameId"   element={<SpectateView />} />
+          <Route path="/game/random"        element={<Navigate to="/game/quick-match" replace />} />
+          <Route path="/transactions"       element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
+          <Route path="/rewards"            element={<Rewards />} />
+          <Route path="/tos"                element={<ToS />} />
+          <Route path="/admin"              element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+          <Route path="*"                   element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
+      <GeoWarningModal />
+      <PWAInstallPrompt />
+      <ForfeitToast />
+      <ReconnectOverlay />
       {tosPending && <AgeToSModal onAccept={() => setTosAccepted(true)} />}
       {showSaveLogin && <SaveLoginPrompt onDone={() => setShowSaveLogin(false)} />}
     </div>
