@@ -56,18 +56,38 @@ export default function Login() {
     setMfaLoading(true);
     setError(null);
     try {
-      const profile = await completeMfaLogin(mfaState.factorId, mfaCode);
-      if (!profile) {
+      // Race the MFA call against a 15s timeout so it never hangs forever
+      const result = await Promise.race([
+        completeMfaLogin(mfaState.factorId, mfaCode),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000)),
+      ]);
+      if (!result) {
         setMfaState(null);
         setNeedsUsername(true);
       } else {
         navigate('/');
       }
-    } catch {
-      setError('Invalid code. Check your authenticator app and try again.');
+    } catch (err) {
+      const msg = err?.message?.toLowerCase() || '';
+      if (msg.includes('timeout')) {
+        setError('Verification timed out. Please try again.');
+      } else if (msg.includes('expired') || msg.includes('invalid')) {
+        setError('Code expired or invalid — open your authenticator app for a fresh code.');
+      } else {
+        setError('Invalid code. Check your authenticator app and try again.');
+      }
+      setMfaCode('');
     } finally {
       setMfaLoading(false);
     }
+  }
+
+  function handleBackToLogin() {
+    // Fire signOut without awaiting so it never blocks the UI
+    signOut().catch(() => {});
+    setMfaState(null);
+    setMfaCode('');
+    setError(null);
   }
 
   async function handleCreateProfile(e) {
@@ -165,7 +185,7 @@ export default function Login() {
               <GlowButton type="submit" disabled={mfaLoading || mfaCode.length !== 6} variant="primary" size="lg" className="w-full">
                 {mfaLoading ? 'Verifying...' : 'Verify →'}
               </GlowButton>
-              <button type="button" onClick={async () => { await signOut(); setMfaState(null); setError(null); }} className="text-xs text-muted hover:text-white text-center">
+              <button type="button" onClick={handleBackToLogin} className="text-xs text-muted hover:text-white text-center" style={{ pointerEvents: 'auto' }}>
                 ← Back to login
               </button>
             </form>
