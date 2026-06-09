@@ -61,7 +61,8 @@ export function AuthProvider({ children }) {
     // Then do the initial session restore
     async function init() {
       try {
-        // Try to restore a previously saved session
+        // restoreSavedSession checks sessionStorage (refresh) first,
+        // then localStorage (saved login). Returns session or null.
         const restored = await restoreSavedSession();
         if (restored) {
           setSession(restored);
