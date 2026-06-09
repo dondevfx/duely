@@ -39,8 +39,15 @@ export async function getStartupSession() {
       clearSavedSession();
       return { session: null, source: null };
     }
-    // Clear from sessionStorage immediately — if MFA is required, a refresh
-    // must go through the saved-login flow again, not bypass MFA via sessionStorage
+    // Refresh token was rotated — update localStorage with the new tokens immediately
+    // so the next visit uses fresh tokens and doesn't get a 401
+    if (data.session) {
+      localStorage.setItem(SAVE_SESSION_KEY, JSON.stringify({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      }));
+    }
+    // Clear from sessionStorage — refresh must go through saved-login + MFA again
     sessionStorage.removeItem('duely_session');
     return { session: data.session, source: 'saved' };
   } catch {

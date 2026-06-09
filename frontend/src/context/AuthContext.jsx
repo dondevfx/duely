@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { supabase, getStartupSession, clearSavedSession } from '../utils/supabase';
+import { supabase, getStartupSession, saveSession, clearSavedSession } from '../utils/supabase';
 import { api } from '../utils/api';
 
 const AuthContext = createContext(null);
@@ -176,6 +176,10 @@ export function AuthProvider({ children }) {
     setMfaPending(false);
     setMfaFactorId(null);
     ensureProfile().catch(() => {});
+    // If this was a saved-login MFA flow, refresh the saved tokens so next visit works
+    if (creds.fromSavedSession && freshSession) {
+      await saveSession();
+    }
     if (!localStorage.getItem('duely_save_login')) setShowSaveLogin(true);
     return true;
   }
