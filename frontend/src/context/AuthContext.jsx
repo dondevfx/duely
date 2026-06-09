@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { supabase, restoreSavedSession, clearSavedSession } from '../utils/supabase';
 import { api } from '../utils/api';
 
@@ -7,12 +7,13 @@ const AuthContext = createContext(null);
 const PENDING_USERNAME_KEY = 'rd_pending_username';
 
 export function AuthProvider({ children }) {
-  const [session, setSession]       = useState(null);
-  const [profile, setProfile]       = useState(null);
-  const [loading, setLoading]       = useState(true);
-  const [mfaPending, setMfaPending] = useState(false);
+  const [session, setSession]         = useState(null);
+  const [profile, setProfile]         = useState(null);
+  const [loading, setLoading]         = useState(true);
+  const [mfaPending, setMfaPending]   = useState(false);
   const [mfaFactorId, setMfaFactorId] = useState(null);
   const [showSaveLogin, setShowSaveLogin] = useState(false);
+  const initializedRef = useRef(false);
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -42,34 +43,45 @@ export function AuthProvider({ children }) {
   }, [fetchProfile]);
 
   useEffect(() => {
-    async function init() {
-      // Try to restore a previously saved session
-      const restored = await restoreSavedSession();
-      if (restored) {
-        setSession(restored);
-        const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-        if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
-          const { data: factors } = await supabase.auth.mfa.listFactors();
-          const factor = factors?.totp?.[0];
-          setMfaPending(true);
-          setMfaFactorId(factor?.id ?? null);
-        } else {
+    // Subscribe to auth changes first
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sess) => {
+      setSession(sess);
+      // Only handle profile updates after initial load is done
+      if (initializedRef.current) {
+        if (sess) {
           await ensureProfile();
+        } else {
+          setProfile(null);
         }
       }
-      setLoading(false);
+    });
+
+    // Then do the initial session restore
+    async function init() {
+      try {
+        // Try to restore a previously saved session
+        const restored = await restoreSavedSession();
+        if (restored) {
+          setSession(restored);
+          const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+          if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
+            const { data: factors } = await supabase.auth.mfa.listFactors();
+            const factor = factors?.totp?.[0];
+            setMfaPending(true);
+            setMfaFactorId(factor?.id ?? null);
+          } else {
+            await ensureProfile();
+          }
+        }
+      } catch (e) {
+        console.error('[AuthContext] init error:', e);
+      } finally {
+        initializedRef.current = true;
+        setLoading(false);
+      }
     }
 
     init();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (session) {
-        ensureProfile();
-      } else {
-        setProfile(null);
-      }
-    });
 
     return () => subscription.unsubscribe();
   }, [ensureProfile]);
@@ -107,7 +119,7 @@ export function AuthProvider({ children }) {
     }
 
     const profile = await ensureProfile();
-    setShowSaveLogin(true); // show save login prompt after successful login
+    setShowSaveLogin(true);
     return profile;
   }
 
