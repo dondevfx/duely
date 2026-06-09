@@ -518,17 +518,18 @@ export default function Rewards() {
   const [statusMap, setStatusMap] = useState({});
 
   const fetchStatus = useCallback(async () => {
+    if (!session) return;
     try {
       const d = await api.get('/rewards/spin-status');
       setStatusMap(d.tiers || {});
     } catch {
       // fail silently
     }
-  }, []);
+  }, [session]);
 
   useEffect(() => { fetchStatus(); }, [fetchStatus]);
   // Re-fetch when ELO changes (e.g. after winning a game or admin adjustment)
-  useEffect(() => { fetchStatus(); }, [elo]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (session) fetchStatus(); }, [elo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="min-h-[calc(100vh-56px)] px-4 py-8">

@@ -165,7 +165,8 @@ export function AuthProvider({ children }) {
     const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: fid, code });
     if (error) throw error;
 
-    // MFA passed — get fresh session and expose to React
+    // MFA passed — clear the MFA-check flag and expose session to React
+    sessionStorage.removeItem('duely_needs_mfa_check');
     const { data: { session: freshSession } } = await supabase.auth.getSession();
     _pendingMfaCreds.current = null;
     setSession(freshSession);

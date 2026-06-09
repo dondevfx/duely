@@ -3,8 +3,6 @@ import { supabase } from './supabase';
 const BASE = import.meta.env.VITE_API_URL || '/api';
 
 async function getAuthHeaders() {
-  // Fast-path: skip the async getSession call when no token is stored
-  if (!localStorage.getItem('duely_auth')) return {};
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return {};
   return { Authorization: `Bearer ${session.access_token}` };

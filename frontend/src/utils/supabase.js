@@ -36,8 +36,12 @@ export async function getStartupSession() {
     // sessionStorage — page refresh in same tab
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
-      console.log('[save-login] restored from sessionStorage (refresh)');
-      return { session, source: 'refresh' };
+      // If this session was restored from localStorage this tab, still treat as 'saved'
+      // so MFA is re-checked on refresh too
+      const needsMfaCheck = sessionStorage.getItem('duely_needs_mfa_check');
+      const source = needsMfaCheck ? 'saved' : 'refresh';
+      console.log('[save-login] restored from sessionStorage, source:', source);
+      return { session, source };
     }
 
     // localStorage — returning visitor with saved login
@@ -70,8 +74,9 @@ export async function getStartupSession() {
       persistTokens(data.session.access_token, data.session.refresh_token);
     }
 
-    // Clear sessionStorage so a refresh goes through saved-login flow (re-checks MFA)
-    sessionStorage.removeItem('duely_session');
+    // Mark this session as a saved-login restore so a page refresh re-checks MFA
+    sessionStorage.setItem('duely_needs_mfa_check', '1');
+
     console.log('[save-login] restored from localStorage (saved)');
     return { session: data.session, source: 'saved' };
   } catch (e) {
