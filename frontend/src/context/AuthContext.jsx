@@ -132,6 +132,8 @@ export function AuthProvider({ children }) {
   async function signOut() {
     await supabase.auth.signOut();
     setProfile(null);
+    setMfaPending(false);
+    setMfaFactorId(null);
   }
 
   const refreshProfile = useCallback(() => fetchProfile(), [fetchProfile]);

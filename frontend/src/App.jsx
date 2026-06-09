@@ -76,11 +76,13 @@ function Shell() {
   }
 
   const tosPending = session && !tosAccepted;
+  const { mfaPending } = useAuth();
+  const blocked = tosPending || mfaPending;
 
   return (
     <div className="min-h-screen bg-bg">
-      {/* When ToS modal is pending, block all clicks on the UI behind it */}
-      <div className={tosPending ? 'pointer-events-none select-none' : ''}>
+      {/* Block all UI clicks when ToS or MFA is pending */}
+      <div className={blocked ? 'pointer-events-none select-none' : ''}>
         <Navbar />
         <div className="flex pt-14">
           <LeftSidebar />

@@ -7,7 +7,7 @@ import { usePageReady } from '../hooks/usePageReady';
 
 export default function Login() {
   const ready = usePageReady();
-  const { signIn, completeMfaLogin, refreshProfile, mfaPending, mfaFactorId } = useAuth();
+  const { signIn, signOut, completeMfaLogin, refreshProfile, mfaPending, mfaFactorId } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -165,7 +165,7 @@ export default function Login() {
               <GlowButton type="submit" disabled={mfaLoading || mfaCode.length !== 6} variant="primary" size="lg" className="w-full">
                 {mfaLoading ? 'Verifying...' : 'Verify →'}
               </GlowButton>
-              <button type="button" onClick={() => { setMfaState(null); setError(null); }} className="text-xs text-muted hover:text-white text-center">
+              <button type="button" onClick={async () => { await signOut(); setMfaState(null); setError(null); }} className="text-xs text-muted hover:text-white text-center">
                 ← Back to login
               </button>
             </form>
