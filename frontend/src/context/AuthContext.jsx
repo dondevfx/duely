@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { supabase, getStartupSession, saveSession, clearSavedSession, SAVE_LOGIN_KEY, getSavedTokens } from '../utils/supabase';
+import { supabase, getStartupSession, clearSavedSession } from '../utils/supabase';
 import { api } from '../utils/api';
 
 const AuthContext = createContext(null);
@@ -62,25 +62,26 @@ export function AuthProvider({ children }) {
       try {
         const { session: restored, source } = await getStartupSession();
         if (restored) {
-          setSession(restored);
           if (source === 'saved') {
             // Saved login: check if user has 2FA enabled
+            // Session is active in Supabase memory — do NOT set React session yet
             const { data: factors } = await supabase.auth.mfa.listFactors();
             const factor = factors?.totp?.find(f => f.status === 'verified');
             if (factor) {
-              // Has 2FA — store factorId, sign out so session is null while waiting for code.
-              // This also clears sessionStorage so refresh goes through saved-login flow again.
-              const fid = factor.id;
-              await supabase.auth.signOut({ scope: 'local' });
-              _pendingMfaCreds.current = { fromSavedSession: true, factorId: fid };
-              setSession(null);
+              // Has 2FA — keep session in Supabase memory for challengeAndVerify,
+              // but don't expose it to React state so the user isn't "logged in" yet
+              _pendingMfaCreds.current = { fromSavedSession: true, factorId: factor.id };
               setMfaPending(true);
-              setMfaFactorId(fid);
+              setMfaFactorId(factor.id);
+              // session stays null in React state — triggers redirect to /login
             } else {
+              // No 2FA — fully log in
+              setSession(restored);
               await ensureProfile();
             }
           } else {
-            // Page refresh (sessionStorage): session already verified this visit, no re-check
+            // Page refresh (sessionStorage): already authenticated this visit
+            setSession(restored);
             const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
             if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
               const { data: factors } = await supabase.auth.mfa.listFactors();
@@ -152,16 +153,7 @@ export function AuthProvider({ children }) {
     const creds = _pendingMfaCreds.current;
     if (!creds) throw new Error('Session expired — please sign in again.');
 
-    if (creds.fromSavedSession) {
-      // Saved-login path: restore session from saved tokens to get an active session
-      const tokens = getSavedTokens();
-      if (!tokens) throw new Error('Saved session expired — please sign in again.');
-      const { error: restoreErr } = await supabase.auth.setSession({
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
-      });
-      if (restoreErr) throw new Error('Saved session expired — please sign in again.');
-    } else {
+    if (!creds.fromSavedSession) {
       // Fresh login path: re-sign-in with stored email/password to get AAL1 session
       const { error: signInErr } = await supabase.auth.signInWithPassword({
         email: creds.email,
@@ -169,22 +161,21 @@ export function AuthProvider({ children }) {
       });
       if (signInErr) throw signInErr;
     }
+    // Saved-session path: session already active in Supabase memory — call verify directly
 
-    let fid = creds.factorId || factorId;
-    if (!fid) {
-      const { data: factors } = await supabase.auth.mfa.listFactors();
-      fid = factors?.totp?.find(f => f.status === 'verified')?.id ?? factors?.totp?.[0]?.id ?? null;
-    }
+    const fid = creds.factorId || factorId;
     if (!fid) throw new Error('No MFA factor found — try signing in again.');
 
     const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: fid, code });
     if (error) throw error;
 
+    // MFA passed — expose the session to React state
+    const { data: { session: freshSession } } = await supabase.auth.getSession();
     _pendingMfaCreds.current = null;
+    setSession(freshSession);
     setMfaPending(false);
     setMfaFactorId(null);
     ensureProfile().catch(() => {});
-    // Don't show save-login prompt again if they already have it saved
     if (!localStorage.getItem('duely_save_login')) setShowSaveLogin(true);
     return true;
   }
