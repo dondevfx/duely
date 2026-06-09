@@ -75,43 +75,48 @@ function Shell() {
     try { localStorage.setItem('worldChatOpen', String(next)); } catch {}
   }
 
+  const tosPending = session && !tosAccepted;
+
   return (
     <div className="min-h-screen bg-bg">
-      <Navbar />
-      <div className="flex pt-14">
-        <LeftSidebar />
-        <main className={`flex-1 lg:ml-56 min-h-[calc(100vh-56px)] overflow-y-auto transition-[margin] duration-300 ${chatOpen ? 'lg:mr-80' : 'lg:mr-0'}`}>
-          <Routes>
-            <Route path="/"                  element={<Home />} />
-            <Route path="/leaderboard"        element={<Leaderboard />} />
-            <Route path="/login"              element={<Login />} />
-            <Route path="/signup"             element={<Signup />} />
-            <Route path="/profile"            element={<Profile />} />
-            <Route path="/wallet"             element={<Wallet />} />
-            <Route path="/tip"                element={<Tip />} />
-            <Route path="/game/block-blast"   element={<BlockBlastGame />} />
-            <Route path="/game/quick-match"   element={<QuickMatch />} />
-            <Route path="/game/scrabble"      element={<ScrabbleGame />} />
-            <Route path="/game/coin-flip"     element={<CoinFlipGame />} />
-            <Route path="/game/blackjack"     element={<BlackjackGame />} />
-            <Route path="/game/word-vs"       element={<ScrabbleGame />} />
-            <Route path="/spectate/:gameId"   element={<SpectateView />} />
-            {/* Legacy random redirect */}
-            <Route path="/game/random"        element={<Navigate to="/game/quick-match" replace />} />
-            <Route path="/transactions"       element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
-            <Route path="/rewards"            element={<Rewards />} />
-            <Route path="/tos"                element={<ToS />} />
-            <Route path="/admin"              element={<ProtectedRoute><Admin /></ProtectedRoute>} />
-            <Route path="*"                   element={<Navigate to="/" replace />} />
-          </Routes>
-        </main>
-        <ChatSidebar open={chatOpen} onToggle={handleChatToggle} />
+      {/* When ToS modal is pending, block all clicks on the UI behind it */}
+      <div className={tosPending ? 'pointer-events-none select-none' : ''}>
+        <Navbar />
+        <div className="flex pt-14">
+          <LeftSidebar />
+          <main className={`flex-1 lg:ml-56 min-h-[calc(100vh-56px)] overflow-y-auto transition-[margin] duration-300 ${chatOpen ? 'lg:mr-80' : 'lg:mr-0'}`}>
+            <Routes>
+              <Route path="/"                  element={<Home />} />
+              <Route path="/leaderboard"        element={<Leaderboard />} />
+              <Route path="/login"              element={<Login />} />
+              <Route path="/signup"             element={<Signup />} />
+              <Route path="/profile"            element={<Profile />} />
+              <Route path="/wallet"             element={<Wallet />} />
+              <Route path="/tip"                element={<Tip />} />
+              <Route path="/game/block-blast"   element={<BlockBlastGame />} />
+              <Route path="/game/quick-match"   element={<QuickMatch />} />
+              <Route path="/game/scrabble"      element={<ScrabbleGame />} />
+              <Route path="/game/coin-flip"     element={<CoinFlipGame />} />
+              <Route path="/game/blackjack"     element={<BlackjackGame />} />
+              <Route path="/game/word-vs"       element={<ScrabbleGame />} />
+              <Route path="/spectate/:gameId"   element={<SpectateView />} />
+              {/* Legacy random redirect */}
+              <Route path="/game/random"        element={<Navigate to="/game/quick-match" replace />} />
+              <Route path="/transactions"       element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
+              <Route path="/rewards"            element={<Rewards />} />
+              <Route path="/tos"                element={<ToS />} />
+              <Route path="/admin"              element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+              <Route path="*"                   element={<Navigate to="/" replace />} />
+            </Routes>
+          </main>
+          <ChatSidebar open={chatOpen} onToggle={handleChatToggle} />
+        </div>
+        <GeoWarningModal />
+        <PWAInstallPrompt />
+        <ForfeitToast />
+        <ReconnectOverlay />
       </div>
-      <GeoWarningModal />
-      <PWAInstallPrompt />
-      <ForfeitToast />
-      <ReconnectOverlay />
-      {session && !tosAccepted && <AgeToSModal onAccept={() => setTosAccepted(true)} />}
+      {tosPending && <AgeToSModal onAccept={() => setTosAccepted(true)} />}
     </div>
   );
 }
