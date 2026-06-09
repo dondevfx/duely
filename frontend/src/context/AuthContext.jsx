@@ -16,9 +16,6 @@ export function AuthProvider({ children }) {
   const initializedRef = useRef(false);
 
   const fetchProfile = useCallback(async () => {
-    // Don't hit the API if there's no active session
-    const { data: { session: s } } = await supabase.auth.getSession();
-    if (!s) { setProfile(null); return null; }
     try {
       const data = await api.get('/auth/me');
       setProfile(data);
@@ -46,13 +43,14 @@ export function AuthProvider({ children }) {
   }, [fetchProfile]);
 
   useEffect(() => {
-    // Subscribe to auth changes first
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sess) => {
+    // Subscribe to auth changes — callback must be synchronous (no await)
+    // to avoid deadlocking the Supabase Web Lock held during notification
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
       setSession(sess);
-      // Only handle profile updates after initial load is done
       if (initializedRef.current) {
         if (sess) {
-          await ensureProfile();
+          // Fire profile fetch outside the lock callback
+          setTimeout(() => ensureProfile(), 0);
         } else {
           setProfile(null);
         }
