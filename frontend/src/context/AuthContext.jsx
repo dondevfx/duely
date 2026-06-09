@@ -16,6 +16,9 @@ export function AuthProvider({ children }) {
   const initializedRef = useRef(false);
 
   const fetchProfile = useCallback(async () => {
+    // Don't hit the API if there's no active session
+    const { data: { session: s } } = await supabase.auth.getSession();
+    if (!s) { setProfile(null); return null; }
     try {
       const data = await api.get('/auth/me');
       setProfile(data);
