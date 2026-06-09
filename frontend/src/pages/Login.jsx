@@ -56,25 +56,18 @@ export default function Login() {
     setMfaLoading(true);
     setError(null);
     try {
-      // Race the MFA call against a 15s timeout so it never hangs forever
-      const result = await Promise.race([
-        completeMfaLogin(mfaState.factorId, mfaCode),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000)),
-      ]);
-      if (!result) {
-        setMfaState(null);
-        setNeedsUsername(true);
-      } else {
-        navigate('/');
-      }
+      await completeMfaLogin(mfaState.factorId, mfaCode);
+      // MFA passed — navigate regardless of profile fetch result
+      navigate('/');
     } catch (err) {
-      const msg = err?.message?.toLowerCase() || '';
+      console.error('[MFA verify error]', err);
+      const msg = String(err?.message || err?.error_description || err || '').toLowerCase();
       if (msg.includes('timeout')) {
-        setError('Verification timed out. Please try again.');
-      } else if (msg.includes('expired') || msg.includes('invalid')) {
-        setError('Code expired or invalid — open your authenticator app for a fresh code.');
+        setError('Verification timed out — please try again.');
+      } else if (msg.includes('expired')) {
+        setError('Code expired — wait for the next code in your authenticator app.');
       } else {
-        setError('Invalid code. Check your authenticator app and try again.');
+        setError('Wrong code — double-check your authenticator app and try again.');
       }
       setMfaCode('');
     } finally {

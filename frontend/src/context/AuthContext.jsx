@@ -124,15 +124,28 @@ export function AuthProvider({ children }) {
   }
 
   async function completeMfaLogin(factorId, code) {
+    if (!factorId) throw new Error('No MFA factor found — try signing in again.');
     const { data: challenge, error: ce } = await supabase.auth.mfa.challenge({ factorId });
-    if (ce) throw ce;
-    const { error: ve } = await supabase.auth.mfa.verify({ factorId, challengeId: challenge.id, code });
-    if (ve) throw ve;
+    if (ce) {
+      console.error('[MFA challenge error]', ce);
+      throw ce;
+    }
+    const { data: verifyData, error: ve } = await supabase.auth.mfa.verify({
+      factorId,
+      challengeId: challenge.id,
+      code,
+    });
+    if (ve) {
+      console.error('[MFA verify error]', ve);
+      throw ve;
+    }
+    console.log('[MFA verify success]', verifyData);
     setMfaPending(false);
     setMfaFactorId(null);
-    const profile = await ensureProfile();
+    // Fetch profile but don't block navigation on it
+    ensureProfile().then(() => {}).catch(() => {});
     setShowSaveLogin(true);
-    return profile;
+    return true;
   }
 
   async function signOut() {
