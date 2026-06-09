@@ -49,6 +49,7 @@ import ReconnectOverlay from './components/ReconnectOverlay';
 import AgeToSModal, { useTosAccepted } from './components/AgeToSModal';
 import GeoWarningModal from './components/GeoWarningModal';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
+import SaveLoginPrompt from './components/SaveLoginPrompt';
 
 function ProtectedRoute({ children }) {
   const { session, loading, mfaPending } = useAuth();
@@ -66,7 +67,7 @@ function getInitialChatOpen() {
 }
 
 function Shell() {
-  const { session } = useAuth();
+  const { session, showSaveLogin, setShowSaveLogin } = useAuth();
   const [tosAccepted, setTosAccepted] = useState(useTosAccepted());
   const [chatOpen, setChatOpen] = useState(getInitialChatOpen);
 
@@ -120,6 +121,7 @@ function Shell() {
         <ReconnectOverlay />
       </div>
       {tosPending && <AgeToSModal onAccept={() => setTosAccepted(true)} />}
+      {showSaveLogin && <SaveLoginPrompt onDone={() => setShowSaveLogin(false)} />}
     </div>
   );
 }
