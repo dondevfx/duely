@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { supabase, restoreSavedSession, clearSavedSession } from '../utils/supabase';
+import { supabase, getStartupSession, saveSession, clearSavedSession } from '../utils/supabase';
 import { api } from '../utils/api';
 
 const AuthContext = createContext(null);
@@ -58,22 +58,34 @@ export function AuthProvider({ children }) {
       }
     });
 
-    // Then do the initial session restore
     async function init() {
       try {
-        // restoreSavedSession checks sessionStorage (refresh) first,
-        // then localStorage (saved login). Returns session or null.
-        const restored = await restoreSavedSession();
+        const { session: restored, source } = await getStartupSession();
         if (restored) {
           setSession(restored);
-          const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-          if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
+          if (source === 'saved') {
+            // Saved login (localStorage): always require 2FA if user has it enabled
             const { data: factors } = await supabase.auth.mfa.listFactors();
-            const factor = factors?.totp?.[0];
-            setMfaPending(true);
-            setMfaFactorId(factor?.id ?? null);
+            const factor = factors?.totp?.find(f => f.status === 'verified');
+            if (factor) {
+              // Force MFA — session is valid so completeMfaLogin will skip re-sign-in
+              _pendingMfaCreds.current = { fromSavedSession: true };
+              setMfaPending(true);
+              setMfaFactorId(factor.id);
+            } else {
+              await ensureProfile();
+            }
           } else {
-            await ensureProfile();
+            // Page refresh (sessionStorage): session already verified this visit, no re-check
+            const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+            if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
+              const { data: factors } = await supabase.auth.mfa.listFactors();
+              const factor = factors?.totp?.[0];
+              setMfaPending(true);
+              setMfaFactorId(factor?.id ?? null);
+            } else {
+              await ensureProfile();
+            }
           }
         }
       } catch (e) {
@@ -133,20 +145,23 @@ export function AuthProvider({ children }) {
   }
 
   async function completeMfaLogin(factorId, code) {
-    // Re-sign-in to get a fresh AAL1 session (we signed out after detecting MFA)
     const creds = _pendingMfaCreds.current;
-    if (!creds) throw new Error('Session expired — please enter your email and password again.');
-    const { error: signInErr } = await supabase.auth.signInWithPassword({
-      email: creds.email,
-      password: creds.password,
-    });
-    if (signInErr) throw signInErr;
+    if (!creds) throw new Error('Session expired — please sign in again.');
 
-    // Now get factorId (use stored one or re-fetch)
+    if (!creds.fromSavedSession) {
+      // Fresh login path: re-sign-in with stored email/password to get AAL1 session
+      const { error: signInErr } = await supabase.auth.signInWithPassword({
+        email: creds.email,
+        password: creds.password,
+      });
+      if (signInErr) throw signInErr;
+    }
+    // Saved session path: session is already valid, just verify the code
+
     let fid = creds.factorId || factorId;
     if (!fid) {
       const { data: factors } = await supabase.auth.mfa.listFactors();
-      fid = factors?.totp?.[0]?.id ?? null;
+      fid = factors?.totp?.find(f => f.status === 'verified')?.id ?? factors?.totp?.[0]?.id ?? null;
     }
     if (!fid) throw new Error('No MFA factor found — try signing in again.');
 
@@ -157,7 +172,8 @@ export function AuthProvider({ children }) {
     setMfaPending(false);
     setMfaFactorId(null);
     ensureProfile().catch(() => {});
-    setShowSaveLogin(true);
+    // Don't show save-login prompt again if they already have it saved
+    if (!localStorage.getItem('duely_save_login')) setShowSaveLogin(true);
     return true;
   }
 
