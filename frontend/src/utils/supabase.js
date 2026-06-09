@@ -39,6 +39,9 @@ export async function getStartupSession() {
       clearSavedSession();
       return { session: null, source: null };
     }
+    // Clear from sessionStorage immediately — if MFA is required, a refresh
+    // must go through the saved-login flow again, not bypass MFA via sessionStorage
+    sessionStorage.removeItem('duely_session');
     return { session: data.session, source: 'saved' };
   } catch {
     clearSavedSession();
@@ -56,6 +59,14 @@ export async function saveSession() {
       refresh_token: session.refresh_token,
     }));
   }
+}
+
+// Returns saved tokens for re-authentication during MFA verify
+export function getSavedTokens() {
+  try {
+    const raw = localStorage.getItem(SAVE_SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
 }
 
 export function clearSavedSession() {

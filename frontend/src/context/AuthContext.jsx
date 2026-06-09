@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { supabase, getStartupSession, saveSession, clearSavedSession } from '../utils/supabase';
+import { supabase, getStartupSession, saveSession, clearSavedSession, SAVE_LOGIN_KEY, getSavedTokens } from '../utils/supabase';
 import { api } from '../utils/api';
 
 const AuthContext = createContext(null);
@@ -64,14 +64,18 @@ export function AuthProvider({ children }) {
         if (restored) {
           setSession(restored);
           if (source === 'saved') {
-            // Saved login (localStorage): always require 2FA if user has it enabled
+            // Saved login: check if user has 2FA enabled
             const { data: factors } = await supabase.auth.mfa.listFactors();
             const factor = factors?.totp?.find(f => f.status === 'verified');
             if (factor) {
-              // Force MFA — session is valid so completeMfaLogin will skip re-sign-in
-              _pendingMfaCreds.current = { fromSavedSession: true };
+              // Has 2FA — store factorId, sign out so session is null while waiting for code.
+              // This also clears sessionStorage so refresh goes through saved-login flow again.
+              const fid = factor.id;
+              await supabase.auth.signOut({ scope: 'local' });
+              _pendingMfaCreds.current = { fromSavedSession: true, factorId: fid };
+              setSession(null);
               setMfaPending(true);
-              setMfaFactorId(factor.id);
+              setMfaFactorId(fid);
             } else {
               await ensureProfile();
             }
@@ -148,7 +152,16 @@ export function AuthProvider({ children }) {
     const creds = _pendingMfaCreds.current;
     if (!creds) throw new Error('Session expired — please sign in again.');
 
-    if (!creds.fromSavedSession) {
+    if (creds.fromSavedSession) {
+      // Saved-login path: restore session from saved tokens to get an active session
+      const tokens = getSavedTokens();
+      if (!tokens) throw new Error('Saved session expired — please sign in again.');
+      const { error: restoreErr } = await supabase.auth.setSession({
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+      });
+      if (restoreErr) throw new Error('Saved session expired — please sign in again.');
+    } else {
       // Fresh login path: re-sign-in with stored email/password to get AAL1 session
       const { error: signInErr } = await supabase.auth.signInWithPassword({
         email: creds.email,
@@ -156,7 +169,6 @@ export function AuthProvider({ children }) {
       });
       if (signInErr) throw signInErr;
     }
-    // Saved session path: session is already valid, just verify the code
 
     let fid = creds.factorId || factorId;
     if (!fid) {

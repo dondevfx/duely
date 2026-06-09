@@ -18,8 +18,8 @@
     }
   } catch {}
 })();
-import { useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import { WalletProvider } from './context/WalletContext';
@@ -66,9 +66,18 @@ function getInitialChatOpen() {
 }
 
 function Shell() {
-  const { session, showSaveLogin, setShowSaveLogin } = useAuth();
+  const { session, showSaveLogin, setShowSaveLogin, mfaPending, loading } = useAuth();
   const [tosAccepted, setTosAccepted] = useState(useTosAccepted());
   const [chatOpen, setChatOpen] = useState(getInitialChatOpen);
+  const navigate = useNavigate();
+
+  // When MFA is pending and there's no session (saved-login MFA flow),
+  // redirect to /login so the MFA form is shown
+  useEffect(() => {
+    if (!loading && mfaPending && !session) {
+      navigate('/login', { replace: true });
+    }
+  }, [mfaPending, session, loading, navigate]);
 
   function handleChatToggle(next) {
     setChatOpen(next);
@@ -76,8 +85,7 @@ function Shell() {
   }
 
   const tosPending = session && !tosAccepted;
-  const { mfaPending } = useAuth();
-  // Block nav/sidebar during ToS or MFA — main content stays interactive so forms work
+  // Only block nav when MFA is pending WITH an active session (mid-login on same visit)
   const navBlocked = tosPending || (mfaPending && !!session);
 
   return (
