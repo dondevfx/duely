@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
 import { usePageReady } from '../hooks/usePageReady';
 
-const ADMIN_ID = '423d2b0c-1dae-4947-8340-b07575954383';
 
 function fmt(n) {
   return Number(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -60,7 +59,7 @@ export default function Admin() {
 
   useEffect(() => {
     if (!profile) return;
-    if (profile.id !== ADMIN_ID) { navigate('/'); return; }
+    if (!profile.is_admin) { navigate('/'); return; }
     load();
   }, [profile]);
 
@@ -172,7 +171,7 @@ export default function Admin() {
     } catch {}
   }
 
-  if (!profile || profile.id !== ADMIN_ID) return null;
+  if (!profile || !profile.is_admin) return null;
 
   return (
     <div className="min-h-screen bg-bg pt-16" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}>

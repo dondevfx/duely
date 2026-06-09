@@ -55,7 +55,7 @@ module.exports = function authRoutes(supabase) {
       .single();
 
     if (error) return res.status(404).json({ error: 'Profile not found' });
-    res.json(data);
+    res.json({ ...data, is_admin: req.user.id === process.env.ADMIN_USER_ID });
   });
 
   const VALID_COLORS = new Set([
