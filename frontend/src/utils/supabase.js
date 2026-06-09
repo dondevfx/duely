@@ -4,7 +4,7 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const SAVE_LOGIN_KEY = 'duely_save_login';
-const SAVE_SESSION_KEY = 'duely_saved_session';
+export const SAVE_SESSION_KEY = 'duely_saved_session';
 
 // sessionStorage: survives refresh, cleared on tab/window close
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -17,66 +17,61 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-// Returns 'refresh' | 'saved' | null
-// 'refresh' = session from sessionStorage (page reload, no MFA re-check needed)
-// 'saved'   = session from localStorage (new visit, must re-check MFA)
-export async function getStartupSession() {
-  try {
-    // Check sessionStorage first (Supabase handles this automatically)
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) return { session, source: 'refresh' };
-
-    // Check localStorage for a saved login
-    const saved = localStorage.getItem(SAVE_LOGIN_KEY);
-    if (!saved) return { session: null, source: null };
-    const raw = localStorage.getItem(SAVE_SESSION_KEY);
-    if (!raw) return { session: null, source: null };
-    const { access_token, refresh_token } = JSON.parse(raw);
-    if (!access_token || !refresh_token) return { session: null, source: null };
-
-    const { data, error } = await supabase.auth.setSession({ access_token, refresh_token });
-    if (error) {
-      clearSavedSession();
-      return { session: null, source: null };
-    }
-    // Refresh token was rotated — update localStorage with the new tokens immediately
-    // so the next visit uses fresh tokens and doesn't get a 401
-    if (data.session) {
-      localStorage.setItem(SAVE_SESSION_KEY, JSON.stringify({
-        access_token: data.session.access_token,
-        refresh_token: data.session.refresh_token,
-      }));
-    }
-    // Clear from sessionStorage — refresh must go through saved-login + MFA again
-    sessionStorage.removeItem('duely_session');
-    return { session: data.session, source: 'saved' };
-  } catch {
-    clearSavedSession();
-    return { session: null, source: null };
-  }
-}
-
-// Save session to localStorage after user clicks "Save login"
-export async function saveSession() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session) {
-    localStorage.setItem(SAVE_LOGIN_KEY, 'true');
-    localStorage.setItem(SAVE_SESSION_KEY, JSON.stringify({
-      access_token: session.access_token,
-      refresh_token: session.refresh_token,
-    }));
-  }
-}
-
-// Returns saved tokens for re-authentication during MFA verify
-export function getSavedTokens() {
-  try {
-    const raw = localStorage.getItem(SAVE_SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+// Directly write tokens to localStorage — no async, no lock needed
+export function persistTokens(access_token, refresh_token) {
+  if (!access_token || !refresh_token) return;
+  console.log('[save-login] persisting tokens to localStorage');
+  localStorage.setItem(SAVE_LOGIN_KEY, 'true');
+  localStorage.setItem(SAVE_SESSION_KEY, JSON.stringify({ access_token, refresh_token }));
 }
 
 export function clearSavedSession() {
   localStorage.removeItem(SAVE_LOGIN_KEY);
   localStorage.removeItem(SAVE_SESSION_KEY);
+}
+
+// On app startup: returns { session, source } where source is 'refresh'|'saved'|null
+export async function getStartupSession() {
+  try {
+    // sessionStorage — page refresh in same tab
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      console.log('[save-login] restored from sessionStorage (refresh)');
+      return { session, source: 'refresh' };
+    }
+
+    // localStorage — returning visitor with saved login
+    const saved = localStorage.getItem(SAVE_LOGIN_KEY);
+    const raw   = localStorage.getItem(SAVE_SESSION_KEY);
+    console.log('[save-login] localStorage check — saved:', saved, 'has tokens:', !!raw);
+    if (!saved || !raw) return { session: null, source: null };
+
+    const { access_token, refresh_token } = JSON.parse(raw);
+    if (!access_token || !refresh_token) {
+      clearSavedSession();
+      return { session: null, source: null };
+    }
+
+    console.log('[save-login] calling setSession with saved tokens');
+    const { data, error } = await supabase.auth.setSession({ access_token, refresh_token });
+    if (error) {
+      console.error('[save-login] setSession error:', error);
+      clearSavedSession();
+      return { session: null, source: null };
+    }
+
+    // Immediately update saved tokens with any rotated values
+    if (data.session) {
+      persistTokens(data.session.access_token, data.session.refresh_token);
+    }
+
+    // Clear sessionStorage so a refresh goes through saved-login flow (re-checks MFA)
+    sessionStorage.removeItem('duely_session');
+    console.log('[save-login] restored from localStorage (saved)');
+    return { session: data.session, source: 'saved' };
+  } catch (e) {
+    console.error('[save-login] getStartupSession error:', e);
+    clearSavedSession();
+    return { session: null, source: null };
+  }
 }

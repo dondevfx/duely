@@ -1,11 +1,9 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { supabase, getStartupSession, saveSession, clearSavedSession } from '../utils/supabase';
+import { supabase, getStartupSession, persistTokens, clearSavedSession, SAVE_LOGIN_KEY } from '../utils/supabase';
 import { api } from '../utils/api';
 
 const AuthContext = createContext(null);
 const PENDING_USERNAME_KEY = 'rd_pending_username';
-const SAVE_LOGIN_KEY = 'duely_save_login';
-const SAVE_SESSION_KEY = 'duely_saved_session';
 
 export function AuthProvider({ children }) {
   const [session, setSession]             = useState(null);
@@ -45,10 +43,7 @@ export function AuthProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sess) => {
       // Keep saved tokens in sync whenever Supabase auto-refreshes them
       if (event === 'TOKEN_REFRESHED' && sess && localStorage.getItem(SAVE_LOGIN_KEY)) {
-        localStorage.setItem(SAVE_SESSION_KEY, JSON.stringify({
-          access_token: sess.access_token,
-          refresh_token: sess.refresh_token,
-        }));
+        persistTokens(sess.access_token, sess.refresh_token);
       }
       // Don't update session state from here during init — init() manages state directly
       if (!initializedRef.current) return;
@@ -177,8 +172,8 @@ export function AuthProvider({ children }) {
     ensureProfile().catch(() => {});
 
     // Always refresh saved tokens after MFA (challengeAndVerify rotates them)
-    if (localStorage.getItem(SAVE_LOGIN_KEY)) {
-      await saveSession();
+    if (freshSession && localStorage.getItem(SAVE_LOGIN_KEY)) {
+      persistTokens(freshSession.access_token, freshSession.refresh_token);
     } else {
       setShowSaveLogin(true);
     }

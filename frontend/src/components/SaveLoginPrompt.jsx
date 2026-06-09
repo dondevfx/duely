@@ -1,12 +1,19 @@
-import { saveSession } from '../utils/supabase';
+import { persistTokens } from '../utils/supabase';
+import { useAuth } from '../context/AuthContext';
 
 export default function SaveLoginPrompt({ onDone }) {
-  async function handleSave() {
-    await saveSession();
+  const { session } = useAuth();
+
+  function handleSave() {
+    if (session?.access_token && session?.refresh_token) {
+      persistTokens(session.access_token, session.refresh_token);
+      console.log('[save-login] user clicked Save — tokens persisted');
+    } else {
+      console.warn('[save-login] Save clicked but no session available:', session);
+    }
     onDone();
   }
 
-  // "Not now" just closes for this session — prompt returns on next login
   function handleDismiss() {
     onDone();
   }
@@ -21,12 +28,7 @@ export default function SaveLoginPrompt({ onDone }) {
             <p className="text-xs text-muted mt-0.5">Stay logged in automatically next visit</p>
           </div>
         </div>
-        <button
-          onClick={handleDismiss}
-          className="text-muted hover:text-white text-lg leading-none mt-0.5 flex-shrink-0"
-        >
-          ✕
-        </button>
+        <button onClick={handleDismiss} className="text-muted hover:text-white text-lg leading-none mt-0.5 flex-shrink-0">✕</button>
       </div>
       <div className="flex gap-2 mt-3">
         <button
