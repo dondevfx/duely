@@ -14,6 +14,7 @@ export function AuthProvider({ children }) {
   const [mfaFactorId, setMfaFactorId] = useState(null);
   const [showSaveLogin, setShowSaveLogin] = useState(false);
   const initializedRef = useRef(false);
+  const _pendingMfaCreds = useRef(null);
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -114,9 +115,15 @@ export function AuthProvider({ children }) {
     if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
       const { data: factors } = await supabase.auth.mfa.listFactors();
       const factor = factors?.totp?.[0];
+      // Store credentials so we can re-authenticate after MFA code entry
+      // Sign out the partial AAL1 session so user isn't logged in until MFA passes
+      const factorId = factor?.id ?? null;
+      await supabase.auth.signOut();
+      // Store creds in memory for completeMfaLogin to use
+      _pendingMfaCreds.current = { email, password, factorId };
       setMfaPending(true);
-      setMfaFactorId(factor?.id ?? null);
-      return { mfaRequired: true, factorId: factor?.id };
+      setMfaFactorId(factorId);
+      return { mfaRequired: true, factorId };
     }
 
     const profile = await ensureProfile();
@@ -125,21 +132,27 @@ export function AuthProvider({ children }) {
   }
 
   async function completeMfaLogin(factorId, code) {
-    // Re-fetch factorId if missing
-    let fid = factorId;
+    // Re-sign-in to get a fresh AAL1 session (we signed out after detecting MFA)
+    const creds = _pendingMfaCreds.current;
+    if (!creds) throw new Error('Session expired — please enter your email and password again.');
+    const { error: signInErr } = await supabase.auth.signInWithPassword({
+      email: creds.email,
+      password: creds.password,
+    });
+    if (signInErr) throw signInErr;
+
+    // Now get factorId (use stored one or re-fetch)
+    let fid = creds.factorId || factorId;
     if (!fid) {
       const { data: factors } = await supabase.auth.mfa.listFactors();
       fid = factors?.totp?.[0]?.id ?? null;
     }
     if (!fid) throw new Error('No MFA factor found — try signing in again.');
 
-    console.log('[MFA] challengeAndVerify factorId:', fid, 'code:', code);
-    const { data, error } = await supabase.auth.mfa.challengeAndVerify({ factorId: fid, code });
-    if (error) {
-      console.error('[MFA] challengeAndVerify error:', error);
-      throw error;
-    }
-    console.log('[MFA] success:', data);
+    const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: fid, code });
+    if (error) throw error;
+
+    _pendingMfaCreds.current = null;
     setMfaPending(false);
     setMfaFactorId(null);
     ensureProfile().catch(() => {});
@@ -150,6 +163,7 @@ export function AuthProvider({ children }) {
   async function signOut() {
     await supabase.auth.signOut();
     clearSavedSession();
+    _pendingMfaCreds.current = null;
     setProfile(null);
     setMfaPending(false);
     setMfaFactorId(null);

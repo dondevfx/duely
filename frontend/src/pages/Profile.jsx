@@ -613,10 +613,8 @@ function TwoFactorSection() {
     if (code.length !== 6) return;
     setBusy(true); setError(null);
     try {
-      const { data: ch, error: ce } = await supabase.auth.mfa.challenge({ factorId: enrollData.id });
-      if (ce) throw ce;
-      const { error: ve } = await supabase.auth.mfa.verify({ factorId: enrollData.id, challengeId: ch.id, code });
-      if (ve) throw new Error('Invalid code. Try again.');
+      const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: enrollData.id, code });
+      if (error) throw error;
       await loadFactors();
       setStep('idle'); setEnrollData(null); setCode('');
       setDone('2FA enabled successfully!');
@@ -629,10 +627,8 @@ function TwoFactorSection() {
     if (code.length !== 6) return;
     setBusy(true); setError(null);
     try {
-      const { data: ch, error: ce } = await supabase.auth.mfa.challenge({ factorId: activeFactor.id });
-      if (ce) throw ce;
-      const { error: ve } = await supabase.auth.mfa.verify({ factorId: activeFactor.id, challengeId: ch.id, code });
-      if (ve) throw new Error('Invalid code. Try again.');
+      const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: activeFactor.id, code });
+      if (error) throw error;
       const { error: ue } = await supabase.auth.mfa.unenroll({ factorId: activeFactor.id });
       if (ue) throw ue;
       await loadFactors();

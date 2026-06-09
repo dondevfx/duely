@@ -177,10 +177,8 @@ export default function Wallet() {
         const { data: factors } = await supabase.auth.mfa.listFactors();
         const factor = factors?.totp?.find(f => f.status === 'verified');
         if (factor) {
-          const { data: ch, error: ce } = await supabase.auth.mfa.challenge({ factorId: factor.id });
-          if (ce) throw new Error('2FA challenge failed.');
-          const { error: ve } = await supabase.auth.mfa.verify({ factorId: factor.id, challengeId: ch.id, code: witMfaCode });
-          if (ve) throw new Error('Invalid authenticator code.');
+          const { error: mfaErr } = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.id, code: witMfaCode });
+          if (mfaErr) throw new Error('Invalid authenticator code.');
         }
       }
       const data = await api.post('/wallet/withdraw', {

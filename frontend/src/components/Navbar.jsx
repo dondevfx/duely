@@ -141,7 +141,7 @@ export default function Navbar() {
 
           {/* Logo */}
           <div className="lg:w-56 lg:shrink-0 flex-1 lg:flex-none flex lg:justify-start justify-center">
-            <Link to="/" onClick={() => { setMobileMenuOpen(false); window.location.href = '/'; }} className="flex items-center gap-2">
+            <Link to="/" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2">
               <span className="text-3xl font-black tracking-tight text-primary" style={{ textShadow: '0 0 22px rgba(30,144,255,0.6)' }}>
                 Duely
               </span>
