@@ -6,6 +6,7 @@ export default function SaveLoginPrompt({ onDone }) {
     onDone();
   }
 
+  // "Not now" just closes for this session — prompt returns on next login
   function handleDismiss() {
     onDone();
   }
@@ -17,7 +18,7 @@ export default function SaveLoginPrompt({ onDone }) {
           <div className="text-2xl">🔑</div>
           <div>
             <p className="text-sm font-bold text-white">Save login info?</p>
-            <p className="text-xs text-muted mt-0.5">Stay logged in next time you visit</p>
+            <p className="text-xs text-muted mt-0.5">Stay logged in automatically next visit</p>
           </div>
         </div>
         <button
@@ -41,6 +42,7 @@ export default function SaveLoginPrompt({ onDone }) {
           Not now
         </button>
       </div>
+      <p className="text-xs text-muted text-center mt-2">This will appear each login until you save</p>
     </div>
   );
 }

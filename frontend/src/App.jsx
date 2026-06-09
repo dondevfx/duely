@@ -48,7 +48,6 @@ import ForfeitToast from './components/ForfeitToast';
 import ReconnectOverlay from './components/ReconnectOverlay';
 import AgeToSModal, { useTosAccepted } from './components/AgeToSModal';
 import GeoWarningModal from './components/GeoWarningModal';
-import PWAInstallPrompt from './components/PWAInstallPrompt';
 import SaveLoginPrompt from './components/SaveLoginPrompt';
 
 function ProtectedRoute({ children }) {
@@ -117,7 +116,6 @@ function Shell() {
         </Routes>
       </main>
       <GeoWarningModal />
-      <PWAInstallPrompt />
       <ForfeitToast />
       <ReconnectOverlay />
       {tosPending && <AgeToSModal onAccept={() => setTosAccepted(true)} />}
