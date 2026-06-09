@@ -139,6 +139,8 @@ export function AuthProvider({ children }) {
     }
 
     const profile = await ensureProfile();
+    // Show save-login prompt — clear any stale SAVE_LOGIN_KEY first so prompt always appears
+    clearSavedSession();
     setShowSaveLogin(true);
     return profile;
   }
@@ -171,10 +173,13 @@ export function AuthProvider({ children }) {
     setMfaFactorId(null);
     ensureProfile().catch(() => {});
 
-    // Always refresh saved tokens after MFA (challengeAndVerify rotates them)
+    // Update saved tokens if user had save-login active (token was rotated by MFA verify)
     if (freshSession && localStorage.getItem(SAVE_LOGIN_KEY)) {
       persistTokens(freshSession.access_token, freshSession.refresh_token);
-    } else {
+    }
+    // Always show save-login prompt after fresh login (clear stale key first)
+    if (!creds.fromSavedSession) {
+      clearSavedSession();
       setShowSaveLogin(true);
     }
     return true;

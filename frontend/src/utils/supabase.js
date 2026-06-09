@@ -44,7 +44,12 @@ export async function getStartupSession() {
     const saved = localStorage.getItem(SAVE_LOGIN_KEY);
     const raw   = localStorage.getItem(SAVE_SESSION_KEY);
     console.log('[save-login] localStorage check — saved:', saved, 'has tokens:', !!raw);
-    if (!saved || !raw) return { session: null, source: null };
+    if (!saved) return { session: null, source: null };
+    if (!raw) {
+      // SAVE_LOGIN_KEY exists but tokens are missing — clear so prompt shows again on next login
+      clearSavedSession();
+      return { session: null, source: null };
+    }
 
     const { access_token, refresh_token } = JSON.parse(raw);
     if (!access_token || !refresh_token) {
