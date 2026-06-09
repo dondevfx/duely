@@ -85,8 +85,8 @@ function Shell() {
   }
 
   const tosPending = session && !tosAccepted;
-  // Only block nav when MFA is pending WITH an active session (mid-login on same visit)
-  const navBlocked = tosPending || (mfaPending && !!session);
+  // Block nav whenever MFA is pending (session may be null during saved-login MFA)
+  const navBlocked = tosPending || mfaPending;
 
   return (
     <div className="min-h-screen bg-bg">
