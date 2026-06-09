@@ -77,7 +77,8 @@ function Shell() {
 
   const tosPending = session && !tosAccepted;
   const { mfaPending } = useAuth();
-  const blocked = tosPending || mfaPending;
+  // Only block UI for mfaPending when there's an active session (mid-login MFA step)
+  const blocked = tosPending || (mfaPending && !!session);
 
   return (
     <div className="min-h-screen bg-bg">
