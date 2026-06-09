@@ -81,9 +81,10 @@ async function settleMatch(supabase, winnerId, loserId, entryFee) {
       const { platformFee } = await payAffiliatesCoins(supabase, owner1, owner2, prizePool)
         .catch(() => ({ platformFee: 0.045 })); // fallback: 4.5% (5% − 0.5% rakeback)
       const adminFeeAmount = parseFloat((prizePool * platformFee).toFixed(4));
-      await creditCoins(supabase, adminId, adminFeeAmount).catch(err =>
-        console.error('[admin-fee] credit failed:', err.message)
-      );
+      // Accumulate into fee_balance (not c_coins) — admin collects manually via dashboard
+      await supabase.rpc('credit_fee_balance', { user_id: adminId, amount: adminFeeAmount })
+        .then(({ error: e }) => { if (e) console.error('[admin-fee] credit_fee_balance failed:', e.message); })
+        .catch(err => console.error('[admin-fee] credit_fee_balance threw:', err.message));
     }
 
     if (parseFloat(entryFee) > 0) {
@@ -269,7 +270,8 @@ async function settleDrawMatch(supabase, p1Id, p2Id, entryFee) {
       platformFeePercent = platformFee;
     } catch {}
     const adminAmount = parseFloat((prizePool * platformFeePercent).toFixed(4));
-    await supabase.rpc('credit_coins', { user_id: adminId, amount: adminAmount }).catch(() => {});
+    // Accumulate into fee_balance — admin collects manually via dashboard
+    await supabase.rpc('credit_fee_balance', { user_id: adminId, amount: adminAmount }).catch(() => {});
   }
 
   supabase.from('transactions').insert([

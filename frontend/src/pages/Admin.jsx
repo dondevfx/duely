@@ -45,6 +45,8 @@ export default function Admin() {
   const [tab, setTab]               = useState('overview');
   const [loading, setLoading]       = useState(true);
 
+  const [collectingFees, setCollectingFees]   = useState(false);
+  const [collectMsg, setCollectMsg]           = useState('');
   const [addingDiamonds, setAddingDiamonds]   = useState(false);
   const [diamondMsg, setDiamondMsg]           = useState('');
   const [removingCoins, setRemovingCoins]     = useState(false);
@@ -77,6 +79,26 @@ export default function Admin() {
       console.error('Admin load error:', e.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleCollectFees() {
+    if (collectingFees) return;
+    setCollectingFees(true);
+    setCollectMsg('');
+    try {
+      const d = await api.post('/admin/collect-fees', {});
+      await refreshProfile();
+      load(); // refresh stats
+      if (d.collected > 0) {
+        setCollectMsg(`Collected ${fmt(d.collected)} 🪙 → balance: ${fmt(d.c_coins)} 🪙`);
+      } else {
+        setCollectMsg('No fees to collect right now.');
+      }
+    } catch (e) {
+      setCollectMsg(`Error: ${e.message}`);
+    } finally {
+      setCollectingFees(false);
     }
   }
 
@@ -182,13 +204,36 @@ export default function Admin() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-              <StatCard label="Fees Collected"   value={`${fmt(stats?.fees_coins)} 🪙`}               sub={`${(stats?.fees_diamonds ?? 0).toLocaleString()} 💎`} color="text-success" />
-              <StatCard label="Total Wagered"    value={`${fmt(stats?.total_wagered)} 🪙`}            color="text-white" />
-              <StatCard label="Platform Fee Rate" value="5%"                                           sub="on coin matches" color="text-muted" />
+              <StatCard label="Uncollected Fees"  value={`${fmt(stats?.fee_balance)} 🪙`}              sub="click Collect to claim" color={stats?.fee_balance > 0 ? 'text-warning' : 'text-muted'} />
+              <StatCard label="Wallet Balance"    value={`${fmt(stats?.fees_coins)} 🪙`}               sub={`${(stats?.fees_diamonds ?? 0).toLocaleString()} 💎`} color="text-success" />
+              <StatCard label="Total Wagered"     value={`${fmt(stats?.total_wagered)} 🪙`}            color="text-white" />
             </div>
 
             {/* Admin Tools */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+              {/* Collect Fees */}
+              <div className="bg-surface border border-border rounded-2xl p-5 flex flex-col gap-3" style={{ borderColor: stats?.fee_balance > 0 ? 'rgba(234,179,8,0.4)' : undefined }}>
+                <div className="font-bold text-white text-sm">Collect Fee Earnings</div>
+                <div className="text-xs text-muted">
+                  Moves <span className="font-bold" style={{ color: stats?.fee_balance > 0 ? '#eab308' : undefined }}>{fmt(stats?.fee_balance)} 🪙</span> of uncollected match fees into your coin balance.
+                </div>
+                <button
+                  onClick={handleCollectFees}
+                  disabled={collectingFees || !(stats?.fee_balance > 0)}
+                  className="w-full py-2 rounded-xl text-sm font-bold transition-all"
+                  style={collectingFees || !(stats?.fee_balance > 0) ? {
+                    background: '#0f172a', color: '#334155', border: '1px solid #1e293b', cursor: collectingFees ? 'wait' : 'not-allowed',
+                  } : {
+                    background: 'linear-gradient(135deg, #ca8a04 0%, #1e293b 100%)',
+                    color: '#fff', border: '1px solid rgba(202,138,4,0.4)',
+                    boxShadow: '0 0 18px rgba(234,179,8,0.25)',
+                  }}
+                >
+                  {collectingFees ? 'Collecting…' : `Collect ${fmt(stats?.fee_balance)} 🪙`}
+                </button>
+                {collectMsg && <div className="text-xs text-center" style={{ color: collectMsg.startsWith('Error') ? '#ef4444' : '#22c55e' }}>{collectMsg}</div>}
+              </div>
+
               {/* Add 5M Diamonds */}
               <div className="bg-surface border border-border rounded-2xl p-5 flex flex-col gap-3">
                 <div className="font-bold text-white text-sm">Add 5M Diamonds</div>

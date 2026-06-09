@@ -29,7 +29,7 @@ module.exports = function adminRoutes(supabase) {
       supabase.from('matches').select('id', { count: 'exact', head: true }),
       supabase.from('matches').select('id', { count: 'exact', head: true }).gte('played_at', todayStart.toISOString()),
       supabase.from('profiles').select('id', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString()),
-      supabase.from('profiles').select('c_coins, diamonds').eq('id', process.env.ADMIN_USER_ID).single(),
+      supabase.from('profiles').select('c_coins, diamonds, fee_balance').eq('id', process.env.ADMIN_USER_ID).single(),
       supabase.from('matches').select('entry_fee_c, prize_pool_c'),
       supabase.from('transactions').select('id', { count: 'exact', head: true }).eq('type', 'withdrawal').eq('status', 'pending'),
     ]);
@@ -43,6 +43,7 @@ module.exports = function adminRoutes(supabase) {
       new_users_today:    newUsersToday ?? 0,
       fees_coins:         parseFloat((adminProfile?.c_coins ?? 0).toFixed(2)),
       fees_diamonds:      adminProfile?.diamonds ?? 0,
+      fee_balance:        parseFloat((adminProfile?.fee_balance ?? 0).toFixed(4)),
       total_wagered:      parseFloat(totalWagered.toFixed(2)),
       pending_withdrawals: pendingWithdrawals ?? 0,
     });
@@ -161,6 +162,43 @@ module.exports = function adminRoutes(supabase) {
       .eq('id', req.user.id);
     if (error) return res.status(500).json({ error: error.message });
     return res.json({ success: true });
+  });
+
+  // ── Collect accumulated platform fees into admin's coin balance ──────
+  router.post('/collect-fees', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { data: collected, error } = await supabase.rpc('collect_admin_fees', {
+        admin_id: process.env.ADMIN_USER_ID,
+      });
+      if (error) return res.status(500).json({ error: error.message });
+
+      const amount = parseFloat(collected ?? 0);
+      if (amount > 0) {
+        // Log it as a transaction for record-keeping
+        await supabase.from('transactions').insert({
+          user_id:  process.env.ADMIN_USER_ID,
+          type:     'fee_collection',
+          amount_c: amount,
+          status:   'confirmed',
+        }).catch(() => {});
+      }
+
+      // Return fresh balances
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('c_coins, fee_balance')
+        .eq('id', process.env.ADMIN_USER_ID)
+        .single();
+
+      res.json({
+        success:     true,
+        collected:   parseFloat(amount.toFixed(4)),
+        c_coins:     parseFloat((profile?.c_coins ?? 0).toFixed(4)),
+        fee_balance: parseFloat((profile?.fee_balance ?? 0).toFixed(4)),
+      });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // ── Remove creator code from a user ──────────────────────────────────
