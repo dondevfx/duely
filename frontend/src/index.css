@@ -1,0 +1,96 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background-color: #000000;
+    color: #fff;
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: #0D0D0D; }
+  ::-webkit-scrollbar-thumb { background: #1E90FF44; border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: #1E90FF; }
+}
+
+/* ── Global game animations ───────────────────────────────── */
+@keyframes floatUp {
+  0%   { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+  60%  { opacity: 1; transform: translate(-50%, -120%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -180%) scale(0.8); }
+}
+
+@keyframes popIn {
+  0%   { transform: scale(0.5) translateY(10px); opacity: 0; }
+  60%  { transform: scale(1.15) translateY(-2px); opacity: 1; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+@keyframes shakeX {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-8px); }
+  40%       { transform: translateX(8px); }
+  60%       { transform: translateX(-5px); }
+  80%       { transform: translateX(5px); }
+}
+
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 8px currentColor; }
+  50%       { box-shadow: 0 0 24px currentColor, 0 0 48px currentColor; }
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes countdownPop {
+  0%   { transform: scale(2.5); opacity: 0; }
+  30%  { transform: scale(1.1); opacity: 1; }
+  70%  { transform: scale(1);   opacity: 1; }
+  100% { transform: scale(0.8); opacity: 0; }
+}
+
+
+.animate-pop-in         { animation: popIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both; }
+.animate-shake-x        { animation: shakeX 0.4s ease both; }
+.animate-slide-down     { animation: slideDown 0.3s ease both; }
+.animate-countdown-pop  { animation: countdownPop 0.85s ease both; }
+.animate-glow-pulse     { animation: glowPulse 2s ease-in-out infinite; }
+
+/* ── Light mode theme ─────────────────────────────────────── */
+html.light body {
+  background-color: #f0f4f8 !important;
+  color: #1e293b;
+}
+html.light .bg-bg { background-color: #f0f4f8 !important; }
+html.light .bg-surface { background-color: #ffffff !important; }
+html.light .bg-surfaceLight { background-color: #e2e8f0 !important; }
+html.light .text-white { color: #1e293b !important; }
+html.light .text-muted { color: #64748b !important; }
+html.light .border-surfaceLight { border-color: #cbd5e1 !important; }
+html.light .border-border { border-color: #d1d5db !important; }
+html.light ::-webkit-scrollbar-track { background: #e2e8f0; }
+html.light ::-webkit-scrollbar-thumb { background: rgba(30,144,255,0.3); }
+html.light input, html.light textarea {
+  background-color: #f8fafc !important;
+  color: #1e293b !important;
+  border-color: #cbd5e1 !important;
+}
+html.light .bg-bg.rounded-xl, html.light .bg-bg.rounded-2xl { background-color: #e8ecf4 !important; }
+/* Light mode navbar top bar */
+html.light nav.fixed {
+  background-color: rgba(222, 228, 238, 0.97) !important;
+  border-color: #c4cdd9 !important;
+}
+/* Light mode mobile overlay */
+html.light .fixed.inset-0.bg-bg { background-color: #edf0f6 !important; }
+/* Light mode black backgrounds → light grey */
+html.light .bg-black { background-color: #e8ecf4 !important; }
+/* Light mode hover overrides */
+html.light .hover\:text-white:hover { color: #1e293b !important; }
+html.light .hover\:bg-surfaceLight:hover { background-color: #cdd4e0 !important; }

@@ -1,0 +1,401 @@
+const { Router } = require('express');
+const { requireAuth } = require('../middleware/auth');
+
+module.exports = function leaderboardRoutes(supabase) {
+  const router = Router();
+
+  // Streak leaderboard — top 100 by current_streak
+  router.get('/streak', async (req, res) => {
+    const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, username, elo, current_streak, best_streak, profile_color, wins, losses')
+      .order('current_streak', { ascending: false })
+      .limit(100)
+      .neq('id', adminId)
+      .neq('is_private', true);
+    if (error) return res.status(500).json({ error: error.message });
+    const players = data.map((p, i) => ({ rank: i + 1, ...p }));
+    let userRank = null;
+    if (req.query.userId) {
+      const uid = req.query.userId;
+      const inList = players.find(p => p.id === uid);
+      userRank = inList ? inList.rank : null;
+    }
+    res.json({ players, userRank });
+  });
+
+  // ELO leaderboard — top 500 + optional user rank
+  router.get('/', async (req, res) => {
+    const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
+    let query = supabase
+      .from('profiles')
+      .select('id, username, elo, wins, losses, streak, current_streak, best_streak, profile_color')
+      .order('elo', { ascending: false })
+      .limit(500)
+      .neq('id', adminId)
+      .neq('is_private', true);
+    const { data, error } = await query;
+    if (error) return res.status(500).json({ error: error.message });
+
+    const players = data.map((p, i) => ({ rank: i + 1, ...p }));
+
+    let userRank = null;
+    if (req.query.userId) {
+      const uid = req.query.userId;
+      const inList = players.find(p => p.id === uid);
+      if (inList) {
+        userRank = inList.rank;
+      } else {
+        const { data: myProfile } = await supabase.from('profiles').select('elo').eq('id', uid).single();
+        const userElo = myProfile?.elo ?? 0;
+        const { count } = await supabase
+          .from('profiles').select('id', { count: 'exact', head: true })
+          .gt('elo', userElo).neq('id', adminId).neq('is_private', true);
+        userRank = (count ?? 0) + 1;
+      }
+    }
+
+    res.json({ players, userRank });
+  });
+
+  // Diamond balance leaderboard — top 500 by current diamond balance
+  router.get('/diamonds', async (req, res) => {
+    const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, username, diamonds, wins, losses')
+      .order('diamonds', { ascending: false })
+      .limit(500)
+      .neq('id', adminId)
+      .neq('is_private', true);
+    if (error) return res.status(500).json({ error: error.message });
+
+    const players = data.map((p, i) => ({ rank: i + 1, ...p }));
+
+    let userRank = null;
+    if (req.query.userId) {
+      const uid = req.query.userId;
+      const inList = players.find(p => p.id === uid);
+      if (inList) {
+        userRank = inList.rank;
+      } else {
+        const { data: myProfile } = await supabase.from('profiles').select('diamonds').eq('id', uid).single();
+        const userDiamonds = myProfile?.diamonds ?? 0;
+        const { count } = await supabase
+          .from('profiles').select('id', { count: 'exact', head: true })
+          .gt('diamonds', userDiamonds).neq('id', adminId).neq('is_private', true);
+        userRank = (count ?? 0) + 1;
+      }
+    }
+
+    res.json({ players, userRank });
+  });
+
+  // Weekly win leaderboard — top 100 by wins in the last 7 days
+  router.get('/weekly', async (req, res) => {
+    const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data: matchData, error } = await supabase
+      .from('matches')
+      .select('winner_id')
+      .not('winner_id', 'is', null)
+      .gte('played_at', sevenDaysAgo);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Aggregate wins per player
+    const winsMap = {};
+    for (const m of (matchData || [])) {
+      if (!m.winner_id || m.winner_id === adminId) continue;
+      winsMap[m.winner_id] = (winsMap[m.winner_id] || 0) + 1;
+    }
+
+    const sorted = Object.entries(winsMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 100);
+
+    const ids = sorted.map(([id]) => id);
+    const { data: profileData } = ids.length
+      ? await supabase
+          .from('profiles')
+          .select('id, username, elo, profile_color')
+          .in('id', ids)
+          .neq('is_private', true)
+      : { data: [] };
+
+    const profileMap = Object.fromEntries((profileData || []).map(p => [p.id, p]));
+
+    const players = sorted
+      .filter(([id]) => profileMap[id])
+      .map(([id, weekly_wins], i) => ({
+        rank: i + 1,
+        id,
+        username: profileMap[id]?.username ?? 'Unknown',
+        elo: profileMap[id]?.elo ?? 0,
+        profile_color: profileMap[id]?.profile_color ?? null,
+        weekly_wins,
+      }));
+
+    res.json({ players });
+  });
+
+  // Coin balance leaderboard — top 500 by current coin balance
+  router.get('/coins', async (req, res) => {
+    const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, username, c_coins, wins, losses')
+      .order('c_coins', { ascending: false })
+      .limit(500)
+      .neq('id', adminId)
+      .neq('is_private', true);
+    if (error) return res.status(500).json({ error: error.message });
+
+    const players = data.map((p, i) => ({ rank: i + 1, ...p }));
+
+    let userRank = null;
+    if (req.query.userId) {
+      const uid = req.query.userId;
+      const inList = players.find(p => p.id === uid);
+      if (inList) {
+        userRank = inList.rank;
+      } else {
+        const { data: myProfile } = await supabase.from('profiles').select('c_coins').eq('id', uid).single();
+        const userCoins = myProfile?.c_coins ?? 0;
+        const { count } = await supabase
+          .from('profiles').select('id', { count: 'exact', head: true })
+          .gt('c_coins', userCoins).neq('id', adminId).neq('is_private', true);
+        userRank = (count ?? 0) + 1;
+      }
+    }
+
+    res.json({ players, userRank });
+  });
+
+  // Total wagered leaderboard — computed from matches table
+  router.get('/wagered', async (req, res) => {
+    const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
+    const { data: matchData, error } = await supabase
+      .from('matches')
+      .select('player1_id, player2_id, entry_fee_c')
+      .not('entry_fee_c', 'is', null)
+      .gt('entry_fee_c', 0);
+    if (error) return res.status(500).json({ error: error.message });
+
+    const wageredMap = {};
+    for (const m of matchData || []) {
+      const fee = Number(m.entry_fee_c) || 0;
+      if (fee <= 0) continue;
+      if (m.player1_id) wageredMap[m.player1_id] = (wageredMap[m.player1_id] || 0) + fee;
+      if (m.player2_id) wageredMap[m.player2_id] = (wageredMap[m.player2_id] || 0) + fee;
+    }
+
+    const sorted = Object.entries(wageredMap)
+      .filter(([id]) => id !== adminId)
+      .sort((a, b) => b[1] - a[1]).slice(0, 500);
+    const ids = sorted.map(([id]) => id);
+    const { data: profileData } = ids.length
+      ? await supabase.from('profiles').select('id, username, wins, losses').in('id', ids).not('is_private', 'is', true)
+      : { data: [] };
+    const profileMap = Object.fromEntries((profileData || []).map(p => [p.id, p]));
+
+    const players = sorted
+      .filter(([id]) => profileMap[id])
+      .map(([id, wagered], i) => ({
+        rank: i + 1, id,
+        username: profileMap[id]?.username ?? 'Unknown',
+        total_wagered: parseFloat(wagered.toFixed(4)),
+        wins: profileMap[id]?.wins ?? 0,
+        losses: profileMap[id]?.losses ?? 0,
+      }));
+
+    let userRank = null;
+    let userWagered = null;
+    if (req.query.userId) {
+      const uid = req.query.userId;
+      const entry = players.find(p => p.id === uid);
+      if (entry) {
+        userRank = entry.rank;
+        userWagered = entry.total_wagered;
+      } else {
+        const myWagered = wageredMap[uid] ?? 0;
+        userWagered = parseFloat(myWagered.toFixed(4));
+        if (myWagered > 0) userRank = Object.values(wageredMap).filter(w => w > myWagered).length + 1;
+      }
+    }
+
+    res.json({ players, userRank, userWagered });
+  });
+
+  // Total wagered diamonds leaderboard — computed from matches table
+  router.get('/wagered-diamonds', async (req, res) => {
+    const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
+    const { data: matchData, error } = await supabase
+      .from('matches')
+      .select('player1_id, player2_id, entry_fee_diamonds')
+      .not('entry_fee_diamonds', 'is', null)
+      .gt('entry_fee_diamonds', 0);
+    if (error) return res.status(500).json({ error: error.message });
+
+    const wageredMap = {};
+    for (const m of matchData || []) {
+      const fee = Number(m.entry_fee_diamonds) || 0;
+      if (fee <= 0) continue;
+      if (m.player1_id) wageredMap[m.player1_id] = (wageredMap[m.player1_id] || 0) + fee;
+      if (m.player2_id) wageredMap[m.player2_id] = (wageredMap[m.player2_id] || 0) + fee;
+    }
+
+    const sorted = Object.entries(wageredMap)
+      .filter(([id]) => id !== adminId)
+      .sort((a, b) => b[1] - a[1]).slice(0, 500);
+    const ids = sorted.map(([id]) => id);
+    const { data: profileData } = ids.length
+      ? await supabase.from('profiles').select('id, username, wins, losses').in('id', ids).not('is_private', 'is', true)
+      : { data: [] };
+    const profileMap = Object.fromEntries((profileData || []).map(p => [p.id, p]));
+
+    const players = sorted
+      .filter(([id]) => profileMap[id])
+      .map(([id, wagered], i) => ({
+        rank: i + 1, id,
+        username: profileMap[id]?.username ?? 'Unknown',
+        total_wagered: Math.round(wagered),
+        wins: profileMap[id]?.wins ?? 0,
+        losses: profileMap[id]?.losses ?? 0,
+      }));
+
+    let userRank = null;
+    let userWagered = null;
+    if (req.query.userId) {
+      const uid = req.query.userId;
+      const entry = players.find(p => p.id === uid);
+      if (entry) {
+        userRank = entry.rank;
+        userWagered = entry.total_wagered;
+      } else {
+        const myWagered = wageredMap[uid] ?? 0;
+        userWagered = Math.round(myWagered);
+        if (myWagered > 0) userRank = Object.values(wageredMap).filter(w => w > myWagered).length + 1;
+      }
+    }
+
+    res.json({ players, userRank, userWagered });
+  });
+
+  // Game-specific highscore leaderboard
+  // Score-based games use game_highscores; all others use wins from matches table
+  const SCORE_GAMES = ['blockBlast', 'tetris', 'snake', 'galaga', 'asteroids', 'piano', 'twoFortyEight', 'clickRace'];
+
+  router.get('/game/:gameType', async (req, res) => {
+    const { gameType } = req.params;
+    const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
+
+    if (SCORE_GAMES.includes(gameType)) {
+      // ── Score leaderboard from game_highscores ──
+      const { data, error } = await supabase
+        .from('game_highscores')
+        .select('user_id, score')
+        .eq('game_type', gameType)
+        .order('score', { ascending: false })
+        .limit(500);
+
+      if (error) return res.status(500).json({ error: error.message });
+
+      const filtered = (data || []).filter(r => r.user_id !== adminId);
+
+      // Fetch usernames in bulk
+      const scoreIds = filtered.map(r => r.user_id);
+      const { data: scoreProfiles } = scoreIds.length
+        ? await supabase.from('profiles').select('id, username').in('id', scoreIds)
+        : { data: [] };
+      const scoreProfileMap = Object.fromEntries((scoreProfiles || []).map(p => [p.id, p.username]));
+
+      const players = filtered.map((r, i) => ({
+          rank: i + 1,
+          id: r.user_id,
+          username: scoreProfileMap[r.user_id] ?? 'Unknown',
+          score: r.score,
+        }));
+
+      let userRank = null;
+      if (req.query.userId) {
+        const uid = req.query.userId;
+        const entry = players.find(p => p.id === uid);
+        if (entry) {
+          userRank = { rank: entry.rank, score: entry.score };
+        } else {
+          // Fetch user's actual score from DB, then count how many are above it
+          const { data: myRow } = await supabase
+            .from('game_highscores')
+            .select('score')
+            .eq('game_type', gameType)
+            .eq('user_id', uid)
+            .single();
+          const myScore = myRow?.score ?? 0;
+          const { count } = await supabase
+            .from('game_highscores')
+            .select('user_id', { count: 'exact', head: true })
+            .eq('game_type', gameType)
+            .gt('score', myScore)
+            .neq('user_id', adminId);
+          userRank = { rank: (count ?? 0) + 1, score: myScore };
+        }
+      }
+
+      return res.json({ players, userRank });
+    }
+
+    // ── Win leaderboard from matches table ──
+    const { data: matchData, error: matchError } = await supabase
+      .from('matches')
+      .select('winner_id')
+      .eq('game_type', gameType)
+      .not('winner_id', 'is', null);
+
+    if (matchError) return res.status(500).json({ error: matchError.message });
+
+    // Count wins per user
+    const winsMap = {};
+    for (const m of (matchData || [])) {
+      if (!m.winner_id || m.winner_id === adminId) continue;
+      winsMap[m.winner_id] = (winsMap[m.winner_id] || 0) + 1;
+    }
+
+    const sorted = Object.entries(winsMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 500);
+
+    // Fetch usernames in bulk
+    const ids = sorted.map(([id]) => id);
+    const { data: profileData } = ids.length
+      ? await supabase.from('profiles').select('id, username').in('id', ids)
+      : { data: [] };
+    const profileMap = Object.fromEntries((profileData || []).map(p => [p.id, p.username]));
+
+    const players = sorted.map(([id, wins], i) => ({
+      rank: i + 1,
+      id,
+      username: profileMap[id] ?? 'Unknown',
+      score: wins,
+    }));
+
+    let userRank = null;
+    if (req.query.userId) {
+      const uid = req.query.userId;
+      const entry = players.find(p => p.id === uid);
+      if (entry) {
+        userRank = { rank: entry.rank, score: entry.score };
+      } else {
+        const myWins = winsMap[uid] ?? 0;
+        const above = Object.values(winsMap).filter(w => w > myWins).length;
+        userRank = { rank: above + 1, score: myWins };
+      }
+    }
+
+    return res.json({ players, userRank });
+  });
+
+  return router;
+};
