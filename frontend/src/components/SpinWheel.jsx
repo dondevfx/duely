@@ -68,7 +68,7 @@ function fmtCountdown(ms) {
   return `${m}m ${s}s`;
 }
 
-export default function SpinWheel() {
+export default function SpinWheel({ locked = false }) {
   const { refreshProfile } = useAuth();
   const [status,    setStatus]    = useState({ canSpin: false });
   const [spinning,  setSpinning]  = useState(false);
@@ -79,6 +79,7 @@ export default function SpinWheel() {
   const [remaining, setRemaining] = useState(0);
 
   useEffect(() => {
+    if (locked) return; // don't spin when locked/logged out
     let frame;
     let last = performance.now();
     const tick = (now) => {
@@ -92,7 +93,7 @@ export default function SpinWheel() {
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [spinning]);
+  }, [spinning, locked]);
 
   const fetchStatus = useCallback(async () => {
     try {

@@ -73,10 +73,12 @@ export function AuthProvider({ children }) {
           const factor = factors?.totp?.find(f => f.status === 'verified');
           if (factor) {
             // Has 2FA — session is alive in Supabase memory for challengeAndVerify
-            // Keep React session = null so user sees logged-out state + MFA redirect
+            // Fetch profile so navbar shows user info while waiting for MFA code
+            // Session stays null in React so pages remain locked until code entered
             _pendingMfaCreds.current = { fromSavedSession: true, factorId: factor.id };
             setMfaPending(true);
             setMfaFactorId(factor.id);
+            fetchProfile().catch(() => {}); // show profile info in nav during MFA wait
             // session intentionally left null — Shell will redirect to /login
           } else {
             // No 2FA — log straight in

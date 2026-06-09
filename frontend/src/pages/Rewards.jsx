@@ -563,7 +563,7 @@ export default function Rewards() {
             const isUnlocked = session
               ? (tier.id === 'bronze' ? true : placementDone && tier.minElo <= elo)
               : false;
-            const isActive = tier.id === activeTier;
+            const isActive = session && tier.id === activeTier;
             const lockText = !session
               ? 'Login to spin'
               : !placementDone && tier.id !== 'bronze'
@@ -585,7 +585,7 @@ export default function Rewards() {
           {session ? <SpinWheel /> : (
             <div className="relative rounded-2xl overflow-hidden">
               <div className="pointer-events-none opacity-40 select-none">
-                <SpinWheel />
+                <SpinWheel locked />
               </div>
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 rounded-2xl gap-2">
                 <span className="text-3xl">🔒</span>
