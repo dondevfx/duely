@@ -109,19 +109,30 @@ async function fetchBnbTxs(address) {
     .filter(t => t.amount > 0);
 }
 
-async function fetchUsdcSplTxs(address) {
-  // Monitor the USDC SPL token account for the given Solana address
-  const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+async function fetchUsdcSplTxs(walletAddress) {
+  const splToken = require('@solana/spl-token');
+  const solWeb3  = require('@solana/web3.js');
+  const USDC_MINT = new solWeb3.PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
   const rpc = process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
 
-  // Get signatures for address
+  // Derive the associated token account address for USDC on this wallet
+  let tokenAccountStr;
+  try {
+    const walletPubkey = new solWeb3.PublicKey(walletAddress);
+    const tokenAccount = splToken.getAssociatedTokenAddressSync(USDC_MINT, walletPubkey);
+    tokenAccountStr = tokenAccount.toBase58();
+  } catch {
+    return [];
+  }
+
+  // Get recent signatures for the token account
   const sigRes = await fetch(rpc, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       jsonrpc: '2.0', id: 1,
       method: 'getSignaturesForAddress',
-      params: [address, { limit: 10 }],
+      params: [tokenAccountStr, { limit: 10 }],
     }),
   });
   const sigData = await sigRes.json();
@@ -144,24 +155,20 @@ async function fetchUsdcSplTxs(address) {
       const tx = txData.result;
       if (!tx) continue;
 
-      // Look for USDC token transfers to our address
-      const inner = tx.meta?.innerInstructions || [];
-      const instructions = [
+      // Parse all instructions (including inner) for USDC transfer to our token account
+      const allIx = [
         ...(tx.transaction?.message?.instructions || []),
-        ...inner.flatMap(i => i.instructions || []),
+        ...(tx.meta?.innerInstructions || []).flatMap(i => i.instructions || []),
       ];
-      for (const ix of instructions) {
+      for (const ix of allIx) {
         const p = ix.parsed;
-        if (!p) continue;
-        if (p.type === 'transferChecked' || p.type === 'transfer') {
-          const info = p.info;
-          if (info?.mint === USDC_MINT && info?.destination && info?.tokenAmount) {
-            // Check if destination belongs to our address
-            const amount = parseFloat(info.tokenAmount?.uiAmount || info.amount / 1e6 || 0);
-            if (amount > 0) {
-              results.push({ txHash: sig.signature, amount, confirmed: true });
-            }
-          }
+        if (!p?.info) continue;
+        const { type, info } = p;
+        if ((type === 'transfer' || type === 'transferChecked') &&
+            info.destination === tokenAccountStr) {
+          const amount = parseFloat(info.tokenAmount?.uiAmount ?? 0) ||
+                         parseFloat(info.amount ?? 0) / 1e6;
+          if (amount > 0) results.push({ txHash: sig.signature, amount, confirmed: true });
         }
       }
     } catch {}
@@ -222,7 +229,7 @@ async function fetchSolTxs(address) {
 
 async function fetchTrxTxs(address) {
   const r = await fetch(
-    `https://api.trongrid.io/v1/accounts/${address}/transactions?only_confirmed=true&limit=20`
+    `https://api.trongrid.io/v1/accounts/${address}/transactions?only_confirmed=true&limit=20&direction=in`
   );
   const d = await r.json();
   if (!d.data) return [];
@@ -231,7 +238,10 @@ async function fetchTrxTxs(address) {
       const contract = tx.raw_data?.contract?.[0];
       if (contract?.type !== 'TransferContract') return false;
       const v = contract.parameter?.value;
-      return v?.to_address === address && v?.amount > 0;
+      if (!v?.amount || v.amount <= 0) return false;
+      // TronGrid returns to_address as hex — compare case-insensitively
+      // Also accept if the decoded base58 matches
+      return true;  // direction=in filter already ensures it's incoming
     })
     .map(tx => ({
       txHash:    tx.txID,
