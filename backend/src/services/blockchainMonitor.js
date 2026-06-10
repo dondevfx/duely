@@ -20,7 +20,7 @@ const { createDepositSwap }  = require('./simpleSwapService');
 const { watch }              = require('./swapPoller');
 
 const POLL_INTERVAL_MS = 45_000;
-const MIN_USD          = 4.50;
+const MIN_USD          = 0.50;  // lowered for testing — raise to 4.50 before launch
 const OUR_USDC_ADDRESS = () => process.env.USDC_SPL_ADDRESS;
 
 // CoinGecko IDs for price lookups
