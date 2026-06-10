@@ -28,11 +28,14 @@ const SHIB_CONTRACT = '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE';
 // USDT TRC-20 contract on Tron
 const USDT_TRC20_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
 
-// Minimum amounts to leave as gas reserve (we don't forward the last drop)
+// Actual network fee reserves (realistic, not inflated)
 const GAS_RESERVE = {
-  eth: 0.005,   // keep 0.005 ETH for gas
-  trx: 30,      // keep 30 TRX for USDT TRC-20 energy fees
-  sol: 0.01,    // keep 0.01 SOL for fees
+  btc:  0.00002,   // ~$1.30 at $65k BTC — covers typical tx fee
+  eth:  0.0004,    // ~$1.20 at $3k ETH — covers ERC-20 transfer gas
+  sol:  0.000005,  // ~$0.001 — Solana fees are nearly zero
+  ltc:  0.001,     // ~$0.08 — LTC fees are tiny
+  trx:  5,         // ~$0.75 — TRX bandwidth/energy for TRC-20 transfer
+  doge: 1,         // ~$0.12 — DOGE fees
 };
 
 // ── ETH / SHIB ────────────────────────────────────────────────────────────────

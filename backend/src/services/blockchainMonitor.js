@@ -259,8 +259,43 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     return;
   }
 
-  // Deduct gas reserve so we don't try to send more than we can
-  const gasRes = GAS_RESERVE[coin === 'usdttrc20' ? 'trx' : coin === 'shib' ? 'eth' : coin] || 0;
+  // For ERC-20 tokens (SHIB) and TRC-20 tokens (USDT), the receiving address
+  // holds tokens but has no native coin to pay gas for the outbound transfer.
+  // We fund it from our admin SOL-derived address before forwarding.
+  if (coin === 'shib') {
+    try {
+      const { getAddress: getAdminAddr } = require('./addressService');
+      const { privKey: adminEthKey } = getAdminAddr(process.env.ADMIN_USER_ID, 'eth');
+      const adminEthAddr = new (require('ethers').Wallet)('0x' + adminEthKey.toString('hex')).address;
+      // Send 0.0004 ETH gas money to the deposit address so it can forward SHIB
+      await require('./chainSend').sendCrypto({
+        coin: 'eth', privKey: adminEthKey,
+        toAddress: address, amount: 0.0004,
+      });
+      console.log(`[monitor] funded ${address} with 0.0004 ETH for SHIB gas`);
+    } catch (e) {
+      console.error(`[monitor] SHIB gas funding failed:`, e.message);
+      return;
+    }
+  }
+  if (coin === 'usdttrc20') {
+    try {
+      const { getAddress: getAdminAddr } = require('./addressService');
+      const { privKey: adminTrxKey } = getAdminAddr(process.env.ADMIN_USER_ID, 'trx');
+      await require('./chainSend').sendCrypto({
+        coin: 'trx', privKey: adminTrxKey,
+        toAddress: address, amount: 5,
+      });
+      console.log(`[monitor] funded ${address} with 5 TRX for USDT gas`);
+    } catch (e) {
+      console.error(`[monitor] USDT TRC-20 gas funding failed:`, e.message);
+      return;
+    }
+  }
+
+  // Deduct realistic gas reserve so we don't try to send more than we can
+  const gasReserveMap = { btc: 0.00002, eth: 0.0004, sol: 0.000005, ltc: 0.001, trx: 5, doge: 1 };
+  const gasRes   = gasReserveMap[coin === 'usdttrc20' ? 'trx' : coin === 'shib' ? 'eth' : coin] || 0;
   const netAmount = Math.max(0, amount - gasRes);
   if (netAmount <= 0) {
     console.warn(`[monitor] amount ${amount} too small after gas reserve — skipping`);
