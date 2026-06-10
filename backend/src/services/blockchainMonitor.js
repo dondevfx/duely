@@ -339,65 +339,44 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     return;
   }
 
-  const usdcAddress = process.env.USDC_SPL_ADDRESS;
-  if (!usdcAddress) {
-    console.error('[monitor] USDC_SPL_ADDRESS not configured — cannot forward deposit');
-    return;
-  }
-
-  const gasReserveMap = { btc: 0.00002, eth: 0.0004, bnb: 0.0005, sol: 0.000005, ltc: 0.001, trx: 5, doge: 1 };
-  const gasRes    = gasReserveMap[coin] || 0;
-  const netAmount = Math.max(0, amount - gasRes);
-  if (netAmount <= 0) {
-    console.warn(`[monitor] amount ${amount} too small after gas reserve — skipping`);
-    return;
-  }
-
-  // Create SimpleSwap exchange: coin → USDC SPL → our admin wallet
-  let swap;
-  try {
-    swap = await createDepositSwap({ coin, amount: netAmount, ourStableAddress: usdcAddress, refundAddress: '' });
-  } catch (e) {
-    console.error(`[monitor] SimpleSwap error for ${txHash}:`, e.message);
-    return;
-  }
-
-  // Record as 'converting' — swapPoller will credit the user when USDC arrives
+  // ── Credit user immediately at spot price minus 1% ───────────────────────────
+  // 0.5% covers SimpleSwap fee, 0.5% is price movement buffer.
+  const SWAP_FEE  = 0.01;
+  const credited  = Math.floor(estimatedUsd * (1 - SWAP_FEE) * 100) / 100;
+  const { creditCoins, recordDeposit } = require('./walletService');
+  await creditCoins(supabase, userId, credited);
+  await recordDeposit(supabase, userId, credited, 'crypto');
   await supabase.from('transactions').insert({
     user_id:       userId,
     type:          'deposit',
-    amount_c:      0,
-    crypto_amount: netAmount,
-    crypto_symbol: coin.toUpperCase(),
-    tx_hash:       swap.exchangeId,
-    status:        'converting',
-  });
-
-  // Record original on-chain tx for idempotency (prevents reprocessing)
-  await supabase.from('transactions').insert({
-    user_id:       userId,
-    type:          'deposit_raw',
-    amount_c:      0,
+    amount_c:      credited,
     crypto_amount: amount,
     crypto_symbol: coin.toUpperCase(),
     tx_hash:       txHash,
-    status:        'forwarded',
-  }).catch(() => {});
+    status:        'confirmed',
+  });
+  console.log(`[monitor] ✓ credited $${credited} to user ${userId} (${amount} ${coin} @ $${priceUsd} -1%)`);
 
-  // Forward the crypto to SimpleSwap
-  const { privKey } = getAddress(userId, coin);
-  try {
-    const sendTx = await sendCrypto({ coin, privKey, toAddress: swap.depositAddress, amount: netAmount });
-    console.log(`[monitor] forwarded ${netAmount} ${coin} → SimpleSwap exchange=${swap.exchangeId} sendTx=${sendTx}`);
-  } catch (e) {
-    console.error(`[monitor] sendCrypto failed for ${txHash}:`, e.message);
+  // ── Forward to SimpleSwap → admin Phantom wallet (fire and forget) ───────────
+  const usdcAddress = process.env.USDC_SPL_ADDRESS;
+  if (!usdcAddress) {
+    console.error('[monitor] USDC_SPL_ADDRESS not set — skipping forward');
     return;
   }
+  const gasReserveMap = { btc: 0.00002, eth: 0.0004, bnb: 0.0005, sol: 0.000005, ltc: 0.001, trx: 5, doge: 1 };
+  const netAmount = Math.max(0, amount - (gasReserveMap[coin] || 0));
+  if (netAmount <= 0) return;
 
-  // swapPoller will poll SimpleSwap every 30s and credit user when status=finished
-  const { watch } = require('./swapPoller');
-  watch(swap.exchangeId, userId);
-  console.log(`[monitor] watching exchange ${swap.exchangeId} — will credit user ${userId} when USDC arrives`);
+  (async () => {
+    try {
+      const swap    = await createDepositSwap({ coin, amount: netAmount, ourStableAddress: usdcAddress, refundAddress: '' });
+      const { privKey } = getAddress(userId, coin);
+      const sendTx  = await sendCrypto({ coin, privKey, toAddress: swap.depositAddress, amount: netAmount });
+      console.log(`[monitor] forwarded ${netAmount} ${coin} → SimpleSwap exchange=${swap.exchangeId} tx=${sendTx}`);
+    } catch (e) {
+      console.error(`[monitor] SimpleSwap forward failed for ${txHash}:`, e.message);
+    }
+  })();
 }
 
 // ── Main polling loop ─────────────────────────────────────────────────────────
