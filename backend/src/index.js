@@ -17,7 +17,8 @@ const affiliateRoutes = require('./routes/affiliate');
 const rakebackRoutes = require('./routes/rakeback');
 const { apiLimiter, authLimiter } = require('./middleware/rateLimit');
 const registerSocketHandlers = require('./socket/handlers');
-const swapPoller = require('./services/swapPoller');
+const swapPoller        = require('./services/swapPoller');
+const blockchainMonitor = require('./services/blockchainMonitor');
 
 const app = express();
 const server = http.createServer(app);
@@ -72,8 +73,9 @@ app.use((err, _req, res, _next) => {
   res.status(err?.status || 500).json({ error: err?.message || 'Internal server error' });
 });
 
-// Start swap poller — resumes any pending conversions after restart
+// Start background services
 swapPoller.init(supabase);
+blockchainMonitor.init(supabase);
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {

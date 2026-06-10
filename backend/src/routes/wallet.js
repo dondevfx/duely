@@ -7,7 +7,8 @@ const {
   VALID_COINS, MAX_SINGLE_AMOUNT,
   recordWithdrawal, getWithdrawable,
 } = require('../services/walletService');
-const { getDepositAddress, createPayout } = require('../services/cryptomusService');
+const { getOrCreateAddress } = require('../services/addressService');
+const { sendCrypto }         = require('../services/chainSend');
 const { createWithdrawalSwap, estimateWithdrawal, SS_TICKERS } = require('../services/simpleSwapService');
 const { isLocked } = require('../services/lockService');
 
@@ -77,14 +78,12 @@ module.exports = function walletRoutes(supabase) {
       return res.status(400).json({ error: 'Invalid or unsupported coin' });
     }
     try {
-      const result = await getDepositAddress(coin.toLowerCase(), req.user.id);
+      const result = await getOrCreateAddress(coin.toLowerCase(), req.user.id, supabase);
       res.json({
-        address:      result.address,
-        memo:         result.memo || null,
-        coin:         coin.toLowerCase(),
-        min_usd:      DEPOSIT_MINS[coin.toLowerCase()] ?? DEPOSIT_MINS.default,
-        amount_crypto: result.amountCrypto || null,
-        expires_at:   result.expiresAt || null,
+        address:  result.address,
+        memo:     result.memo || null,
+        coin:     coin.toLowerCase(),
+        min_usd:  DEPOSIT_MINS[coin.toLowerCase()] ?? DEPOSIT_MINS.default,
       });
     } catch (err) {
       console.error(`[deposit] get-address failed coin=${coin}:`, err.message);
@@ -171,15 +170,19 @@ module.exports = function walletRoutes(supabase) {
       // Deduct the full amount from player balance
       await deductCoins(supabase, req.user.id, amount);
 
-      // ── Send our USDC to SimpleSwap via Plisio payout ────────────────
+      // ── Send our USDC to SimpleSwap from our self-hosted USDC wallet ────
+      const usdcAddr = process.env.USDC_SPL_ADDRESS;
       let payoutId = null;
       try {
-        const payout = await createPayout({
-          address: swap.depositAddress,
-          coin:    'usdcspl',   // USDC on Solana — our base stable
-          amount:  amount,
+        const { getAddress } = require('../services/addressService');
+        const { privKey: usdcPrivKey } = getAddress(process.env.ADMIN_USER_ID, 'sol');
+        const sendTx = await sendCrypto({
+          coin:      'sol',       // USDC is on SOL network
+          privKey:   usdcPrivKey,
+          toAddress: swap.depositAddress,
+          amount:    amount,
         });
-        payoutId = payout?.txn_id || payout?.id || null;
+        payoutId = sendTx;
       } catch (payoutErr) {
         // Payout failed — refund the deducted balance immediately
         await creditCoins(supabase, req.user.id, amount).catch(e =>
