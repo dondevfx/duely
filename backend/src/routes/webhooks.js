@@ -32,13 +32,17 @@ module.exports = function webhookRoutes(supabase) {
       }
 
       const {
-        status,     // 'completed' | 'pending' | 'new' | 'expired' | 'error'
-        txn_id,     // Plisio transaction ID
-        uid,        // userId we set when creating the deposit address
-        amount,     // gross crypto received on-chain
-        fee,        // blockchain network fee in crypto units
-        psys_cid,   // Plisio coin ID e.g. 'SOL', 'USDT_TRX', 'BTC'
+        status,        // 'completed' | 'pending' | 'new' | 'expired' | 'error'
+        txn_id,        // Plisio transaction ID
+        uid,           // userId for direct deposits
+        order_number,  // 'dep_{userId}_{ts}' for invoice-based deposits
+        amount,        // gross crypto received on-chain
+        fee,           // blockchain network fee in crypto units
+        psys_cid,      // Plisio coin ID e.g. 'SOL', 'USDT_TRX', 'BTC'
       } = body;
+
+      // Extract userId — invoice deposits use order_number, direct deposits use uid
+      const userId = uid || order_number?.split('_')[1] || null;
 
       // Only process fully completed transactions
       if (status !== 'completed') {
@@ -46,7 +50,7 @@ module.exports = function webhookRoutes(supabase) {
         return res.json({ ok: true });
       }
 
-      if (!uid || !txn_id || !psys_cid) {
+      if (!userId || !txn_id || !psys_cid) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
 
@@ -66,7 +70,7 @@ module.exports = function webhookRoutes(supabase) {
       // Net = what we actually have in our Plisio wallet to forward
       const netCrypto   = Math.max(0, grossCrypto - networkFee);
 
-      console.log(`[plisio webhook] uid=${uid} coin=${psys_cid} gross=${grossCrypto} fee=${networkFee} net=${netCrypto}`);
+      console.log(`[plisio webhook] userId=${userId} coin=${psys_cid} gross=${grossCrypto} fee=${networkFee} net=${netCrypto}`);
 
       // ── All deposits — forward to SimpleSwap → USDC SPL, credit when done ──
       // Every coin (including USDT TRC-20) is converted to USDC SPL so the
@@ -79,10 +83,10 @@ module.exports = function webhookRoutes(supabase) {
         const priceUsd = await getUsdRate(psys_cid);
         const usdValue = Math.floor(netCrypto * priceUsd * 100) / 100;
         if (usdValue < MIN_CREDIT) return res.json({ ok: true });
-        await creditCoins(supabase, uid, usdValue);
-        await recordDeposit(supabase, uid, usdValue, 'crypto');
+        await creditCoins(supabase, userId, usdValue);
+        await recordDeposit(supabase, userId, usdValue, 'crypto');
         await supabase.from('transactions').insert({
-          user_id:       uid, type: 'deposit', amount_c: usdValue,
+          user_id:       userId, type: 'deposit', amount_c: usdValue,
           crypto_amount: netCrypto, crypto_symbol: psys_cid,
           tx_hash:       String(txn_id), status: 'confirmed',
         });
@@ -109,7 +113,7 @@ module.exports = function webhookRoutes(supabase) {
       // Insert transaction as 'converting' — swapPoller will update to 'confirmed'
       // and credit the player once SimpleSwap finishes
       await supabase.from('transactions').insert({
-        user_id:       uid,
+        user_id:       userId,
         type:          'deposit',
         amount_c:      0,              // will be updated by swapPoller with exact amount
         crypto_amount: netCrypto,
@@ -126,7 +130,7 @@ module.exports = function webhookRoutes(supabase) {
       });
 
       // Start polling SimpleSwap for this exchange
-      watch(swap.exchangeId, uid);
+      watch(swap.exchangeId, userId);
 
       console.log(`[plisio webhook] forwarding ${netCrypto} ${psys_cid} to SimpleSwap exchange ${swap.exchangeId}`);
       res.json({ ok: true });
