@@ -93,7 +93,7 @@ async function fetchEthTxs(address) {
 }
 
 async function fetchBnbTxs(address) {
-  const key = process.env.BSCSCAN_API_KEY || '';
+  const key = process.env.ETHERSCAN_API_KEY || '';
   const r = await fetch(
     `https://api.bscscan.com/api?module=account&action=txlist&address=${address}&sort=desc&apikey=${key}`
   );
