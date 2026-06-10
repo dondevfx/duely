@@ -15,7 +15,8 @@ const fetch   = require('node-fetch');
 const solWeb3 = require('@solana/web3.js');
 const splToken = require('@solana/spl-token');
 
-const JUPITER_API = 'https://quote-api.jup.ag/v6';
+// Try newer lite API first, fall back to standard
+const JUPITER_API = process.env.JUPITER_API_URL || 'https://lite-api.jup.ag/swap/v1';
 const SOL_MINT    = 'So11111111111111111111111111111111111111112';
 const USDC_MINT   = new solWeb3.PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
 
@@ -35,6 +36,7 @@ async function swapSolToUsdc(privKey, amountSol, adminAddress) {
   // Step 1 — get quote
   const quoteUrl = `${JUPITER_API}/quote?inputMint=${SOL_MINT}&outputMint=${USDC_MINT.toBase58()}&amount=${lamports}&slippageBps=50`;
   const quoteRes = await fetch(quoteUrl);
+  if (!quoteRes.ok) throw new Error(`Jupiter quote HTTP ${quoteRes.status}`);
   const quote    = await quoteRes.json();
   if (quote.error) throw new Error(`Jupiter quote error: ${quote.error}`);
 
@@ -53,6 +55,7 @@ async function swapSolToUsdc(privKey, amountSol, adminAddress) {
       wrapAndUnwrapSol:        true,
     }),
   });
+  if (!swapRes.ok) throw new Error(`Jupiter swap HTTP ${swapRes.status}`);
   const swapData = await swapRes.json();
   if (swapData.error) throw new Error(`Jupiter swap error: ${swapData.error}`);
 
