@@ -389,7 +389,14 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
         console.log(`[monitor] forwarded ${netAmount} ${coin} → ChangeNow exchange=${swap.exchangeId} tx=${sendTx}`);
       }
     } catch (e) {
-      console.error(`[monitor] forward failed for ${txHash}:`, e.message);
+      console.error(`[monitor] forward failed (${e.message}) — sending ${coin} directly to admin wallet`);
+      // Fallback: send coin directly to admin wallet so funds are never stuck
+      try {
+        const sendTx = await sendCrypto({ coin, privKey, toAddress: usdcAddress, amount: netAmount });
+        console.log(`[monitor] fallback: sent ${netAmount} ${coin} directly to admin wallet tx=${sendTx}`);
+      } catch (e2) {
+        console.error(`[monitor] fallback also failed for ${txHash}:`, e2.message);
+      }
     }
   })();
 }
