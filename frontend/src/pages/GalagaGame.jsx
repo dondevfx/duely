@@ -7,6 +7,7 @@ import GlowButton from '../components/GlowButton';
 import GameLobby from '../components/GameLobby';
 import { usePageReady } from '../hooks/usePageReady';
 import { useGamePageRejoin } from '../hooks/useGamePageRejoin';
+import CoinIcon from '../components/CoinIcon';
 
 const COIN_FEES    = [0.25, 0.5, 1, 2, 5, 10, 25, 50, 100];
 const DIAMOND_FEES = [50, 100, 250, 500, 1000];
@@ -572,7 +573,7 @@ export default function GalagaGame() {
 
   const isDiamonds = betCurrency === 'diamonds';
   const fees       = isDiamonds ? DIAMOND_FEES : COIN_FEES;
-  const currLabel  = isDiamonds ? '💎' : '🪙';
+  const currLabel  = isDiamonds ? '💎' : <CoinIcon size="0.85em" />;
   const balance    = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const insufficient = entryFee > 0 && balance < entryFee;
 
@@ -1615,8 +1616,12 @@ export default function GalagaGame() {
                     <span className="text-muted">{result.humanWon ? 'Payout' : 'Entry lost'}</span>
                     <span className={result.humanWon ? 'text-success font-bold' : 'text-danger font-bold'}>
                       {result.humanWon
-                        ? `+${result.currency === 'diamonds' ? Math.round(result.balanceChange.winnerPayout) + ' 💎' : result.balanceChange.winnerPayout.toLocaleString('en-US', {minimumFractionDigits:2,maximumFractionDigits:2}) + ' 🪙'}`
-                        : `-${result.entryFee ?? 0} ${result.currency === 'diamonds' ? '💎' : '🪙'}`}
+                        ? result.currency === 'diamonds'
+                          ? `+${Math.round(result.balanceChange.winnerPayout)} 💎`
+                          : <span className="inline-flex items-center gap-1">+{result.balanceChange.winnerPayout.toLocaleString('en-US', {minimumFractionDigits:2,maximumFractionDigits:2})} <CoinIcon size="0.8em" /></span>
+                        : result.currency === 'diamonds'
+                          ? `-${result.entryFee ?? 0} 💎`
+                          : <span className="inline-flex items-center gap-1">-{result.entryFee ?? 0} <CoinIcon size="0.8em" /></span>}
                     </span>
                   </div>
                 )}
@@ -1691,10 +1696,12 @@ export default function GalagaGame() {
                       <p className="text-muted">Balance</p>
                       <p className={`font-semibold ${isWinner ? 'text-success' : 'text-danger'}`}>
                         {isWinner
-                          ? `+${result.currency === 'diamonds'
-                              ? Math.round(result.balanceChange.winnerPayout ?? 0) + ' 💎'
-                              : (result.balanceChange.winnerPayout ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' 🪙'}`
-                          : `-${result.entryFee ?? 0} ${result.currency === 'diamonds' ? '💎' : '🪙'}`}
+                          ? result.currency === 'diamonds'
+                            ? `+${Math.round(result.balanceChange.winnerPayout ?? 0)} 💎`
+                            : <span className="inline-flex items-center gap-1">+{(result.balanceChange.winnerPayout ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <CoinIcon size="0.8em" /></span>
+                          : result.currency === 'diamonds'
+                            ? `-${result.entryFee ?? 0} 💎`
+                            : <span className="inline-flex items-center gap-1">-{result.entryFee ?? 0} <CoinIcon size="0.8em" /></span>}
                       </p>
                     </div>
                   )}

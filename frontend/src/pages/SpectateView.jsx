@@ -166,7 +166,7 @@ export default function SpectateView() {
   const gameLabel = {
     scrabble:   '🔤 Word VS',
     blockBlast: '🟦 Block Burst',
-    coinFlip:   '🪙 Coin Flip',
+    coinFlip:   '🟡 Coin Flip',
     blackjack:  '🃏 Blackjack',
   }[gameType] ?? '🎮 Live Game';
 

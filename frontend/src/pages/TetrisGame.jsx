@@ -6,6 +6,7 @@ import { useCurrency } from '../context/CurrencyContext';
 import GlowButton from '../components/GlowButton';
 import GameLobby from '../components/GameLobby';
 import ResultScreen from '../components/ResultScreen';
+import CoinIcon from '../components/CoinIcon';
 import { usePageReady } from '../hooks/usePageReady';
 
 const COLS = 10;
@@ -187,7 +188,7 @@ export default function TetrisGame() {
 
   const isDiamonds   = betCurrency === 'diamonds';
   const fees         = isDiamonds ? DIAMOND_FEES : COIN_FEES;
-  const currLabel    = isDiamonds ? '💎' : '🪙';
+  const currLabel    = isDiamonds ? '💎' : <CoinIcon size="0.85em" />;
   const myBalance    = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const insufficient = entryFee > 0 && myBalance < entryFee;
   const isWinner     = result && result.winnerId === profile?.id;

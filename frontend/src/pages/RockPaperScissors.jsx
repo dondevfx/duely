@@ -7,6 +7,7 @@ import GlowButton from '../components/GlowButton';
 import GameLobby from '../components/GameLobby';
 import { usePageReady } from '../hooks/usePageReady';
 import { useGamePageRejoin } from '../hooks/useGamePageRejoin';
+import CoinIcon from '../components/CoinIcon';
 
 const COIN_FEES    = [0.25, 0.5, 1, 2, 5, 10, 25, 50, 100];
 const DIAMOND_FEES = [50, 100, 250, 500, 1000];
@@ -587,10 +588,12 @@ export default function RockPaperScissors() {
                 <span className="text-muted">{isWinner ? 'Payout' : 'Entry lost'}</span>
                 <span className={`font-bold ${isWinner ? 'text-success' : 'text-danger'}`}>
                   {isWinner
-                    ? `+${resultCurrency === 'diamonds'
-                        ? Math.round(result.balanceChange.winnerPayout) + ' 💎'
-                        : result.balanceChange.winnerPayout.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' 🪙'}`
-                    : `-${entryFee} ${resultCurrency === 'diamonds' ? '💎' : '🪙'}`}
+                    ? resultCurrency === 'diamonds'
+                      ? `+${Math.round(result.balanceChange.winnerPayout)} 💎`
+                      : <span className="inline-flex items-center gap-1">+{result.balanceChange.winnerPayout.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <CoinIcon size="0.8em" /></span>
+                    : resultCurrency === 'diamonds'
+                      ? `-${entryFee} 💎`
+                      : <span className="inline-flex items-center gap-1">-{entryFee} <CoinIcon size="0.8em" /></span>}
                 </span>
               </div>
             )}

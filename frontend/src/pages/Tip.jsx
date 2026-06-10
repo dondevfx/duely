@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
+import CoinIcon from '../components/CoinIcon';
 
 const COIN_AMOUNTS    = [1, 5, 10, 25, 50, 100];
 const DIAMOND_AMOUNTS = [50, 100, 250, 500, 1000];
@@ -20,7 +21,7 @@ export default function Tip() {
 
   const isDiamonds    = currency === 'diamonds';
   const quickAmounts  = isDiamonds ? DIAMOND_AMOUNTS : COIN_AMOUNTS;
-  const currencyLabel = isDiamonds ? '💎' : '🪙';
+  const currencyLabel = isDiamonds ? '💎' : <CoinIcon size="0.85em" />;
   const myBalance     = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const tipAmount     = isDiamonds ? Math.floor(parseFloat(amount)) : parseFloat(amount);
   const insufficient  = tipAmount > 0 && myBalance < tipAmount;
@@ -43,7 +44,7 @@ export default function Tip() {
       });
       const label = isDiamonds
         ? `${data.amount} 💎`
-        : `${parseFloat(data.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 🪙`;
+        : `${parseFloat(data.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} coins`;
       setResult({ type: 'success', text: `Sent ${label} to ${data.recipient}!` });
       setRecipient('');
       setAmount('');
@@ -56,7 +57,7 @@ export default function Tip() {
   }
 
   const sendLabel = tipAmount > 0
-    ? `Send ${isDiamonds ? tipAmount + ' 💎' : tipAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' 🪙'}`
+    ? `Send ${isDiamonds ? tipAmount + ' 💎' : tipAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' coins'}`
     : 'Send';
 
   if (!session) return (
@@ -84,7 +85,7 @@ export default function Tip() {
               !isDiamonds ? 'bg-primary text-white shadow-glow' : 'text-muted hover:text-white'
             }`}
           >
-            🪙 Coins
+            <CoinIcon size="0.85em" /> Coins
           </button>
           <button
             onClick={() => handleCurrencySwitch('diamonds')}
@@ -103,7 +104,7 @@ export default function Tip() {
             <span className="font-mono font-black text-white">
               {isDiamonds
                 ? <>{(profile.diamonds ?? 0).toLocaleString()} <span className="text-sm">💎</span></>
-                : <>{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'} 🪙</>
+                : <span className="inline-flex items-center gap-1">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'} <CoinIcon size="0.85em" /></span>
               }
             </span>
           </div>
@@ -124,7 +125,7 @@ export default function Tip() {
           {/* Amount */}
           <div>
             <label className="block text-sm text-muted mb-2">
-              Amount ({isDiamonds ? 'Diamonds' : '🪙 Coins'})
+              Amount ({isDiamonds ? 'Diamonds' : 'Coins'})
             </label>
             <input
               type="number"
@@ -158,7 +159,7 @@ export default function Tip() {
               Insufficient {isDiamonds ? 'diamonds' : 'balance'} — you have{' '}
               {isDiamonds
                 ? `${(profile?.diamonds ?? 0).toLocaleString()} 💎`
-                : `${profile?.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 🪙`}
+                : `${profile?.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} coins`}
             </p>
           )}
 

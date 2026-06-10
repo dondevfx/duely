@@ -6,6 +6,7 @@ import { useCurrency } from '../context/CurrencyContext';
 import GlowButton from '../components/GlowButton';
 import GameLobby from '../components/GameLobby';
 import { usePageReady } from '../hooks/usePageReady';
+import CoinIcon from '../components/CoinIcon';
 
 const COIN_FEES    = [0.5, 1, 2, 5, 10, 25];
 const DIAMOND_FEES = [50, 100, 250, 500, 1000];
@@ -87,7 +88,7 @@ export default function TypeGame() {
 
   const isDiamonds = betCurrency === 'diamonds';
   const fees = isDiamonds ? DIAMOND_FEES : COIN_FEES;
-  const currencyLabel = isDiamonds ? '💎' : '🪙';
+  const currencyLabel = isDiamonds ? '💎' : <CoinIcon size="0.85em" />;
   const myBalance = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const insufficient = entryFee > 0 && myBalance < entryFee;
 
@@ -425,10 +426,12 @@ export default function TypeGame() {
                 <span className={isWinner ? 'text-2xl font-black text-success' : 'text-danger font-bold'}
                   style={isWinner ? { textShadow: '0 0 12px rgba(74,222,128,0.5)' } : {}}>
                   {isWinner
-                    ? `+${resultCurrency === 'diamonds'
-                        ? Math.round(result.balanceChange.winnerPayout) + ' 💎'
-                        : result.balanceChange.winnerPayout.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' 🪙'}`
-                    : `-${entryFee} ${resultCurrency === 'diamonds' ? '💎' : '🪙'}`}
+                    ? resultCurrency === 'diamonds'
+                      ? `+${Math.round(result.balanceChange.winnerPayout)} 💎`
+                      : <span className="inline-flex items-center gap-1">+{result.balanceChange.winnerPayout.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <CoinIcon size="0.8em" /></span>
+                    : resultCurrency === 'diamonds'
+                      ? `-${entryFee} 💎`
+                      : <span className="inline-flex items-center gap-1">-{entryFee} <CoinIcon size="0.8em" /></span>}
                 </span>
               </div>
             )}

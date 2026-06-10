@@ -84,7 +84,7 @@ const SEG_THEMES = [
 
 // Segment labels — index 2 is always the coin visual
 function buildLabels(prizes) {
-  return prizes.map((p, i) => (i === 2 ? '🪙' : fmtPrize(p)));
+  return prizes.map((p, i) => (i === 2 ? 'coin' : fmtPrize(p)));
 }
 
 function fmtPrize(n) {
@@ -357,7 +357,7 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
               const eDeg = sDeg + STEP;
               const mid  = sDeg + STEP / 2;
               const lp   = labelXY(CX, CY, R, mid);
-              const isCoin = label === '🪙';
+              const isCoin = label === 'coin';
               return (
                 <g key={i}>
                   <path
@@ -374,14 +374,17 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
                     opacity="0.7"
                   />
                   {isCoin ? (
-                    <text
-                      x={lp.x} y={lp.y}
-                      textAnchor="middle" dominantBaseline="middle"
-                      fontSize="18"
-                      transform={`rotate(${mid}, ${lp.x}, ${lp.y})`}
-                    >
-                      🪙
-                    </text>
+                    <g transform={`rotate(${mid}, ${lp.x}, ${lp.y})`}>
+                      <defs>
+                        <radialGradient id={`coin_${i}`} cx="35%" cy="30%" r="65%">
+                          <stop offset="0%" stopColor="#FFE566" />
+                          <stop offset="45%" stopColor="#F5C518" />
+                          <stop offset="75%" stopColor="#D4920E" />
+                          <stop offset="100%" stopColor="#C07800" />
+                        </radialGradient>
+                      </defs>
+                      <circle cx={lp.x} cy={lp.y} r="9" fill={`url(#coin_${i})`} stroke="rgba(160,100,0,0.5)" strokeWidth="1" />
+                    </g>
                   ) : (
                     <>
                       <text

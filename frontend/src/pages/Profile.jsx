@@ -8,6 +8,7 @@ import QRCode from 'react-qr-code';
 import GlowButton from '../components/GlowButton';
 import { getRank } from '../utils/ranks';
 import { usePageReady } from '../hooks/usePageReady';
+import CoinIcon from '../components/CoinIcon';
 
 const GAME_INFO = {
   scrabble:      { emoji: '🔤', name: 'Word VS' },
@@ -186,8 +187,8 @@ function MatchRow({ match, myId }) {
     const fee  = match.entry_fee_c ?? 0;
     if (pool > 0 || fee > 0) {
       payout = isWinner
-        ? { amount: parseFloat((pool * 0.95).toFixed(4)), currency: '🪙' }
-        : { amount: -parseFloat(Number(fee).toFixed(4)), currency: '🪙' };
+        ? { amount: parseFloat((pool * 0.95).toFixed(4)), currency: 'coins' }
+        : { amount: -parseFloat(Number(fee).toFixed(4)), currency: 'coins' };
     }
   }
 
@@ -218,7 +219,7 @@ function MatchRow({ match, myId }) {
             {payout.amount >= 0 ? '+' : '-'}
             {isDiamonds
               ? `${Math.abs(payout.amount).toLocaleString()} ${payout.currency}`
-              : `${fmt(Math.abs(payout.amount))} ${payout.currency}`
+              : <span className="inline-flex items-center gap-0.5">{fmt(Math.abs(payout.amount))} <CoinIcon size="0.8em" /></span>
             }
           </div>
         ) : (

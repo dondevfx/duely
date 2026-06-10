@@ -6,6 +6,7 @@ import { supabase } from '../utils/supabase';
 import GlowButton from '../components/GlowButton';
 import DailyBonus from '../components/DailyBonus';
 import { usePageReady } from '../hooks/usePageReady';
+import CoinIcon from '../components/CoinIcon';
 
 // ── Supported coins ───────────────────────────────────────────────────
 const COINS = [
@@ -73,7 +74,7 @@ function TxRow({ tx }) {
       </div>
       <div className="text-right">
         <div className={`text-sm font-bold ${isDeposit ? 'text-success' : 'text-danger'}`}>
-          {isDeposit ? '+' : '-'}{fmt(tx.amount_c)} 🪙
+          <span className="inline-flex items-center gap-0.5">{isDeposit ? '+' : '-'}{fmt(tx.amount_c)} <CoinIcon size="0.8em" /></span>
         </div>
         <div className="flex items-center gap-1.5 justify-end mt-0.5">
           <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-bold ${
@@ -149,7 +150,7 @@ export default function Wallet() {
         if (c_coins > startBalance) {
           clearInterval(interval);
           setDepPolling(false);
-          setDepMsg({ type: 'success', text: `+${fmt(c_coins - startBalance)} 🪙 received! Balance updated.` });
+          setDepMsg({ type: 'success', text: `+${fmt(c_coins - startBalance)} coins received! Balance updated.` });
           refreshProfile();
           api.get('/wallet/transactions?limit=50').then(setTransactions).catch(() => {});
         }
@@ -187,7 +188,7 @@ export default function Wallet() {
         address:   witAddress.trim(),
         extraId:   witExtraId.trim() || undefined,
       });
-      setWitMsg({ type: 'success', text: `Withdrawal of ~${data.crypto_amount} ${witCoin.label} initiated. New balance: ${fmt(data.new_balance)} 🪙` });
+      setWitMsg({ type: 'success', text: `Withdrawal of ~${data.crypto_amount} ${witCoin.label} initiated. New balance: ${fmt(data.new_balance)} coins` });
       setWitAddress('');
       setWitExtraId('');
       setWitAmountUsd('');
@@ -218,14 +219,14 @@ export default function Wallet() {
     <div className="min-h-screen bg-bg pt-16" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}>
       <div className="max-w-2xl mx-auto px-4 py-12">
         <h1 className="text-4xl font-black text-white mb-2">Wallet</h1>
-        <p className="text-muted mb-8">Manage your 🪙 Coins — 1 Coin = $1 USD</p>
+        <p className="text-muted mb-8">Manage your Coins — 1 Coin = $1 USD</p>
 
         {/* ── Balance card ────────────────────────────────────────────── */}
         <div className="bg-gradient-to-br from-primary/20 to-accent/10 border border-primary/30 rounded-2xl p-6 mb-6">
           <div className="text-sm text-muted mb-1">Coin Balance</div>
           <div className="text-5xl font-black text-white font-mono mb-1">
             {fmt(profile?.c_coins)}
-            <span className="text-2xl text-primary ml-2">🪙</span>
+            <span className="text-2xl text-primary ml-2"><CoinIcon size="1.25rem" /></span>
           </div>
           <div className="text-sm text-muted">≈ ${fmt(profile?.c_coins)} USD</div>
         </div>
@@ -275,7 +276,7 @@ export default function Wallet() {
                 {/* Minimum notice */}
                 <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-2.5 text-center">
                   <p className="text-sm text-white font-semibold">Minimum deposit $5 — send a little extra to cover network fees</p>
-                  <p className="text-xs text-muted mt-0.5">You receive 🪙 Coins equal to the USD value received after fees</p>
+                  <p className="text-xs text-muted mt-0.5">You receive Coins equal to the USD value received after fees</p>
                 </div>
 
                 {/* Address */}
@@ -334,7 +335,7 @@ export default function Wallet() {
         <div className="bg-surface border border-surfaceLight rounded-2xl p-6 mb-6">
           <h2 className="text-lg font-bold text-white mb-1">Withdraw</h2>
           <p className="text-sm text-muted mb-4">
-            Convert 🪙 Coins to crypto.
+            Convert Coins to crypto.
           </p>
 
           <div className="flex flex-col gap-4">
@@ -370,7 +371,7 @@ export default function Wallet() {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-xs text-muted">Amount (USD) — min $5</label>
-                <span className="text-xs text-muted">Balance: <span className="text-white font-bold">{fmt(profile?.c_coins)} 🪙</span></span>
+                <span className="text-xs text-muted">Balance: <span className="text-white font-bold inline-flex items-center gap-0.5">{fmt(profile?.c_coins)} <CoinIcon size="0.75em" /></span></span>
               </div>
               <input
                 type="number" min="5" max={profile?.c_coins ?? 0} step="1"
@@ -380,7 +381,7 @@ export default function Wallet() {
                 className="w-full bg-bg border border-surfaceLight rounded-lg px-4 py-3 text-white placeholder-muted text-sm focus:outline-none focus:border-primary transition-colors"
               />
               {witAmountUsd && parseFloat(witAmountUsd) > (profile?.c_coins ?? 0) && (
-                <p className="text-xs text-danger mt-1">Exceeds your balance of {fmt(profile?.c_coins)} 🪙</p>
+                <p className="text-xs text-danger mt-1">Exceeds your balance of {fmt(profile?.c_coins)} coins</p>
               )}
             </div>
 

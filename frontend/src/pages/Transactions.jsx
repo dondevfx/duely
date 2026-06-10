@@ -2,6 +2,7 @@
 import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
 import { usePageReady } from '../hooks/usePageReady';
+import CoinIcon from '../components/CoinIcon';
 
 const FILTERS = [
   { key: 'all',        label: 'All' },
@@ -60,7 +61,7 @@ function TxRow({ tx }) {
   const isDiamonds  = tx.crypto_symbol?.toLowerCase() === 'diamonds';
   const amountLabel = isDiamonds
     ? `${Number(tx.crypto_amount || 0).toLocaleString()} 💎`
-    : `${fmt(tx.amount_c)} 🪙`;
+    : `${fmt(tx.amount_c)} coins`;
 
   return (
     <div className="flex items-center justify-between py-3.5 border-b border-surfaceLight/50 last:border-0 gap-4">
@@ -178,7 +179,7 @@ export default function Transactions() {
 
         {/* Header */}
         <h1 className="text-4xl font-black text-white mb-2">Transactions</h1>
-        <p className="text-muted mb-8">Full history of your 🪙 Coin activity</p>
+        <p className="text-muted mb-8">Full history of your Coin activity</p>
 
         {/* Filter tabs */}
         <div className="bg-surface border border-surfaceLight rounded-2xl p-2 mb-6 flex flex-wrap gap-1">
@@ -211,7 +212,7 @@ export default function Transactions() {
             </div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-              <span className="text-4xl select-none">🪙</span>
+              <CoinIcon size="2.5rem" />
               <p className="text-white font-bold text-lg">
                 {activeFilter === 'all' ? 'No transactions yet' : `No ${FILTERS.find(f => f.key === activeFilter)?.label ?? ''} found`}
               </p>

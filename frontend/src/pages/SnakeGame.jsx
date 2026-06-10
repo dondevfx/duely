@@ -7,6 +7,7 @@ import GlowButton from '../components/GlowButton';
 import GameLobby from '../components/GameLobby';
 import { usePageReady } from '../hooks/usePageReady';
 import { useGamePageRejoin } from '../hooks/useGamePageRejoin';
+import CoinIcon from '../components/CoinIcon';
 
 const GRID     = 16;
 const CELL     = 44;
@@ -100,7 +101,7 @@ export default function SnakeGame() {
 
   const isDiamonds   = betCurrency === 'diamonds';
   const fees         = isDiamonds ? DIAMOND_FEES : COIN_FEES;
-  const currLabel    = isDiamonds ? '💎' : '🪙';
+  const currLabel    = isDiamonds ? '💎' : <CoinIcon size="0.85em" />;
   const myBalance    = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const insufficient = entryFee > 0 && myBalance < entryFee;
   const isWinner     = result && result.winnerId === profile?.id;
@@ -921,15 +922,15 @@ export default function SnakeGame() {
                   <div className="flex justify-between">
                     <span className="text-muted">Payout</span>
                     <span className="text-success font-bold">
-                      +{result.currency === 'diamonds'
-                        ? `${Math.round(result.balanceChange.winnerPayout)} 💎`
-                        : `${result.balanceChange.winnerPayout.toFixed(2)} 🪙`}
+                      {result.currency === 'diamonds'
+                        ? `+${Math.round(result.balanceChange.winnerPayout)} 💎`
+                        : <span className="inline-flex items-center gap-1">+{result.balanceChange.winnerPayout.toFixed(2)} <CoinIcon size="0.8em" /></span>}
                     </span>
                   </div>
                 ) : !result.humanWon && result.entryFee > 0 ? (
                   <div className="flex justify-between">
                     <span className="text-muted">Entry lost</span>
-                    <span className="text-danger font-bold">-{result.entryFee} {result.currency === 'diamonds' ? '💎' : '🪙'}</span>
+                    <span className="text-danger font-bold inline-flex items-center gap-1">-{result.entryFee} {result.currency === 'diamonds' ? '💎' : <CoinIcon size="0.8em" />}</span>
                   </div>
                 ) : null}
               </div>
@@ -984,10 +985,12 @@ export default function SnakeGame() {
                     <span className="text-muted">{isWinner ? 'Payout' : 'Entry lost'}</span>
                     <span className={isWinner ? 'text-success font-bold' : 'text-danger font-bold'}>
                       {isWinner
-                        ? `+${resultCurrency === 'diamonds'
-                            ? Math.round(result.balanceChange.winnerPayout) + ' 💎'
-                            : result.balanceChange.winnerPayout.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' 🪙'}`
-                        : `-${entryFee} ${resultCurrency === 'diamonds' ? '💎' : '🪙'}`}
+                        ? resultCurrency === 'diamonds'
+                          ? `+${Math.round(result.balanceChange.winnerPayout)} 💎`
+                          : <span className="inline-flex items-center gap-1">+{result.balanceChange.winnerPayout.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <CoinIcon size="0.8em" /></span>
+                        : resultCurrency === 'diamonds'
+                          ? `-${entryFee} 💎`
+                          : <span className="inline-flex items-center gap-1">-{entryFee} <CoinIcon size="0.8em" /></span>}
                     </span>
                   </div>
                 )}

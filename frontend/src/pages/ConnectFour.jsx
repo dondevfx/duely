@@ -6,6 +6,7 @@ import { useCurrency } from '../context/CurrencyContext';
 import GlowButton from '../components/GlowButton';
 import GameLobby from '../components/GameLobby';
 import { usePageReady } from '../hooks/usePageReady';
+import CoinIcon from '../components/CoinIcon';
 
 const COIN_FEES    = [0.5, 1, 2, 5, 10, 25];
 const DIAMOND_FEES = [50, 100, 250, 500, 1000];
@@ -468,10 +469,12 @@ export default function ConnectFour() {
                 <span className={isWinner ? 'text-2xl font-black text-success' : 'text-danger font-bold'}
                   style={isWinner ? { textShadow: '0 0 12px rgba(74,222,128,0.5)' } : {}}>
                   {isWinner
-                    ? `+${resultCurrency === 'diamonds'
-                        ? Math.round(result.balanceChange.winnerPayout) + ' 💎'
-                        : result.balanceChange.winnerPayout.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' 🪙'}`
-                    : `-${entryFee} ${resultCurrency === 'diamonds' ? '💎' : '🪙'}`}
+                    ? resultCurrency === 'diamonds'
+                      ? `+${Math.round(result.balanceChange.winnerPayout)} 💎`
+                      : <span className="inline-flex items-center gap-1">+{result.balanceChange.winnerPayout.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <CoinIcon size="0.8em" /></span>
+                    : resultCurrency === 'diamonds'
+                      ? `-${entryFee} 💎`
+                      : <span className="inline-flex items-center gap-1">-{entryFee} <CoinIcon size="0.8em" /></span>}
                 </span>
               </div>
             )}

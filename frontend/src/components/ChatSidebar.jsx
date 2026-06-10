@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import CoinIcon from './CoinIcon';
 import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
@@ -31,10 +32,10 @@ const BOT_LINES = [
   "🔥 Win streaks show on your profile, chat, and the leaderboard.",
   "🔤 Word VS: short words score fast — save the long ones for premium squares.",
   "🏅 Rakeback pays you back just for playing — claim it every day.",
-  "🪙 Coin Flip: pick Heads or Tails and you'll be matched with someone on the other side.",
+  "🟡 Coin Flip: pick Heads or Tails and you'll be matched with someone on the other side.",
   "🃏 Blackjack: get closer to 21 than your opponent — without going bust.",
   "🃏 Blackjack: both players act at the same time, then the dealer reveals. No waiting!",
-  "🪙 Coin Flip is the fastest way to double your coins — one flip, instant result.",
+  "🟡 Coin Flip is the fastest way to double your coins — one flip, instant result.",
 ];
 
 // Stable fake cumulative P&L for the bot — starts at 0, ends ~+184K
@@ -219,7 +220,7 @@ function LineChart({ data }) {
         }}>
           <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>{fmtXDate(tooltip.date)}</div>
           <div style={{ fontSize: 14, fontWeight: 700, color: tooltip.balance >= 0 ? '#22c55e' : '#ef4444' }}>
-            {tooltip.balance >= 0 ? '+' : ''}{tooltip.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 🪙
+            <span style={{display:'inline-flex',alignItems:'center',gap:2}}>{tooltip.balance >= 0 ? '+' : ''}{tooltip.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <CoinIcon size="0.85em" /></span>
           </div>
         </div>
       )}
@@ -355,7 +356,7 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
               <div className="grid grid-cols-2 gap-3 mb-5">
                 <div className="bg-bg rounded-xl px-5 py-4">
                   <div className="text-sm text-muted mb-1">Coins Wagered</div>
-                  <div className="text-xl font-black text-white">{fmt(data.total_wagered)} 🪙</div>
+                  <div className="text-xl font-black text-white inline-flex items-center gap-1">{fmt(data.total_wagered)} <CoinIcon size="0.85em" /></div>
                 </div>
                 <div className="bg-bg rounded-xl px-5 py-4">
                   <div className="text-sm text-muted mb-1">Diamonds Wagered</div>
@@ -372,7 +373,7 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
                       color: history[history.length - 1].balance >= 0 ? '#22c55e' : '#ef4444',
                     }}>
                       {history[history.length - 1].balance >= 0 ? '+' : ''}
-                      {history[history.length - 1].balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 🪙
+                      <span style={{display:'inline-flex',alignItems:'center',gap:2}}>{history[history.length - 1].balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <CoinIcon size="0.85em" /></span>
                     </span>
                   </div>
                   <div className="bg-bg rounded-xl px-2 pt-2 pb-1 overflow-hidden">
@@ -438,7 +439,7 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
                         className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
                           tipCurrency === c ? 'bg-primary text-white' : 'bg-surfaceLight text-muted hover:text-white'
                         }`}>
-                        {c === 'coins' ? '🪙 Coins' : '💎 Diamonds'}
+                        {c === 'coins' ? <span className="inline-flex items-center gap-1"><CoinIcon size="0.8em" /> Coins</span> : '💎 Diamonds'}
                       </button>
                     ))}
                   </div>

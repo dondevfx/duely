@@ -4,6 +4,7 @@ import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import { usePageReady } from '../hooks/usePageReady';
 import { getRank } from '../utils/ranks';
+import CoinIcon from '../components/CoinIcon';
 
 const T_ROWS = 20, T_COLS = 10;
 
@@ -60,7 +61,7 @@ function SpectatorModal({ game, onClose }) {
   const live = activeGames.find(g => g.id === game.id) || game;
   const color1 = live.player1?.profileColor || '#1E90FF';
   const color2 = live.player2?.profileColor || '#ef4444';
-  const sym = live.currency === 'diamonds' ? '💎' : '🪙';
+  const sym = live.currency === 'diamonds' ? '💎' : <CoinIcon size="0.85em" />;
   const isTetris = live.gameType === 'tetris';
 
   const [board0, setBoard0] = useState(null);
@@ -219,7 +220,7 @@ export default function PlayNow() {
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-black text-red-400">{GAME_LABELS[game.gameType] || game.gameType}</span>
                       <span className="text-xs font-bold text-white">
-                        {game.entryFee > 0 ? `${game.entryFee} ${game.currency === 'diamonds' ? '💎' : '🪙'}` : 'Free'}
+                        {game.entryFee > 0 ? <span className="inline-flex items-center gap-0.5">{game.entryFee} {game.currency === 'diamonds' ? '💎' : <CoinIcon size="0.85em" />}</span> : 'Free'}
                       </span>
                     </div>
 
@@ -313,7 +314,7 @@ export default function PlayNow() {
                     <div className="text-base font-black text-primary">{gameLabel}</div>
                     <div className="text-base font-black text-white">
                       {entry.entryFee > 0
-                        ? `${entry.entryFee} ${entry.currency === 'diamonds' ? '💎' : '🪙'}`
+                        ? <span className="inline-flex items-center gap-0.5">{entry.entryFee} {entry.currency === 'diamonds' ? '💎' : <CoinIcon size="0.85em" />}</span>
                         : 'Free'}
                     </div>
                   </div>

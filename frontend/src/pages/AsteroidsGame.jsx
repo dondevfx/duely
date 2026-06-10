@@ -6,6 +6,7 @@ import GlowButton from '../components/GlowButton';
 import GameLobby from '../components/GameLobby';
 import { usePageReady } from '../hooks/usePageReady';
 import { useGamePageRejoin } from '../hooks/useGamePageRejoin';
+import CoinIcon from '../components/CoinIcon';
 
 const COIN_FEES    = [0.25, 0.5, 1, 2, 5, 10, 25, 50, 100];
 const DIAMOND_FEES = [50, 100, 250, 500, 1000];
@@ -205,7 +206,7 @@ export default function AsteroidsGame() {
 
   const isDiamonds    = betCurrency === 'diamonds';
   const fees          = isDiamonds ? DIAMOND_FEES : COIN_FEES;
-  const currencyLabel = isDiamonds ? '💎' : '🪙';
+  const currencyLabel = isDiamonds ? '💎' : <CoinIcon size="0.85em" />;
   const myBalance     = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const insufficient  = entryFee > 0 && myBalance < entryFee;
 
@@ -799,8 +800,12 @@ export default function AsteroidsGame() {
                     <span className="text-muted">{result.humanWon ? 'Payout' : 'Entry lost'}</span>
                     <span className={result.humanWon ? 'text-success font-bold' : 'text-danger font-bold'}>
                       {result.humanWon
-                        ? `+${result.currency === 'diamonds' ? Math.round(result.balanceChange.winnerPayout) + ' 💎' : result.balanceChange.winnerPayout.toLocaleString('en-US', {minimumFractionDigits:2,maximumFractionDigits:2}) + ' 🪙'}`
-                        : `-${result.entryFee ?? 0} ${result.currency === 'diamonds' ? '💎' : '🪙'}`}
+                        ? result.currency === 'diamonds'
+                          ? `+${Math.round(result.balanceChange.winnerPayout)} 💎`
+                          : <span className="inline-flex items-center gap-1">+{result.balanceChange.winnerPayout.toLocaleString('en-US', {minimumFractionDigits:2,maximumFractionDigits:2})} <CoinIcon size="0.8em" /></span>
+                        : result.currency === 'diamonds'
+                          ? `-${result.entryFee ?? 0} 💎`
+                          : <span className="inline-flex items-center gap-1">-{result.entryFee ?? 0} <CoinIcon size="0.8em" /></span>}
                     </span>
                   </div>
                 )}
@@ -838,8 +843,12 @@ export default function AsteroidsGame() {
                     <span className="text-muted">{isWinner ? 'Payout' : 'Entry lost'}</span>
                     <span className={isWinner ? 'text-success font-bold' : 'text-danger font-bold'}>
                       {isWinner
-                        ? `+${resultCurrency === 'diamonds' ? Math.round(result.balanceChange.winnerPayout) + ' 💎' : result.balanceChange.winnerPayout.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' 🪙'}`
-                        : `-${entryFee} ${resultCurrency === 'diamonds' ? '💎' : '🪙'}`}
+                        ? resultCurrency === 'diamonds'
+                          ? `+${Math.round(result.balanceChange.winnerPayout)} 💎`
+                          : <span className="inline-flex items-center gap-1">+{result.balanceChange.winnerPayout.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <CoinIcon size="0.8em" /></span>
+                        : resultCurrency === 'diamonds'
+                          ? `-${entryFee} 💎`
+                          : <span className="inline-flex items-center gap-1">-{entryFee} <CoinIcon size="0.8em" /></span>}
                     </span>
                   </div>
                 )}

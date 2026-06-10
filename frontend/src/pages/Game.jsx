@@ -6,6 +6,7 @@ import StatusIndicator from '../components/StatusIndicator';
 import GlowButton from '../components/GlowButton';
 import GameLobby from '../components/GameLobby';
 import { usePageReady } from '../hooks/usePageReady';
+import CoinIcon from '../components/CoinIcon';
 
 const COIN_FEES    = [0.25, 0.5, 1, 2, 5, 10, 25, 50, 100, 500, 1000, 5000];
 const DIAMOND_FEES = [50, 100, 250, 500, 1000, 10000];
@@ -358,7 +359,7 @@ export default function Game() {
               <span className="text-accent font-bold">
                 {resultCurrency === 'diamonds'
                   ? `${Math.round(entryFee * 2)} 💎`
-                  : `${(entryFee * 2 * 0.95).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 🪙`}
+                  : <span className="inline-flex items-center gap-1">{(entryFee * 2 * 0.95).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <CoinIcon size="0.8em" /></span>}
               </span>
             </div>
           )}
@@ -405,10 +406,12 @@ export default function Game() {
                 <span className="text-muted">{isWinner ? 'Payout' : 'Entry lost'}</span>
                 <span className={isWinner ? 'text-success font-bold' : 'text-danger font-bold'}>
                   {isWinner
-                    ? `+${resultCurrency === 'diamonds'
-                        ? Math.round(result.balanceChange.winnerPayout) + ' 💎'
-                        : result.balanceChange.winnerPayout.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' 🪙'}`
-                    : `-${entryFee} ${resultCurrency === 'diamonds' ? '💎' : '🪙'}`}
+                    ? resultCurrency === 'diamonds'
+                      ? `+${Math.round(result.balanceChange.winnerPayout)} 💎`
+                      : <span className="inline-flex items-center gap-1">+{result.balanceChange.winnerPayout.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <CoinIcon size="0.8em" /></span>
+                    : resultCurrency === 'diamonds'
+                      ? `-${entryFee} 💎`
+                      : <span className="inline-flex items-center gap-1">-{entryFee} <CoinIcon size="0.8em" /></span>}
                 </span>
               </div>
             )}

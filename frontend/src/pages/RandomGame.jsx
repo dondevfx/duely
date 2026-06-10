@@ -6,6 +6,7 @@ import { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
 import { useCurrency } from '../context/CurrencyContext';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
+import CoinIcon from '../components/CoinIcon';
 
 const GAMES = [
   { route: '/game/block-blast', name: 'Block Burst',         icon: '🟦' },
@@ -35,7 +36,7 @@ export default function RandomGame() {
 
   const isDiamonds  = betCurrency === 'diamonds';
   const fees        = isDiamonds ? DIAMOND_FEES : COIN_FEES;
-  const currLabel   = isDiamonds ? '💎' : '🪙';
+  const currLabel   = isDiamonds ? '💎' : <CoinIcon size="0.85em" />;
   const myBalance   = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const insufficient = entryFee > 0 && myBalance < entryFee;
 
@@ -52,9 +53,10 @@ export default function RandomGame() {
     setEntryFee(fees[parseInt(e.target.value)]);
   }
 
+  const payoutAmt = (entryFee * 2 * 0.95) % 1 === 0 ? (entryFee * 2 * 0.95).toLocaleString() : (entryFee * 2 * 0.95).toFixed(2);
   const payout = isDiamonds
-    ? (entryFee * 2).toLocaleString() + ' 💎'
-    : `${(entryFee * 2 * 0.95) % 1 === 0 ? (entryFee * 2 * 0.95).toLocaleString() : (entryFee * 2 * 0.95).toFixed(2)} 🪙`;
+    ? `${(entryFee * 2).toLocaleString()} 💎`
+    : <span className="inline-flex items-center gap-1">{payoutAmt} <CoinIcon size="0.85em" /></span>;
 
   function roll() {
     if (!authenticated || insufficient || rolling) return;
@@ -93,9 +95,9 @@ export default function RandomGame() {
             <div className="flex items-center gap-0.5 bg-bg border border-border rounded-lg p-1">
               <button
                 onClick={() => switchCurrency('coins')}
-                className={`px-4 py-2 rounded text-sm font-bold transition-all ${!isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}
+                className={`px-4 py-2 rounded text-sm font-bold transition-all inline-flex items-center gap-1 ${!isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}
               >
-                🪙 Coins
+                <CoinIcon size="0.85em" /> Coins
               </button>
               <button
                 onClick={() => switchCurrency('diamonds')}
@@ -168,11 +170,7 @@ export default function RandomGame() {
             <p className="text-center text-sm text-muted" style={{ marginTop: '12px' }}>
               Payout if you win:{' '}
               <span className="text-success font-bold">
-                +{isDiamonds
-                  ? `${(entryFee * 2).toLocaleString()} 💎`
-                  : `${(entryFee * 2 * 0.95) % 1 === 0
-                      ? (entryFee * 2 * 0.95).toLocaleString()
-                      : (entryFee * 2 * 0.95).toFixed(2)} 🪙`}
+                +{payout}
               </span>
             </p>
           )}
