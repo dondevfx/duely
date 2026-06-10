@@ -339,67 +339,65 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     return;
   }
 
-  // ── Credit directly at CoinGecko spot price ──────────────────────────────────
-  // No forwarding to SimpleSwap — avoids their $5+ minimum and latency.
-  // Player receives USD equivalent of the crypto they sent (minus nothing — fees
-  // are already implicit in the spot price difference vs mid-market).
-  const { creditCoins, recordDeposit } = require('./walletService');
-  const credited = Math.floor(estimatedUsd * 100) / 100;
+  const usdcAddress = process.env.USDC_SPL_ADDRESS;
+  if (!usdcAddress) {
+    console.error('[monitor] USDC_SPL_ADDRESS not configured — cannot forward deposit');
+    return;
+  }
 
-  await creditCoins(supabase, userId, credited);
-  await recordDeposit(supabase, userId, credited, 'crypto');
+  const gasReserveMap = { btc: 0.00002, eth: 0.0004, bnb: 0.0005, sol: 0.000005, ltc: 0.001, trx: 5, doge: 1 };
+  const gasRes    = gasReserveMap[coin] || 0;
+  const netAmount = Math.max(0, amount - gasRes);
+  if (netAmount <= 0) {
+    console.warn(`[monitor] amount ${amount} too small after gas reserve — skipping`);
+    return;
+  }
+
+  // Create SimpleSwap exchange: coin → USDC SPL → our admin wallet
+  let swap;
+  try {
+    swap = await createDepositSwap({ coin, amount: netAmount, ourStableAddress: usdcAddress, refundAddress: '' });
+  } catch (e) {
+    console.error(`[monitor] SimpleSwap error for ${txHash}:`, e.message);
+    return;
+  }
+
+  // Record as 'converting' — swapPoller will credit the user when USDC arrives
   await supabase.from('transactions').insert({
     user_id:       userId,
     type:          'deposit',
-    amount_c:      credited,
+    amount_c:      0,
+    crypto_amount: netAmount,
+    crypto_symbol: coin.toUpperCase(),
+    tx_hash:       swap.exchangeId,
+    status:        'converting',
+  });
+
+  // Record original on-chain tx for idempotency (prevents reprocessing)
+  await supabase.from('transactions').insert({
+    user_id:       userId,
+    type:          'deposit_raw',
+    amount_c:      0,
     crypto_amount: amount,
     crypto_symbol: coin.toUpperCase(),
     tx_hash:       txHash,
-    status:        'confirmed',
-  });
-  console.log(`[monitor] ✓ credited $${credited} (${amount} ${coin} @ $${priceUsd}) to user ${userId} tx=${txHash}`);
+    status:        'forwarded',
+  }).catch(() => {});
 
-  // ── Forward crypto to SimpleSwap → USDC (background, non-blocking) ──────────
-  // User is already credited above. This converts the received crypto into USDC
-  // so the platform holds stablecoins instead of volatile assets.
-  setImmediate(() => forwardToStable(userId, coin, amount, txHash));
-}
-
-const GAS_RESERVE = { btc: 0.00002, eth: 0.0004, bnb: 0.0005, sol: 0.000005, ltc: 0.001, trx: 5, doge: 1 };
-
-async function forwardToStable(userId, coin, amount, originalTxHash) {
-  const usdcAddress = process.env.USDC_SPL_ADDRESS;
-  const adminSolAddress = process.env.ADMIN_SOL_ADDRESS; // fallback if SimpleSwap minimum not met
-
-  const gasRes    = GAS_RESERVE[coin] || 0;
-  const netAmount = Math.max(0, amount - gasRes);
-  if (netAmount <= 0) return;
-
+  // Forward the crypto to SimpleSwap
   const { privKey } = getAddress(userId, coin);
-
-  // Try SimpleSwap first
   try {
-    if (!usdcAddress) throw new Error('USDC_SPL_ADDRESS not set');
-    const swap = await createDepositSwap({ coin, amount: netAmount, ourStableAddress: usdcAddress, refundAddress: '' });
     const sendTx = await sendCrypto({ coin, privKey, toAddress: swap.depositAddress, amount: netAmount });
-    console.log(`[monitor] forwarded ${netAmount} ${coin} → SimpleSwap (exchange=${swap.exchangeId} sendTx=${sendTx})`);
-    return;
+    console.log(`[monitor] forwarded ${netAmount} ${coin} → SimpleSwap exchange=${swap.exchangeId} sendTx=${sendTx}`);
   } catch (e) {
-    console.warn(`[monitor] SimpleSwap forward failed for ${originalTxHash}: ${e.message} — trying admin wallet fallback`);
+    console.error(`[monitor] sendCrypto failed for ${txHash}:`, e.message);
+    return;
   }
 
-  // Fallback: send to admin SOL wallet for manual batch-swap
-  const fallbackAddr = adminSolAddress || usdcAddress;
-  if (!fallbackAddr) {
-    console.error(`[monitor] No fallback address configured — ${netAmount} ${coin} stuck in deposit address for user ${userId}`);
-    return;
-  }
-  try {
-    const sendTx = await sendCrypto({ coin, privKey, toAddress: fallbackAddr, amount: netAmount });
-    console.log(`[monitor] forwarded ${netAmount} ${coin} → admin wallet fallback tx=${sendTx}`);
-  } catch (e) {
-    console.error(`[monitor] fallback forward also failed for ${originalTxHash}: ${e.message}`);
-  }
+  // swapPoller will poll SimpleSwap every 30s and credit user when status=finished
+  const { watch } = require('./swapPoller');
+  watch(swap.exchangeId, userId);
+  console.log(`[monitor] watching exchange ${swap.exchangeId} — will credit user ${userId} when USDC arrives`);
 }
 
 // ── Main polling loop ─────────────────────────────────────────────────────────
