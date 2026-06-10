@@ -38,6 +38,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
+// Trust Railway's reverse proxy so rate-limiter sees real client IPs
+app.set('trust proxy', 1);
+
 app.use(cors({
   origin: allowedOrigins,
   credentials: true,
