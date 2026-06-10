@@ -8,14 +8,14 @@ const BASE_STABLE = 'usdcspl';
 
 // Map our internal coin IDs to SimpleSwap tickers
 const SS_TICKERS = {
-  btc:       'btc',
-  eth:       'eth',
-  sol:       'sol',
-  ltc:       'ltc',
-  trx:       'trx',
-  doge:      'doge',
-  shib:      'shib',
-  usdttrc20: 'usdttrc20',
+  btc:  'btc',
+  eth:  'eth',
+  sol:  'sol',
+  ltc:  'ltc',
+  trx:  'trx',
+  doge: 'doge',
+  bnb:  'bnbbsc',
+  xrp:  'xrp',
 };
 
 async function ssGet(path) {

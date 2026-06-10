@@ -23,10 +23,7 @@ bitcoin.initEccLib(ecc);
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-// SHIB ERC-20 contract
-const SHIB_CONTRACT = '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE';
-// USDT TRC-20 contract on Tron
-const USDT_TRC20_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
+// (no token contracts needed — BNB and XRP are native coins)
 
 // Actual network fee reserves (realistic, not inflated)
 const GAS_RESERVE = {
@@ -49,16 +46,37 @@ async function sendEth(privKey, toAddress, amount) {
   return tx.hash;
 }
 
-async function sendShib(privKey, toAddress, amount) {
-  const provider = new ethers.JsonRpcProvider(process.env.ALCHEMY_ETH_RPC);
-  const wallet   = new ethers.Wallet('0x' + privKey.toString('hex'), provider);
-  const abi      = ['function transfer(address to, uint256 amount) returns (bool)'];
-  const contract = new ethers.Contract(SHIB_CONTRACT, abi, wallet);
-  const decimals = 18n;
-  const amountBN = BigInt(Math.floor(amount * 1e9)) * (10n ** (decimals - 9n));
-  const tx       = await contract.transfer(toAddress, amountBN);
+async function sendBnb(privKey, toAddress, amount) {
+  const provider = new ethers.JsonRpcProvider(
+    process.env.BSC_RPC || 'https://bsc-dataseed.binance.org/'
+  );
+  const wallet = new ethers.Wallet('0x' + privKey.toString('hex'), provider);
+  const value  = ethers.parseEther(String(amount));
+  const tx     = await wallet.sendTransaction({ to: toAddress, value });
   await tx.wait(1);
   return tx.hash;
+}
+
+async function sendXrp(privKey, toAddress, amount) {
+  const xrpl   = require('xrpl');
+  const seed   = xrpl.encodeSeed(privKey);
+  const wallet = xrpl.Wallet.fromSeed(seed);
+  const client = new xrpl.Client('wss://xrplcluster.com');
+  await client.connect();
+  try {
+    const drops = Math.floor(amount * 1_000_000);  // 1 XRP = 1,000,000 drops
+    const prepared = await client.autofill({
+      TransactionType: 'Payment',
+      Account:         wallet.address,
+      Amount:          String(drops),
+      Destination:     toAddress,
+    });
+    const { tx_blob } = wallet.sign(prepared);
+    const result = await client.submitAndWait(tx_blob);
+    return result.result.hash;
+  } finally {
+    await client.disconnect();
+  }
 }
 
 // ── SOL ───────────────────────────────────────────────────────────────────────
@@ -175,15 +193,15 @@ async function sendUtxoCoin(coin, privKey, toAddress, amount) {
 async function sendCrypto({ coin, privKey, toAddress, amount }) {
   console.log(`[chainSend] sending ${amount} ${coin} → ${toAddress}`);
   switch (coin.toLowerCase()) {
-    case 'eth':       return sendEth(privKey, toAddress, amount);
-    case 'shib':      return sendShib(privKey, toAddress, amount);
-    case 'sol':       return sendSol(privKey, toAddress, amount);
-    case 'trx':       return sendTrx(privKey, toAddress, amount);
-    case 'usdttrc20': return sendUsdtTrc20(privKey, toAddress, amount);
+    case 'eth':  return sendEth(privKey, toAddress, amount);
+    case 'bnb':  return sendBnb(privKey, toAddress, amount);
+    case 'sol':  return sendSol(privKey, toAddress, amount);
+    case 'trx':  return sendTrx(privKey, toAddress, amount);
+    case 'xrp':  return sendXrp(privKey, toAddress, amount);
     case 'btc':
     case 'ltc':
-    case 'doge':      return sendUtxoCoin(coin, privKey, toAddress, amount);
-    default:          throw new Error(`chainSend: unsupported coin ${coin}`);
+    case 'doge': return sendUtxoCoin(coin, privKey, toAddress, amount);
+    default:     throw new Error(`chainSend: unsupported coin ${coin}`);
   }
 }
 

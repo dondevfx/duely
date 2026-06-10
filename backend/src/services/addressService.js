@@ -16,6 +16,7 @@ const bitcoin  = require('bitcoinjs-lib');
 const ecc      = require('tiny-secp256k1');
 const bs58     = require('bs58');
 const solWeb3  = require('@solana/web3.js');
+const xrpl     = require('xrpl');
 
 // initialise bitcoinjs-lib with the secp256k1 implementation
 bitcoin.initEccLib(ecc);
@@ -74,6 +75,18 @@ function solAddress(privKey) {
   return kp.publicKey.toBase58();
 }
 
+function xrpAddress(privKey) {
+  // XRP uses secp256k1 — derive keypair from seed using xrpl
+  const seed = xrpl.encodeSeed(privKey);
+  const wallet = xrpl.Wallet.fromSeed(seed);
+  return wallet.address;
+}
+
+function bnbAddress(privKey) {
+  // BNB Smart Chain uses same address format as ETH
+  return ethAddress(privKey);
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
@@ -99,11 +112,16 @@ function getAddress(userId, coin) {
       address = p2pkhAddress(privKey, 0x1e);
       break;
     case 'trx':
-    case 'usdttrc20':
       address = tronAddress(privKey);
       break;
     case 'sol':
       address = solAddress(privKey);
+      break;
+    case 'bnb':
+      address = bnbAddress(privKey);
+      break;
+    case 'xrp':
+      address = xrpAddress(privKey);
       break;
     default:
       throw new Error(`Unsupported coin: ${coin}`);

@@ -8,28 +8,28 @@ import DailyBonus from '../components/DailyBonus';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
 
-// ── Supported deposit coins (Plisio) ─────────────────────────────────
+// ── Supported deposit coins ───────────────────────────────────────────
 const COINS = [
-  { id: 'usdttrc20', label: 'USDT',  network: 'TRC-20'   },
-  { id: 'sol',       label: 'SOL',   network: 'Solana'   },
-  { id: 'btc',       label: 'BTC',   network: 'Bitcoin'  },
-  { id: 'eth',       label: 'ETH',   network: 'Ethereum' },
-  { id: 'ltc',       label: 'LTC',   network: 'Litecoin' },
-  { id: 'trx',       label: 'TRX',   network: 'TRON'     },
-  { id: 'doge',      label: 'DOGE',  network: 'Dogecoin' },
-  { id: 'shib',      label: 'SHIB',  network: 'Ethereum' },
+  { id: 'btc',  label: 'BTC',  network: 'Bitcoin'  },
+  { id: 'eth',  label: 'ETH',  network: 'Ethereum' },
+  { id: 'sol',  label: 'SOL',  network: 'Solana'   },
+  { id: 'bnb',  label: 'BNB',  network: 'BSC'      },
+  { id: 'xrp',  label: 'XRP',  network: 'XRP'      },
+  { id: 'ltc',  label: 'LTC',  network: 'Litecoin' },
+  { id: 'doge', label: 'DOGE', network: 'Dogecoin' },
+  { id: 'trx',  label: 'TRX',  network: 'TRON'     },
 ];
 
 // ── Supported withdrawal coins (SimpleSwap) ───────────────────────────
 const WITHDRAW_COINS = [
-  { id: 'sol',       label: 'SOL',   network: 'Solana'   },
-  { id: 'usdttrc20', label: 'USDT',  network: 'TRC-20'   },
-  { id: 'btc',       label: 'BTC',   network: 'Bitcoin'  },
-  { id: 'eth',       label: 'ETH',   network: 'Ethereum' },
-  { id: 'ltc',       label: 'LTC',   network: 'Litecoin' },
-  { id: 'trx',       label: 'TRX',   network: 'TRON'     },
-  { id: 'doge',      label: 'DOGE',  network: 'Dogecoin' },
-  { id: 'shib',      label: 'SHIB',  network: 'Ethereum' },
+  { id: 'btc',  label: 'BTC',  network: 'Bitcoin'  },
+  { id: 'eth',  label: 'ETH',  network: 'Ethereum' },
+  { id: 'sol',  label: 'SOL',  network: 'Solana'   },
+  { id: 'bnb',  label: 'BNB',  network: 'BSC'      },
+  { id: 'xrp',  label: 'XRP',  network: 'XRP'      },
+  { id: 'ltc',  label: 'LTC',  network: 'Litecoin' },
+  { id: 'doge', label: 'DOGE', network: 'Dogecoin' },
+  { id: 'trx',  label: 'TRX',  network: 'TRON'     },
 ];
 
 const MIN_WITHDRAWAL = 5;

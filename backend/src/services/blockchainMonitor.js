@@ -25,14 +25,14 @@ const OUR_USDC_ADDRESS = () => process.env.USDC_SPL_ADDRESS;
 
 // CoinGecko IDs for price lookups
 const COINGECKO_IDS = {
-  btc:       'bitcoin',
-  eth:       'ethereum',
-  sol:       'solana',
-  ltc:       'litecoin',
-  trx:       'tron',
-  doge:      'dogecoin',
-  shib:      'shiba-inu',
-  usdttrc20: 'tether',
+  btc:  'bitcoin',
+  eth:  'ethereum',
+  sol:  'solana',
+  ltc:  'litecoin',
+  trx:  'tron',
+  doge: 'dogecoin',
+  bnb:  'binancecoin',
+  xrp:  'ripple',
 };
 
 // Price cache
@@ -92,20 +92,35 @@ async function fetchEthTxs(address) {
     .filter(t => t.amount > 0);
 }
 
-async function fetchShibTxs(address) {
-  const key          = process.env.ETHERSCAN_API_KEY || '';
-  const shibContract = '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE';
+async function fetchBnbTxs(address) {
+  const key = process.env.BSCSCAN_API_KEY || '';
   const r = await fetch(
-    `https://api.etherscan.io/api?module=account&action=tokentx&contractaddress=${shibContract}&address=${address}&sort=desc&apikey=${key}`
+    `https://api.bscscan.com/api?module=account&action=txlist&address=${address}&sort=desc&apikey=${key}`
   );
   const d = await r.json();
   if (d.status !== '1') return [];
   return d.result
-    .filter(tx => tx.to?.toLowerCase() === address.toLowerCase())
+    .filter(tx => tx.to?.toLowerCase() === address.toLowerCase() && tx.isError === '0')
     .map(tx => ({
       txHash:    tx.hash,
       amount:    parseFloat(tx.value) / 1e18,
       confirmed: parseInt(tx.confirmations) >= 1,
+    }))
+    .filter(t => t.amount > 0);
+}
+
+async function fetchXrpTxs(address) {
+  const r = await fetch(
+    `https://api.xrpscan.com/api/v1/account/${address}/transactions?type=Payment`
+  );
+  const d = await r.json();
+  if (!d.transactions) return [];
+  return d.transactions
+    .filter(tx => tx.Destination === address && tx.Amount && typeof tx.Amount === 'string')
+    .map(tx => ({
+      txHash:    tx.hash,
+      amount:    parseInt(tx.Amount) / 1_000_000,  // drops → XRP
+      confirmed: true,
     }))
     .filter(t => t.amount > 0);
 }
@@ -217,15 +232,15 @@ async function fetchBlockcypherTxs(coin, address) {
 
 async function fetchTxs(coin, address) {
   switch (coin) {
-    case 'btc':       return fetchBtcTxs(address);
-    case 'eth':       return fetchEthTxs(address);
-    case 'shib':      return fetchShibTxs(address);
-    case 'sol':       return fetchSolTxs(address);
-    case 'trx':       return fetchTrxTxs(address);
-    case 'usdttrc20': return fetchUsdtTrc20Txs(address);
+    case 'btc':  return fetchBtcTxs(address);
+    case 'eth':  return fetchEthTxs(address);
+    case 'bnb':  return fetchBnbTxs(address);
+    case 'sol':  return fetchSolTxs(address);
+    case 'trx':  return fetchTrxTxs(address);
+    case 'xrp':  return fetchXrpTxs(address);
     case 'ltc':
-    case 'doge':      return fetchBlockcypherTxs(coin, address);
-    default:          return [];
+    case 'doge': return fetchBlockcypherTxs(coin, address);
+    default:     return [];
   }
 }
 
@@ -259,43 +274,9 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     return;
   }
 
-  // For ERC-20 tokens (SHIB) and TRC-20 tokens (USDT), the receiving address
-  // holds tokens but has no native coin to pay gas for the outbound transfer.
-  // We fund it from our admin SOL-derived address before forwarding.
-  if (coin === 'shib') {
-    try {
-      const { getAddress: getAdminAddr } = require('./addressService');
-      const { privKey: adminEthKey } = getAdminAddr(process.env.ADMIN_USER_ID, 'eth');
-      const adminEthAddr = new (require('ethers').Wallet)('0x' + adminEthKey.toString('hex')).address;
-      // Send 0.0004 ETH gas money to the deposit address so it can forward SHIB
-      await require('./chainSend').sendCrypto({
-        coin: 'eth', privKey: adminEthKey,
-        toAddress: address, amount: 0.0004,
-      });
-      console.log(`[monitor] funded ${address} with 0.0004 ETH for SHIB gas`);
-    } catch (e) {
-      console.error(`[monitor] SHIB gas funding failed:`, e.message);
-      return;
-    }
-  }
-  if (coin === 'usdttrc20') {
-    try {
-      const { getAddress: getAdminAddr } = require('./addressService');
-      const { privKey: adminTrxKey } = getAdminAddr(process.env.ADMIN_USER_ID, 'trx');
-      await require('./chainSend').sendCrypto({
-        coin: 'trx', privKey: adminTrxKey,
-        toAddress: address, amount: 5,
-      });
-      console.log(`[monitor] funded ${address} with 5 TRX for USDT gas`);
-    } catch (e) {
-      console.error(`[monitor] USDT TRC-20 gas funding failed:`, e.message);
-      return;
-    }
-  }
-
   // Deduct realistic gas reserve so we don't try to send more than we can
-  const gasReserveMap = { btc: 0.00002, eth: 0.0004, sol: 0.000005, ltc: 0.001, trx: 5, doge: 1 };
-  const gasRes   = gasReserveMap[coin === 'usdttrc20' ? 'trx' : coin === 'shib' ? 'eth' : coin] || 0;
+  const gasReserveMap = { btc: 0.00002, eth: 0.0004, bnb: 0.0005, sol: 0.000005, ltc: 0.001, trx: 5, doge: 1, xrp: 0.01 };
+  const gasRes   = gasReserveMap[coin] || 0;
   const netAmount = Math.max(0, amount - gasRes);
   if (netAmount <= 0) {
     console.warn(`[monitor] amount ${amount} too small after gas reserve — skipping`);
