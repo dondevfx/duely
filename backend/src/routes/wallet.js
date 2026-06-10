@@ -71,9 +71,9 @@ module.exports = function walletRoutes(supabase) {
 
     const orderId = `dep_${req.user.id}_${Date.now()}`;
     try {
-      // price_amount is just a placeholder to satisfy NOWPayments minimum requirements.
-      // Users can send any amount — the webhook credits outcome_amount (what actually arrives).
-      const payment = await createPayment({ amountUsd: 1000, coin, orderId });
+      // Create payment at minimum $5. is_fixed_rate:false means NowPayments accepts
+      // any amount the user sends — the webhook credits outcome_amount (what actually arrives).
+      const payment = await createPayment({ amountUsd: 5, coin, orderId });
       res.json({
         payment_id:   payment.payment_id,
         pay_address:  payment.pay_address,

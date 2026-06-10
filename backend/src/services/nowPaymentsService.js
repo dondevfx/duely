@@ -28,6 +28,7 @@ async function createPayment({ amountUsd = 5, coin, orderId }) {
       order_id:            orderId,
       ipn_callback_url:    `${process.env.BACKEND_URL}/api/webhooks/nowpayments`,
       is_fee_paid_by_user: true,
+      is_fixed_rate:       false,
     }),
   });
 }

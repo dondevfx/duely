@@ -275,8 +275,8 @@ export default function Wallet() {
 
                 {/* Minimum notice */}
                 <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-2.5 text-center">
-                  <p className="text-sm text-white font-semibold">Minimum deposit $5 — send a little extra to cover network fees</p>
-                  <p className="text-xs text-muted mt-0.5">You receive Coins equal to the USD value received after fees</p>
+                  <p className="text-sm text-white font-semibold">Send any amount — minimum $5</p>
+                  <p className="text-xs text-muted mt-0.5">Your balance is credited with the exact USD value received after network fees</p>
                 </div>
 
                 {/* Address */}
