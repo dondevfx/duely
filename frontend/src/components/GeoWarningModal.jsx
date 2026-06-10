@@ -22,8 +22,8 @@ export default function GeoWarningModal() {
   const [countryName, setCountryName] = useState(null);
 
   useEffect(() => {
-    // Only show once per device
-    if (localStorage.getItem(DISMISSED_KEY)) return;
+    // Show every new tab session — clears on tab close, persists through refreshes
+    if (sessionStorage.getItem(DISMISSED_KEY)) return;
 
     fetch('https://ipapi.co/json/', { cache: 'no-store' })
       .then(r => r.json())
@@ -35,7 +35,7 @@ export default function GeoWarningModal() {
   }, []);
 
   function dismiss() {
-    localStorage.setItem(DISMISSED_KEY, '1');
+    sessionStorage.setItem(DISMISSED_KEY, '1');
     setCountryName(null);
   }
 
