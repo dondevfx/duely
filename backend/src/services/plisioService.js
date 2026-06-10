@@ -23,9 +23,13 @@ async function plisioGet(path) {
   const sep = path.includes('?') ? '&' : '?';
   const url = `${PLISIO_BASE}${path}${sep}api_key=${API_KEY}`;
   const res = await fetch(url);
-  const data = await res.json().catch(() => ({}));
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { throw new Error(`Plisio non-JSON response: ${text.slice(0, 200)}`); }
   if (data.status === 'error') {
-    throw new Error(data.data?.message || data.data?.name || 'Plisio error');
+    const msg = data.data?.message || data.data?.name || JSON.stringify(data.data) || 'Plisio error';
+    console.error('[plisio] API error:', msg, 'path:', path);
+    throw new Error(msg);
   }
   return data.data ?? data;
 }

@@ -257,7 +257,7 @@ export default function Wallet() {
         {/* ── Deposit ──────────────────────────────────────────────────── */}
         <div className="bg-surface border border-surfaceLight rounded-2xl p-6 mb-6">
           <h2 className="text-lg font-bold text-white mb-1">Deposit</h2>
-          <p className="text-sm text-muted mb-4">Select a coin and send any amount above the $5 minimum. Your balance is credited with the exact amount received after fees.</p>
+          <p className="text-sm text-muted mb-4">Select a coin and send any amount above the $5 minimum.</p>
 
           <div className="flex flex-col gap-4">
             <div>
@@ -361,7 +361,7 @@ export default function Wallet() {
         <div className="bg-surface border border-surfaceLight rounded-2xl p-6 mb-6">
           <h2 className="text-lg font-bold text-white mb-1">Withdraw</h2>
           <p className="text-sm text-muted mb-4">
-            Convert Coins to any crypto. Minimum ${MIN_WITHDRAWAL}. Fees paid by you from the withdrawn amount.
+            Convert Coins to any crypto. Minimum ${MIN_WITHDRAWAL}.
           </p>
 
           <div className="flex flex-col gap-4">
@@ -452,13 +452,6 @@ export default function Wallet() {
           )}
         </div>
 
-        {/* ── Transaction history ───────────────────────────────────────── */}
-        {transactions.length > 0 && (
-          <div className="bg-surface border border-surfaceLight rounded-2xl p-6">
-            <h2 className="text-lg font-bold text-white mb-4">Transaction History</h2>
-            {transactions.map(tx => <TxRow key={tx.id} tx={tx} />)}
-          </div>
-        )}
 
       </div>
     </div>
