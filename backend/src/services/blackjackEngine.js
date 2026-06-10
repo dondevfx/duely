@@ -1,5 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
-const { calculateNewRatings, updateStreaks } = require('./eloService');
+const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds } = require('./walletService');
 const { creditRakeback } = require('./rakebackService');
 const gameEvents = require('./gameEvents');
@@ -366,12 +366,12 @@ async function _resolveGame(io, supabase, roomId) {
   if (supabase) {
     if (!isDraw && !isFree) {
       if (!winner.isBot) {
-        const { error: eloWinErr } = await supabase.from('profiles').update({ elo: newWinnerElo }).eq('id', winner.userId);
+        await applyEloUpdate(supabase, winner.userId, newWinnerElo); const eloWinErr = null;
         if (eloWinErr) console.error('[blackjackEngine] elo winner update failed:', eloWinErr.message);
         try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch (e) { console.error('[blackjackEngine] increment_win:', e.message); }
       }
       if (!loser.isBot) {
-        const { error: eloLoseErr } = await supabase.from('profiles').update({ elo: newLoserElo }).eq('id', loser.userId);
+        await applyEloUpdate(supabase, loser.userId, newLoserElo); const eloLoseErr = null;
         if (eloLoseErr) console.error('[blackjackEngine] elo loser update failed:', eloLoseErr.message);
         try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch (e) { console.error('[blackjackEngine] increment_loss:', e.message); }
       }

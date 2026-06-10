@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getRank, isRanked, placementMatches } from '../utils/ranks';
+import { getRank, isRanked, placementMatches, getDisplayRank } from '../utils/ranks';
+import CoinIcon from './CoinIcon';
 
 function fmt(n) {
   return Number(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -10,10 +11,14 @@ function ResultTimer({ seconds = 10, onTimeout }) {
   const [remaining, setRemaining] = useState(seconds);
 
   useEffect(() => {
-    if (remaining <= 0) { onTimeout?.(); return; }
-    const id = setInterval(() => setRemaining(r => r - 1), 1000);
+    const id = setInterval(() => {
+      setRemaining(r => {
+        if (r <= 1) { clearInterval(id); onTimeout?.(); return 0; }
+        return r - 1;
+      });
+    }, 1000);
     return () => clearInterval(id);
-  }, [remaining]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const flashing = remaining <= 5;
   return (
@@ -76,7 +81,6 @@ export default function ResultScreen({
 }) {
   // onBackToLobby falls back to onPlayAgain for pages that haven't split the two yet
   const goBack = onBackToLobby ?? onPlayAgain;
-  const sym = currency === 'diamonds' ? '💎' : '🪙';
   const elo    = isWinner ? (newWinnerElo ?? 0) : (newLoserElo ?? 0);
   const eloBefore = eloBeforeRef?.current ?? elo;
   const eloDelta  = elo - eloBefore;
@@ -151,12 +155,16 @@ export default function ResultScreen({
             ))}
             <div className="flex justify-between border-t border-surfaceLight/40 pt-2">
               <span className="text-muted">ELO</span>
-              <span className="text-white font-bold">
-                {elo}{' '}
-                <span className={eloDelta >= 0 ? 'text-success' : 'text-danger'}>
-                  ({eloDelta >= 0 ? '+' : ''}{eloDelta})
+              {ranked ? (
+                <span className="text-white font-bold">
+                  {elo}{' '}
+                  <span className={eloDelta >= 0 ? 'text-success' : 'text-danger'}>
+                    ({eloDelta >= 0 ? '+' : ''}{eloDelta})
+                  </span>
                 </span>
-              </span>
+              ) : (
+                <span className="font-bold" style={{ color: '#64748b' }}>Unranked</span>
+              )}
             </div>
             {balanceChange && (
               <div className="border-t border-surfaceLight/40 pt-3 mt-1 text-center">
@@ -167,15 +175,19 @@ export default function ResultScreen({
                   className={`text-4xl font-black ${isDraw ? 'text-accent' : isWinner ? 'text-success' : 'text-danger'}`}
                   style={{ textShadow: isWinner && !isDraw ? '0 0 20px rgba(74,222,128,0.6)' : isDraw ? '0 0 20px rgba(56,189,248,0.5)' : 'none' }}
                 >
-                  {isDraw
-                    ? `+${currency === 'diamonds'
-                        ? Math.round(balanceChange.winnerPayout).toLocaleString() + ' 💎'
-                        : fmt(balanceChange.winnerPayout) + ' 🪙'}`
-                    : isWinner
-                      ? `+${currency === 'diamonds'
-                          ? Math.round(balanceChange.winnerPayout).toLocaleString() + ' 💎'
-                          : fmt(balanceChange.winnerPayout) + ' 🪙'}`
-                      : `-${entryFee} ${sym}`}
+                  {isDraw ? (
+                    currency === 'diamonds'
+                      ? `+${Math.round(balanceChange.winnerPayout).toLocaleString()} 💎`
+                      : <span>+{fmt(balanceChange.winnerPayout)} <CoinIcon size="0.85em" /></span>
+                  ) : isWinner ? (
+                    currency === 'diamonds'
+                      ? `+${Math.round(balanceChange.winnerPayout).toLocaleString()} 💎`
+                      : <span>+{fmt(balanceChange.winnerPayout)} <CoinIcon size="0.85em" /></span>
+                  ) : (
+                    currency === 'diamonds'
+                      ? `-${entryFee} 💎`
+                      : <span>-{entryFee} <CoinIcon size="0.85em" /></span>
+                  )}
                 </div>
               </div>
             )}

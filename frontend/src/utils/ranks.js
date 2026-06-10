@@ -22,4 +22,12 @@ export function placementMatches(profile) {
   return Math.min(3, (profile?.wins ?? 0) + (profile?.losses ?? 0));
 }
 
+const UNRANKED = { name: 'Unranked', min: 0, max: Infinity, icon: '❔', color: '#64748b', glow: 'rgba(100,116,139,0.3)' };
+
+/** Returns Unranked badge if player hasn't completed placement (needs profile object) */
+export function getDisplayRank(profile) {
+  if (!isRanked(profile)) return UNRANKED;
+  return getRank(profile?.elo ?? 1000);
+}
+
 export { RANKS };

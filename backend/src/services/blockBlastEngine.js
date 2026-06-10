@@ -1,4 +1,4 @@
-﻿const { calculateNewRatings, updateStreaks } = require('./eloService');
+﻿const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
 const { v4: uuidv4 } = require('uuid');
 const { updateHighscore } = require('./highscoreService');
@@ -255,7 +255,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
   let winnerStreak = 0;
   let isFirstWin = false;
   if (supabase && !isFree && !winner.isBot) {
-    try { await supabase.from('profiles').update({ elo: newWinnerElo }).eq('id', winner.userId); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
+    try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
     try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
     try {
       // Human won: increment their streak, reset loser streak if loser is human
@@ -266,7 +266,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
     try { await supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId); } catch {}
   }
   if (supabase && !isFree && !loser.isBot) {
-    try { await supabase.from('profiles').update({ elo: newLoserElo }).eq('id', loser.userId); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
+    try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
     try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
   }
   if (supabase) {

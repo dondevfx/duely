@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../utils/api';
+import CoinIcon from './CoinIcon';
 
 // Only games currently live on the site
 const GAME_META = {
   block_blast: { icon: '🟦', name: 'Block Burst' },
   scrabble:    { icon: '🔤', name: 'Word VS'     },
-  coin_flip:   { icon: '🪙', name: 'Coin Flip'   },
+  coin_flip:   { icon: '🟡', name: 'Coin Flip'   },
   blackjack:   { icon: '🃏', name: 'Blackjack'   },
 };
 
@@ -55,8 +56,10 @@ function fmtPayout(payout, diamonds) {
     if (payout >= 1000) return `+${(payout / 1000).toFixed(1).replace(/\.0$/, '')}k 💎`;
     return `+${payout} 💎`;
   }
-  if (payout >= 1000) return `+${(payout / 1000).toFixed(1).replace(/\.0$/, '')}k 🪙`;
-  return `+${payout % 1 === 0 ? payout : payout.toFixed(2)} 🪙`;
+  const amt = payout >= 1000
+    ? `+${(payout / 1000).toFixed(1).replace(/\.0$/, '')}k`
+    : `+${payout % 1 === 0 ? payout : payout.toFixed(2)}`;
+  return <span className="inline-flex items-center gap-0.5">{amt} <CoinIcon size="0.85em" /></span>;
 }
 
 const MAX = 14;

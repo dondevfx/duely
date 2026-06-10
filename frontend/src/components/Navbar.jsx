@@ -2,7 +2,7 @@
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
-import { getRank } from '../utils/ranks';
+import { getRank, getDisplayRank } from '../utils/ranks';
 import { api } from '../utils/api';
 import CoinIcon from './CoinIcon';
 
@@ -12,12 +12,13 @@ const NAV_LINKS = [
   { icon: '👤', label: 'Profile',     to: '/profile' },
   { icon: '💳', label: 'Wallet',      to: '/wallet' },
   { icon: '💸', label: 'Tip',         to: '/tip' },
+  { icon: '🎡', label: 'Rewards',     to: '/rewards' },
 ];
 
 const GAME_LINKS = [
   { icon: '⚡', label: 'Quick Match', to: '/game/quick-match' },
   { icon: '🟦', label: 'Block Burst', to: '/game/block-blast' },
-  { icon: '🪙', label: 'Coin Flip',   to: '/game/coin-flip' },
+  { icon: '🟡', label: 'Coin Flip',   to: '/game/coin-flip' },
   { icon: '🔤', label: 'Word VS',     to: '/game/scrabble' },
   { icon: '🃏', label: 'Blackjack',   to: '/game/blackjack' },
 ];
@@ -45,17 +46,20 @@ export default function Navbar() {
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen]   = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileCurrencyOpen, setMobileCurrencyOpen] = useState(false);
   const [rakebackOpen, setRakebackOpen]   = useState(false);
   const [rakebackData, setRakebackData]   = useState(null);
   const [rakebackLoading, setRakebackLoading] = useState(false);
   const [rakebackCountdowns, setRakebackCountdowns] = useState({ instant: 0, daily: 0, weekly: 0 });
-  const dropRef     = useRef(null);
-  const rakebackRef = useRef(null);
+  const dropRef          = useRef(null);
+  const rakebackRef      = useRef(null);
+  const mobileCurrencyRef = useRef(null);
 
   useEffect(() => {
     function handler(e) {
       if (dropRef.current && !dropRef.current.contains(e.target)) setDropdownOpen(false);
       if (rakebackRef.current && !rakebackRef.current.contains(e.target)) setRakebackOpen(false);
+      if (mobileCurrencyRef.current && !mobileCurrencyRef.current.contains(e.target)) setMobileCurrencyOpen(false);
     }
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -136,9 +140,9 @@ export default function Navbar() {
             </div>
           </button>
 
-          {/* Logo */}
-          <div className="lg:w-56 lg:shrink-0 flex-1 lg:flex-none flex lg:justify-start justify-center">
-            <Link to="/" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2">
+          {/* Logo — absolutely centered on mobile, left-aligned on desktop */}
+          <div className="absolute left-1/2 -translate-x-1/2 lg:relative lg:left-auto lg:translate-x-0 lg:w-56 lg:shrink-0 flex justify-center lg:justify-start pointer-events-none lg:pointer-events-auto">
+            <Link to="/" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 pointer-events-auto">
               <span className="text-3xl font-black tracking-tight text-primary" style={{ textShadow: '0 0 22px rgba(30,144,255,0.6)' }}>
                 Duely
               </span>
@@ -326,16 +330,41 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Mobile compact balance */}
+          {/* Mobile compact balance with dropdown */}
           {profile && (
-            <div className="lg:hidden shrink-0">
-              <Link to="/wallet"
-                className="flex items-center gap-1 px-2.5 py-1 bg-black border border-primary/30 rounded-full text-xs font-bold text-white">
+            <div className="lg:hidden shrink-0 relative" ref={mobileCurrencyRef}>
+              <button
+                onClick={() => setMobileCurrencyOpen(o => !o)}
+                className="flex items-center gap-1 px-2.5 py-1 bg-black border border-primary/30 hover:border-primary rounded-full text-xs font-bold text-white transition-all"
+              >
                 {isDiamonds
                   ? <>{compactNum(profile.diamonds ?? 0)} 💎</>
                   : <>{profile.c_coins?.toLocaleString('en-US', { maximumFractionDigits: 0 }) ?? '0'} <CoinIcon size="1em" /></>
                 }
-              </Link>
+                <span className="text-muted text-[10px]">▾</span>
+              </button>
+              {mobileCurrencyOpen && (
+                <div className="absolute top-full mt-2 right-0 bg-surface border border-border rounded-xl shadow-glow-lg z-50 overflow-hidden" style={{ minWidth: 190 }}>
+                  <div className="p-1">
+                    <button onClick={() => { setDisplayCurrency('coins'); setMobileCurrencyOpen(false); }}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs transition-all ${!isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
+                      <div className="flex items-center gap-2"><CoinIcon size="1em" /><span className="font-medium">Coins</span></div>
+                      <span className="font-mono font-bold text-white">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</span>
+                    </button>
+                    <button onClick={() => { setDisplayCurrency('diamonds'); setMobileCurrencyOpen(false); }}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs transition-all ${isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
+                      <div className="flex items-center gap-2"><span className="relative -top-px">💎</span><span className="font-medium">Diamonds</span></div>
+                      <span className="font-mono font-bold text-white">{compactNum(profile.diamonds ?? 0)}</span>
+                    </button>
+                  </div>
+                  <div className="border-t border-border p-1.5">
+                    <Link to="/wallet" onClick={() => setMobileCurrencyOpen(false)}
+                      className="block w-full text-center text-xs font-semibold px-3 py-2 rounded-lg bg-surfaceLight hover:bg-primary/20 text-muted hover:text-white transition-all">
+                      Wallet →
+                    </Link>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -358,8 +387,8 @@ export default function Navbar() {
                       }}>
                       {profile.username?.[0]?.toUpperCase() ?? '?'}
                     </div>
-                    <span className="absolute -bottom-1 -right-1 text-sm leading-none" title={getRank(profile.elo).name}>
-                      {getRank(profile.elo).icon}
+                    <span className="absolute -bottom-1 -right-1 text-sm leading-none" title={getDisplayRank(profile).name}>
+                      {getDisplayRank(profile).icon}
                     </span>
                     {(profile.current_streak ?? 0) >= 1 && (
                       <span className="absolute -top-1 -left-1 flex items-center justify-center min-w-[18px] h-[18px] rounded-full text-[10px] font-black leading-none px-0.5"
@@ -372,8 +401,8 @@ export default function Navbar() {
                     <span className="text-sm text-muted group-hover:text-white transition-colors truncate max-w-[90px]">
                       {profile.username}
                     </span>
-                    <span className="text-xs font-semibold" style={{ color: getRank(profile.elo).color }}>
-                      {getRank(profile.elo).name}
+                    <span className="text-xs font-semibold" style={{ color: getDisplayRank(profile).color }}>
+                      {getDisplayRank(profile).name}
                     </span>
                   </div>
                 </Link>

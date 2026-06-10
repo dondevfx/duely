@@ -6,7 +6,7 @@ import { getRank } from '../utils/ranks';
 const GAMES = [
   { icon: '⚡', label: 'Quick Match',  route: '/game/quick-match', live: true },
   { icon: '🟦', label: 'Block Burst',  route: '/game/block-blast', live: true },
-  { icon: '🪙', label: 'Coin Flip',    route: '/game/coin-flip',   live: true },
+  { icon: '🟡', label: 'Coin Flip',    route: '/game/coin-flip',   live: true },
   { icon: '🔤', label: 'Word VS',       route: '/game/scrabble',    live: true },
   { icon: '🃏', label: 'Blackjack',    route: '/game/blackjack',   live: true },
 ];

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import GlowButton from './GlowButton';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
+import CoinIcon from './CoinIcon';
 
 export const COIN_FEES    = [1, 5, 10];
 export const DIAMOND_FEES = [100, 250, 500];
@@ -50,7 +51,7 @@ export default function GameLobby({
 
   const isDiamonds = betCurrency === 'diamonds';
   const fees       = isDiamonds ? DIAMOND_FEES : COIN_FEES;
-  const currLabel  = isDiamonds ? '💎' : '🪙';
+  const currLabel  = isDiamonds ? <span>💎</span> : <CoinIcon size="1em" />;
   const insufficient = entryFee > 0 && balance < entryFee;
 
   const sliderIdx = Math.max(0, fees.indexOf(entryFee));
@@ -66,9 +67,10 @@ export default function GameLobby({
     setEntryFee(fees[parseInt(e.target.value)]);
   }
 
-  const payout = isDiamonds
-    ? (entryFee * 2).toLocaleString() + ' 💎'
-    : `${(entryFee * 2 * 0.95) % 1 === 0 ? (entryFee * 2 * 0.95).toLocaleString() : (entryFee * 2 * 0.95).toFixed(2)} 🪙`;
+  const payoutAmt = isDiamonds
+    ? (entryFee * 2).toLocaleString()
+    : `${(entryFee * 2 * 0.95) % 1 === 0 ? (entryFee * 2 * 0.95).toLocaleString() : (entryFee * 2 * 0.95).toFixed(2)}`;
+  const payout = <span className="inline-flex items-center gap-1">{payoutAmt} {currLabel}</span>;
 
   return (
     <div className="w-full max-w-md animate-slide-up">
@@ -86,7 +88,7 @@ export default function GameLobby({
               onClick={() => switchCurrency('coins')}
               className={`px-4 py-2 rounded text-sm font-bold transition-all ${!isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}
             >
-              🪙 Coins
+              <CoinIcon size="1em" /> Coins
             </button>
             <button
               onClick={() => switchCurrency('diamonds')}

@@ -7,6 +7,7 @@ import { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
 import ResultScreen from '../components/ResultScreen';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
+import CoinIcon from '../components/CoinIcon';
 
 function fmtFee(fee) {
   if (fee >= 1000) return `${(fee / 1000).toLocaleString()}k`;
@@ -234,7 +235,7 @@ export default function CoinFlipGame() {
 
   const isDiamonds = betCurrency === 'diamonds';
   const fees = isDiamonds ? DIAMOND_FEES : COIN_FEES;
-  const currLabel = isDiamonds ? '💎' : '🪙';
+  const currLabel = isDiamonds ? <span>💎</span> : <CoinIcon size="1em" />;
   const myBalance = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const insufficient = entryFee > 0 && myBalance < entryFee;
   const sliderIdx = Math.max(0, fees.indexOf(entryFee));
@@ -244,9 +245,10 @@ export default function CoinFlipGame() {
     setEntryFee((cur === 'diamonds' ? DIAMOND_FEES : COIN_FEES)[0]);
   }
 
-  const payout = isDiamonds
-    ? `${(entryFee * 2).toLocaleString()} 💎`
-    : `${(entryFee * 2 * 0.95) % 1 === 0 ? (entryFee * 2 * 0.95).toLocaleString() : (entryFee * 2 * 0.95).toFixed(2)} 🪙`;
+  const payoutAmt = isDiamonds
+    ? `${(entryFee * 2).toLocaleString()}`
+    : `${(entryFee * 2 * 0.95) % 1 === 0 ? (entryFee * 2 * 0.95).toLocaleString() : (entryFee * 2 * 0.95).toFixed(2)}`;
+  const payout = <span className="inline-flex items-center gap-1">{payoutAmt} {currLabel}</span>;
 
   useEffect(() => {
     if (!socket) return;
@@ -268,13 +270,13 @@ export default function CoinFlipGame() {
       pendingResultRef.current = data;
       setFlipResult(data.result);
       landCoin(data.result);
-      refreshProfile(); // update ELO in sidebar immediately
 
       // After transition completes show label for 2s, then result screen
       setTimeout(() => setResultLanded(true), 4200);
       setTimeout(() => {
         setResultData(pendingResultRef.current);
         setPhase('result');
+        refreshProfile(); // update balance/ELO when result screen shows
       }, 6200);
     });
 
@@ -402,7 +404,7 @@ export default function CoinFlipGame() {
           winnerStreak={resultData.winnerStreak ?? 0}
           isFirstWin={resultData.isFirstWin ?? false}
           profile={profile}
-          gameLabel="🪙 Coin Flip"
+          gameLabel="🟡 Coin Flip"
           extraRows={[
             { label: 'Your Pick', value: side === 'heads' ? '🔵 Heads' : '⚪ Tails' },
             { label: 'Landed On', value: resultData.result === 'heads' ? '🔵 Heads' : '⚪ Tails' },
@@ -420,7 +422,7 @@ export default function CoinFlipGame() {
       <div className="w-full max-w-md animate-slide-up">
 
         <div className="text-center mb-6">
-          <h1 className="text-5xl font-black text-white mb-2">🪙 Coin Flip</h1>
+          <h1 className="text-5xl font-black text-white mb-2">🟡 Coin Flip</h1>
           <p className="text-muted text-base">Pick a side — get matched with the opposite</p>
           {(playerCounts?.['coin-flip'] ?? 0) > 0 && (
             <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full bg-success/10 border border-success/30">
@@ -470,7 +472,7 @@ export default function CoinFlipGame() {
               <div className="flex items-center justify-between mb-4">
                 <span className="text-base font-bold text-white">Entry Fee</span>
                 <div className="flex items-center gap-0.5 bg-bg border border-border rounded-lg p-1">
-                  <button onClick={() => switchCurrency('coins')} className={`px-4 py-2 rounded text-sm font-bold transition-all ${!isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}>🪙 Coins</button>
+                  <button onClick={() => switchCurrency('coins')} className={`px-4 py-2 rounded text-sm font-bold transition-all ${!isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}><CoinIcon size="0.85em" /> Coins</button>
                   <button onClick={() => switchCurrency('diamonds')} className={`px-4 py-2 rounded text-sm font-bold transition-all ${isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}>💎 Diamonds</button>
                 </div>
               </div>

@@ -4,6 +4,7 @@ import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { getRank } from '../utils/ranks';
 import { usePageReady } from '../hooks/usePageReady';
+import CoinIcon from '../components/CoinIcon';
 
 function RankBadge({ rank }) {
   if (rank === 1) return <span className="text-yellow-400 font-black">🥇</span>;
@@ -14,7 +15,7 @@ function RankBadge({ rank }) {
 
 const TABS = [
   { id: 'elo',             label: 'ELO',             icon: '⚔️', endpoint: '/leaderboard',                 valueKey: 'elo',           isDiamond: false, label2: 'Rating' },
-  { id: 'wagered',         label: '🪙 Wagered',       icon: '',   endpoint: '/leaderboard/wagered',         valueKey: 'total_wagered', isDiamond: false, label2: 'Wagered' },
+  { id: 'wagered',         label: 'Wagered',          icon: '',   endpoint: '/leaderboard/wagered',         valueKey: 'total_wagered', isDiamond: false, label2: 'Wagered' },
   { id: 'wagered-diamonds',label: '💎 Wagered',       icon: '',   endpoint: '/leaderboard/wagered-diamonds',valueKey: 'total_wagered', isDiamond: true,  label2: 'Wagered' },
   { id: 'games',           label: 'Games',           icon: '🎮', endpoint: null,                           valueKey: null,            isDiamond: false, label2: 'Score' },
   { id: 'streak',          label: '🔥 Streaks',       icon: '',   endpoint: '/leaderboard/streak',          valueKey: 'current_streak',isDiamond: false, label2: 'Streak' },
@@ -23,7 +24,7 @@ const TABS = [
 const GAME_LEADERBOARDS = [
   { id: 'blockBlast',    label: 'Block Burst',  icon: '🟦', scoreLabel: 'Score' },
   { id: 'scrabble',      label: 'Word VS',      icon: '🔤', scoreLabel: 'Score' },
-  { id: 'coinFlip',      label: 'Coin Flip',    icon: '🪙', scoreLabel: 'Wins'  },
+  { id: 'coinFlip',      label: 'Coin Flip',    icon: '🟡', scoreLabel: 'Wins'  },
   { id: 'blackjack',     label: 'Blackjack',    icon: '🃏', scoreLabel: 'Wins'  },
 ];
 
@@ -88,7 +89,13 @@ export default function Leaderboard() {
   }, []);
 
   const current = data[activeTab];
-  const players = current?.players ?? [];
+  const allPlayers = current?.players ?? [];
+  // Hide players with no activity: for ELO, require at least 1 win; for others, require value > 0
+  const players = allPlayers.filter(p => {
+    if (tab?.id === 'elo') return (p.wins ?? 0) > 0;
+    if (tab?.id === 'streak') return (p.current_streak ?? 0) > 0;
+    return (p[tab?.valueKey ?? ''] ?? 0) > 0;
+  });
   const userRank = current?.userRank ?? null;
   const myEntry = players.find(p => p.id === profile?.id);
 
@@ -97,7 +104,7 @@ export default function Leaderboard() {
     if (tab.id === 'elo') return `${getRank(v).icon} ${v} ELO`;
     if (tab.id === 'streak') return player.current_streak >= 1 ? `🔥 ${player.current_streak}` : `0 wins`;
     if (tab.isDiamond) return `💎 ${Number(v).toLocaleString()}`;
-    return `🪙 ${Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return <span className="inline-flex items-center gap-1"><CoinIcon size="0.9em" />{Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
   }
 
   // Get user's own value from profile for rank banner (works even outside top 500)
@@ -108,7 +115,7 @@ export default function Leaderboard() {
       const myEntry = players.find(p => p.id === profile.id);
       const w = myEntry?.total_wagered ?? current?.userWagered ?? 0;
       if (tab.isDiamond) return `💎 ${Number(w).toLocaleString()}`;
-      return `🪙 ${Number(w).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      return `${Number(w).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} coins`;
     }
     if (tab.id === 'streak') return `🔥 ${profile?.current_streak ?? 0}`;
     return '';
@@ -117,7 +124,7 @@ export default function Leaderboard() {
   // Games tab content
   const gameMeta = selectedGame ? GAME_LEADERBOARDS.find(g => g.id === selectedGame) : null;
   const currentGameData = selectedGame ? gameData[selectedGame] : null;
-  const gamePlayers = currentGameData?.players ?? [];
+  const gamePlayers = (currentGameData?.players ?? []).filter(p => (p.score ?? 0) > 0);
   const gameUserRank = currentGameData?.userRank ?? null;
   const myGameEntry = gamePlayers.find(p => p.id === profile?.id);
 

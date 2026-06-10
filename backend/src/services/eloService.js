@@ -89,4 +89,20 @@ async function updateElo(supabase, winnerId, loserId, winnerElo, loserElo) {
   return { newWinnerElo, newLoserElo, ...streakData };
 }
 
-module.exports = { calculateNewRatings, updateElo, updateStreaks };
+/**
+ * Apply ELO update only after a player has completed placement (3+ total matches).
+ * ELO updates happen BEFORE wins/losses are incremented, so compare against current total.
+ */
+async function applyEloUpdate(supabase, userId, newElo) {
+  try {
+    const { data } = await supabase
+      .from('profiles').select('wins, losses').eq('id', userId).single();
+    const total = (data?.wins ?? 0) + (data?.losses ?? 0);
+    if (total < 3) return; // still in placement — no ELO change
+    await supabase.from('profiles').update({ elo: newElo }).eq('id', userId);
+  } catch (e) {
+    console.error('[applyEloUpdate] error:', e.message);
+  }
+}
+
+module.exports = { calculateNewRatings, updateElo, updateStreaks, applyEloUpdate };

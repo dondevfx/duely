@@ -2007,7 +2007,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         const loser  = playerWon ? bot : player;
         const isFree = entryFee === 0;
 
-        const { calculateNewRatings } = require('../services/eloService');
+        const { calculateNewRatings, applyEloUpdate: _applyElo } = require('../services/eloService');
         const { newWinnerElo, newLoserElo } = isFree
           ? { newWinnerElo: winner.elo, newLoserElo: loser.elo }
           : calculateNewRatings(winner.elo, loser.elo);
@@ -2021,11 +2021,11 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         let winnerStreak = 0, isFirstWin = false;
         if (!isFree) {
           if (playerWon) {
-            try { await supabase.from('profiles').update({ elo: newWinnerElo }).eq('id', player.userId); } catch {}
+            try { await _applyElo(supabase, player.userId, newWinnerElo); } catch {}
             try { await supabase.rpc('increment_win', { uid: player.userId }); } catch {}
             try { ({ winnerStreak, isFirstWin } = await require('../services/eloService').updateStreaks(supabase, player.userId, null)); } catch {}
           } else {
-            try { await supabase.from('profiles').update({ elo: newLoserElo }).eq('id', player.userId); } catch {}
+            try { await _applyElo(supabase, player.userId, newLoserElo); } catch {}
             try { await supabase.rpc('increment_loss', { uid: player.userId }); } catch {}
             try { await supabase.from('profiles').update({ current_streak: 0 }).eq('id', player.userId); } catch {}
           }

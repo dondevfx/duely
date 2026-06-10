@@ -1,5 +1,5 @@
 const { getRoom } = require('./matchmaking');
-const { calculateNewRatings, updateStreaks } = require('./eloService');
+const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
 const { scheduleBotClick } = require('./botService');
 
@@ -97,7 +97,7 @@ async function resolveRound(io, supabase, roomId, winner) {
     let isFirstWin = false;
     if (supabase && !winner.isBot) {
       try {
-        await supabase.from('profiles').update({ elo: newWinnerElo }).eq('id', winner.userId);
+        await applyEloUpdate(supabase, winner.userId, newWinnerElo);
         await supabase.rpc('increment_win', { uid: winner.userId });
       } catch (e) { console.error('[gameEngine] RPC failed:', e.message); }
       try {
@@ -106,7 +106,7 @@ async function resolveRound(io, supabase, roomId, winner) {
     }
     if (supabase && !loser.isBot) {
       try {
-        await supabase.from('profiles').update({ elo: newLoserElo }).eq('id', loser.userId);
+        await applyEloUpdate(supabase, loser.userId, newLoserElo);
         await supabase.rpc('increment_loss', { uid: loser.userId });
       } catch (e) { console.error('[gameEngine] RPC failed:', e.message); }
     }

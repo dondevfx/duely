@@ -285,7 +285,7 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
     try {
       const res = await api.post('/affiliate/collect-earnings');
       setAffStatus(s => ({ ...s, earnings_c: 0 }));
-      setAffMsg({ type: 'success', text: `Collected ${res.collected_c.toFixed(2)} 🪙!` });
+      setAffMsg({ type: 'success', text: `Collected ${res.collected_c.toFixed(2)} coins!` });
       refreshProfile();
     } catch (err) {
       setAffMsg({ type: 'error', text: err.message });
@@ -487,7 +487,7 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
                     {affStatus.myCode}
                   </div>
                   <div className="flex flex-col items-center mb-3">
-                    <div className="text-sm font-black text-success">+{fmt(affStatus.earnings_c)} 🪙</div>
+                    <div className="text-sm font-black text-success">+{fmt(affStatus.earnings_c)} coins</div>
                     <div className="text-[10px] text-muted">Coin earnings</div>
                   </div>
                   {(affStatus.earnings_c > 0 || affStatus.earnings_diamonds > 0) ? (
@@ -868,7 +868,7 @@ function ProfileLineChart({ data }) {
         }}>
           <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>{fmtXDate(tooltip.date)}</div>
           <div style={{ fontSize: 14, fontWeight: 700, color: tooltip.balance >= 0 ? '#22c55e' : '#ef4444' }}>
-            {tooltip.balance >= 0 ? '+' : ''}{tooltip.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 🪙
+            {tooltip.balance >= 0 ? '+' : ''}{tooltip.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} coins
           </div>
         </div>
       )}
@@ -906,7 +906,7 @@ function CoinHistorySection({ userId }) {
         <div className="flex items-center gap-3">
           {netPnl !== null && (
             <span className="text-sm font-bold" style={{ color: netPnl >= 0 ? '#22c55e' : '#ef4444' }}>
-              {netPnl >= 0 ? '+' : ''}{netPnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 🪙
+              {netPnl >= 0 ? '+' : ''}{netPnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} coins
             </span>
           )}
           <span className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${
@@ -1406,7 +1406,7 @@ export default function Profile() {
               { label: 'Leaderboard', value: extraStats.rank ? `#${extraStats.rank}` : '-', color: 'text-accent' },
               { label: 'Wins', value: profile.wins, color: 'text-success' },
               { label: 'Losses', value: profile.losses, color: 'text-danger' },
-              { label: 'Wagered', value: `${fmt(extraStats.total_wagered)} 🪙`, color: 'text-white' },
+              { label: 'Wagered', value: `${fmt(extraStats.total_wagered)} coins`, color: 'text-white' },
             ].map(s => (
               <div key={s.label} className="bg-bg rounded-xl p-3 text-center">
                 <div className={`text-xl font-black ${s.color}`}>{s.value}</div>
@@ -1532,7 +1532,10 @@ export default function Profile() {
         </div>
         </div>{/* end main content */}
 
-        {/* Friends panel — floats to the right of the centered box, desktop only */}
+        {/* Friends panel — below main content on mobile, floats right on desktop */}
+        <div className="mt-6 lg:hidden">
+          <FriendsPanel myId={profile.id} activeGames={activeGames} />
+        </div>
         <div className="absolute top-0 left-full ml-4 w-64 hidden lg:block">
           <FriendsPanel myId={profile.id} activeGames={activeGames} />
         </div>

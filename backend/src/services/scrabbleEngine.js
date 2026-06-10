@@ -1,6 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const { isValidWord } = require('./wordValidator');
-const { calculateNewRatings, updateStreaks } = require('./eloService');
+const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
 const { updateHighscore } = require('./highscoreService');
 const gameEvents = require('./gameEvents');
@@ -465,7 +465,7 @@ async function _endGame(io, supabase, roomId, reason) {
   if (supabase) {
     if (!isFree) {
       if (!winner.isBot) {
-        await supabase.from('profiles').update({ elo: newWinnerElo }).eq('id', winner.userId).catch(() => {});
+        await applyEloUpdate(supabase, winner.userId, newWinnerElo);
         await supabase.rpc('increment_win', { uid: winner.userId }).catch(() => {});
         // Human won: increment their streak, reset loser streak if loser is human
         try { await updateStreaks(supabase, winner.userId, loser.isBot ? null : loser.userId); } catch {}
@@ -474,7 +474,7 @@ async function _endGame(io, supabase, roomId, reason) {
         await supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId).catch(() => {});
       }
       if (!loser.isBot) {
-        await supabase.from('profiles').update({ elo: newLoserElo }).eq('id', loser.userId).catch(() => {});
+        await applyEloUpdate(supabase, loser.userId, newLoserElo);
         await supabase.rpc('increment_loss', { uid: loser.userId }).catch(() => {});
       }
     }
