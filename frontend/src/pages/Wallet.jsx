@@ -10,36 +10,36 @@ import CoinIcon from '../components/CoinIcon';
 
 // ── Supported deposit coins ───────────────────────────────────────────
 const COINS = [
-  { id: 'btc',  label: 'BTC',  network: 'Bitcoin'  },
-  { id: 'eth',  label: 'ETH',  network: 'Ethereum' },
-  { id: 'sol',  label: 'SOL',  network: 'Solana'   },
-  { id: 'bnb',  label: 'BNB',  network: 'BSC'      },
-  { id: 'usdc', label: 'USDC', network: 'Solana'   },
-  { id: 'ltc',  label: 'LTC',  network: 'Litecoin' },
-  { id: 'doge', label: 'DOGE', network: 'Dogecoin' },
-  { id: 'trx',  label: 'TRX',  network: 'TRON'     },
+  { id: 'sol',  label: 'SOL',  network: 'Solana',   minUsd: 2  },
+  { id: 'usdc', label: 'USDC', network: 'Solana',   minUsd: 2  },
+  { id: 'btc',  label: 'BTC',  network: 'Bitcoin',  minUsd: 20 },
+  { id: 'eth',  label: 'ETH',  network: 'Ethereum', minUsd: 20 },
+  { id: 'bnb',  label: 'BNB',  network: 'BSC',      minUsd: 20 },
+  { id: 'ltc',  label: 'LTC',  network: 'Litecoin', minUsd: 20 },
+  { id: 'doge', label: 'DOGE', network: 'Dogecoin', minUsd: 20 },
+  { id: 'trx',  label: 'TRX',  network: 'TRON',     minUsd: 20 },
 ];
 
-// ── Supported withdrawal coins (SimpleSwap) ───────────────────────────
+// ── Supported withdrawal coins ────────────────────────────────────────
 const WITHDRAW_COINS = [
+  { id: 'sol',  label: 'SOL',  network: 'Solana'   },
+  { id: 'usdc', label: 'USDC', network: 'Solana'   },
   { id: 'btc',  label: 'BTC',  network: 'Bitcoin'  },
   { id: 'eth',  label: 'ETH',  network: 'Ethereum' },
-  { id: 'sol',  label: 'SOL',  network: 'Solana'   },
   { id: 'bnb',  label: 'BNB',  network: 'BSC'      },
-  { id: 'usdc', label: 'USDC', network: 'Solana'   },
   { id: 'ltc',  label: 'LTC',  network: 'Litecoin' },
   { id: 'doge', label: 'DOGE', network: 'Dogecoin' },
   { id: 'trx',  label: 'TRX',  network: 'TRON'     },
 ];
 
-const MIN_WITHDRAWAL = 1; // lowered for testing
+const MIN_WITHDRAWAL = 5;
 
 function fmt(n) {
   return Number(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 // ── Coin grid ─────────────────────────────────────────────────────────
-function CoinGrid({ coins, selected, onSelect }) {
+function CoinGrid({ coins, selected, onSelect, showMin = false }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
       {coins.map(c => (
@@ -54,6 +54,9 @@ function CoinGrid({ coins, selected, onSelect }) {
         >
           <div className="text-xs font-black mt-0.5">{c.label}</div>
           <div className="text-[10px] opacity-60 leading-tight">{c.network}</div>
+          {showMin && c.minUsd && (
+            <div className="text-[9px] opacity-50 leading-tight">min ${c.minUsd}</div>
+          )}
         </button>
       ))}
     </div>
@@ -257,7 +260,7 @@ export default function Wallet() {
         {/* ── Deposit ──────────────────────────────────────────────────── */}
         <div className="bg-surface border border-surfaceLight rounded-2xl p-6 mb-6">
           <h2 className="text-lg font-bold text-white mb-1">Deposit</h2>
-          <p className="text-sm text-muted mb-4">Select a coin and send any amount above the $5 minimum.</p>
+          <p className="text-sm text-muted mb-4">Select a coin and send to your deposit address.</p>
 
           <div className="flex flex-col gap-4">
             <div>
@@ -266,6 +269,7 @@ export default function Wallet() {
                 coins={COINS}
                 selected={depCoin}
                 onSelect={c => { setDepCoin(c); setDepAddress(null); setDepMsg(null); setDepPolling(false); }}
+                showMin
               />
             </div>
 
@@ -361,7 +365,7 @@ export default function Wallet() {
         <div className="bg-surface border border-surfaceLight rounded-2xl p-6 mb-6">
           <h2 className="text-lg font-bold text-white mb-1">Withdraw</h2>
           <p className="text-sm text-muted mb-4">
-            Convert Coins to any crypto. Minimum ${MIN_WITHDRAWAL}.
+            Convert Coins to any crypto.
           </p>
 
           <div className="flex flex-col gap-4">
@@ -386,7 +390,7 @@ export default function Wallet() {
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-muted">Amount (USD) — min ${MIN_WITHDRAWAL}</label>
+                <label className="text-xs text-muted">Amount (USD)</label>
                 <span className="text-xs text-muted">Balance: <span className="text-white font-bold inline-flex items-center gap-0.5">{fmt(profile?.c_coins)} <CoinIcon size="0.75em" /></span></span>
               </div>
               <input
@@ -402,11 +406,6 @@ export default function Wallet() {
               {witEstimate && (
                 <p className="text-xs text-success mt-1">
                   ≈ {witEstimate} {witCoin.label} after all fees
-                </p>
-              )}
-              {witAmountUsd && parseFloat(witAmountUsd) >= MIN_WITHDRAWAL && (
-                <p className="text-[10px] text-muted mt-0.5">
-                  Includes Plisio 0.5% + SimpleSwap 0.5% fees — paid by you
                 </p>
               )}
             </div>

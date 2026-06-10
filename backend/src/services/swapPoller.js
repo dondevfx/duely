@@ -68,19 +68,21 @@ async function poll(exchangeId, userId, startedAt) {
     console.log(`[swapPoller] exchange ${exchangeId} status=${result.status} amountTo=${result.amountTo}`);
 
     if (result.status === 'finished') {
-      // All fees have been taken. amount_to = exact USDC that arrived in our wallet.
-      const usdcReceived = Math.floor(result.amountTo * 100) / 100; // round down
+      // Take 0.5% platform fee from exact USDC received, credit the rest to player
+      const OUR_FEE    = 0.005;
+      const usdcRaw    = result.amountTo;
+      const usdcCredit = Math.floor(usdcRaw * (1 - OUR_FEE) * 100) / 100;
 
-      if (usdcReceived > 0) {
-        await creditCoins(supabaseRef, userId, usdcReceived);
-        await recordDeposit(supabaseRef, userId, usdcReceived, 'crypto');
+      if (usdcCredit > 0) {
+        await creditCoins(supabaseRef, userId, usdcCredit);
+        await recordDeposit(supabaseRef, userId, usdcCredit, 'crypto');
         await supabaseRef
           .from('transactions')
-          .update({ status: 'confirmed', amount_c: usdcReceived })
+          .update({ status: 'confirmed', amount_c: usdcCredit })
           .eq('tx_hash', exchangeId)
-          .eq('status', 'converting'); // only update if still converting (idempotency)
+          .eq('status', 'converting');
 
-        console.log(`[swapPoller] ✓ credited $${usdcReceived} USDC to user ${userId} (exchange ${exchangeId})`);
+        console.log(`[swapPoller] ✓ credited $${usdcCredit} to user ${userId} ($${usdcRaw} received, 0.5% fee taken, exchange ${exchangeId})`);
       }
       activePolls.delete(exchangeId);
 

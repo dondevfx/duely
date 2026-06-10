@@ -14,15 +14,16 @@ const { isLocked } = require('../services/lockService');
 
 const WITHDRAW_COOLDOWN_MS = 60 * 1000;   // 60s between withdrawals
 const DEPOSIT_MAX_SINGLE   = 50_000;      // $50k hard cap per deposit
-const MIN_WITHDRAWAL       = 1;           // $1 minimum — lowered for testing
+const MIN_WITHDRAWAL       = 5;           // $5 minimum withdrawal
 
 // Coins accepted for deposit (Plisio supports all of these)
 const DEPOSIT_COINS = new Set(['btc','eth','sol','ltc','trx','doge','bnb','usdc']);
 
 // Per-coin deposit minimums enforced by our platform
 const DEPOSIT_MINS = {
-  usdttrc20: 10,   // $10 — USDT TRC-20 cross-network swap is expensive
-  default:    5,   // $5 for all other coins
+  sol:     2,   // Jupiter on-chain swap, low fees
+  usdc:    2,   // direct credit, no swap
+  default: 20,  // ChangeNow minimum for reasonable fees
 };
 
 // Basic address validation — Plisio/SimpleSwap do real validation
