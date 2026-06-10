@@ -13,15 +13,10 @@
  * Addresses are loaded from `deposit_addresses` table on start.
  */
 
-const fetch     = require('node-fetch');
-const { getAddress }         = require('./addressService');
-const { sendCrypto, GAS_RESERVE } = require('./chainSend');
-const { createDepositSwap }  = require('./simpleSwapService');
-const { watch }              = require('./swapPoller');
+const fetch = require('node-fetch');
 
 const POLL_INTERVAL_MS = 45_000;
 const MIN_USD          = 0.50;  // lowered for testing — raise to 4.50 before launch
-const OUR_USDC_ADDRESS = () => process.env.USDC_SPL_ADDRESS;
 
 // CoinGecko IDs for price lookups
 const COINGECKO_IDS = {
@@ -341,62 +336,25 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     return;
   }
 
-  const usdc = OUR_USDC_ADDRESS();
-  if (!usdc) {
-    console.error('[monitor] USDC_SPL_ADDRESS not configured');
-    return;
-  }
+  // ── Credit directly at CoinGecko spot price ──────────────────────────────────
+  // No forwarding to SimpleSwap — avoids their $5+ minimum and latency.
+  // Player receives USD equivalent of the crypto they sent (minus nothing — fees
+  // are already implicit in the spot price difference vs mid-market).
+  const { creditCoins, recordDeposit } = require('./walletService');
+  const credited = Math.floor(estimatedUsd * 100) / 100;
 
-  // Deduct realistic gas reserve so we don't try to send more than we can
-  const gasReserveMap = { btc: 0.00002, eth: 0.0004, bnb: 0.0005, sol: 0.000005, ltc: 0.001, trx: 5, doge: 1 };
-  const gasRes    = gasReserveMap[coin] || 0;
-  const netAmount = Math.max(0, amount - gasRes);
-  if (netAmount <= 0) {
-    console.warn(`[monitor] amount ${amount} too small after gas reserve — skipping`);
-    return;
-  }
-
-  // Create SimpleSwap exchange: coin → USDC SPL
-  let swap;
-  try {
-    swap = await createDepositSwap({ coin, amount: netAmount, ourStableAddress: usdc, refundAddress: '' });
-  } catch (e) {
-    console.error(`[monitor] SimpleSwap error for ${txHash}:`, e.message);
-    return;
-  }
-
-  // Insert converting transaction BEFORE sending (prevents double-send on crash)
+  await creditCoins(supabase, userId, credited);
+  await recordDeposit(supabase, userId, credited, 'crypto');
   await supabase.from('transactions').insert({
     user_id:       userId,
     type:          'deposit',
-    amount_c:      0,
-    crypto_amount: netAmount,
-    crypto_symbol: coin.toUpperCase(),
-    tx_hash:       swap.exchangeId,
-    status:        'converting',
-  });
-
-  // Mark original on-chain tx so we don't reprocess it
-  await supabase.from('transactions').insert({
-    user_id:       userId,
-    type:          'deposit_raw',
-    amount_c:      0,
+    amount_c:      credited,
     crypto_amount: amount,
     crypto_symbol: coin.toUpperCase(),
     tx_hash:       txHash,
-    status:        'forwarded',
-  }).then().catch(() => {});
-
-  // Get our private key for this address and send crypto to SimpleSwap
-  const { privKey } = getAddress(userId, coin);
-  try {
-    const sendTxHash = await sendCrypto({ coin, privKey, toAddress: swap.depositAddress, amount: netAmount });
-    console.log(`[monitor] forwarded ${netAmount} ${coin} → SimpleSwap tx=${sendTxHash}`);
-  } catch (e) {
-    console.error(`[monitor] sendCrypto failed for ${txHash}:`, e.message);
-  }
-
-  watch(swap.exchangeId, userId);
+    status:        'confirmed',
+  });
+  console.log(`[monitor] ✓ credited $${credited} (${amount} ${coin} @ $${priceUsd}) to user ${userId} tx=${txHash}`);
 }
 
 // ── Main polling loop ─────────────────────────────────────────────────────────

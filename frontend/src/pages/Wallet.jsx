@@ -32,7 +32,7 @@ const WITHDRAW_COINS = [
   { id: 'trx',  label: 'TRX',  network: 'TRON'     },
 ];
 
-const MIN_WITHDRAWAL = 5;
+const MIN_WITHDRAWAL = 1; // lowered for testing
 
 function fmt(n) {
   return Number(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
