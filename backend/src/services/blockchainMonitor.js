@@ -339,10 +339,19 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     return;
   }
 
-  // ── Credit user immediately at spot price minus 1% ───────────────────────────
-  // 0.5% covers SimpleSwap fee, 0.5% is price movement buffer.
-  const SWAP_FEE  = 0.01;
-  const credited  = Math.floor(estimatedUsd * (1 - SWAP_FEE) * 100) / 100;
+  // ── Deduct gas reserve first (player pays network fee) ───────────────────────
+  const gasReserveMap = { btc: 0.00002, eth: 0.0004, bnb: 0.0005, sol: 0.000005, ltc: 0.001, trx: 5, doge: 1 };
+  const gasRes    = gasReserveMap[coin] || 0;
+  const netAmount = Math.max(0, amount - gasRes);
+  if (netAmount <= 0) {
+    console.warn(`[monitor] amount too small after gas reserve — skipping`);
+    return;
+  }
+
+  // ── Credit user at net USD value minus 1.1% SimpleSwap fixed fee ─────────────
+  const SWAP_FEE  = 0.011;
+  const netUsd    = netAmount * priceUsd;
+  const credited  = Math.floor(netUsd * (1 - SWAP_FEE) * 100) / 100;
   const { creditCoins, recordDeposit } = require('./walletService');
   await creditCoins(supabase, userId, credited);
   await recordDeposit(supabase, userId, credited, 'crypto');
@@ -355,17 +364,14 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     tx_hash:       txHash,
     status:        'confirmed',
   });
-  console.log(`[monitor] ✓ credited $${credited} to user ${userId} (${amount} ${coin} @ $${priceUsd} -1%)`);
+  console.log(`[monitor] ✓ credited $${credited} to user ${userId} (${amount} ${coin} @ $${priceUsd}, gas=${gasRes}, fee=1.1%)`);
 
-  // ── Forward to SimpleSwap → admin Phantom wallet (fire and forget) ───────────
+  // ── Forward to SimpleSwap (fixed rate) → admin Phantom wallet ────────────────
   const usdcAddress = process.env.USDC_SPL_ADDRESS;
   if (!usdcAddress) {
     console.error('[monitor] USDC_SPL_ADDRESS not set — skipping forward');
     return;
   }
-  const gasReserveMap = { btc: 0.00002, eth: 0.0004, bnb: 0.0005, sol: 0.000005, ltc: 0.001, trx: 5, doge: 1 };
-  const netAmount = Math.max(0, amount - (gasReserveMap[coin] || 0));
-  if (netAmount <= 0) return;
 
   (async () => {
     try {

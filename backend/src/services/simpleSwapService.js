@@ -75,7 +75,7 @@ async function createDepositSwap({ coin, amount, ourStableAddress, refundAddress
   const ticker = SS_TICKERS[coin.toLowerCase()];
   if (!ticker) throw new Error(`Unsupported coin: ${coin}`);
   const exchange = await ssPost('/create_exchange', {
-    fixed:                false,
+    fixed:                true,   // fixed rate — predictable ~1% fee, no surprise slippage
     currency_from:        ticker,
     currency_to:          BASE_STABLE,
     amount,
