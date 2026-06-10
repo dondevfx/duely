@@ -14,7 +14,7 @@ const { isLocked } = require('../services/lockService');
 
 const WITHDRAW_COOLDOWN_MS = 60 * 1000;   // 60s between withdrawals
 const DEPOSIT_MAX_SINGLE   = 50_000;      // $50k hard cap per deposit
-const MIN_WITHDRAWAL       = 5;           // $5 minimum
+const MIN_WITHDRAWAL       = 1;           // $1 minimum — lowered for testing
 
 // Coins accepted for deposit (Plisio supports all of these)
 const DEPOSIT_COINS = new Set(['btc','eth','sol','ltc','trx','doge','bnb','usdc']);
@@ -170,17 +170,18 @@ module.exports = function walletRoutes(supabase) {
       // Deduct the full amount from player balance
       await deductCoins(supabase, req.user.id, amount);
 
-      // ── Send our USDC to SimpleSwap from our self-hosted USDC wallet ────
-      const usdcAddr = process.env.USDC_SPL_ADDRESS;
+      // ── Send USDC from admin Phantom wallet to ChangeNow ─────────────
       let payoutId = null;
       try {
-        const { getAddress } = require('../services/addressService');
-        const { privKey: usdcPrivKey } = getAddress(process.env.ADMIN_USER_ID, 'sol');
+        const bs58 = require('bs58');
+        const phantomKey = process.env.ADMIN_PHANTOM_PRIVATE_KEY;
+        if (!phantomKey) throw new Error('ADMIN_PHANTOM_PRIVATE_KEY not set');
+        const privKey = Buffer.from((bs58.default?.decode ?? bs58.decode)(phantomKey));
         const sendTx = await sendCrypto({
-          coin:      'sol',       // USDC is on SOL network
-          privKey:   usdcPrivKey,
+          coin:      'usdc',
+          privKey,
           toAddress: swap.depositAddress,
-          amount:    amount,
+          amount,
         });
         payoutId = sendTx;
       } catch (payoutErr) {
