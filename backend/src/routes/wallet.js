@@ -13,7 +13,7 @@ const { isLocked } = require('../services/lockService');
 
 const WITHDRAW_COOLDOWN_MS = 60 * 1000;   // 60s between withdrawals
 const DEPOSIT_MAX_SINGLE   = 50_000;      // $50k hard cap per deposit
-const MIN_WITHDRAWAL       = 6;           // $6 minimum to cover swap + network fees
+const MIN_WITHDRAWAL       = 5;           // $5 minimum
 
 // Coins accepted for deposit (Plisio supports all of these)
 const DEPOSIT_COINS = new Set(['btc','eth','sol','ltc','trx','doge','shib','usdttrc20']);

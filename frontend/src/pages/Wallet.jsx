@@ -10,14 +10,14 @@ import CoinIcon from '../components/CoinIcon';
 
 // ── Supported deposit coins (Plisio) ─────────────────────────────────
 const COINS = [
-  { id: 'usdttrc20', label: 'USDT',  network: 'TRC-20',  min: 10 },
-  { id: 'sol',       label: 'SOL',   network: 'Solana',  min: 5  },
-  { id: 'btc',       label: 'BTC',   network: 'Bitcoin', min: 5  },
-  { id: 'eth',       label: 'ETH',   network: 'Ethereum',min: 5  },
-  { id: 'ltc',       label: 'LTC',   network: 'Litecoin',min: 5  },
-  { id: 'trx',       label: 'TRX',   network: 'TRON',    min: 5  },
-  { id: 'doge',      label: 'DOGE',  network: 'Dogecoin',min: 5  },
-  { id: 'shib',      label: 'SHIB',  network: 'Ethereum',min: 5  },
+  { id: 'usdttrc20', label: 'USDT',  network: 'TRC-20'   },
+  { id: 'sol',       label: 'SOL',   network: 'Solana'   },
+  { id: 'btc',       label: 'BTC',   network: 'Bitcoin'  },
+  { id: 'eth',       label: 'ETH',   network: 'Ethereum' },
+  { id: 'ltc',       label: 'LTC',   network: 'Litecoin' },
+  { id: 'trx',       label: 'TRX',   network: 'TRON'     },
+  { id: 'doge',      label: 'DOGE',  network: 'Dogecoin' },
+  { id: 'shib',      label: 'SHIB',  network: 'Ethereum' },
 ];
 
 // ── Supported withdrawal coins (SimpleSwap) ───────────────────────────
@@ -32,7 +32,7 @@ const WITHDRAW_COINS = [
   { id: 'shib',      label: 'SHIB',  network: 'Ethereum' },
 ];
 
-const MIN_WITHDRAWAL = 6;
+const MIN_WITHDRAWAL = 5;
 
 function fmt(n) {
   return Number(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -54,11 +54,6 @@ function CoinGrid({ coins, selected, onSelect }) {
         >
           <div className="text-xs font-black mt-0.5">{c.label}</div>
           <div className="text-[10px] opacity-60 leading-tight">{c.network}</div>
-          {c.min !== undefined && (
-            <div className="text-[10px] font-bold mt-1 text-warning">
-              Min ${c.min}
-            </div>
-          )}
         </button>
       ))}
     </div>
@@ -266,7 +261,10 @@ export default function Wallet() {
 
           <div className="flex flex-col gap-4">
             <div>
-              <p className="text-xs text-muted mb-2">Select coin</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-muted">Select coin</p>
+                <span className="text-xs font-bold text-success">Min $5</span>
+              </div>
               <CoinGrid
                 coins={COINS}
                 selected={depCoin}
