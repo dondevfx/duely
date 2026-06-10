@@ -7,7 +7,7 @@ const {
   VALID_COINS, MAX_SINGLE_AMOUNT,
   recordWithdrawal, getWithdrawable,
 } = require('../services/walletService');
-const { getDepositAddress, createPayout: plisioPayout } = require('../services/plisioService');
+const { getDepositAddress, createPayout } = require('../services/cryptomusService');
 const { createWithdrawalSwap, estimateWithdrawal, SS_TICKERS } = require('../services/simpleSwapService');
 const { isLocked } = require('../services/lockService');
 
@@ -174,7 +174,7 @@ module.exports = function walletRoutes(supabase) {
       // ── Send our USDC to SimpleSwap via Plisio payout ────────────────
       let payoutId = null;
       try {
-        const payout = await plisioPayout({
+        const payout = await createPayout({
           address: swap.depositAddress,
           coin:    'usdcspl',   // USDC on Solana — our base stable
           amount:  amount,
