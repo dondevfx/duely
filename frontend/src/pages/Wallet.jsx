@@ -29,28 +29,40 @@ function fmt(n) {
 }
 
 // ── Coin grid ─────────────────────────────────────────────────────────
-function CoinGrid({ selected, onSelect }) {
+function CoinGrid({ selected, onSelect, mins }) {
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
-      {COINS.map(c => (
-        <button
-          key={c.id}
-          onClick={() => onSelect(c)}
-          className={`relative py-2.5 px-1 rounded-xl border text-center transition-all ${
-            selected?.id === c.id
-              ? 'bg-primary border-primary text-white shadow-glow'
-              : 'border-border bg-surfaceLight text-muted hover:border-primary hover:text-white'
-          }`}
-        >
-          {c.best && (
-            <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 text-[11px] bg-success text-bg px-1 rounded font-bold">
-              CHEAP
-            </span>
-          )}
-          <div className="text-xs font-black">{c.label}</div>
-          <div className="text-[11px] opacity-60 leading-tight">{c.network}</div>
-        </button>
-      ))}
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+      {COINS.map(c => {
+        const min     = mins?.[c.id];
+        const loading = min === undefined;
+        const cheap   = min !== undefined && min <= 5;
+        return (
+          <button
+            key={c.id}
+            onClick={() => onSelect(c)}
+            className={`relative py-2.5 px-2 rounded-xl border text-center transition-all ${
+              selected?.id === c.id
+                ? 'bg-primary border-primary text-white shadow-glow'
+                : 'border-border bg-surfaceLight text-muted hover:border-primary hover:text-white'
+            }`}
+          >
+            {cheap && (
+              <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 text-[10px] bg-success text-bg px-1.5 rounded font-bold whitespace-nowrap">
+                MIN $5
+              </span>
+            )}
+            <div className="text-xs font-black mt-0.5">{c.label}</div>
+            <div className="text-[10px] opacity-60 leading-tight">{c.network}</div>
+            <div className={`text-[10px] font-bold mt-0.5 ${
+              loading ? 'text-muted/40' :
+              cheap   ? 'text-success' :
+                        'text-warning'
+            }`}>
+              {loading ? '...' : cheap ? 'Min $5' : `Min ~$${min}`}
+            </div>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -101,7 +113,7 @@ export default function Wallet() {
   const [depMsg, setDepMsg]         = useState(null);
   const [depCopied, setDepCopied]   = useState(false);
   const [depPolling, setDepPolling] = useState(false);
-  const [coinMinUsd, setCoinMinUsd] = useState(null); // null = loading, number = resolved
+  const [coinMins, setCoinMins]     = useState({}); // { coinId: minUsd }
 
   // Withdraw state
   const [witCoin, setWitCoin]           = useState(COINS[0]);
@@ -120,15 +132,15 @@ export default function Wallet() {
     supabase.auth.mfa.listFactors()
       .then(({ data }) => setHasMfa(data?.totp?.some(f => f.status === 'verified') ?? false))
       .catch(() => {});
+    // Fetch minimums for all coins in parallel — stagger slightly to avoid rate limits
+    COINS.forEach((c, i) => {
+      setTimeout(() => {
+        api.get(`/wallet/min-deposit?coin=${c.id}`)
+          .then(d => setCoinMins(prev => ({ ...prev, [c.id]: d.min_usd })))
+          .catch(() => setCoinMins(prev => ({ ...prev, [c.id]: 5 })));
+      }, i * 150);
+    });
   }, []);
-
-  // Fetch minimum deposit USD whenever selected deposit coin changes
-  useEffect(() => {
-    setCoinMinUsd(null);
-    api.get(`/wallet/min-deposit?coin=${depCoin.id}`)
-      .then(d => setCoinMinUsd(d.min_usd))
-      .catch(() => setCoinMinUsd(5));
-  }, [depCoin.id]);
 
   // ── Crypto deposit ────────────────────────────────────────────────────
   async function handleCreatePayment() {
@@ -251,21 +263,8 @@ export default function Wallet() {
           <div className="flex flex-col gap-4">
             <div>
               <p className="text-xs text-muted mb-2">Select coin</p>
-              <CoinGrid selected={depCoin} onSelect={c => { setDepCoin(c); setDepPayment(null); setDepMsg(null); setDepPolling(false); setCoinMinUsd(null); }} />
+              <CoinGrid selected={depCoin} mins={coinMins} onSelect={c => { setDepCoin(c); setDepPayment(null); setDepMsg(null); setDepPolling(false); }} />
             </div>
-
-            {/* Minimum warning — shown when coin min > $5 */}
-            {coinMinUsd !== null && coinMinUsd > 5 && (
-              <div className="flex items-start gap-2.5 bg-warning/10 border border-warning/30 rounded-xl px-4 py-3 text-sm">
-                <span className="text-warning mt-0.5">⚠️</span>
-                <div>
-                  <span className="text-warning font-bold">{depCoin.label} minimum is ~${coinMinUsd}.</span>
-                  <span className="text-muted ml-1">
-                    Switch to <button className="text-primary underline font-semibold" onClick={() => { setDepCoin(COINS[0]); setDepPayment(null); setDepMsg(null); setDepPolling(false); setCoinMinUsd(null); }}>USDT (TRC-20)</button> to deposit $5.
-                  </span>
-                </div>
-              </div>
-            )}
 
             {!depPayment && (
               <GlowButton
