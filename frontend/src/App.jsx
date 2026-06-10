@@ -79,6 +79,15 @@ function Shell() {
     }
   }, [mfaPending, session, loading, navigate]);
 
+  // Twemoji: re-parse after every render so emojis look identical on all platforms
+  useEffect(() => {
+    if (!window.twemoji) return;
+    const id = setTimeout(() => {
+      window.twemoji.parse(document.body, { folder: 'svg', ext: '.svg' });
+    }, 80);
+    return () => clearTimeout(id);
+  });
+
   function handleChatToggle(next) {
     setChatOpen(next);
     try { localStorage.setItem('worldChatOpen', String(next)); } catch {}

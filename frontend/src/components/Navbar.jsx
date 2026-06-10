@@ -5,8 +5,6 @@ import { useCurrency } from '../context/CurrencyContext';
 import { getRank } from '../utils/ranks';
 import { api } from '../utils/api';
 
-const ADMIN_ID = '423d2b0c-1dae-4947-8340-b07575954383';
-
 const NAV_LINKS = [
   { icon: '🏠', label: 'Home',        to: '/' },
   { icon: '🏆', label: 'Leaderboard', to: '/leaderboard' },
@@ -16,13 +14,11 @@ const NAV_LINKS = [
 ];
 
 const GAME_LINKS = [
-  { icon: '🎲', label: 'Random Game', to: '/game/random' },
-  { icon: '🟦', label: 'Block Burst',  to: '/game/block-blast' },
-  { icon: '🟩', label: 'Block Fall',   to: '/game/tetris' },
-  { icon: '♟',  label: 'Chess',        to: '/game/chess' },
-  { icon: '🔴', label: 'Drop Zone',    to: '/game/c4' },
-  { icon: '🎹', label: 'Tile Tap',     to: '/game/piano' },
-  { icon: '⌨️', label: 'Type Race',    to: '/game/type' },
+  { icon: '⚡', label: 'Quick Match', to: '/game/quick-match' },
+  { icon: '🟦', label: 'Block Burst', to: '/game/block-blast' },
+  { icon: '🪙', label: 'Coin Flip',   to: '/game/coin-flip' },
+  { icon: '🔤', label: 'Word VS',     to: '/game/scrabble' },
+  { icon: '🃏', label: 'Blackjack',   to: '/game/blackjack' },
 ];
 
 function compactNum(n) {
@@ -343,7 +339,7 @@ export default function Navbar() {
           <div className="lg:w-64 lg:shrink-0 flex items-center justify-end gap-2 shrink-0">
             {profile ? (
               <>
-                {profile.id === ADMIN_ID && (
+                {profile.is_admin && (
                   <Link to="/admin" className="hidden lg:block text-xs font-bold px-2 py-1 rounded-lg text-muted/50 hover:text-primary hover:bg-primary/10 transition-colors">
                     ⚙
                   </Link>

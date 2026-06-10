@@ -101,7 +101,7 @@ export default function Login() {
 
   if (needsUsername) {
     return (
-      <div className="min-h-screen bg-bg flex items-center justify-center px-4">
+      <div className="min-h-full bg-bg flex items-center justify-center px-4 py-8">
         <div className="w-full max-w-sm animate-slide-up">
           <div className="text-center mb-8">
             <Link to="/" className="text-3xl font-black">
@@ -148,7 +148,7 @@ export default function Login() {
 
   if (mfaState) {
     return (
-      <div className="min-h-screen bg-bg flex items-center justify-center px-4">
+      <div className="min-h-full bg-bg flex items-center justify-center px-4 py-8">
         <div className="w-full max-w-sm animate-slide-up">
           <div className="text-center mb-8">
             <Link to="/" className="text-3xl font-black">
@@ -189,7 +189,7 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-bg flex items-center justify-center px-4" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}>
+    <div className="min-h-full bg-bg flex items-center justify-center px-4 py-8" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}>
       <div className="w-full max-w-sm animate-slide-up">
         <div className="text-center mb-8">
           <Link to="/" className="text-3xl font-black">

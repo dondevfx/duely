@@ -93,28 +93,38 @@ export default function MatchTicker() {
     return () => clearTimeout(timerRef.current);
   }, []);
 
-  return (
-    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${MAX}, 1fr)` }}>
-      {items.map((item, i) => (
-        <div
-          key={item.id}
-          className={`flex flex-col items-center justify-center gap-1.5 py-3 px-1 bg-surface border rounded-xl overflow-hidden${
-            i === 0 ? ' animate-pop-in' : ''
-          }`}
-          style={{
-            height: 100,
-            borderColor: item.fake ? undefined : 'rgba(30,144,255,0.3)',
-          }}
-        >
-          <span className="text-4xl leading-none shrink-0">{item.game.icon}</span>
-          <span className="text-[10px] text-muted font-medium leading-none w-full text-center truncate px-1">
-            {item.game.name}{item.vsBot ? ' · Bot' : ''}
-          </span>
-          <span className="text-[11px] font-bold text-success leading-none truncate w-full text-center px-1">
-            {fmtPayout(item.payout, item.diamonds)}
-          </span>
-        </div>
-      ))}
+  const card = (item, i) => (
+    <div
+      key={item.id}
+      className={`flex flex-col items-center justify-center gap-1.5 py-3 px-1 bg-surface border rounded-xl overflow-hidden shrink-0${
+        i === 0 ? ' animate-pop-in' : ''
+      }`}
+      style={{
+        height: 90,
+        width: 80,
+        borderColor: item.fake ? undefined : 'rgba(30,144,255,0.3)',
+      }}
+    >
+      <span className="text-3xl leading-none shrink-0">{item.game.icon}</span>
+      <span className="text-[9px] text-muted font-medium leading-none w-full text-center truncate px-1">
+        {item.game.name}{item.vsBot ? ' · Bot' : ''}
+      </span>
+      <span className="text-[10px] font-bold text-success leading-none truncate w-full text-center px-1">
+        {fmtPayout(item.payout, item.diamonds)}
+      </span>
     </div>
+  );
+
+  return (
+    <>
+      {/* Mobile: horizontal scroll strip */}
+      <div className="lg:hidden flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        {items.map((item, i) => card(item, i))}
+      </div>
+      {/* Desktop: full grid */}
+      <div className="hidden lg:grid gap-2" style={{ gridTemplateColumns: `repeat(${MAX}, 1fr)` }}>
+        {items.map((item, i) => card(item, i))}
+      </div>
+    </>
   );
 }
