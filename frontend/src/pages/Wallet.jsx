@@ -40,25 +40,25 @@ function CoinGrid({ selected, onSelect, mins }) {
           <button
             key={c.id}
             onClick={() => onSelect(c)}
-            className={`relative py-2.5 px-2 rounded-xl border text-center transition-all ${
+            className={`relative py-3 px-2 rounded-xl border text-center transition-all ${
               selected?.id === c.id
                 ? 'bg-primary border-primary text-white shadow-glow'
                 : 'border-border bg-surfaceLight text-muted hover:border-primary hover:text-white'
             }`}
           >
-            {cheap && (
+            {c.best && (
               <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 text-[10px] bg-success text-bg px-1.5 rounded font-bold whitespace-nowrap">
-                MIN $5
+                CHEAP
               </span>
             )}
             <div className="text-xs font-black mt-0.5">{c.label}</div>
             <div className="text-[10px] opacity-60 leading-tight">{c.network}</div>
-            <div className={`text-[10px] font-bold mt-0.5 ${
-              loading ? 'text-muted/40' :
+            <div className={`text-[10px] font-bold mt-1 ${
+              loading ? 'opacity-30' :
               cheap   ? 'text-success' :
                         'text-warning'
             }`}>
-              {loading ? '...' : cheap ? 'Min $5' : `Min ~$${min}`}
+              {loading ? '···' : cheap ? 'Min $5' : `Min ~$${min}`}
             </div>
           </button>
         );

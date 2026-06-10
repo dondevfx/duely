@@ -44,8 +44,9 @@ async function getCoinUsdEstimate(coinAmount, coin) {
 }
 
 // Minimum deposit amount for a coin (in that coin's units)
+// currency_to=usdttrc20 reflects NowPayments' real conversion minimum for that coin
 async function getMinAmount(coin) {
-  return npFetch(`/min-amount?currency_from=${coin}&currency_to=${coin}`);
+  return npFetch(`/min-amount?currency_from=${coin}&currency_to=usdttrc20`);
 }
 
 // Create a payout withdrawal — amount is in the target coin's units

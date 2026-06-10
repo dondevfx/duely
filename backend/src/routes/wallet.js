@@ -38,6 +38,15 @@ async function getLastWithdrawal(supabase, userId) {
   return data?.[0]?.created_at || null;
 }
 
+// Returns NowPayments' real minimum deposit in USD for a coin (+10% buffer)
+async function getRealMinUsd(coin) {
+  const minData = await getMinAmount(coin);
+  const minCoin = parseFloat(minData.min_amount ?? 0);
+  if (!minCoin || minCoin <= 0) return 5;
+  const usdData = await getCoinUsdEstimate(minCoin, coin);
+  return Math.ceil(parseFloat(usdData.estimated_amount ?? 5) * 1.1);
+}
+
 module.exports = function walletRoutes(supabase) {
   const router = Router();
 
@@ -71,20 +80,12 @@ module.exports = function walletRoutes(supabase) {
 
     const orderId = `dep_${req.user.id}_${Date.now()}`;
     try {
-      // Fetch this coin's minimum amount and convert to USD so we never go below
-      // NowPayments' per-coin floor. Add 10% buffer. Floor at $5.
+      // Use NowPayments' real minimum for this coin so the order never gets rejected.
+      // is_fixed_rate:false means the user can send any amount above this minimum —
+      // the webhook credits outcome_amount (what actually arrives).
       let minUsd = 5;
-      try {
-        const minData  = await getMinAmount(coin);
-        const minCoin  = parseFloat(minData.min_amount ?? 0);
-        if (minCoin > 0) {
-          const usdData = await getCoinUsdEstimate(minCoin, coin);
-          minUsd = Math.max(5, parseFloat(usdData.estimated_amount ?? 5) * 1.1);
-        }
-      } catch (_) { /* fall back to $5 */ }
+      try { minUsd = await getRealMinUsd(coin); } catch (_) { /* fall back to $5 */ }
 
-      // Create payment at the coin's minimum. is_fixed_rate:false means NowPayments accepts
-      // any amount the user sends — the webhook credits outcome_amount (what actually arrives).
       const payment = await createPayment({ amountUsd: minUsd, coin, orderId });
       res.json({
         payment_id:   payment.payment_id,
@@ -212,12 +213,8 @@ module.exports = function walletRoutes(supabase) {
       return res.status(400).json({ error: 'Invalid coin' });
     }
     try {
-      const minData = await getMinAmount(coin);
-      const minCoin = parseFloat(minData.min_amount ?? 0);
-      if (!minCoin || minCoin <= 0) return res.json({ min_usd: 5 });
-      const usdData = await getCoinUsdEstimate(minCoin, coin);
-      const minUsd  = Math.ceil(parseFloat(usdData.estimated_amount ?? 5) * 1.1);
-      res.json({ min_usd: Math.max(5, minUsd) });
+      const minUsd = await getRealMinUsd(coin);
+      res.json({ min_usd: minUsd });
     } catch {
       res.json({ min_usd: 5 });
     }
