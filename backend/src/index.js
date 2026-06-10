@@ -17,6 +17,7 @@ const affiliateRoutes = require('./routes/affiliate');
 const rakebackRoutes = require('./routes/rakeback');
 const { apiLimiter, authLimiter } = require('./middleware/rateLimit');
 const registerSocketHandlers = require('./socket/handlers');
+const swapPoller = require('./services/swapPoller');
 
 const app = express();
 const server = http.createServer(app);
@@ -70,6 +71,9 @@ app.use((err, _req, res, _next) => {
   console.error('[error]', err?.message || err);
   res.status(err?.status || 500).json({ error: err?.message || 'Internal server error' });
 });
+
+// Start swap poller — resumes any pending conversions after restart
+swapPoller.init(supabase);
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {

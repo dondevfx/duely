@@ -22,7 +22,7 @@ async function createPayment({ amountUsd = 5, coin, orderId }) {
   return npFetch('/payment', {
     method: 'POST',
     body: JSON.stringify({
-      price_amount:        Math.max(5, parseFloat(amountUsd)),
+      price_amount:        parseFloat(amountUsd),
       price_currency:      'usd',
       pay_currency:        coin,
       order_id:            orderId,
@@ -44,9 +44,9 @@ async function getCoinUsdEstimate(coinAmount, coin) {
 }
 
 // Minimum deposit amount for a coin (in that coin's units)
-// currency_to=usdttrc20 reflects NowPayments' real conversion minimum for that coin
+// currency_to=usd gives the true per-coin minimum without USDT TRC-20 inflation
 async function getMinAmount(coin) {
-  return npFetch(`/min-amount?currency_from=${coin}&currency_to=usdttrc20`);
+  return npFetch(`/min-amount?currency_from=${coin}&currency_to=usd`);
 }
 
 // Create a payout withdrawal — amount is in the target coin's units
