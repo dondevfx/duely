@@ -101,6 +101,7 @@ export default function Wallet() {
   const [depMsg, setDepMsg]         = useState(null);
   const [depCopied, setDepCopied]   = useState(false);
   const [depPolling, setDepPolling] = useState(false);
+  const [coinMinUsd, setCoinMinUsd] = useState(null); // null = loading, number = resolved
 
   // Withdraw state
   const [witCoin, setWitCoin]           = useState(COINS[0]);
@@ -120,6 +121,14 @@ export default function Wallet() {
       .then(({ data }) => setHasMfa(data?.totp?.some(f => f.status === 'verified') ?? false))
       .catch(() => {});
   }, []);
+
+  // Fetch minimum deposit USD whenever selected deposit coin changes
+  useEffect(() => {
+    setCoinMinUsd(null);
+    api.get(`/wallet/min-deposit?coin=${depCoin.id}`)
+      .then(d => setCoinMinUsd(d.min_usd))
+      .catch(() => setCoinMinUsd(5));
+  }, [depCoin.id]);
 
   // ── Crypto deposit ────────────────────────────────────────────────────
   async function handleCreatePayment() {
@@ -242,8 +251,21 @@ export default function Wallet() {
           <div className="flex flex-col gap-4">
             <div>
               <p className="text-xs text-muted mb-2">Select coin</p>
-              <CoinGrid selected={depCoin} onSelect={c => { setDepCoin(c); setDepPayment(null); setDepMsg(null); setDepPolling(false); }} />
+              <CoinGrid selected={depCoin} onSelect={c => { setDepCoin(c); setDepPayment(null); setDepMsg(null); setDepPolling(false); setCoinMinUsd(null); }} />
             </div>
+
+            {/* Minimum warning — shown when coin min > $5 */}
+            {coinMinUsd !== null && coinMinUsd > 5 && (
+              <div className="flex items-start gap-2.5 bg-warning/10 border border-warning/30 rounded-xl px-4 py-3 text-sm">
+                <span className="text-warning mt-0.5">⚠️</span>
+                <div>
+                  <span className="text-warning font-bold">{depCoin.label} minimum is ~${coinMinUsd}.</span>
+                  <span className="text-muted ml-1">
+                    Switch to <button className="text-primary underline font-semibold" onClick={() => { setDepCoin(COINS[0]); setDepPayment(null); setDepMsg(null); setDepPolling(false); setCoinMinUsd(null); }}>USDT (TRC-20)</button> to deposit $5.
+                  </span>
+                </div>
+              </div>
+            )}
 
             {!depPayment && (
               <GlowButton

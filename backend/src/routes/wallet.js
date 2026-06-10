@@ -205,6 +205,24 @@ module.exports = function walletRoutes(supabase) {
     }
   });
 
+  // ── Minimum deposit in USD for a given coin ──────────────────────────
+  router.get('/min-deposit', requireAuth, async (req, res) => {
+    const { coin } = req.query;
+    if (!coin || !VALID_COINS.has(coin)) {
+      return res.status(400).json({ error: 'Invalid coin' });
+    }
+    try {
+      const minData = await getMinAmount(coin);
+      const minCoin = parseFloat(minData.min_amount ?? 0);
+      if (!minCoin || minCoin <= 0) return res.json({ min_usd: 5 });
+      const usdData = await getCoinUsdEstimate(minCoin, coin);
+      const minUsd  = Math.ceil(parseFloat(usdData.estimated_amount ?? 5) * 1.1);
+      res.json({ min_usd: Math.max(5, minUsd) });
+    } catch {
+      res.json({ min_usd: 5 });
+    }
+  });
+
   // ── Get crypto estimate (frontend preview) ────────────────────────────
   router.get('/estimate', requireAuth, async (req, res) => {
     const { coin } = req.query;
