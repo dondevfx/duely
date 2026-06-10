@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import CoinIcon from './CoinIcon';
 import { api } from '../utils/api';
 
 // Only games currently live on the site
@@ -58,7 +59,7 @@ function fmtPayout(payout, diamonds) {
   const amt = payout >= 1000
     ? `+${(payout / 1000).toFixed(1).replace(/\.0$/, '')}k`
     : `+${payout % 1 === 0 ? payout : payout.toFixed(2)}`;
-  return `${amt} 🪙`;
+  return <span className="inline-flex items-center gap-0.5">{amt} <CoinIcon size="0.85em" /></span>;
 }
 
 const MAX = 14;

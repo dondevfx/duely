@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { getRank, getDisplayRank } from '../utils/ranks';
 import { api } from '../utils/api';
+import CoinIcon from './CoinIcon';
 
 const NAV_LINKS = [
   { icon: '🏠', label: 'Home',        to: '/' },
@@ -171,7 +172,7 @@ export default function Navbar() {
                     </>
                   ) : (
                     <>
-                      🪙
+                      <CoinIcon size="1.1em" />
                       <span className="text-base font-black text-white font-mono">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</span>
                       <span className="text-xs text-muted group-hover:text-accent transition-colors">Coins</span>
                     </>
@@ -185,7 +186,7 @@ export default function Navbar() {
                       <button onClick={() => { setDisplayCurrency('coins'); setDropdownOpen(false); }}
                         className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm transition-all ${!isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
                         <div className="flex items-center gap-2">
-                          🪙
+                          <CoinIcon size="1em" />
                           <span className="font-medium">Coins</span>
                         </div>
                         <span className="font-mono font-bold text-white">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</span>
@@ -243,7 +244,7 @@ export default function Navbar() {
                               <span className="text-sm font-semibold text-white">Instant</span>
                             </div>
                             <span className="font-mono text-sm font-black text-white whitespace-nowrap flex items-center gap-1">
-                              {(rakebackData.instant ?? 0).toFixed(2)} 🪙
+                              {(rakebackData.instant ?? 0).toFixed(2)} <CoinIcon size="0.9em" />
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
@@ -272,7 +273,7 @@ export default function Navbar() {
                               <span className="text-sm font-semibold text-white">Daily</span>
                             </div>
                             <span className="font-mono text-sm font-black text-white whitespace-nowrap flex items-center gap-1">
-                              {(rakebackData.daily ?? 0).toFixed(2)} 🪙
+                              {(rakebackData.daily ?? 0).toFixed(2)} <CoinIcon size="0.9em" />
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
@@ -301,7 +302,7 @@ export default function Navbar() {
                               <span className="text-sm font-semibold text-white">Weekly</span>
                             </div>
                             <span className="font-mono text-sm font-black text-white whitespace-nowrap flex items-center gap-1">
-                              {(rakebackData.weekly ?? 0).toFixed(2)} 🪙
+                              {(rakebackData.weekly ?? 0).toFixed(2)} <CoinIcon size="0.9em" />
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
@@ -346,7 +347,7 @@ export default function Navbar() {
                   style={{ fontSize: 11 }}
                 >
                   <span className="font-mono">{isDiamonds ? compactNum(profile.diamonds ?? 0) : compactNum(profile.c_coins ?? 0)}</span>
-                  <span>{isDiamonds ? '💎' : '🪙'}</span>
+                  {isDiamonds ? <span>💎</span> : <CoinIcon size="0.9em" />}
                   <span className="text-muted" style={{ fontSize: 9 }}>▾</span>
                 </button>
                 {mobileCurrencyOpen && (
@@ -354,7 +355,7 @@ export default function Navbar() {
                     <div className="p-1">
                       <button onClick={() => { setDisplayCurrency('coins'); setMobileCurrencyOpen(false); }}
                         className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs transition-all ${!isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
-                        <div className="flex items-center gap-2">🪙<span className="font-medium">Coins</span></div>
+                        <div className="flex items-center gap-2"><CoinIcon size="1em" /><span className="font-medium">Coins</span></div>
                         <span className="font-mono font-bold text-white">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</span>
                       </button>
                       <button onClick={() => { setDisplayCurrency('diamonds'); setMobileCurrencyOpen(false); }}
@@ -414,7 +415,7 @@ export default function Navbar() {
                                 <span className="text-base">{icon}</span>
                                 <span className="text-sm font-semibold text-white">{label}</span>
                               </div>
-                              <span className="font-mono text-sm font-black text-white">{amount.toFixed(2)} 🪙</span>
+                              <span className="font-mono text-sm font-black text-white flex items-center gap-1">{amount.toFixed(2)} <CoinIcon size="0.9em" /></span>
                             </div>
                             <div className="flex items-center gap-2">
                               {!claimable && countdown > 0 && (

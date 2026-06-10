@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getRank, isRanked, placementMatches, getDisplayRank } from '../utils/ranks';
+import CoinIcon from './CoinIcon';
 
 function fmt(n) {
   return Number(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -177,15 +178,15 @@ export default function ResultScreen({
                   {isDraw ? (
                     currency === 'diamonds'
                       ? `+${Math.round(balanceChange.winnerPayout).toLocaleString()} 💎`
-                      : `+${fmt(balanceChange.winnerPayout)} 🪙`
+                      : <span className="inline-flex items-center gap-1">+{fmt(balanceChange.winnerPayout)} <CoinIcon size="0.8em" /></span>
                   ) : isWinner ? (
                     currency === 'diamonds'
                       ? `+${Math.round(balanceChange.winnerPayout).toLocaleString()} 💎`
-                      : `+${fmt(balanceChange.winnerPayout)} 🪙`
+                      : <span className="inline-flex items-center gap-1">+{fmt(balanceChange.winnerPayout)} <CoinIcon size="0.8em" /></span>
                   ) : (
                     currency === 'diamonds'
                       ? `-${entryFee} 💎`
-                      : `-${entryFee} 🪙`
+                      : <span className="inline-flex items-center gap-1">-{entryFee} <CoinIcon size="0.8em" /></span>
                   )}
                 </div>
               </div>

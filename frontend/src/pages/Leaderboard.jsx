@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { getRank } from '../utils/ranks';
+import CoinIcon from '../components/CoinIcon';
 import { usePageReady } from '../hooks/usePageReady';
 
 function RankBadge({ rank }) {
@@ -103,7 +104,7 @@ export default function Leaderboard() {
     if (tab.id === 'elo') return `${getRank(v).icon} ${v} ELO`;
     if (tab.id === 'streak') return player.current_streak >= 1 ? `🔥 ${player.current_streak}` : `0 wins`;
     if (tab.isDiamond) return `💎 ${Number(v).toLocaleString()}`;
-    return `🪙 ${Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return <span className="inline-flex items-center gap-1"><CoinIcon size="0.85em" /> {Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
   }
 
   // Get user's own value from profile for rank banner (works even outside top 500)

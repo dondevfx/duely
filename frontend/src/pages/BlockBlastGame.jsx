@@ -7,6 +7,7 @@ import GlowButton from '../components/GlowButton';
 import GameLobby from '../components/GameLobby';
 import ResultScreen from '../components/ResultScreen';
 import { usePageReady } from '../hooks/usePageReady';
+import CoinIcon from '../components/CoinIcon';
 
 const COIN_FEES    = [0.5, 1, 2, 5, 10, 25];
 const DIAMOND_FEES = [50, 100, 250, 500, 1000];
@@ -252,7 +253,7 @@ export default function BlockBlastGame() {
 
   const isDiamonds   = betCurrency === 'diamonds';
   const fees         = isDiamonds ? DIAMOND_FEES : COIN_FEES;
-  const currLabel    = isDiamonds ? '💎' : '🪙';
+  const currLabel    = isDiamonds ? '💎' : <CoinIcon size="0.85em" />;
   const balance      = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const insufficient = entryFee > 0 && balance < entryFee;
 
@@ -1017,13 +1018,13 @@ export default function BlockBlastGame() {
                     <span className="text-success font-bold">
                       {result.currency === 'diamonds'
                         ? `+${Math.round(result.balanceChange.winnerPayout ?? 0)} 💎`
-                        : `+${(result.balanceChange.winnerPayout ?? 0).toFixed(2)} 🪙`}
+                        : <span className="inline-flex items-center gap-1">+{(result.balanceChange.winnerPayout ?? 0).toFixed(2)} <CoinIcon size="0.85em" /></span>}
                     </span>
                   </div>
                 ) : !result.humanWon && result.entryFee > 0 ? (
                   <div className="flex justify-between border-t border-border pt-2">
                     <span className="text-muted">Entry lost</span>
-                    <span className="text-danger font-bold">-{result.entryFee} {result.currency === 'diamonds' ? '💎' : '🪙'}</span>
+                    <span className="text-danger font-bold inline-flex items-center gap-1">-{result.entryFee} {result.currency === 'diamonds' ? '💎' : <CoinIcon size="0.85em" />}</span>
                   </div>
                 ) : null}
               </div>
@@ -1108,10 +1109,10 @@ export default function BlockBlastGame() {
                           {isWinner
                             ? result.currency === 'diamonds'
                               ? `+${Math.round(result.balanceChange.winnerPayout ?? 0)} 💎`
-                              : `+${(result.balanceChange.winnerPayout ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 🪙`
+                              : <span className="inline-flex items-center gap-1">+{(result.balanceChange.winnerPayout ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <CoinIcon size="0.85em" /></span>
                             : result.currency === 'diamonds'
                               ? `-${result.entryFee ?? 0} 💎`
-                              : `-${result.entryFee ?? 0} 🪙`}
+                              : <span className="inline-flex items-center gap-1">-{result.entryFee ?? 0} <CoinIcon size="0.85em" /></span>}
                         </p>
                       </div>
                     )}

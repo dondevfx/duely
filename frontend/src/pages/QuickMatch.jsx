@@ -7,6 +7,7 @@ import { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
 import { useCurrency } from '../context/CurrencyContext';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
+import CoinIcon from '../components/CoinIcon';
 
 const POOL = [
   { route: '/game/block-blast', name: 'Block Burst',  icon: '🟦' },
@@ -36,7 +37,7 @@ export default function QuickMatch() {
 
   const isDiamonds   = betCurrency === 'diamonds';
   const fees         = isDiamonds ? DIAMOND_FEES : COIN_FEES;
-  const currLabel    = isDiamonds ? '💎' : '🪙';
+  const currLabel    = isDiamonds ? '💎' : <CoinIcon size="0.85em" />;
   const myBalance    = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const insufficient = entryFee > 0 && myBalance < entryFee;
   // Find index; if current entryFee not in new fees array, default to 0
@@ -77,9 +78,12 @@ export default function QuickMatch() {
     }, 70);
   }
 
+  const payoutAmt = isDiamonds
+    ? (entryFee * 2).toLocaleString()
+    : ((entryFee * 2 * 0.95) % 1 === 0 ? (entryFee * 2 * 0.95).toLocaleString() : (entryFee * 2 * 0.95).toFixed(2));
   const payout = isDiamonds
-    ? `${(entryFee * 2).toLocaleString()} 💎`
-    : `${(entryFee * 2 * 0.95) % 1 === 0 ? (entryFee * 2 * 0.95).toLocaleString() : (entryFee * 2 * 0.95).toFixed(2)} 🪙`;
+    ? `${payoutAmt} 💎`
+    : <span className="inline-flex items-center gap-1">{payoutAmt} <CoinIcon size="0.85em" /></span>;
 
   return (
     <div
@@ -116,7 +120,7 @@ export default function QuickMatch() {
                 onClick={() => switchCurrency('coins')}
                 className={`px-4 py-2 rounded text-sm font-bold transition-all ${!isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}
               >
-                🪙 Coins
+                <CoinIcon size="0.85em" /> Coins
               </button>
               <button
                 onClick={() => switchCurrency('diamonds')}

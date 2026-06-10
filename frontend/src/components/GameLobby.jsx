@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import GlowButton from './GlowButton';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
+import CoinIcon from './CoinIcon';
 
 export const COIN_FEES    = [1, 5, 10];
 export const DIAMOND_FEES = [100, 250, 500];
@@ -50,16 +51,19 @@ export default function GameLobby({
 
   const isDiamonds = betCurrency === 'diamonds';
   const fees       = isDiamonds ? DIAMOND_FEES : COIN_FEES;
-  const currLabel  = isDiamonds ? '💎' : '🪙';
+  const currLabel  = isDiamonds ? '💎' : <CoinIcon size="0.85em" />;
   const insufficient = entryFee > 0 && balance < entryFee;
 
   const sliderIdx = Math.max(0, fees.indexOf(entryFee));
 
-  // Safety net: if entryFee isn't valid for current currency, snap to first option
+  // Safety net on mount — catch case where betCurrency is already set but entryFee is stale
   useEffect(() => {
-    if (!fees.includes(entryFee)) {
-      setEntryFee(fees[0]);
-    }
+    if (!fees.includes(entryFee)) setEntryFee(fees[0]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Safety net on currency switch
+  useEffect(() => {
+    if (!fees.includes(entryFee)) setEntryFee(fees[0]);
   }, [betCurrency]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function switchCurrency(cur) {
@@ -73,9 +77,12 @@ export default function GameLobby({
     setEntryFee(fees[parseInt(e.target.value)]);
   }
 
+  const payoutAmt = isDiamonds
+    ? (entryFee * 2).toLocaleString()
+    : ((entryFee * 2 * 0.95) % 1 === 0 ? (entryFee * 2 * 0.95).toLocaleString() : (entryFee * 2 * 0.95).toFixed(2));
   const payout = isDiamonds
-    ? `${(entryFee * 2).toLocaleString()} 💎`
-    : `${(entryFee * 2 * 0.95) % 1 === 0 ? (entryFee * 2 * 0.95).toLocaleString() : (entryFee * 2 * 0.95).toFixed(2)} 🪙`;
+    ? `${payoutAmt} 💎`
+    : <span className="inline-flex items-center gap-1">{payoutAmt} <CoinIcon size="0.9em" /></span>;
 
   return (
     <div className="w-full max-w-md animate-slide-up">
@@ -93,7 +100,7 @@ export default function GameLobby({
               onClick={() => switchCurrency('coins')}
               className={`px-4 py-2 rounded text-sm font-bold transition-all ${!isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}
             >
-              🪙 Coins
+              <CoinIcon size="0.85em" /> Coins
             </button>
             <button
               onClick={() => switchCurrency('diamonds')}

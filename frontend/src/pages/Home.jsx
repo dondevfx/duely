@@ -4,6 +4,7 @@ import DailyBonus from '../components/DailyBonus';
 import SpinWheel from '../components/SpinWheel';
 import MatchTicker from '../components/MatchTicker';
 import { useAuth } from '../context/AuthContext';
+import CoinIcon from '../components/CoinIcon';
 
 const GAMES = [
   {
@@ -70,7 +71,7 @@ export default function Home() {
               </h1>
               <p className="text-xl text-muted max-w-2xl mx-auto lg:mx-0 mb-10">
                 Challenge opponents in real-time skill-based games. Wager{' '}
-                <span className="text-accent font-semibold inline-flex items-center gap-1">🪙 Coins</span>, climb the leaderboard,
+                <span className="text-accent font-semibold inline-flex items-center gap-1"><CoinIcon size="1em" /> Coins</span>, climb the leaderboard,
                 and prove you're the best.
               </p>
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4">
@@ -128,7 +129,7 @@ export default function Home() {
         <section className="max-w-7xl mx-auto px-4 mb-10">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { label: 'Balance', value: `${profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'} 🪙` },
+              { label: 'Balance', value: <span className="inline-flex items-center gap-1">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'} <CoinIcon size="0.85em" /></span> },
               { label: 'ELO', value: profile.elo ?? 1000 },
               { label: 'Wins', value: profile.wins ?? 0 },
               { label: 'Losses', value: profile.losses ?? 0 },
@@ -183,7 +184,7 @@ export default function Home() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary">•</span>
-                  Bet 🪙 Coins or Diamonds on any game
+                  Bet <CoinIcon size="0.9em" /> Coins or Diamonds on any game
                 </li>
               </ul>
               <Link

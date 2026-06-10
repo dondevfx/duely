@@ -1,34 +1,22 @@
-// Gold coin SVG that looks identical on every device/OS/browser
-// Use this instead of the 🪙 emoji anywhere you want a consistent coin icon.
-export default function CoinIcon({ size = '1em', style = {} }) {
+// Pure CSS gold coin — renders identically on every device, OS, and browser.
+// No emoji, no SVG image paths, just a gradient circle.
+export default function CoinIcon({ size = '1em' }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      width={size}
-      height={size}
-      style={{ display: 'inline-block', verticalAlign: '-0.15em', flexShrink: 0, ...style }}
+    <span
       aria-label="coins"
-    >
-      <defs>
-        <radialGradient id="coinFace" cx="38%" cy="35%" r="65%">
-          <stop offset="0%"   stopColor="#FFED8A" />
-          <stop offset="55%"  stopColor="#F5C518" />
-          <stop offset="100%" stopColor="#C8860A" />
-        </radialGradient>
-        <radialGradient id="coinEdge" cx="50%" cy="50%" r="50%">
-          <stop offset="70%"  stopColor="#D4920E" />
-          <stop offset="100%" stopColor="#9A6200" />
-        </radialGradient>
-      </defs>
-      {/* Coin edge (shadow/depth) */}
-      <ellipse cx="12" cy="13" rx="9" ry="4.5" fill="url(#coinEdge)" />
-      {/* Coin face */}
-      <ellipse cx="12" cy="11" rx="9" ry="4.5" fill="url(#coinFace)" />
-      {/* Shine highlight */}
-      <ellipse cx="9.5" cy="9.5" rx="3" ry="1.4" fill="rgba(255,255,255,0.35)" transform="rotate(-20 9.5 9.5)" />
-      {/* Dollar mark */}
-      <text x="12" y="13.5" textAnchor="middle" fontSize="5.5" fontWeight="900"
-        fill="#9A6200" fontFamily="system-ui,sans-serif">$</text>
-    </svg>
+      style={{
+        display: 'inline-block',
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        background: 'linear-gradient(145deg, #FFE566 0%, #F5C518 45%, #D4920E 75%, #C07800 100%)',
+        border: '1px solid rgba(160,100,0,0.4)',
+        boxShadow: 'inset 0 1.5px 0 rgba(255,255,255,0.5), inset 0 -1px 0 rgba(0,0,0,0.25), 0 1px 3px rgba(0,0,0,0.25)',
+        flexShrink: 0,
+        verticalAlign: 'middle',
+        position: 'relative',
+        top: '-0.05em',
+      }}
+    />
   );
 }

@@ -205,7 +205,7 @@ export default function ScrabbleGame() {
 
   const [phase, setPhase]         = useState(location.state?.autoQueue ? 'queue' : 'lobby');
   const [privateCode, setPrivateCode] = useState('');
-  const [entryFee, setEntryFee]   = useState(location.state?.entryFee ?? COIN_FEES[0]);
+  const [entryFee, setEntryFee]   = useState(() => location.state?.entryFee ?? (betCurrency === 'diamonds' ? DIAMOND_FEES[0] : COIN_FEES[0]));
   const [opponent, setOpponent]   = useState(null);
   const [roomId, setRoomId]       = useState(null);
   const [countdown, setCountdown] = useState(null);
