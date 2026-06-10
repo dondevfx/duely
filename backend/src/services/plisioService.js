@@ -41,11 +41,13 @@ async function getDepositAddress(coin, userId) {
   const psisCid = PLISIO_COINS[coin.toLowerCase()];
   if (!psisCid) throw new Error(`Unsupported coin: ${coin}`);
 
+  // order_number embeds userId so the webhook can identify the player
   const orderNumber = `dep_${userId}_${Date.now()}`;
 
   // Step 1: create invoice for minimum $5
+  // No callback_url param — we use the Status URL set in the Plisio dashboard
   const created = await plisioGet(
-    `/invoices/new?currency=${psisCid}&order_name=deposit&order_number=${encodeURIComponent(orderNumber)}&source_currency=USD&source_amount=5&callback_url=${encodeURIComponent(process.env.BACKEND_URL + '/api/webhooks/plisio')}`
+    `/invoices/new?currency=${psisCid}&order_name=deposit&order_number=${encodeURIComponent(orderNumber)}&source_currency=USD&source_amount=5`
   );
 
   const txnId = created.txn_id;
