@@ -4,7 +4,6 @@ import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { getRank } from '../utils/ranks';
 import { usePageReady } from '../hooks/usePageReady';
-import CoinIcon from '../components/CoinIcon';
 
 function RankBadge({ rank }) {
   if (rank === 1) return <span className="text-yellow-400 font-black">🥇</span>;
@@ -104,7 +103,7 @@ export default function Leaderboard() {
     if (tab.id === 'elo') return `${getRank(v).icon} ${v} ELO`;
     if (tab.id === 'streak') return player.current_streak >= 1 ? `🔥 ${player.current_streak}` : `0 wins`;
     if (tab.isDiamond) return `💎 ${Number(v).toLocaleString()}`;
-    return <span className="inline-flex items-center gap-1"><CoinIcon size="0.9em" />{Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
+    return `🪙 ${Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
   // Get user's own value from profile for rank banner (works even outside top 500)

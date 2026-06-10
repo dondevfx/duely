@@ -7,7 +7,6 @@ import GlowButton from '../components/GlowButton';
 import GameLobby from '../components/GameLobby';
 import ResultScreen from '../components/ResultScreen';
 import { usePageReady } from '../hooks/usePageReady';
-import CoinIcon from '../components/CoinIcon';
 
 const COIN_FEES    = [0.5, 1, 2, 5, 10, 25];
 const DIAMOND_FEES = [50, 100, 250, 500, 1000];
@@ -151,7 +150,7 @@ export default function BlockBlastGame() {
   const [phase, setPhase]             = useState(location.state?.autoQueue ? 'queue' : 'lobby');
   const { displayCurrency: betCurrency, setDisplayCurrency: setBetCurrency } = useCurrency();
   useEffect(() => { if (location.state?.betCurrency) setBetCurrency(location.state.betCurrency); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const [entryFee, setEntryFee]       = useState(location.state?.entryFee ?? COIN_FEES[Math.floor(COIN_FEES.length / 2)]);
+  const [entryFee, setEntryFee]       = useState(location.state?.entryFee ?? COIN_FEES[0]);
   const [opponent, setOpponent]       = useState(null);
   const [roomId, setRoomId]           = useState(null);
   const [countdown, setCountdown]     = useState(0);
@@ -253,7 +252,7 @@ export default function BlockBlastGame() {
 
   const isDiamonds   = betCurrency === 'diamonds';
   const fees         = isDiamonds ? DIAMOND_FEES : COIN_FEES;
-  const currLabel    = isDiamonds ? <span>💎</span> : <CoinIcon size="1em" />;
+  const currLabel    = isDiamonds ? '💎' : '🪙';
   const balance      = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const insufficient = entryFee > 0 && balance < entryFee;
 
@@ -377,6 +376,7 @@ export default function BlockBlastGame() {
   // Called after every drop to check if stuck
   function _checkStuck(newGrid, newTray) {
     if (stuckRef.current) return; // already stuck
+    if (blastModeRef.current) return; // in blast mode — don't trigger stuck check
     if (!checkIsStuck(newGrid, newTray)) return;
 
     stuckRef.current = true;
@@ -615,7 +615,7 @@ export default function BlockBlastGame() {
   }, [socket, authenticated]);
 
   return (
-    <div className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-4" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}>
+    <div className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-4" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}>
 
       {/* ── LOBBY ── */}
       {phase === 'lobby' && (
@@ -694,7 +694,7 @@ export default function BlockBlastGame() {
 
       {/* ── GAME ── */}
       {phase === 'active' && (
-        <div className="flex flex-col items-center gap-4 animate-fade-in w-full">
+        <div className="flex flex-col items-center gap-4 animate-fade-in w-full" style={{ paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}>
           <style>{`
             @keyframes powerUpPulse {
               0%, 100% { transform: scale(1); filter: brightness(1); }
@@ -837,7 +837,7 @@ export default function BlockBlastGame() {
           </div>
 
           {/* Tray — 3 draggable piece cards */}
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }} className="select-none">
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', touchAction: 'none' }} className="select-none">
             {tray.map((piece, idx) => {
               if (!piece) return (
                 <div key={idx} className="rounded-2xl border-2 border-dashed border-border/30 opacity-20" style={{ width: traySlot, height: traySlot }} />
@@ -1017,13 +1017,13 @@ export default function BlockBlastGame() {
                     <span className="text-success font-bold">
                       {result.currency === 'diamonds'
                         ? `+${Math.round(result.balanceChange.winnerPayout ?? 0)} 💎`
-                        : <span>+{(result.balanceChange.winnerPayout ?? 0).toFixed(2)} <CoinIcon size="0.85em" /></span>}
+                        : `+${(result.balanceChange.winnerPayout ?? 0).toFixed(2)} 🪙`}
                     </span>
                   </div>
                 ) : !result.humanWon && result.entryFee > 0 ? (
                   <div className="flex justify-between border-t border-border pt-2">
                     <span className="text-muted">Entry lost</span>
-                    <span className="text-danger font-bold">-{result.entryFee} {result.currency === 'diamonds' ? '💎' : <CoinIcon size="0.85em" />}</span>
+                    <span className="text-danger font-bold">-{result.entryFee} {result.currency === 'diamonds' ? '💎' : '🪙'}</span>
                   </div>
                 ) : null}
               </div>
@@ -1108,10 +1108,10 @@ export default function BlockBlastGame() {
                           {isWinner
                             ? result.currency === 'diamonds'
                               ? `+${Math.round(result.balanceChange.winnerPayout ?? 0)} 💎`
-                              : <span>+{(result.balanceChange.winnerPayout ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <CoinIcon size="0.85em" /></span>
+                              : `+${(result.balanceChange.winnerPayout ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 🪙`
                             : result.currency === 'diamonds'
                               ? `-${result.entryFee ?? 0} 💎`
-                              : <span>-{result.entryFee ?? 0} <CoinIcon size="0.85em" /></span>}
+                              : `-${result.entryFee ?? 0} 🪙`}
                         </p>
                       </div>
                     )}

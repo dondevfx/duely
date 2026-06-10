@@ -1267,24 +1267,6 @@ export default function Profile() {
         {/* Profile header */}
         <div className="bg-surface border border-surfaceLight rounded-2xl p-6 mb-6 relative">
 
-          {/* Top-right action buttons */}
-          <div className="absolute top-4 right-4 flex items-center gap-2">
-            <Link
-              to="/transactions"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-surfaceLight text-muted hover:text-white hover:border-primary transition-all text-xs font-semibold"
-              title="Transaction History"
-            >
-              📋 Transactions
-            </Link>
-            <button
-              onClick={() => setShowSettings(true)}
-              className="w-9 h-9 flex items-center justify-center rounded-xl border border-surfaceLight text-muted hover:text-white hover:border-primary transition-all"
-              title="Settings"
-            >
-              ⚙️
-            </button>
-          </div>
-
           <div className="flex items-center gap-5 mb-6">
             <div className="relative">
               <button
@@ -1337,7 +1319,7 @@ export default function Profile() {
                 </>
               )}
             </div>
-            <div className="flex-1 pr-8">
+            <div className="flex-1 min-w-0">
               {editing ? (
                 <div className="flex gap-2">
                   <input
@@ -1372,6 +1354,24 @@ export default function Profile() {
                 Member since {new Date(profile.created_at).toLocaleDateString()}
               </p>
             </div>
+          </div>
+
+          {/* Action buttons row — sits below header on all screen sizes */}
+          <div className="flex items-center gap-2 mb-4">
+            <Link
+              to="/transactions"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-surfaceLight text-muted hover:text-white hover:border-primary transition-all text-xs font-semibold"
+              title="Transaction History"
+            >
+              📋 Transactions
+            </Link>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-surfaceLight text-muted hover:text-white hover:border-primary transition-all text-xs font-semibold"
+              title="Settings"
+            >
+              ⚙️ Settings
+            </button>
           </div>
 
           {/* Email verification banner */}

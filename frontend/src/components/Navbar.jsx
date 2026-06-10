@@ -4,15 +4,14 @@ import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { getRank, getDisplayRank } from '../utils/ranks';
 import { api } from '../utils/api';
-import CoinIcon from './CoinIcon';
 
 const NAV_LINKS = [
   { icon: '🏠', label: 'Home',        to: '/' },
-  { icon: '🏆', label: 'Leaderboard', to: '/leaderboard' },
+  { icon: '🎡', label: 'Rewards',     to: '/rewards' },
   { icon: '👤', label: 'Profile',     to: '/profile' },
+  { icon: '🏆', label: 'Leaderboard', to: '/leaderboard' },
   { icon: '💳', label: 'Wallet',      to: '/wallet' },
   { icon: '💸', label: 'Tip',         to: '/tip' },
-  { icon: '🎡', label: 'Rewards',     to: '/rewards' },
 ];
 
 const GAME_LINKS = [
@@ -51,15 +50,18 @@ export default function Navbar() {
   const [rakebackData, setRakebackData]   = useState(null);
   const [rakebackLoading, setRakebackLoading] = useState(false);
   const [rakebackCountdowns, setRakebackCountdowns] = useState({ instant: 0, daily: 0, weekly: 0 });
-  const dropRef          = useRef(null);
-  const rakebackRef      = useRef(null);
-  const mobileCurrencyRef = useRef(null);
+  const dropRef            = useRef(null);
+  const rakebackRef        = useRef(null);
+  const mobileCurrencyRef  = useRef(null);
+  const mobileRakebackRef  = useRef(null);
+  const [mobileRakebackOpen, setMobileRakebackOpen] = useState(false);
 
   useEffect(() => {
     function handler(e) {
       if (dropRef.current && !dropRef.current.contains(e.target)) setDropdownOpen(false);
       if (rakebackRef.current && !rakebackRef.current.contains(e.target)) setRakebackOpen(false);
       if (mobileCurrencyRef.current && !mobileCurrencyRef.current.contains(e.target)) setMobileCurrencyOpen(false);
+      if (mobileRakebackRef.current && !mobileRakebackRef.current.contains(e.target)) setMobileRakebackOpen(false);
     }
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -169,7 +171,7 @@ export default function Navbar() {
                     </>
                   ) : (
                     <>
-                      <CoinIcon size="1.1em" />
+                      🪙
                       <span className="text-base font-black text-white font-mono">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</span>
                       <span className="text-xs text-muted group-hover:text-accent transition-colors">Coins</span>
                     </>
@@ -183,7 +185,7 @@ export default function Navbar() {
                       <button onClick={() => { setDisplayCurrency('coins'); setDropdownOpen(false); }}
                         className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm transition-all ${!isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
                         <div className="flex items-center gap-2">
-                          <CoinIcon size="1em" />
+                          🪙
                           <span className="font-medium">Coins</span>
                         </div>
                         <span className="font-mono font-bold text-white">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</span>
@@ -241,7 +243,7 @@ export default function Navbar() {
                               <span className="text-sm font-semibold text-white">Instant</span>
                             </div>
                             <span className="font-mono text-sm font-black text-white whitespace-nowrap flex items-center gap-1">
-                              {(rakebackData.instant ?? 0).toFixed(2)} <CoinIcon size="0.9em" />
+                              {(rakebackData.instant ?? 0).toFixed(2)} 🪙
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
@@ -270,7 +272,7 @@ export default function Navbar() {
                               <span className="text-sm font-semibold text-white">Daily</span>
                             </div>
                             <span className="font-mono text-sm font-black text-white whitespace-nowrap flex items-center gap-1">
-                              {(rakebackData.daily ?? 0).toFixed(2)} <CoinIcon size="0.9em" />
+                              {(rakebackData.daily ?? 0).toFixed(2)} 🪙
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
@@ -299,7 +301,7 @@ export default function Navbar() {
                               <span className="text-sm font-semibold text-white">Weekly</span>
                             </div>
                             <span className="font-mono text-sm font-black text-white whitespace-nowrap flex items-center gap-1">
-                              {(rakebackData.weekly ?? 0).toFixed(2)} <CoinIcon size="0.9em" />
+                              {(rakebackData.weekly ?? 0).toFixed(2)} 🪙
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
@@ -330,41 +332,106 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Mobile compact balance with dropdown */}
+          {/* Mobile: balance + rakeback buttons */}
           {profile && (
-            <div className="lg:hidden shrink-0 relative" ref={mobileCurrencyRef}>
-              <button
-                onClick={() => setMobileCurrencyOpen(o => !o)}
-                className="flex items-center gap-1 px-2.5 py-1 bg-black border border-primary/30 hover:border-primary rounded-full text-xs font-bold text-white transition-all"
-              >
-                {isDiamonds
-                  ? <>{compactNum(profile.diamonds ?? 0)} 💎</>
-                  : <>{profile.c_coins?.toLocaleString('en-US', { maximumFractionDigits: 0 }) ?? '0'} <CoinIcon size="1em" /></>
-                }
-                <span className="text-muted text-[10px]">▾</span>
-              </button>
-              {mobileCurrencyOpen && (
-                <div className="absolute top-full mt-2 right-0 bg-surface border border-border rounded-xl shadow-glow-lg z-50 overflow-hidden" style={{ minWidth: 190 }}>
-                  <div className="p-1">
-                    <button onClick={() => { setDisplayCurrency('coins'); setMobileCurrencyOpen(false); }}
-                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs transition-all ${!isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
-                      <div className="flex items-center gap-2"><CoinIcon size="1em" /><span className="font-medium">Coins</span></div>
-                      <span className="font-mono font-bold text-white">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</span>
-                    </button>
-                    <button onClick={() => { setDisplayCurrency('diamonds'); setMobileCurrencyOpen(false); }}
-                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs transition-all ${isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
-                      <div className="flex items-center gap-2"><span className="relative -top-px">💎</span><span className="font-medium">Diamonds</span></div>
-                      <span className="font-mono font-bold text-white">{compactNum(profile.diamonds ?? 0)}</span>
-                    </button>
+            <div className="lg:hidden flex items-center gap-1 shrink-0">
+              {/* Balance dropdown */}
+              <div className="relative" ref={mobileCurrencyRef}>
+                <button
+                  onClick={() => setMobileCurrencyOpen(o => !o)}
+                  className="flex items-center gap-1 px-2 py-1 bg-black border border-primary/30 hover:border-primary rounded-full text-xs font-bold text-white transition-all"
+                >
+                  {isDiamonds
+                    ? <>{compactNum(profile.diamonds ?? 0)} 💎</>
+                    : <>{compactNum(profile.c_coins ?? 0)} 🪙</>
+                  }
+                  <span className="text-muted text-[10px]">▾</span>
+                </button>
+                {mobileCurrencyOpen && (
+                  <div className="absolute top-full mt-2 left-0 bg-surface border border-border rounded-xl shadow-glow-lg z-50 overflow-hidden" style={{ minWidth: 190 }}>
+                    <div className="p-1">
+                      <button onClick={() => { setDisplayCurrency('coins'); setMobileCurrencyOpen(false); }}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs transition-all ${!isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
+                        <div className="flex items-center gap-2">🪙<span className="font-medium">Coins</span></div>
+                        <span className="font-mono font-bold text-white">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</span>
+                      </button>
+                      <button onClick={() => { setDisplayCurrency('diamonds'); setMobileCurrencyOpen(false); }}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs transition-all ${isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
+                        <div className="flex items-center gap-2"><span>💎</span><span className="font-medium">Diamonds</span></div>
+                        <span className="font-mono font-bold text-white">{compactNum(profile.diamonds ?? 0)}</span>
+                      </button>
+                    </div>
+                    <div className="border-t border-border p-1.5">
+                      <Link to="/wallet" onClick={() => setMobileCurrencyOpen(false)}
+                        className="block w-full text-center text-xs font-semibold px-3 py-2 rounded-lg bg-surfaceLight hover:bg-primary/20 text-muted hover:text-white transition-all">
+                        Wallet →
+                      </Link>
+                    </div>
                   </div>
-                  <div className="border-t border-border p-1.5">
-                    <Link to="/wallet" onClick={() => setMobileCurrencyOpen(false)}
-                      className="block w-full text-center text-xs font-semibold px-3 py-2 rounded-lg bg-surfaceLight hover:bg-primary/20 text-muted hover:text-white transition-all">
-                      Wallet →
-                    </Link>
+                )}
+              </div>
+
+              {/* Mobile rakeback button */}
+              <div className="relative" ref={mobileRakebackRef}>
+                <button
+                  onClick={() => {
+                    setMobileRakebackOpen(o => {
+                      if (!o) {
+                        setRakebackLoading(true);
+                        fetchRakeback().finally(() => setRakebackLoading(false));
+                      }
+                      return !o;
+                    });
+                  }}
+                  className="flex items-center justify-center w-7 h-7 rounded-full border border-border bg-black text-sm"
+                  title="Rakeback"
+                >
+                  🎁
+                </button>
+                {mobileRakebackOpen && (
+                  <div className="absolute top-full mt-2 right-0 bg-surface border border-border rounded-xl shadow-glow-lg z-[200] overflow-hidden" style={{ minWidth: 'min(280px, calc(100vw - 32px))', right: -8 }}>
+                    <div className="px-4 py-3 border-b border-border">
+                      <span className="text-sm font-bold text-white">🎁 Rakeback</span>
+                      <p className="text-[10px] text-muted mt-0.5">Earned from coin wagers only</p>
+                    </div>
+                    {rakebackLoading ? (
+                      <div className="px-4 py-4 text-xs text-muted text-center">Loading...</div>
+                    ) : !rakebackData ? (
+                      <div className="px-4 py-4 text-xs text-muted text-center">Unavailable</div>
+                    ) : (
+                      <div className="p-3 space-y-2">
+                        {[
+                          { key: 'instant', label: 'Instant', icon: '⚡', amount: rakebackData.instant ?? 0, claimable: rakebackData.instantClaimable ?? false, countdown: rakebackCountdowns.instant },
+                          { key: 'daily',   label: 'Daily',   icon: '⏱️', amount: rakebackData.daily   ?? 0, claimable: rakebackData.dailyClaimable,             countdown: rakebackCountdowns.daily },
+                          { key: 'weekly',  label: 'Weekly',  icon: '📆', amount: rakebackData.weekly  ?? 0, claimable: rakebackData.weeklyClaimable,             countdown: rakebackCountdowns.weekly },
+                        ].map(({ key, label, icon, amount, claimable, countdown }) => (
+                          <div key={key} className="rounded-xl border border-border bg-bg p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-base">{icon}</span>
+                                <span className="text-sm font-semibold text-white">{label}</span>
+                              </div>
+                              <span className="font-mono text-sm font-black text-white">{amount.toFixed(2)} 🪙</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {!claimable && countdown > 0 && (
+                                <span className="text-[10px] text-muted font-mono flex-1">{fmtRakebackTimer(countdown)}</span>
+                              )}
+                              <button
+                                onClick={() => handleRakebackClaim(key)}
+                                disabled={!claimable}
+                                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${claimable ? 'bg-primary text-white hover:bg-blue-500' : 'bg-surfaceLight text-muted cursor-not-allowed opacity-60'}`}
+                              >
+                                Claim
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
 

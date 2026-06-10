@@ -241,6 +241,18 @@ export default function ScrabbleGame() {
   useEffect(() => { profileRef.current = profile; }, [profile]);
   useEffect(() => { roomIdRef.current  = roomId;  }, [roomId]);
 
+  // Lock scroll during active game on mobile
+  useEffect(() => {
+    if (phase === 'playing') {
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+      return () => {
+        document.body.style.overflow = '';
+        document.body.style.touchAction = '';
+      };
+    }
+  }, [phase]);
+
   const isDiamonds   = betCurrency === 'diamonds';
   const fees         = isDiamonds ? DIAMOND_FEES : COIN_FEES;
   const balance      = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
@@ -562,7 +574,7 @@ export default function ScrabbleGame() {
   return (
     <div
       className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-2 py-4"
-      style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}
+      style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}
     >
       {blankPick && <BlankPicker onPick={onBlankPick} onCancel={() => setBlankPick(null)} />}
 
@@ -722,8 +734,8 @@ export default function ScrabbleGame() {
                 >🔀 Shuffle</button>
               )}
             </div>
-            <div className="overflow-x-auto overflow-y-visible pb-1 pt-2">
-              <div className="flex justify-center gap-2 min-w-max mx-auto px-2">
+            <div className="overflow-x-auto overflow-y-visible pb-1 pt-2" style={{ touchAction: 'pan-x' }}>
+              <div className="flex justify-center gap-2 min-w-max mx-auto px-2" style={{ touchAction: 'none' }}>
                 {myHand.map((letter, i) => (
                   <TileButton
                     key={`${letter}-${i}`}

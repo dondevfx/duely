@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { useCurrency } from '../context/CurrencyContext';
@@ -7,7 +7,6 @@ import { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
 import ResultScreen from '../components/ResultScreen';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
-import CoinIcon from '../components/CoinIcon';
 
 function fmtFee(fee) {
   if (fee >= 1000) return `${(fee / 1000).toLocaleString()}k`;
@@ -136,6 +135,7 @@ function Coin3D({ coinRef, resultLanded }) {
 export default function CoinFlipGame() {
   const ready = usePageReady();
   const navigate = useNavigate();
+  const location = useLocation();
   const { profile, session, refreshProfile } = useAuth();
   const { socket, authenticated, playerCounts } = useSocket();
   const { displayCurrency: betCurrency, setDisplayCurrency: setBetCurrency } = useCurrency();
@@ -148,7 +148,7 @@ export default function CoinFlipGame() {
   const [privateCode, setPrivateCode] = useState('');
   const [privateMode, setPrivateMode] = useState(null);
   const [joinCode, setJoinCode] = useState('');
-  const [entryFee, setEntryFee] = useState(() => betCurrency === 'diamonds' ? DIAMOND_FEES[0] : COIN_FEES[0]);
+  const [entryFee, setEntryFee] = useState(() => location.state?.entryFee ?? (betCurrency === 'diamonds' ? DIAMOND_FEES[0] : COIN_FEES[0]));
   const [statusMsg, setStatusMsg] = useState('');
   const [flipResult, setFlipResult] = useState(null);
   const [resultData, setResultData] = useState(null);
@@ -235,7 +235,7 @@ export default function CoinFlipGame() {
 
   const isDiamonds = betCurrency === 'diamonds';
   const fees = isDiamonds ? DIAMOND_FEES : COIN_FEES;
-  const currLabel = isDiamonds ? <span>💎</span> : <CoinIcon size="1em" />;
+  const currLabel = isDiamonds ? '💎' : '🪙';
   const myBalance = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const insufficient = entryFee > 0 && myBalance < entryFee;
   const sliderIdx = Math.max(0, fees.indexOf(entryFee));
@@ -311,6 +311,21 @@ export default function CoinFlipGame() {
       socket.off('error');
     };
   }, [socket, landCoin, refreshProfile]);
+
+  // Auto-queue when navigated here from Quick Match
+  useEffect(() => {
+    if (!location.state?.autoQueue) return;
+    if (!socket || !authenticated || !session) return;
+    if (location.state?.betCurrency) setBetCurrency(location.state.betCurrency);
+    setTimeout(() => {
+      eloBeforeRef.current = profile?.elo ?? 1000;
+      lastModeRef.current = 'pvp';
+      const fee = location.state?.entryFee ?? entryFee;
+      lastSettingsRef.current = { entryFee: fee, currency: betCurrency, side };
+      socket.emit('join_coin_flip_queue', { entryFee: fee, currency: betCurrency === 'diamonds' ? 'diamonds' : 'coins', side });
+      setPhase('queue');
+    }, 300);
+  }, [socket, authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function joinQueue() {
     if (!session) { navigate('/login'); return; }
@@ -418,7 +433,7 @@ export default function CoinFlipGame() {
 
   return (
     <div className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-4"
-      style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}>
+      style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}>
       <div className="w-full max-w-md animate-slide-up">
 
         <div className="text-center mb-6">
@@ -472,7 +487,7 @@ export default function CoinFlipGame() {
               <div className="flex items-center justify-between mb-4">
                 <span className="text-base font-bold text-white">Entry Fee</span>
                 <div className="flex items-center gap-0.5 bg-bg border border-border rounded-lg p-1">
-                  <button onClick={() => switchCurrency('coins')} className={`px-4 py-2 rounded text-sm font-bold transition-all ${!isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}><CoinIcon size="0.85em" /> Coins</button>
+                  <button onClick={() => switchCurrency('coins')} className={`px-4 py-2 rounded text-sm font-bold transition-all ${!isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}>🪙 Coins</button>
                   <button onClick={() => switchCurrency('diamonds')} className={`px-4 py-2 rounded text-sm font-bold transition-all ${isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}>💎 Diamonds</button>
                 </div>
               </div>
