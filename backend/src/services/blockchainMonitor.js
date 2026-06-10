@@ -14,9 +14,10 @@
  */
 
 const fetch = require('node-fetch');
-const { getAddress }      = require('./addressService');
-const { sendCrypto }      = require('./chainSend');
+const { getAddress }        = require('./addressService');
+const { sendCrypto }        = require('./chainSend');
 const { createDepositSwap } = require('./simpleSwapService');
+const { swapSolToUsdc }     = require('./jupiterService');
 
 const POLL_INTERVAL_MS = 45_000;
 const MIN_USD          = 0.50;  // lowered for testing — raise to 4.50 before launch
@@ -373,14 +374,22 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     return;
   }
 
+  const { privKey } = getAddress(userId, coin);
+
   (async () => {
     try {
-      const swap    = await createDepositSwap({ coin, amount: netAmount, ourStableAddress: usdcAddress, refundAddress: '' });
-      const { privKey } = getAddress(userId, coin);
-      const sendTx  = await sendCrypto({ coin, privKey, toAddress: swap.depositAddress, amount: netAmount });
-      console.log(`[monitor] forwarded ${netAmount} ${coin} → SimpleSwap exchange=${swap.exchangeId} tx=${sendTx}`);
+      if (coin === 'sol') {
+        // Jupiter: on-chain swap, ~0.3% fee, no minimum, USDC goes straight to Phantom
+        const swapTx = await swapSolToUsdc(privKey, netAmount, usdcAddress);
+        console.log(`[monitor] Jupiter swapped ${netAmount} SOL → USDC tx=${swapTx}`);
+      } else {
+        // ChangeNow: for BTC/ETH/LTC/DOGE/TRX/BNB
+        const swap   = await createDepositSwap({ coin, amount: netAmount, ourStableAddress: usdcAddress, refundAddress: '' });
+        const sendTx = await sendCrypto({ coin, privKey, toAddress: swap.depositAddress, amount: netAmount });
+        console.log(`[monitor] forwarded ${netAmount} ${coin} → ChangeNow exchange=${swap.exchangeId} tx=${sendTx}`);
+      }
     } catch (e) {
-      console.error(`[monitor] SimpleSwap forward failed for ${txHash}:`, e.message);
+      console.error(`[monitor] forward failed for ${txHash}:`, e.message);
     }
   })();
 }
