@@ -79,14 +79,6 @@ function Shell() {
     }
   }, [mfaPending, session, loading, navigate]);
 
-  // Twemoji: re-parse after every render so emojis look identical on all platforms
-  useEffect(() => {
-    if (!window.twemoji) return;
-    const id = setTimeout(() => {
-      window.twemoji.parse(document.body, { folder: 'svg', ext: '.svg' });
-    }, 80);
-    return () => clearTimeout(id);
-  });
 
   function handleChatToggle(next) {
     setChatOpen(next);
@@ -108,7 +100,7 @@ function Shell() {
         </div>
       </div>
       {/* Main content always interactive */}
-      <main className={`absolute top-14 bottom-0 right-0 overflow-y-auto transition-[left,right] duration-300 lg:left-56 ${chatOpen ? 'lg:right-80' : 'right-0'}`}>
+      <main className={`absolute top-14 bottom-0 left-0 right-0 overflow-y-auto transition-[left,right] duration-300 lg:left-56 ${chatOpen ? 'lg:right-80' : 'lg:right-0'}`}>
         <Routes>
           <Route path="/"                  element={<Home />} />
           <Route path="/leaderboard"        element={<Leaderboard />} />

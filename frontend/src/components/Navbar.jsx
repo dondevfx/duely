@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { getRank } from '../utils/ranks';
 import { api } from '../utils/api';
+import CoinIcon from './CoinIcon';
 
 const NAV_LINKS = [
   { icon: '🏠', label: 'Home',        to: '/' },
@@ -115,7 +116,7 @@ export default function Navbar() {
   const isDiamonds = displayCurrency === 'diamonds';
   const balanceDisplay = isDiamonds
     ? `${(profile?.diamonds ?? 0).toLocaleString()} 💎`
-    : `${profile?.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'} 🪙`;
+    : profile?.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00';
 
   return (
     <>
@@ -164,7 +165,7 @@ export default function Navbar() {
                     </>
                   ) : (
                     <>
-                      <span className="text-base">🪙</span>
+                      <CoinIcon size="1.1em" />
                       <span className="text-base font-black text-white font-mono">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</span>
                       <span className="text-xs text-muted group-hover:text-accent transition-colors">Coins</span>
                     </>
@@ -178,7 +179,7 @@ export default function Navbar() {
                       <button onClick={() => { setDisplayCurrency('coins'); setDropdownOpen(false); }}
                         className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm transition-all ${!isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
                         <div className="flex items-center gap-2">
-                          <span>🪙</span>
+                          <CoinIcon size="1em" />
                           <span className="font-medium">Coins</span>
                         </div>
                         <span className="font-mono font-bold text-white">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</span>
@@ -235,8 +236,8 @@ export default function Navbar() {
                               <span className="text-base">⚡</span>
                               <span className="text-sm font-semibold text-white">Instant</span>
                             </div>
-                            <span className="font-mono text-sm font-black text-white whitespace-nowrap">
-                              {(rakebackData.instant ?? 0).toFixed(2)} 🪙
+                            <span className="font-mono text-sm font-black text-white whitespace-nowrap flex items-center gap-1">
+                              {(rakebackData.instant ?? 0).toFixed(2)} <CoinIcon size="0.9em" />
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
@@ -264,8 +265,8 @@ export default function Navbar() {
                               <span className="text-base">⏱️</span>
                               <span className="text-sm font-semibold text-white">Daily</span>
                             </div>
-                            <span className="font-mono text-sm font-black text-white whitespace-nowrap">
-                              {(rakebackData.daily ?? 0).toFixed(2)} 🪙
+                            <span className="font-mono text-sm font-black text-white whitespace-nowrap flex items-center gap-1">
+                              {(rakebackData.daily ?? 0).toFixed(2)} <CoinIcon size="0.9em" />
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
@@ -293,8 +294,8 @@ export default function Navbar() {
                               <span className="text-base">📆</span>
                               <span className="text-sm font-semibold text-white">Weekly</span>
                             </div>
-                            <span className="font-mono text-sm font-black text-white whitespace-nowrap">
-                              {(rakebackData.weekly ?? 0).toFixed(2)} 🪙
+                            <span className="font-mono text-sm font-black text-white whitespace-nowrap flex items-center gap-1">
+                              {(rakebackData.weekly ?? 0).toFixed(2)} <CoinIcon size="0.9em" />
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
@@ -330,7 +331,10 @@ export default function Navbar() {
             <div className="lg:hidden shrink-0">
               <Link to="/wallet"
                 className="flex items-center gap-1 px-2.5 py-1 bg-black border border-primary/30 rounded-full text-xs font-bold text-white">
-                {isDiamonds ? `${compactNum(profile.diamonds ?? 0)} 💎` : `${profile.c_coins?.toLocaleString('en-US', { maximumFractionDigits: 0 }) ?? '0'} 🪙`}
+                {isDiamonds
+                  ? <>{compactNum(profile.diamonds ?? 0)} 💎</>
+                  : <>{profile.c_coins?.toLocaleString('en-US', { maximumFractionDigits: 0 }) ?? '0'} <CoinIcon size="1em" /></>
+                }
               </Link>
             </div>
           )}
