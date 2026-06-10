@@ -7,7 +7,7 @@ const {
   VALID_COINS, MAX_SINGLE_AMOUNT,
   recordWithdrawal, getWithdrawable,
 } = require('../services/walletService');
-const { createPayment, getEstimate, createPayout } = require('../services/nowPaymentsService');
+const { createPayment, getEstimate, createPayout, getMinAmount, getCoinUsdEstimate } = require('../services/nowPaymentsService');
 const { isLocked } = require('../services/lockService');
 
 const WITHDRAW_COOLDOWN_MS    = 60 * 1000;    // 60 seconds between withdrawals
@@ -71,9 +71,21 @@ module.exports = function walletRoutes(supabase) {
 
     const orderId = `dep_${req.user.id}_${Date.now()}`;
     try {
-      // Create payment at minimum $5. is_fixed_rate:false means NowPayments accepts
+      // Fetch this coin's minimum amount and convert to USD so we never go below
+      // NowPayments' per-coin floor. Add 10% buffer. Floor at $5.
+      let minUsd = 5;
+      try {
+        const minData  = await getMinAmount(coin);
+        const minCoin  = parseFloat(minData.min_amount ?? 0);
+        if (minCoin > 0) {
+          const usdData = await getCoinUsdEstimate(minCoin, coin);
+          minUsd = Math.max(5, parseFloat(usdData.estimated_amount ?? 5) * 1.1);
+        }
+      } catch (_) { /* fall back to $5 */ }
+
+      // Create payment at the coin's minimum. is_fixed_rate:false means NowPayments accepts
       // any amount the user sends — the webhook credits outcome_amount (what actually arrives).
-      const payment = await createPayment({ amountUsd: 5, coin, orderId });
+      const payment = await createPayment({ amountUsd: minUsd, coin, orderId });
       res.json({
         payment_id:   payment.payment_id,
         pay_address:  payment.pay_address,
