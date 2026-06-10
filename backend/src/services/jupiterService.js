@@ -27,7 +27,7 @@ const USDC_MINT   = new solWeb3.PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZ
  * @returns {string} transaction hash
  */
 async function swapSolToUsdc(privKey, amountSol, adminAddress) {
-  const rpc        = process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
+  const rpc        = process.env.SOLANA_RPC || 'https://mainnet.helius-rpc.com/?api-key=' + (process.env.HELIUS_API_KEY || '');
   const connection = new solWeb3.Connection(rpc, 'confirmed');
   const keypair    = solWeb3.Keypair.fromSeed(new Uint8Array(privKey));
   const lamports   = Math.floor(amountSol * solWeb3.LAMPORTS_PER_SOL);
