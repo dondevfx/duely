@@ -45,7 +45,7 @@ async function getCoinUsdEstimate(coinAmount, coin) {
 
 // Minimum deposit amount for a coin (in that coin's units)
 async function getMinAmount(coin) {
-  return npFetch(`/min-amount?currency_from=${coin}&currency_to=usdttrc20`);
+  return npFetch(`/min-amount?currency_from=${coin}&currency_to=${coin}`);
 }
 
 // Create a payout withdrawal — amount is in the target coin's units
