@@ -79,10 +79,12 @@ module.exports = function walletRoutes(supabase) {
     try {
       const result = await getDepositAddress(coin.toLowerCase(), req.user.id);
       res.json({
-        address:  result.address,
-        memo:     result.memo || null,
-        coin:     coin.toLowerCase(),
-        min_usd:  DEPOSIT_MINS[coin.toLowerCase()] ?? DEPOSIT_MINS.default,
+        address:      result.address,
+        memo:         result.memo || null,
+        coin:         coin.toLowerCase(),
+        min_usd:      DEPOSIT_MINS[coin.toLowerCase()] ?? DEPOSIT_MINS.default,
+        amount_crypto: result.amountCrypto || null,
+        expires_at:   result.expiresAt || null,
       });
     } catch (err) {
       console.error(`[deposit] get-address failed coin=${coin}:`, err.message);

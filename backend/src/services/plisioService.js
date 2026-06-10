@@ -30,19 +30,35 @@ async function plisioGet(path) {
   return data.data ?? data;
 }
 
-// Get or create a permanent deposit address for a user + coin combo.
-// Plisio returns the same address every time for the same uid + psys_cid.
+// Create a deposit invoice and return the wallet address + amount to send.
+// Uses Plisio's /invoices/new endpoint (minimum $5 USD).
+// The wallet_hash in the invoice is our static Plisio wallet address for that coin.
 async function getDepositAddress(coin, userId) {
   const psisCid = PLISIO_COINS[coin.toLowerCase()];
   if (!psisCid) throw new Error(`Unsupported coin: ${coin}`);
-  const data = await plisioGet(
-    `/operations/deposit?psys_cid=${psisCid}&uid=${encodeURIComponent(userId)}`
+
+  const orderNumber = `dep_${userId}_${Date.now()}`;
+
+  // Step 1: create invoice for minimum $5
+  const created = await plisioGet(
+    `/invoices/new?currency=${psisCid}&order_name=deposit&order_number=${encodeURIComponent(orderNumber)}&source_currency=USD&source_amount=5&callback_url=${encodeURIComponent(process.env.BACKEND_URL + '/api/webhooks/plisio')}`
   );
+
+  const txnId = created.txn_id;
+  if (!txnId) throw new Error('Plisio did not return a transaction ID');
+
+  // Step 2: fetch invoice details to get wallet_hash (deposit address)
+  const details = await plisioGet(`/invoices/${txnId}`);
+  const invoice = details.invoice || details;
+
   return {
-    address:   data.address,
-    memo:      data.memo || null,   // for coins that need a memo/tag
+    address:    invoice.wallet_hash,
+    memo:       null,
     coin,
     psisCid,
+    txnId,
+    amountCrypto: invoice.invoice_total_sum,   // exact amount to send
+    expiresAt:  invoice.expire_utc,
   };
 }
 
