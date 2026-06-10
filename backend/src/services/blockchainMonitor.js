@@ -32,7 +32,7 @@ const COINGECKO_IDS = {
   trx:  'tron',
   doge: 'dogecoin',
   bnb:  'binancecoin',
-  xrp:  'ripple',
+  usdc: 'usd-coin',
 };
 
 // Price cache
@@ -109,20 +109,64 @@ async function fetchBnbTxs(address) {
     .filter(t => t.amount > 0);
 }
 
-async function fetchXrpTxs(address) {
-  const r = await fetch(
-    `https://api.xrpscan.com/api/v1/account/${address}/transactions?type=Payment`
-  );
-  const d = await r.json();
-  if (!d.transactions) return [];
-  return d.transactions
-    .filter(tx => tx.Destination === address && tx.Amount && typeof tx.Amount === 'string')
-    .map(tx => ({
-      txHash:    tx.hash,
-      amount:    parseInt(tx.Amount) / 1_000_000,  // drops → XRP
-      confirmed: true,
-    }))
-    .filter(t => t.amount > 0);
+async function fetchUsdcSplTxs(address) {
+  // Monitor the USDC SPL token account for the given Solana address
+  const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+  const rpc = process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
+
+  // Get signatures for address
+  const sigRes = await fetch(rpc, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0', id: 1,
+      method: 'getSignaturesForAddress',
+      params: [address, { limit: 10 }],
+    }),
+  });
+  const sigData = await sigRes.json();
+  const sigs = sigData.result || [];
+
+  const results = [];
+  for (const sig of sigs) {
+    if (sig.err) continue;
+    try {
+      const txRes = await fetch(rpc, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 1,
+          method: 'getTransaction',
+          params: [sig.signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0 }],
+        }),
+      });
+      const txData = await txRes.json();
+      const tx = txData.result;
+      if (!tx) continue;
+
+      // Look for USDC token transfers to our address
+      const inner = tx.meta?.innerInstructions || [];
+      const instructions = [
+        ...(tx.transaction?.message?.instructions || []),
+        ...inner.flatMap(i => i.instructions || []),
+      ];
+      for (const ix of instructions) {
+        const p = ix.parsed;
+        if (!p) continue;
+        if (p.type === 'transferChecked' || p.type === 'transfer') {
+          const info = p.info;
+          if (info?.mint === USDC_MINT && info?.destination && info?.tokenAmount) {
+            // Check if destination belongs to our address
+            const amount = parseFloat(info.tokenAmount?.uiAmount || info.amount / 1e6 || 0);
+            if (amount > 0) {
+              results.push({ txHash: sig.signature, amount, confirmed: true });
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+  return results;
 }
 
 async function fetchSolTxs(address) {
@@ -237,7 +281,7 @@ async function fetchTxs(coin, address) {
     case 'bnb':  return fetchBnbTxs(address);
     case 'sol':  return fetchSolTxs(address);
     case 'trx':  return fetchTrxTxs(address);
-    case 'xrp':  return fetchXrpTxs(address);
+    case 'usdc': return fetchUsdcSplTxs(address);
     case 'ltc':
     case 'doge': return fetchBlockcypherTxs(coin, address);
     default:     return [];
@@ -268,6 +312,25 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     return;
   }
 
+  // ── USDC deposits: already stable, credit directly without SimpleSwap ──
+  if (coin === 'usdc') {
+    const credited = Math.floor(amount * 100) / 100;
+    const { creditCoins, recordDeposit } = require('./walletService');
+    await creditCoins(supabase, userId, credited);
+    await recordDeposit(supabase, userId, credited, 'crypto');
+    await supabase.from('transactions').insert({
+      user_id:       userId,
+      type:          'deposit',
+      amount_c:      credited,
+      crypto_amount: amount,
+      crypto_symbol: 'USDC',
+      tx_hash:       txHash,
+      status:        'confirmed',
+    });
+    console.log(`[monitor] USDC deposit — credited $${credited} to user ${userId}`);
+    return;
+  }
+
   const usdc = OUR_USDC_ADDRESS();
   if (!usdc) {
     console.error('[monitor] USDC_SPL_ADDRESS not configured');
@@ -275,8 +338,8 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
   }
 
   // Deduct realistic gas reserve so we don't try to send more than we can
-  const gasReserveMap = { btc: 0.00002, eth: 0.0004, bnb: 0.0005, sol: 0.000005, ltc: 0.001, trx: 5, doge: 1, xrp: 0.01 };
-  const gasRes   = gasReserveMap[coin] || 0;
+  const gasReserveMap = { btc: 0.00002, eth: 0.0004, bnb: 0.0005, sol: 0.000005, ltc: 0.001, trx: 5, doge: 1 };
+  const gasRes    = gasReserveMap[coin] || 0;
   const netAmount = Math.max(0, amount - gasRes);
   if (netAmount <= 0) {
     console.warn(`[monitor] amount ${amount} too small after gas reserve — skipping`);
@@ -312,24 +375,17 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     crypto_symbol: coin.toUpperCase(),
     tx_hash:       txHash,
     status:        'forwarded',
-  }).then().catch(() => {});   // best-effort
+  }).then().catch(() => {});
 
   // Get our private key for this address and send crypto to SimpleSwap
   const { privKey } = getAddress(userId, coin);
   try {
-    const sendTxHash = await sendCrypto({
-      coin,
-      privKey,
-      toAddress: swap.depositAddress,
-      amount:    netAmount,
-    });
+    const sendTxHash = await sendCrypto({ coin, privKey, toAddress: swap.depositAddress, amount: netAmount });
     console.log(`[monitor] forwarded ${netAmount} ${coin} → SimpleSwap tx=${sendTxHash}`);
   } catch (e) {
     console.error(`[monitor] sendCrypto failed for ${txHash}:`, e.message);
-    // Transaction already inserted as 'converting' — swapPoller will timeout and mark 'stuck'
   }
 
-  // Start polling SimpleSwap for USDC arrival
   watch(swap.exchangeId, userId);
 }
 

@@ -15,7 +15,7 @@ const SS_TICKERS = {
   trx:  'trx',
   doge: 'doge',
   bnb:  'bnbbsc',
-  xrp:  'xrp',
+  usdc: 'usdcspl',
 };
 
 async function ssGet(path) {

@@ -17,7 +17,7 @@ const DEPOSIT_MAX_SINGLE   = 50_000;      // $50k hard cap per deposit
 const MIN_WITHDRAWAL       = 5;           // $5 minimum
 
 // Coins accepted for deposit (Plisio supports all of these)
-const DEPOSIT_COINS = new Set(['btc','eth','sol','ltc','trx','doge','bnb','xrp']);
+const DEPOSIT_COINS = new Set(['btc','eth','sol','ltc','trx','doge','bnb','usdc']);
 
 // Per-coin deposit minimums enforced by our platform
 const DEPOSIT_MINS = {

@@ -16,7 +16,6 @@ const bitcoin  = require('bitcoinjs-lib');
 const ecc      = require('tiny-secp256k1');
 const bs58     = require('bs58');
 const solWeb3  = require('@solana/web3.js');
-const xrpl     = require('xrpl');
 
 // initialise bitcoinjs-lib with the secp256k1 implementation
 bitcoin.initEccLib(ecc);
@@ -120,8 +119,9 @@ function getAddress(userId, coin) {
     case 'bnb':
       address = bnbAddress(privKey);
       break;
-    case 'xrp':
-      address = xrpAddress(privKey);
+    case 'usdc':
+      // USDC SPL lives on Solana — same address format as SOL
+      address = solAddress(privKey);
       break;
     default:
       throw new Error(`Unsupported coin: ${coin}`);

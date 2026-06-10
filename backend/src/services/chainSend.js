@@ -57,26 +57,30 @@ async function sendBnb(privKey, toAddress, amount) {
   return tx.hash;
 }
 
-async function sendXrp(privKey, toAddress, amount) {
-  const xrpl   = require('xrpl');
-  const seed   = xrpl.encodeSeed(privKey);
-  const wallet = xrpl.Wallet.fromSeed(seed);
-  const client = new xrpl.Client('wss://xrplcluster.com');
-  await client.connect();
-  try {
-    const drops = Math.floor(amount * 1_000_000);  // 1 XRP = 1,000,000 drops
-    const prepared = await client.autofill({
-      TransactionType: 'Payment',
-      Account:         wallet.address,
-      Amount:          String(drops),
-      Destination:     toAddress,
-    });
-    const { tx_blob } = wallet.sign(prepared);
-    const result = await client.submitAndWait(tx_blob);
-    return result.result.hash;
-  } finally {
-    await client.disconnect();
-  }
+async function sendUsdcSpl(privKey, toAddress, amount) {
+  const splToken = require('@solana/spl-token');
+  const connection = new solWeb3.Connection(
+    process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com',
+    'confirmed'
+  );
+  const keypair   = solWeb3.Keypair.fromSeed(new Uint8Array(privKey));
+  const toPubkey  = new solWeb3.PublicKey(toAddress);
+  const usdcMint  = new solWeb3.PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+  const decimals  = 6;   // USDC has 6 decimal places
+  const units     = Math.floor(amount * 10 ** decimals);
+
+  // Get or create associated token accounts for sender and receiver
+  const fromAta = await splToken.getOrCreateAssociatedTokenAccount(
+    connection, keypair, usdcMint, keypair.publicKey
+  );
+  const toAta = await splToken.getOrCreateAssociatedTokenAccount(
+    connection, keypair, usdcMint, toPubkey
+  );
+
+  const sig = await splToken.transfer(
+    connection, keypair, fromAta.address, toAta.address, keypair, units
+  );
+  return sig;
 }
 
 // ── SOL ───────────────────────────────────────────────────────────────────────
@@ -197,7 +201,7 @@ async function sendCrypto({ coin, privKey, toAddress, amount }) {
     case 'bnb':  return sendBnb(privKey, toAddress, amount);
     case 'sol':  return sendSol(privKey, toAddress, amount);
     case 'trx':  return sendTrx(privKey, toAddress, amount);
-    case 'xrp':  return sendXrp(privKey, toAddress, amount);
+    case 'usdc': return sendUsdcSpl(privKey, toAddress, amount);
     case 'btc':
     case 'ltc':
     case 'doge': return sendUtxoCoin(coin, privKey, toAddress, amount);
