@@ -131,7 +131,7 @@ export default function Navbar() {
 
           {/* Hamburger — mobile only */}
           <button
-            className="lg:hidden p-3 rounded-lg text-muted hover:text-white hover:bg-surfaceLight transition-colors shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
+            className="lg:hidden p-2 rounded-lg text-muted hover:text-white hover:bg-surfaceLight transition-colors shrink-0 w-9 h-9 flex items-center justify-center"
             onClick={() => setMobileMenuOpen(o => !o)}
             aria-label="Menu"
           >
@@ -144,11 +144,11 @@ export default function Navbar() {
 
           {/* Logo — absolutely centered on mobile, left-aligned on desktop */}
           <div className="absolute left-1/2 -translate-x-1/2 lg:relative lg:left-auto lg:translate-x-0 lg:w-56 lg:shrink-0 flex justify-center lg:justify-start pointer-events-none lg:pointer-events-auto">
-            <Link to="/" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 pointer-events-auto">
-              <span className="text-3xl font-black tracking-tight text-primary" style={{ textShadow: '0 0 22px rgba(30,144,255,0.6)' }}>
+            <Link to="/" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-1.5 pointer-events-auto">
+              <span className="text-2xl lg:text-3xl font-black tracking-tight text-primary" style={{ textShadow: '0 0 22px rgba(30,144,255,0.6)' }}>
                 Duely
               </span>
-              <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+              <span className="w-1.5 h-1.5 lg:w-2 lg:h-2 rounded-full bg-accent animate-pulse" />
             </Link>
           </div>
 
@@ -332,23 +332,25 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Mobile: balance + rakeback buttons */}
+          {/* Flex-1 spacer on mobile to push right items to edge */}
+          <div className="lg:hidden flex-1" />
+
+          {/* Mobile: balance + rakeback (inline with right section) */}
           {profile && (
-            <div className="lg:hidden flex items-center gap-1 shrink-0">
+            <div className="lg:hidden flex items-center gap-1.5 shrink-0">
               {/* Balance dropdown */}
               <div className="relative" ref={mobileCurrencyRef}>
                 <button
                   onClick={() => setMobileCurrencyOpen(o => !o)}
-                  className="flex items-center gap-1 px-2 py-1 bg-black border border-primary/30 hover:border-primary rounded-full text-xs font-bold text-white transition-all"
+                  className="flex items-center gap-0.5 px-2 py-1 bg-black border border-primary/30 rounded-full font-bold text-white transition-all"
+                  style={{ fontSize: 11 }}
                 >
-                  {isDiamonds
-                    ? <>{compactNum(profile.diamonds ?? 0)} 💎</>
-                    : <>{compactNum(profile.c_coins ?? 0)} 🪙</>
-                  }
-                  <span className="text-muted text-[10px]">▾</span>
+                  <span className="font-mono">{isDiamonds ? compactNum(profile.diamonds ?? 0) : compactNum(profile.c_coins ?? 0)}</span>
+                  <span>{isDiamonds ? '💎' : '🪙'}</span>
+                  <span className="text-muted" style={{ fontSize: 9 }}>▾</span>
                 </button>
                 {mobileCurrencyOpen && (
-                  <div className="absolute top-full mt-2 left-0 bg-surface border border-border rounded-xl shadow-glow-lg z-50 overflow-hidden" style={{ minWidth: 190 }}>
+                  <div className="absolute top-full mt-2 right-0 bg-surface border border-border rounded-xl shadow-glow-lg z-50 overflow-hidden" style={{ minWidth: 190 }}>
                     <div className="p-1">
                       <button onClick={() => { setDisplayCurrency('coins'); setMobileCurrencyOpen(false); }}
                         className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs transition-all ${!isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
@@ -383,7 +385,8 @@ export default function Navbar() {
                       return !o;
                     });
                   }}
-                  className="flex items-center justify-center w-7 h-7 rounded-full border border-border bg-black text-sm"
+                  className="flex items-center justify-center w-7 h-7 rounded-full border border-border bg-black"
+                  style={{ fontSize: 14 }}
                   title="Rakeback"
                 >
                   🎁
@@ -444,9 +447,9 @@ export default function Navbar() {
                     ⚙
                   </Link>
                 )}
-                <Link to="/profile" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2.5 group">
+                <Link to="/profile" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 group">
                   <div className="relative">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all"
+                    <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full flex items-center justify-center text-xs lg:text-sm font-bold transition-all"
                       style={{
                         backgroundColor: `${profile.profile_color || '#1E90FF'}22`,
                         border: `1.5px solid ${profile.profile_color || '#1E90FF'}`,

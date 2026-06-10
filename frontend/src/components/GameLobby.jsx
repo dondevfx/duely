@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GlowButton from './GlowButton';
 import { useSocket } from '../context/SocketContext';
@@ -54,6 +54,13 @@ export default function GameLobby({
   const insufficient = entryFee > 0 && balance < entryFee;
 
   const sliderIdx = Math.max(0, fees.indexOf(entryFee));
+
+  // Safety net: if entryFee isn't valid for current currency, snap to first option
+  useEffect(() => {
+    if (!fees.includes(entryFee)) {
+      setEntryFee(fees[0]);
+    }
+  }, [betCurrency]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function switchCurrency(cur) {
     setBetCurrency(cur);

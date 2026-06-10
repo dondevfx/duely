@@ -28,8 +28,8 @@ function calcScore(hand) {
   return score;
 }
 
-// Responsive card size — bigger on desktop, shrink gracefully on mobile
-const CARD_W = typeof window !== 'undefined' ? Math.min(130, Math.floor((window.innerWidth - 48) / 3)) : 130;
+// Responsive card size — bigger on desktop, compact on mobile
+const CARD_W = typeof window !== 'undefined' ? Math.min(90, Math.floor((window.innerWidth - 48) / 4)) : 90;
 const CARD_H = Math.round(CARD_W * 1.44);
 
 const CARD_DEAL_CSS = `
@@ -554,9 +554,9 @@ export default function BlackjackGame() {
 
         {/* Opponent section */}
         <div style={{
-          flex: 1, minHeight: 200, display: 'flex', flexDirection: 'column',
+          flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center',
-          padding: '24px 16px 16px',
+          padding: '12px 12px 10px',
           borderBottom: '1px solid rgba(255,255,255,0.07)',
           position: 'relative',
         }}>
@@ -588,18 +588,16 @@ export default function BlackjackGame() {
               )}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'nowrap', overflowX: 'auto', maxWidth: '100%', paddingBottom: 4, justifyContent: 'center' }}>
             {oppReveal
               ? oppReveal.hand.map((c, i) => (
                   <FlipCard key={i} card={c} flipped={flippingOpp} flipDelay={i * 0.18} />
                 ))
               : oppHand.length > 0
-                // Show opponent's real cards (initial 2 face-up + hit cards unlocked by matching your hits)
                 ? oppHand.map((c, i) => (
                     <Card key={`opp-${dealRevision}-${i}`} card={c}
                       dealIndex={dealRevision > 0 && i < 2 ? i : (i >= 2 ? 0 : null)} />
                   ))
-                // Fallback: face-down placeholders (e.g. reconnect edge case)
                 : Array.from({ length: opponentHandSize }).map((_, i) => (
                     <Card key={i} faceDown dealIndex={dealRevision > 0 ? i : null} />
                   ))
@@ -609,9 +607,10 @@ export default function BlackjackGame() {
 
         {/* Your section */}
         <div style={{
-          flex: 1, minHeight: 220, display: 'flex', flexDirection: 'column',
+          flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center',
-          padding: '16px 16px 24px',
+          padding: '10px 12px 12px',
+          overflowY: 'auto',
         }}>
           <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{
@@ -674,7 +673,7 @@ export default function BlackjackGame() {
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 20 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'nowrap', overflowX: 'auto', maxWidth: '100%', paddingBottom: 4, justifyContent: 'center', marginBottom: 16 }}>
             {(rd ? (myReveal?.hand ?? myHand) : myHand).map((c, i) => (
               <Card
                 key={`${dealRevision}-${i}`}

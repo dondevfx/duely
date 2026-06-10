@@ -150,7 +150,7 @@ export default function BlockBlastGame() {
   const [phase, setPhase]             = useState(location.state?.autoQueue ? 'queue' : 'lobby');
   const { displayCurrency: betCurrency, setDisplayCurrency: setBetCurrency } = useCurrency();
   useEffect(() => { if (location.state?.betCurrency) setBetCurrency(location.state.betCurrency); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const [entryFee, setEntryFee]       = useState(location.state?.entryFee ?? COIN_FEES[0]);
+  const [entryFee, setEntryFee]       = useState(() => location.state?.entryFee ?? (betCurrency === 'diamonds' ? DIAMOND_FEES[0] : COIN_FEES[0]));
   const [opponent, setOpponent]       = useState(null);
   const [roomId, setRoomId]           = useState(null);
   const [countdown, setCountdown]     = useState(0);

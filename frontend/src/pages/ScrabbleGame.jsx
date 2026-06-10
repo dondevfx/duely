@@ -52,7 +52,7 @@ function TurnTimerBar({ seconds, total = 60 }) {
   );
 }
 
-function TileButton({ letter, selected, onClick, onDragStart, onDragEnd, dragging }) {
+function TileButton({ letter, selected, onClick, onDragStart, onDragEnd, dragging, onTouchStart }) {
   const val = LETTER_VALUES[letter] ?? 0;
   const isBlank = letter === '?';
   return (
@@ -61,6 +61,7 @@ function TileButton({ letter, selected, onClick, onDragStart, onDragEnd, draggin
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onClick}
+      onTouchStart={onTouchStart}
       className="relative flex-shrink-0 flex items-center justify-center select-none transition-all"
       style={{
         width: CELL_SIZE - 8, height: CELL_SIZE - 8,
@@ -93,8 +94,8 @@ function TileButton({ letter, selected, onClick, onDragStart, onDragEnd, draggin
 // Responsive cell size: max 70px but shrinks to fit the screen
 // Board = 6 cells + 5 gaps(4px) + 16px padding + 6px border = 6*cell + 42
 const CELL_SIZE = typeof window !== 'undefined'
-  ? Math.min(70, Math.floor((Math.min(window.innerWidth, 480) - 42) / 6))
-  : 70;
+  ? Math.min(56, Math.floor((Math.min(window.innerWidth, 420) - 32) / 6))
+  : 56;
 
 function BoardCell({ row, col, cell, pending, myTurn, onClick, onRemove, onDragOver, onDrop }) {
   const prem      = PREMIUM[`${row},${col}`];
@@ -122,6 +123,8 @@ function BoardCell({ row, col, cell, pending, myTurn, onClick, onRemove, onDragO
       onClick={onClick}
       onDragOver={onDragOver}
       onDrop={onDrop}
+      data-row={row}
+      data-col={col}
       style={{
         width: CELL_SIZE, height: CELL_SIZE,
         borderRadius: 6,
@@ -227,6 +230,10 @@ export default function ScrabbleGame() {
   const [blankPick, setBlankPick]   = useState(null);
   const [submitting, setSubmitting] = useState(false); // disable Play Word while waiting
 
+  // Touch drag state
+  const [touchDragPos, setTouchDragPos]   = useState(null); // { x, y } for ghost
+  const touchDragIdxRef = useRef(null);  // which tile is being touch-dragged
+
   // Exchange mode
   const [exchangeMode, setExchangeMode] = useState(false);
   const [exchangeSel, setExchangeSel]   = useState(new Set());
@@ -258,6 +265,58 @@ export default function ScrabbleGame() {
   const balance      = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const insufficient = entryFee > 0 && balance < entryFee;
   const isWinner     = result && result.winnerId === profile?.id;
+
+  // Touch drag-and-drop for tile placement (mobile iOS/Android)
+  function handleTileTouchStart(idx, e) {
+    if (!myTurn || phase !== 'game' || submitting || exchangeMode) return;
+    e.preventDefault();
+    touchDragIdxRef.current = idx;
+    setDraggingIdx(idx);
+    const t = e.touches[0];
+    setTouchDragPos({ x: t.clientX, y: t.clientY });
+  }
+
+  useEffect(() => {
+    function onTouchMove(e) {
+      if (touchDragIdxRef.current === null) return;
+      e.preventDefault();
+      const t = e.touches[0];
+      setTouchDragPos({ x: t.clientX, y: t.clientY });
+    }
+    function onTouchEnd(e) {
+      if (touchDragIdxRef.current === null) return;
+      const idx = touchDragIdxRef.current;
+      touchDragIdxRef.current = null;
+      setDraggingIdx(null);
+      setTouchDragPos(null);
+
+      // Find the element under the final touch point
+      const t = e.changedTouches[0];
+      // Temporarily hide the ghost so it doesn't block elementFromPoint
+      const el = document.elementFromPoint(t.clientX, t.clientY);
+      if (!el) return;
+
+      // Walk up the DOM to find a board cell with data-row/data-col
+      let target = el;
+      for (let i = 0; i < 6; i++) {
+        if (!target) break;
+        const row = target.dataset?.row;
+        const col = target.dataset?.col;
+        if (row !== undefined && col !== undefined) {
+          // Simulate a drop on this cell
+          handleCellDropByTouch(parseInt(row), parseInt(col), idx);
+          return;
+        }
+        target = target.parentElement;
+      }
+    }
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend', onTouchEnd);
+    return () => {
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [myTurn, phase, submitting, exchangeMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Turn timer countdown
   useEffect(() => {
@@ -548,8 +607,21 @@ export default function ScrabbleGame() {
     const tile = myHand[idx];
     if (!tile) return;
     setDraggingIdx(null);
-    // Use the existing selectedHandIdx path
-    const savedIdx = selectedHandIdx;
+    setSelectedHandIdx(idx);
+    if (tile === '?') {
+      setBlankPick({ row, col });
+    } else {
+      placeTile(row, col, tile, tile, false);
+    }
+  }
+
+  // Touch drag drop — called from touch event handler with explicit idx
+  function handleCellDropByTouch(row, col, idx) {
+    if (!myTurn || phase !== 'game' || submitting) return;
+    const key = `${row},${col}`;
+    if (pending[key] || board[row][col]) return;
+    const tile = myHand[idx];
+    if (!tile) return;
     setSelectedHandIdx(idx);
     if (tile === '?') {
       setBlankPick({ row, col });
@@ -573,10 +645,31 @@ export default function ScrabbleGame() {
 
   return (
     <div
-      className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-2 py-4"
+      className={`min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center px-2 py-4 ${phase === 'game' ? 'justify-start overflow-y-auto' : 'justify-center'}`}
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}
     >
       {blankPick && <BlankPicker onPick={onBlankPick} onCancel={() => setBlankPick(null)} />}
+
+      {/* Touch drag ghost */}
+      {touchDragPos && draggingIdx !== null && myHand[draggingIdx] && (
+        <div style={{
+          position: 'fixed',
+          left: touchDragPos.x - (CELL_SIZE - 8) / 2,
+          top: touchDragPos.y - (CELL_SIZE - 8) / 2,
+          zIndex: 9999,
+          pointerEvents: 'none',
+          width: CELL_SIZE - 8, height: CELL_SIZE - 8,
+          borderRadius: 8,
+          background: '#e8d5a8',
+          border: '2.5px solid #1E90FF',
+          boxShadow: '0 0 16px rgba(30,144,255,0.8)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 22, fontWeight: 900, color: '#2c1a00',
+          opacity: 0.9,
+        }}>
+          {myHand[draggingIdx] === '?' ? '?' : myHand[draggingIdx]}
+        </div>
+      )}
 
       {/* LOBBY */}
       {phase === 'lobby' && (
@@ -640,7 +733,7 @@ export default function ScrabbleGame() {
 
       {/* GAME */}
       {phase === 'game' && (
-        <div className="w-full animate-fade-in px-2 flex flex-col items-center" style={{ maxWidth: 520 }}>
+        <div className="w-full animate-fade-in px-1 flex flex-col items-center" style={{ maxWidth: 520, alignSelf: 'flex-start', paddingTop: 8 }}>
 
           {/* Turn timer bar */}
           {myTurn && turnSeconds > 0 && (
@@ -745,6 +838,7 @@ export default function ScrabbleGame() {
                     onClick={() => handleHandClick(i)}
                     onDragStart={() => handleTileDragStart(i)}
                     onDragEnd={handleTileDragEnd}
+                    onTouchStart={(e) => handleTileTouchStart(i, e)}
                   />
                 ))}
                 {myHand.length === 0 && <span className="text-muted text-sm py-3">No tiles</span>}
