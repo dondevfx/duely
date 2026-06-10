@@ -78,7 +78,7 @@ module.exports = function walletRoutes(supabase) {
       return res.status(400).json({ error: 'Invalid or unsupported coin' });
     }
     try {
-      const result = await getOrCreateAddress(coin.toLowerCase(), req.user.id, supabase);
+      const result = await getOrCreateAddress(req.user.id, coin.toLowerCase(), supabase);
       res.json({
         address:  result.address,
         memo:     result.memo || null,
