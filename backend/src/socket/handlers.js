@@ -122,13 +122,15 @@ const {
   deductCoins, deductDiamonds,
   settleBotMatch,
 } = require('../services/walletService');
-const { lockUser, unlockUser } = require('../services/lockService');
+const { lockUser, unlockUser, isLocked } = require('../services/lockService');
 const { createClient } = require('@supabase/supabase-js');
 
 module.exports = function registerSocketHandlers(io, supabase) {
   // ── Shared private-room registry (all game types) ─────────────
   const pendingPrivateRooms = new Map(); // code → { gameType, p1, createdAt }
 const userQueues = new Set(); // userId → currently in a queue (prevents dual-tab double-join)
+  // Returns true if user is in a queue OR in an active match (lock held until settlement)
+  const inMatchOrQueue = (uid) => userQueues.has(uid) || isLocked(uid);
   const chatBanned = new Set(); // userId → banned from chat
 
   // ── Live player count tracking ────────────────────────────────
@@ -291,8 +293,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
-      if (userQueues.has(authenticatedUser.userId))
-        return socket.emit('error', { message: 'Already in a queue — leave your current queue first.' });
+      if (inMatchOrQueue(authenticatedUser.userId))
+        return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
       const { data: profile } = await supabase
         .from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
 
@@ -356,6 +358,13 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
     socket.on('create_private', async ({ entryFee = 0 }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      if (inMatchOrQueue(authenticatedUser.userId))
+        return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
+      if (entryFee > 0) {
+        const { data: pf } = await supabase.from('profiles').select('c_coins').eq('id', authenticatedUser.userId).single();
+        if ((pf?.c_coins ?? 0) < entryFee) return socket.emit('error', { message: 'Insufficient C Coins' });
+        lockUser(authenticatedUser.userId);
+      }
       const player = {
         socketId: socket.id, userId: authenticatedUser.userId,
         username: authenticatedUser.username, elo: authenticatedUser.elo, entryFee,
@@ -367,6 +376,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
     socket.on('join_private', async ({ inviteCode }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      if (inMatchOrQueue(authenticatedUser.userId))
+        return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
       const { data: profile } = await supabase
         .from('profiles').select('c_coins,elo,username').eq('id', authenticatedUser.userId).single();
       const player = {
@@ -419,8 +430,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_type_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
-      if (userQueues.has(authenticatedUser.userId))
-        return socket.emit('error', { message: 'Already in a queue — leave your current queue first.' });
+      if (inMatchOrQueue(authenticatedUser.userId))
+        return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
       const { data: profile } = await supabase
         .from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
 
@@ -529,8 +540,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_memory_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
-      if (userQueues.has(authenticatedUser.userId))
-        return socket.emit('error', { message: 'Already in a queue — leave your current queue first.' });
+      if (inMatchOrQueue(authenticatedUser.userId))
+        return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
       const { data: profile } = await supabase
         .from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
 
@@ -619,8 +630,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_aim_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
-      if (userQueues.has(authenticatedUser.userId))
-        return socket.emit('error', { message: 'Already in a queue — leave your current queue first.' });
+      if (inMatchOrQueue(authenticatedUser.userId))
+        return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
       const { data: profile } = await supabase
         .from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
 
@@ -709,8 +720,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_c4_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
-      if (userQueues.has(authenticatedUser.userId))
-        return socket.emit('error', { message: 'Already in a queue — leave your current queue first.' });
+      if (inMatchOrQueue(authenticatedUser.userId))
+        return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
       const { data: profile } = await supabase
         .from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
 
@@ -811,8 +822,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_dart_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
-      if (userQueues.has(authenticatedUser.userId))
-        return socket.emit('error', { message: 'Already in a queue — leave your current queue first.' });
+      if (inMatchOrQueue(authenticatedUser.userId))
+        return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
       const { data: profile } = await supabase
         .from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
       if (entryFee > 0) {
@@ -881,8 +892,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_asteroid_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
-      if (userQueues.has(authenticatedUser.userId))
-        return socket.emit('error', { message: 'Already in a queue — leave your current queue first.' });
+      if (inMatchOrQueue(authenticatedUser.userId))
+        return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
       const { data: profile } = await supabase
         .from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
       if (entryFee > 0) {
@@ -958,8 +969,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_starship_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
-      if (userQueues.has(authenticatedUser.userId))
-        return socket.emit('error', { message: 'Already in a queue — leave your current queue first.' });
+      if (inMatchOrQueue(authenticatedUser.userId))
+        return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
       const { data: profile } = await supabase
         .from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
       if (entryFee > 0) {
@@ -1033,8 +1044,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_block_blast_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
-      if (userQueues.has(authenticatedUser.userId))
-        return socket.emit('error', { message: 'Already in a queue — leave your current queue first.' });
+      if (inMatchOrQueue(authenticatedUser.userId))
+        return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
       const { data: profile } = await supabase
         .from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
       if (entryFee > 0) {
@@ -1160,8 +1171,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_piano_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
-      if (userQueues.has(authenticatedUser.userId))
-        return socket.emit('error', { message: 'Already in a queue — leave your current queue first.' });
+      if (inMatchOrQueue(authenticatedUser.userId))
+        return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
       const { data: profile } = await supabase
         .from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
       if (entryFee > 0) {
@@ -1262,8 +1273,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_click_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
-      if (userQueues.has(authenticatedUser.userId))
-        return socket.emit('error', { message: 'Already in a queue — leave your current queue first.' });
+      if (inMatchOrQueue(authenticatedUser.userId))
+        return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
       const { data: profile } = await supabase
         .from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
       if (entryFee > 0) {
@@ -1335,8 +1346,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_ttt_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
-      if (userQueues.has(authenticatedUser.userId))
-        return socket.emit('error', { message: 'Already in a queue — leave your current queue first.' });
+      if (inMatchOrQueue(authenticatedUser.userId))
+        return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
       const { data: profile } = await supabase
         .from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
       if (entryFee > 0) {
@@ -1412,8 +1423,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_tetris_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
-      if (userQueues.has(authenticatedUser.userId))
-        return socket.emit('error', { message: 'Already in a queue — leave your current queue first.' });
+      if (inMatchOrQueue(authenticatedUser.userId))
+        return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
       const { data: profile } = await supabase
         .from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
       if (entryFee > 0) {
@@ -1532,8 +1543,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_chess_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
-      if (userQueues.has(authenticatedUser.userId))
-        return socket.emit('error', { message: 'Already in a queue — leave your current queue first.' });
+      if (inMatchOrQueue(authenticatedUser.userId))
+        return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
       const { data: profile } = await supabase
         .from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
       if (entryFee > 0) {
@@ -1661,6 +1672,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('create_private_room', async ({ gameType, entryFee = 0, currency = 'coins', side = 'heads' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      if (inMatchOrQueue(authenticatedUser.userId))
+        return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
       if (entryFee > 0) {
         const { data: pf } = await supabase.from('profiles').select('c_coins,diamonds').eq('id', authenticatedUser.userId).single();
         if (currency === 'diamonds' && (pf.diamonds || 0) < entryFee) return socket.emit('error', { message: 'Insufficient diamonds' });
@@ -1693,6 +1706,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
     socket.on('join_private_room', async ({ gameType, code }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      if (inMatchOrQueue(authenticatedUser.userId))
+        return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
       const key = (code || '').toUpperCase().trim();
       const pending = pendingPrivateRooms.get(key);
       if (!pending) return socket.emit('error', { message: 'Room not found. Check the code and try again.' });
@@ -1722,8 +1737,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_crossroad_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
-      if (userQueues.has(authenticatedUser.userId))
-        return socket.emit('error', { message: 'Already in a queue — leave your current queue first.' });
+      if (inMatchOrQueue(authenticatedUser.userId))
+        return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
       const { data: profile } = await supabase
         .from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
       if (entryFee > 0) {
