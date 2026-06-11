@@ -91,8 +91,8 @@ async function swapUsdcToSol(adminPrivKey, amountUsdc, playerAddress) {
   const keypair    = solWeb3.Keypair.fromSeed(new Uint8Array(adminPrivKey));
   const usdcUnits  = Math.floor(amountUsdc * 1_000_000);   // USDC 6 decimals
 
-  // Step 1 — get quote USDC → SOL
-  const quoteUrl = `${JUPITER_API}/quote?inputMint=${USDC_MINT.toBase58()}&outputMint=${SOL_MINT}&amount=${usdcUnits}&slippageBps=50`;
+  // Step 1 — get quote USDC → SOL (150 bps slippage to avoid SlippageToleranceExceeded)
+  const quoteUrl = `${JUPITER_API}/quote?inputMint=${USDC_MINT.toBase58()}&outputMint=${SOL_MINT}&amount=${usdcUnits}&slippageBps=150`;
   const quoteRes = await fetch(quoteUrl);
   if (!quoteRes.ok) throw new Error(`Jupiter quote HTTP ${quoteRes.status}`);
   const quote = await quoteRes.json();
@@ -101,15 +101,15 @@ async function swapUsdcToSol(adminPrivKey, amountUsdc, playerAddress) {
   const solReceived = parseFloat(quote.outAmount) / solWeb3.LAMPORTS_PER_SOL;
   console.log(`[jupiter] USDC→SOL quote: ${amountUsdc} USDC → ${solReceived} SOL for ${playerAddress}`);
 
-  // Step 2 — get swap transaction, output SOL goes to player's wallet directly
+  // Step 2 — get swap transaction
+  // Jupiter sends SOL to admin wallet (userPublicKey) with wrapAndUnwrapSol
+  // We then forward it to the player in a second tx
   const swapRes = await fetch(`${JUPITER_API}/swap`, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body:    JSON.stringify({
       quoteResponse:    quote,
       userPublicKey:    keypair.publicKey.toBase58(),
-      // No destinationTokenAccount — SOL unwraps to player's native wallet
-      destinationWallet: playerAddress,
       wrapAndUnwrapSol: true,
     }),
   });
@@ -117,19 +117,37 @@ async function swapUsdcToSol(adminPrivKey, amountUsdc, playerAddress) {
   const swapData = await swapRes.json();
   if (swapData.error) throw new Error(`Jupiter swap error: ${swapData.error}`);
 
-  // Step 3 — sign and send
+  // Step 3 — sign and send swap tx
   const txBuf = Buffer.from(swapData.swapTransaction, 'base64');
   const tx    = solWeb3.VersionedTransaction.deserialize(txBuf);
   tx.sign([keypair]);
 
-  const txHash = await connection.sendRawTransaction(tx.serialize(), {
+  const swapTxHash = await connection.sendRawTransaction(tx.serialize(), {
     skipPreflight:       false,
     preflightCommitment: 'confirmed',
   });
-  await connection.confirmTransaction(txHash, 'confirmed');
+  await connection.confirmTransaction(swapTxHash, 'confirmed');
+  console.log(`[jupiter] swapped ${amountUsdc} USDC → ${solReceived} SOL in admin wallet, tx=${swapTxHash}`);
 
-  console.log(`[jupiter] swapped ${amountUsdc} USDC → ${solReceived} SOL → ${playerAddress}, tx=${txHash}`);
-  return { txHash, solReceived };
+  // Step 4 — send SOL from admin wallet to player
+  // Keep a tiny reserve for tx fee, send the rest
+  const FEE_RESERVE_LAMPORTS = 5_000;   // 0.000005 SOL for tx fee
+  const sendLamports = Math.floor(solReceived * solWeb3.LAMPORTS_PER_SOL) - FEE_RESERVE_LAMPORTS;
+  if (sendLamports <= 0) throw new Error('SOL amount too small after fee reserve');
+
+  const playerPubkey = new solWeb3.PublicKey(playerAddress);
+  const sendTx = new solWeb3.Transaction().add(
+    solWeb3.SystemProgram.transfer({
+      fromPubkey: keypair.publicKey,
+      toPubkey:   playerPubkey,
+      lamports:   sendLamports,
+    })
+  );
+  const sendTxHash = await solWeb3.sendAndConfirmTransaction(connection, sendTx, [keypair]);
+  const solSent = sendLamports / solWeb3.LAMPORTS_PER_SOL;
+
+  console.log(`[jupiter] sent ${solSent} SOL → ${playerAddress}, tx=${sendTxHash}`);
+  return { txHash: sendTxHash, solReceived: solSent };
 }
 
 module.exports = { swapSolToUsdc, swapUsdcToSol };
