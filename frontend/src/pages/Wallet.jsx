@@ -55,7 +55,7 @@ function CoinGrid({ coins, selected, onSelect, showMin = false }) {
           <div className="text-xs font-black mt-0.5">{c.label}</div>
           <div className="text-[10px] opacity-60 leading-tight">{c.network}</div>
           {showMin && c.minUsd && (
-            <div className="text-[9px] opacity-50 leading-tight">min ${c.minUsd}</div>
+            <div className="text-[9px] leading-tight text-success font-semibold">min ${c.minUsd}</div>
           )}
         </button>
       ))}
