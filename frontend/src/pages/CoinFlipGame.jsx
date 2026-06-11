@@ -476,7 +476,6 @@ export default function CoinFlipGame() {
           <div className="text-center animate-fade-in">
             <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-6" />
             <h2 className="text-2xl font-bold text-white mb-2">Searching...</h2>
-            <p className="text-muted mb-6">{statusMsg}</p>
             <GlowButton variant="ghost" onClick={leaveQueue}>Cancel</GlowButton>
           </div>
         )}
