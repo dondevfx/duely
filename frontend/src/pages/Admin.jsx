@@ -43,8 +43,8 @@ export default function Admin() {
   const [userSearch, setUserSearch] = useState('');
   const [tab, setTab]               = useState('overview');
   const [loading, setLoading]       = useState(true);
-  const [walletBals, setWalletBals] = useState([]);
-  const [balsLoading, setBalsLoading] = useState(false);
+  const [coinSupply, setCoinSupply]   = useState(null);
+  const [supplyLoading, setSupplyLoading] = useState(false);
 
   const [collectingFees, setCollectingFees]   = useState(false);
   const [collectMsg, setCollectMsg]           = useState('');
@@ -83,15 +83,15 @@ export default function Admin() {
     }
   }
 
-  async function loadWalletBalances() {
-    setBalsLoading(true);
+  async function loadCoinSupply() {
+    setSupplyLoading(true);
     try {
-      const data = await api.get('/admin/wallet-balances');
-      setWalletBals(data);
+      const data = await api.get('/admin/coin-supply');
+      setCoinSupply(data.total);
     } catch (e) {
-      console.error('Wallet balances error:', e.message);
+      console.error('Coin supply error:', e.message);
     } finally {
-      setBalsLoading(false);
+      setSupplyLoading(false);
     }
   }
 
@@ -222,42 +222,22 @@ export default function Admin() {
               <StatCard label="Total Wagered"     value={`${fmt(stats?.total_wagered)} 🪙`}            color="text-white" />
             </div>
 
-            {/* ── Wallet Balances ─────────────────────────────────────── */}
-            <div className="bg-surface border border-border rounded-2xl p-5 mb-8">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-white font-bold text-lg">On-Chain Wallet Balances</h2>
-                  <p className="text-xs text-muted mt-0.5">Compare platform wallets to your records</p>
-                </div>
-                <button
-                  onClick={loadWalletBalances}
-                  disabled={balsLoading}
-                  className="px-4 py-2 text-sm font-bold rounded-xl border border-primary text-primary hover:bg-primary hover:text-white transition-all disabled:opacity-50"
-                >
-                  {balsLoading ? 'Loading...' : 'Load Balances'}
-                </button>
+            {/* ── Coin Supply ──────────────────────────────────────────── */}
+            <div className="bg-surface border border-border rounded-2xl p-5 mb-8 flex items-center justify-between">
+              <div>
+                <h2 className="text-white font-bold text-lg">Total Coins in Circulation</h2>
+                <p className="text-xs text-muted mt-0.5">Sum of all player balances — should match your USDC float</p>
+                {coinSupply !== null && (
+                  <div className="text-3xl font-black text-success mt-2">${fmt(coinSupply)} <span className="text-base text-muted">coins</span></div>
+                )}
               </div>
-
-              {walletBals.length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {walletBals.map(w => (
-                    <div key={w.coin} className="bg-bg border border-surfaceLight rounded-xl p-4">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-white font-bold text-sm">{w.label}</span>
-                        {w.error && <span className="text-xs text-warning">{w.error}</span>}
-                      </div>
-                      <div className="text-2xl font-black text-success">
-                        {w.balance.toFixed(w.unit === 'USDC' || w.unit === 'TRX' ? 2 : 6)} <span className="text-sm text-muted">{w.unit}</span>
-                      </div>
-                      <div className="text-[10px] font-mono text-muted mt-1 break-all">{w.address}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {walletBals.length === 0 && !balsLoading && (
-                <p className="text-xs text-muted text-center py-4">Click "Load Balances" to fetch on-chain wallet balances</p>
-              )}
+              <button
+                onClick={loadCoinSupply}
+                disabled={supplyLoading}
+                className="px-4 py-2 text-sm font-bold rounded-xl border border-primary text-primary hover:bg-primary hover:text-white transition-all disabled:opacity-50"
+              >
+                {supplyLoading ? 'Loading...' : 'Check'}
+              </button>
             </div>
 
             {/* Admin Tools */}

@@ -218,89 +218,18 @@ module.exports = function adminRoutes(supabase) {
     res.json({ success: true });
   });
 
-  // ── Wallet balances (on-chain) ────────────────────────────────────────
-  router.get('/wallet-balances', requireAuth, requireAdmin, async (req, res) => {
-    const fetch   = require('node-fetch');
-    const solWeb3 = require('@solana/web3.js');
-    const splToken = require('@solana/spl-token');
-    const { getAddress } = require('../services/addressService');
-
-    const ADMIN_ID  = process.env.ADMIN_USER_ID;
-    const RPC       = process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
-    const ETHERSCAN = process.env.ETHERSCAN_API_KEY || '';
-    const PHANTOM   = process.env.USDC_SPL_ADDRESS;
-    const USDC_MINT = new solWeb3.PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
-
-    const results = [];
-
+  // ── Total coins in circulation ────────────────────────────────────────
+  router.get('/coin-supply', requireAuth, requireAdmin, async (req, res) => {
     try {
-      // SOL balance of admin derived wallet
-      const { address: solAddr } = getAddress(ADMIN_ID, 'sol');
-      const connection = new solWeb3.Connection(RPC, 'confirmed');
-      const solLamports = await connection.getBalance(new solWeb3.PublicKey(solAddr));
-      results.push({ coin: 'SOL', label: 'SOL (deposit wallet)', address: solAddr, balance: solLamports / 1e9, unit: 'SOL' });
-
-      // USDC balance of admin Phantom wallet
-      if (PHANTOM) {
-        try {
-          const phantomPubkey = new solWeb3.PublicKey(PHANTOM);
-          const usdcAta = splToken.getAssociatedTokenAddressSync(USDC_MINT, phantomPubkey);
-          const usdcInfo = await connection.getTokenAccountBalance(usdcAta);
-          results.push({ coin: 'USDC', label: 'USDC (Phantom wallet)', address: PHANTOM, balance: parseFloat(usdcInfo.value.uiAmount || 0), unit: 'USDC' });
-        } catch { results.push({ coin: 'USDC', label: 'USDC (Phantom wallet)', address: PHANTOM, balance: 0, unit: 'USDC', error: 'no token account' }); }
+      const { data, error } = await supabase
+        .rpc('sum_c_coins');
+      if (error) {
+        // fallback if RPC doesn't exist
+        const { data: rows } = await supabase.from('profiles').select('c_coins');
+        const total = (rows || []).reduce((sum, r) => sum + (parseFloat(r.c_coins) || 0), 0);
+        return res.json({ total: Math.round(total * 100) / 100 });
       }
-
-      // ETH balance
-      try {
-        const { address: ethAddr } = getAddress(ADMIN_ID, 'eth');
-        const ethRes = await fetch(`https://api.etherscan.io/api?module=account&action=balance&address=${ethAddr}&apikey=${ETHERSCAN}`);
-        const ethData = await ethRes.json();
-        results.push({ coin: 'ETH', label: 'ETH (deposit wallet)', address: ethAddr, balance: parseFloat(ethData.result || 0) / 1e18, unit: 'ETH' });
-      } catch {}
-
-      // BNB balance
-      try {
-        const { address: bnbAddr } = getAddress(ADMIN_ID, 'bnb');
-        const bnbRes = await fetch(`https://api.bscscan.com/api?module=account&action=balance&address=${bnbAddr}&apikey=${ETHERSCAN}`);
-        const bnbData = await bnbRes.json();
-        results.push({ coin: 'BNB', label: 'BNB (deposit wallet)', address: bnbAddr, balance: parseFloat(bnbData.result || 0) / 1e18, unit: 'BNB' });
-      } catch {}
-
-      // BTC balance
-      try {
-        const { address: btcAddr } = getAddress(ADMIN_ID, 'btc');
-        const btcRes = await fetch(`https://blockstream.info/api/address/${btcAddr}`);
-        const btcData = await btcRes.json();
-        const btcSats = (btcData.chain_stats?.funded_txo_sum || 0) - (btcData.chain_stats?.spent_txo_sum || 0);
-        results.push({ coin: 'BTC', label: 'BTC (deposit wallet)', address: btcAddr, balance: btcSats / 1e8, unit: 'BTC' });
-      } catch {}
-
-      // LTC balance
-      try {
-        const { address: ltcAddr } = getAddress(ADMIN_ID, 'ltc');
-        const ltcRes = await fetch(`https://api.blockcypher.com/v1/ltc/main/addrs/${ltcAddr}/balance`);
-        const ltcData = await ltcRes.json();
-        results.push({ coin: 'LTC', label: 'LTC (deposit wallet)', address: ltcAddr, balance: (ltcData.balance || 0) / 1e8, unit: 'LTC' });
-      } catch {}
-
-      // DOGE balance
-      try {
-        const { address: dogeAddr } = getAddress(ADMIN_ID, 'doge');
-        const dogeRes = await fetch(`https://api.blockcypher.com/v1/doge/main/addrs/${dogeAddr}/balance`);
-        const dogeData = await dogeRes.json();
-        results.push({ coin: 'DOGE', label: 'DOGE (deposit wallet)', address: dogeAddr, balance: (dogeData.balance || 0) / 1e8, unit: 'DOGE' });
-      } catch {}
-
-      // TRX balance
-      try {
-        const { address: trxAddr } = getAddress(ADMIN_ID, 'trx');
-        const trxRes = await fetch(`https://api.trongrid.io/v1/accounts/${trxAddr}`);
-        const trxData = await trxRes.json();
-        const trxBal = trxData.data?.[0]?.balance || 0;
-        results.push({ coin: 'TRX', label: 'TRX (deposit wallet)', address: trxAddr, balance: trxBal / 1e6, unit: 'TRX' });
-      } catch {}
-
-      res.json(results);
+      res.json({ total: Math.round((data || 0) * 100) / 100 });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
