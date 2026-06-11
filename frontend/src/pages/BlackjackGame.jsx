@@ -778,8 +778,7 @@ export default function BlackjackGame() {
       <div className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-4">
         <div className="text-center animate-fade-in">
           <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-6" />
-          <h2 className="text-2xl font-bold text-white mb-2">Finding opponent…</h2>
-          <p className="text-muted mb-6">{statusMsg}</p>
+          <h2 className="text-2xl font-bold text-white mb-6">Searching...</h2>
           <GlowButton variant="ghost" onClick={leaveQueue}>Cancel</GlowButton>
         </div>
       </div>
