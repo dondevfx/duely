@@ -10,7 +10,7 @@ import CoinIcon from '../components/CoinIcon';
 const GAMES = [
   {
     title: 'Quick Match',
-    description: 'Pick your bet and get matched instantly — jump straight into Block Burst. Fast, competitive, no bots.',
+    description: 'Pick your bet and get matched instantly. Fast, competitive, no bots.',
     icon: '⚡',
     route: '/game/quick-match',
     available: true,
