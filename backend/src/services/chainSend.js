@@ -107,24 +107,12 @@ async function sendUsdcSpl(privKey, toAddress, amount) {
     || 'GGakQrHowCPNcd9VJJqTfwjYEtJfDm6bjwC2GvmSwAxV';
   const fromAta = new solWeb3.PublicKey(adminAtaAddr);
 
-  // Recipient: derive their USDC ATA address (sync, no network call, no SOL needed)
-  // If toAddress is already a token account (not a wallet), this is still safe —
-  // we'll detect that below and use toAddress directly.
+  // Recipient ATA — create if it doesn't exist (costs ~0.002 SOL from admin wallet)
   const toPubkey = new solWeb3.PublicKey(toAddress);
-  let toAta = splToken.getAssociatedTokenAddressSync(usdcMint, toPubkey, true);
-
-  // Verify the derived ATA exists; if not, toAddress itself might be the token account
-  const ataInfo = await connection.getAccountInfo(toAta);
-  if (!ataInfo) {
-    // Try treating toAddress itself as the token account
-    const directInfo = await connection.getAccountInfo(toPubkey);
-    if (directInfo && directInfo.owner.toBase58() === splToken.TOKEN_PROGRAM_ID.toBase58()) {
-      toAta = toPubkey;
-      console.log(`[chainSend] toAddress is a token account directly, sending to ${toAddress}`);
-    } else {
-      throw new Error(`Recipient USDC token account not found for ${toAddress}. They may need to activate their USDC wallet first.`);
-    }
-  }
+  const toAtaAccount = await splToken.getOrCreateAssociatedTokenAccount(
+    connection, keypair, usdcMint, toPubkey
+  );
+  const toAta = toAtaAccount.address;
 
   console.log(`[chainSend] USDC transfer: ${fromAta.toBase58()} → ${toAta.toBase58()} (${units} units)`);
   const txHash = await splToken.transfer(connection, keypair, fromAta, toAta, keypair, units);
