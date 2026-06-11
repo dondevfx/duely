@@ -244,6 +244,7 @@ export default function ScrabbleGame() {
 
   const roomIdRef    = useRef(null);
   const profileRef   = useRef(profile);
+  const phaseRef     = useRef(location.state?.autoQueue ? 'queue' : 'lobby');
   const eloBeforeRef = useRef(null);
   const timerRef     = useRef(null);
   // Keep a snapshot of the hand BEFORE placing tiles (so we can restore on error)
@@ -252,6 +253,7 @@ export default function ScrabbleGame() {
   const inActiveMatchRef = useRef(false);
 
   useEffect(() => { profileRef.current = profile; }, [profile]);
+  useEffect(() => { phaseRef.current   = phase;   }, [phase]);
   useEffect(() => { roomIdRef.current  = roomId;  }, [roomId]);
   useEffect(() => { socketRef.current  = socket;  }, [socket]);
 
@@ -366,6 +368,7 @@ export default function ScrabbleGame() {
     socket.on('scrabble_countdown', ({ count }) => setCountdown(count));
 
     socket.on('scrabble_start', ({ board: b, scores: sc, bagCount: bc, firstTurnSocketId }) => {
+      if (phaseRef.current === 'result') return; // opponent already left — don't overwrite result screen
       inActiveMatchRef.current = true;
       setBoard(b.map(r => r.map(c => c)));
       setScores(sc); setBagCount(bc);

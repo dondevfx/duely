@@ -288,6 +288,7 @@ export default function BlockBlastGame() {
     socket.on('block_blast_countdown', ({ count }) => setCountdown(count));
 
     socket.on('block_blast_start', ({ seed }) => {
+      if (phaseRef.current === 'result') return; // opponent already left — don't overwrite result screen
       setPhase('active');
       initGame(seed);
     });
