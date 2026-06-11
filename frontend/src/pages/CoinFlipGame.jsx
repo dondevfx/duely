@@ -527,8 +527,8 @@ export default function CoinFlipGame() {
               )}
               {(() => { const n = betCounts?.[`coin-flip:${entryFee}:${betCurrency}`] || 0; return n > 0 ? (
                 <div className="flex items-center gap-1.5 mt-1">
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#60a5fa', boxShadow: '0 0 6px #60a5fa' }} />
-                  <span style={{ color: '#60a5fa', fontSize: 12, fontWeight: 600 }}>{n} at this bet</span>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 6px #4ade80' }} />
+                  <span style={{ color: '#4ade80', fontSize: 12, fontWeight: 600 }}>{n} at this bet</span>
                 </div>
               ) : null; })()}
               {insufficient && <p className="text-danger text-sm mt-2 text-center font-semibold">Insufficient balance.</p>}

@@ -118,7 +118,7 @@ const {
 const { checkSocketClickRate, cleanupSocket } = require('../middleware/rateLimit');
 const { createBotPlayer } = require('../services/botService');
 const {
-  settleMatch, settleMatchDiamonds,
+  settleMatch, settleMatchDiamonds, forfeitSettleDiamonds, forfeitSettleCoins,
   deductCoins, deductDiamonds,
   settleBotMatch,
 } = require('../services/walletService');
@@ -2336,11 +2336,14 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
       if (stayerSocket) {
         // Stayer is still connected → they win the forfeit
-        const fallbackPayout = parseFloat(((fee * 2) * 0.95).toFixed(4));
+        // Fallback only used for coins (settle_match_coins may return null data)
+        const fallbackPayout = currency === 'diamonds'
+          ? fee  // diamonds: winner gets loser's full stake
+          : parseFloat(((fee * 2) * 0.95).toFixed(4)); // coins: 95% of prize pool
         try {
           const result = currency === 'diamonds'
-            ? await settleMatchDiamonds(supabase, stayer.userId, leaver.userId, fee)
-            : await settleMatch(supabase, stayer.userId, leaver.userId, fee);
+            ? await forfeitSettleDiamonds(supabase, stayer.userId, leaver.userId, fee)
+            : await forfeitSettleCoins(supabase, stayer.userId, leaver.userId, fee);
 
           const prizePool = fee * 2;
           const platformFee = parseFloat((prizePool * 0.05).toFixed(4));
@@ -2365,7 +2368,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
             currency,
           });
         } catch (e) {
-          console.error('forfeit settle error:', e.message);
+          console.error('[forfeit] settle error — currency:', currency, 'fee:', fee, 'winner:', stayer.userId, 'loser:', leaver.userId, '| error:', e?.message, e?.code, e?.details, e?.hint);
           // Still tell stayer they won even if payout failed
           stayerSocket.emit('opponent_disconnected', {
             winnerId:      stayer.userId,
