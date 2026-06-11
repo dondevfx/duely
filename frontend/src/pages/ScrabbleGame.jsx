@@ -645,7 +645,7 @@ export default function ScrabbleGame() {
 
   return (
     <div
-      className={`min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center px-2 py-4 ${phase === 'game' ? 'justify-start overflow-y-auto' : 'justify-center'}`}
+      className={`min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center px-2 py-4 ${phase === 'game' ? 'justify-center overflow-y-auto' : 'justify-center'}`}
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}
     >
       {blankPick && <BlankPicker onPick={onBlankPick} onCancel={() => setBlankPick(null)} />}
@@ -733,7 +733,7 @@ export default function ScrabbleGame() {
 
       {/* GAME */}
       {phase === 'game' && (
-        <div className="w-full animate-fade-in px-1 flex flex-col items-center" style={{ maxWidth: 520, alignSelf: 'flex-start', paddingTop: 8 }}>
+        <div className="w-full animate-fade-in px-1 flex flex-col items-center mx-auto" style={{ maxWidth: 580, paddingTop: 8 }}>
 
           {/* Turn timer bar */}
           {myTurn && turnSeconds > 0 && (
