@@ -451,11 +451,16 @@ export default function BlackjackGame() {
   function playVsBot(free = false) {
     if (!session) { navigate('/login'); return; }
     if (!authenticated) return;
+    if (phaseRef.current !== 'lobby') return; // prevent double-click / multiple games
     eloBeforeRef.current = profile?.elo ?? 1000;
     const fee = free ? 0 : entryFee;
     const cur = free ? 'coins' : betCurrency;
     lastModeRef.current = free ? 'bot_free' : 'bot_paid';
     lastSettingsRef.current = { entryFee: fee, currency: cur };
+    pendingStartRef.current = null;
+    setOpponentUsername('Duely Bot');
+    setCountdown(3); // countdown will apply buffered bj_start data when it hits 0
+    setPhase('queue');
     socket.emit('play_bj_vs_bot', { entryFee: fee, currency: cur });
   }
 
@@ -510,8 +515,11 @@ export default function BlackjackGame() {
       setPhase('queue');
       setStatusMsg('Waiting for opponent…');
     } else if (mode === 'bot_free' || mode === 'bot_paid') {
+      pendingStartRef.current = null;
+      setOpponentUsername('Duely Bot');
+      setCountdown(3);
+      setPhase('queue');
       socket.emit('play_bj_vs_bot', { entryFee: s.entryFee, currency: s.currency });
-      setPhase('lobby'); // bj_start event will move to playing
     } else {
       setPhase('lobby');
     }
@@ -815,8 +823,8 @@ export default function BlackjackGame() {
 
   // ── Queue / Countdown ──
   if (phase === 'queue') {
-    // Once matched, show countdown; before match show searching spinner
-    if (roomId && countdown > 0) {
+    // Show countdown when active (PvP after match_found, or bot immediately)
+    if (countdown > 0) {
       return (
         <div className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-4">
           <div className="text-center animate-fade-in">
