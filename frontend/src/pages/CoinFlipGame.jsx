@@ -473,11 +473,11 @@ export default function CoinFlipGame() {
 
         {/* Queue phase */}
         {phase === 'queue' && (
-          <div className="mb-6 bg-surface border border-border rounded-2xl p-5 text-center">
-            <div className="text-4xl mb-3 animate-bounce">⏳</div>
-            <p className="text-white font-bold mb-2">{statusMsg}</p>
-            <p className="text-muted text-sm mb-4">You picked: <span className="font-bold text-white capitalize">{side}</span></p>
-            <button onClick={leaveQueue} className="text-sm text-danger hover:text-red-400 transition-colors">Cancel</button>
+          <div className="text-center animate-fade-in">
+            <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-6" />
+            <h2 className="text-2xl font-bold text-white mb-2">Searching...</h2>
+            <p className="text-muted mb-6">{statusMsg}</p>
+            <GlowButton variant="ghost" onClick={leaveQueue}>Cancel</GlowButton>
           </div>
         )}
 
