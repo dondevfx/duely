@@ -4,6 +4,7 @@ import DailyBonus from '../components/DailyBonus';
 import SpinWheel from '../components/SpinWheel';
 import MatchTicker from '../components/MatchTicker';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import CoinIcon from '../components/CoinIcon';
 
 const GAMES = [
@@ -13,7 +14,7 @@ const GAMES = [
     icon: '⚡',
     route: '/game/quick-match',
     available: true,
-    tag: 'Live',
+    countKey: 'block-blast',
   },
   {
     title: 'Block Burst',
@@ -21,7 +22,7 @@ const GAMES = [
     icon: '🟦',
     route: '/game/block-blast',
     available: true,
-    tag: 'Live',
+    countKey: 'block-blast',
   },
   {
     title: 'Coin Flip',
@@ -29,7 +30,7 @@ const GAMES = [
     icon: '🟡',
     route: '/game/coin-flip',
     available: true,
-    tag: 'Live',
+    countKey: 'coin-flip',
   },
   {
     title: 'Word VS',
@@ -37,7 +38,7 @@ const GAMES = [
     icon: '🔤',
     route: '/game/scrabble',
     available: true,
-    tag: 'Live',
+    countKey: 'scrabble',
   },
   {
     title: 'Blackjack',
@@ -45,12 +46,13 @@ const GAMES = [
     icon: '🃏',
     route: '/game/blackjack',
     available: true,
-    tag: 'Live',
+    countKey: 'blackjack',
   },
 ];
 
 export default function Home() {
   const { profile } = useAuth();
+  const { playerCounts } = useSocket();
 
   return (
     <div className="min-h-screen bg-bg pt-16">
@@ -150,7 +152,7 @@ export default function Home() {
             <h2 className="text-2xl font-bold text-white mb-6">Choose a Game</h2>
             <div className="grid sm:grid-cols-2 gap-5">
               {GAMES.map(game => (
-                <GameCard key={game.title} {...game} />
+                <GameCard key={game.title} {...game} liveCount={playerCounts?.[game.countKey] ?? 0} />
               ))}
             </div>
           </div>
