@@ -219,7 +219,7 @@ export default function BlackjackGame() {
   // Countdown tick — when it hits 0, apply any buffered bj_start and go to 'playing'
   useEffect(() => {
     if (countdown <= 0) {
-      if (pendingStartRef.current) {
+      if (pendingStartRef.current && phaseRef.current !== 'result') {
         const d = pendingStartRef.current;
         pendingStartRef.current = null;
         prevHandLenRef.current = 0;
@@ -366,6 +366,7 @@ export default function BlackjackGame() {
 
     socket.on('opponent_disconnected', (data = {}) => {
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      pendingStartRef.current = null; // cancel any buffered start so countdown doesn't overwrite result
       const myId = profile?.id;
       const isWin = data.winnerId === myId;
       const payout = data.winnerPayout ?? null;
