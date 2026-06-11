@@ -187,6 +187,7 @@ module.exports = function walletRoutes(supabase) {
         });
         payoutId = sendTx;
       } catch (payoutErr) {
+        console.error(`[withdraw] payout failed user=${req.user.id} amount=${amount}:`, payoutErr);
         // Payout failed — refund the deducted balance immediately
         await creditCoins(supabase, req.user.id, amount).catch(e =>
           console.error(`CRITICAL: refund failed user=${req.user.id} amount=${amount}:`, e.message)
