@@ -996,7 +996,7 @@ export default function BlockBlastGame() {
               gameLabel="🟦 Block Burst"
               extraRows={[{
                 label: 'Score',
-                value: `${(isWinner ? result.winnerScore : result.loserScore ?? 0).toLocaleString()} — ${(isWinner ? result.loserScore : result.winnerScore ?? 0).toLocaleString()}`,
+                value: `${(isWinner ? (result.winnerScore ?? 0) : (result.loserScore ?? 0)).toLocaleString()} — ${(isWinner ? (result.loserScore ?? 0) : (result.winnerScore ?? 0)).toLocaleString()}`,
               }]}
               onRematch={requestRematch}
               onPlayAgain={backToLobby}
