@@ -143,6 +143,17 @@ export default function CoinFlipGame() {
   const eloBeforeRef    = useRef(profile?.elo ?? 1000);
   const lastModeRef     = useRef(null); // 'pvp' | 'bot_free' | 'bot_paid'
   const lastSettingsRef = useRef({ entryFee: 0, currency: 'coins', side: 'heads' });
+  const socketRef        = useRef(socket);
+  const inActiveMatchRef = useRef(false);
+  useEffect(() => { socketRef.current = socket; }, [socket]);
+  // Forfeit on unmount only
+  useEffect(() => {
+    return () => {
+      if (inActiveMatchRef.current && socketRef.current) {
+        socketRef.current.emit('player_forfeit');
+      }
+    };
+  }, []);
 
   const [phase, setPhase] = useState('lobby');
   const [side, setSide] = useState('heads');
@@ -260,6 +271,7 @@ export default function CoinFlipGame() {
     });
 
     socket.on('coin_flip_match_found', ({ opponent }) => {
+      inActiveMatchRef.current = true;
       setFlipResult(null);
       setResultLanded(false);
       rotRef.current = 0;
@@ -268,6 +280,7 @@ export default function CoinFlipGame() {
     });
 
     socket.on('coin_flip_result', (data) => {
+      inActiveMatchRef.current = false;
       pendingResultRef.current = data;
       setFlipResult(data.result);
       landCoin(data.result);
@@ -282,6 +295,7 @@ export default function CoinFlipGame() {
     });
 
     socket.on('opponent_disconnected', (data = {}) => {
+      inActiveMatchRef.current = false;
       const payout = data.winnerPayout ?? null;
       setResultData({
         winnerId: data.winnerId,
@@ -301,7 +315,6 @@ export default function CoinFlipGame() {
     socket.on('error', ({ message }) => { setStatusMsg(message); setPhase('lobby'); });
 
     return () => {
-      socket.emit('player_forfeit');
       socket.emit('leave_game');
       socket.emit('leave_all_queues');
       socket.off('coin_flip_queue_joined');

@@ -2152,9 +2152,10 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         const found = getFn(socket.id);
         if (!found) continue;
         const { room } = found;
-        if (room.state === 'finished' || room.state === 'waiting') {
-          delFn(found.roomId); continue;
-        }
+        // 'waiting' = game not started yet (e.g. scrabble pre-start) — skip entirely, don't delete
+        if (room.state === 'waiting') continue;
+        // 'finished' = already settled — just clean up
+        if (room.state === 'finished') { delFn(found.roomId); continue; }
         await _handleForfeit(io, supabase, found, socket.id, delFn, gameType);
         break;
       }

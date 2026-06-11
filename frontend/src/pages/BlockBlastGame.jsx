@@ -206,9 +206,19 @@ export default function BlockBlastGame() {
   const blastTimerRef = useRef(null);
   const keepPlayingTimerRef = useRef(null);
 
+  const socketRef        = useRef(socket);
   useEffect(() => { profileRef.current = profile; }, [profile]);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
+  useEffect(() => { socketRef.current = socket; }, [socket]);
+  // Forfeit on unmount only — fires even if socket dep hasn't changed
+  useEffect(() => {
+    return () => {
+      if (['active', 'countdown'].includes(phaseRef.current) && socketRef.current) {
+        socketRef.current.emit('player_forfeit');
+      }
+    };
+  }, []);
 
   // Lock page scroll on mobile while game is active (prevents scroll while dragging pieces)
   useEffect(() => {
@@ -326,7 +336,6 @@ export default function BlockBlastGame() {
     });
 
     return () => {
-      socket.emit('player_forfeit');
       socket.emit('leave_game');
       socket.emit('leave_all_queues');
       socket.off('block_blast_match_found');

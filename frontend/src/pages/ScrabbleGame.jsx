@@ -248,9 +248,21 @@ export default function ScrabbleGame() {
   const timerRef     = useRef(null);
   // Keep a snapshot of the hand BEFORE placing tiles (so we can restore on error)
   const handBeforeRef = useRef([]);
+  const socketRef     = useRef(socket);
+  const inActiveMatchRef = useRef(false);
 
   useEffect(() => { profileRef.current = profile; }, [profile]);
   useEffect(() => { roomIdRef.current  = roomId;  }, [roomId]);
+  useEffect(() => { socketRef.current  = socket;  }, [socket]);
+
+  // Forfeit on unmount only (not on dep changes)
+  useEffect(() => {
+    return () => {
+      if (inActiveMatchRef.current && socketRef.current) {
+        socketRef.current.emit('player_forfeit');
+      }
+    };
+  }, []);
 
   // Lock scroll during active game on mobile
   useEffect(() => {
@@ -343,6 +355,7 @@ export default function ScrabbleGame() {
     socket.on('scrabble_countdown', ({ count }) => setCountdown(count));
 
     socket.on('scrabble_start', ({ board: b, scores: sc, bagCount: bc, firstTurnSocketId }) => {
+      inActiveMatchRef.current = true;
       setBoard(b.map(r => r.map(c => c)));
       setScores(sc); setBagCount(bc);
       setMyTurn(firstTurnSocketId === socket.id);
@@ -407,6 +420,7 @@ export default function ScrabbleGame() {
     });
 
     socket.on('scrabble_result', (res) => {
+      inActiveMatchRef.current = false;
       setResult(res); setPhase('result'); refreshProfile();
     });
 
@@ -419,6 +433,7 @@ export default function ScrabbleGame() {
     });
 
     socket.on('opponent_disconnected', (data = {}) => {
+      inActiveMatchRef.current = false;
       const myId = profileRef.current?.id;
       setResult({
         winnerId: data.winnerId || myId,
@@ -433,7 +448,6 @@ export default function ScrabbleGame() {
     });
 
     return () => {
-      socket.emit('player_forfeit');
       socket.emit('leave_game');
       socket.emit('leave_all_queues');
       socket.off('scrabble_match_found');

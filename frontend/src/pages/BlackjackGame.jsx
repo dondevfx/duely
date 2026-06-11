@@ -162,10 +162,22 @@ export default function BlackjackGame() {
   const eloBeforeRef    = useRef(profile?.elo ?? 1000);
   const lastModeRef     = useRef(null); // 'pvp' | 'bot_free' | 'bot_paid'
   const lastSettingsRef = useRef({ entryFee: 0, currency: 'coins' });
+  const socketRef       = useRef(socket);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { socketRef.current = socket; }, [socket]);
 
   const [phase, _setPhase] = useState('lobby');
   const phaseRef = useRef('lobby');
   function setPhase(p) { phaseRef.current = p; _setPhase(p); }
+
+  // Forfeit on unmount only
+  useEffect(() => {
+    return () => {
+      if (['playing', 'reveal'].includes(phaseRef.current) && socketRef.current) {
+        socketRef.current.emit('player_forfeit');
+      }
+    };
+  }, []);
   const [privateCode, setPrivateCode] = useState('');
   const [privateMode, setPrivateMode] = useState(null);
   const [joinCode, setJoinCode] = useState('');
@@ -359,7 +371,6 @@ export default function BlackjackGame() {
     });
 
     return () => {
-      socket.emit('player_forfeit');
       socket.emit('leave_game');
       socket.emit('leave_all_queues');
       socket.off('bj_queue_joined'); socket.off('bj_match_found');
