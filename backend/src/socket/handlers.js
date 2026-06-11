@@ -2336,73 +2336,73 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       const stayerSocket = io.sockets.sockets.get(stayer.socketId);
 
       if (stayerSocket) {
-        // Stayer is still connected → they win the forfeit
-        console.log(`[forfeit] settling — game:${gameType} currency:${currency} fee:${fee} winner:${stayer.userId} loser:${leaver.userId}`);
-        const fallbackPayout = currency === 'diamonds'
-          ? fee
-          : parseFloat((fee * 0.9).toFixed(4));
+        console.log(`[forfeit] settling game:${gameType} currency:${currency} fee:${fee} winner:${stayer.userId} loser:${leaver.userId}`);
 
-        // Pre-calculate ELO so catch block always has valid values
+        // Pre-calculate ELO (used even if settle fails)
         let newWinnerElo = (stayer.elo || 1000) + 25;
         let newLoserElo  = Math.max(0, (leaver.elo || 1000) - 25);
+        let winnerPayout = 0;
 
         try {
-          // Run ELO update and wallet settle in parallel
-          const [eloResult, settleResult] = await Promise.allSettled([
-            _updateElo(supabase, stayer.userId, leaver.userId, stayer.elo || 1000, leaver.elo || 1000),
-            currency === 'diamonds'
-              ? forfeitSettleDiamonds(supabase, stayer.userId, leaver.userId, fee)
-              : forfeitSettleCoins(supabase, stayer.userId, leaver.userId, fee),
-          ]);
-
-          if (eloResult.status === 'rejected') {
-            console.error('[forfeit] elo update failed:', eloResult.reason?.message);
-          } else {
-            newWinnerElo = eloResult.value?.newWinnerElo ?? newWinnerElo;
-            newLoserElo  = eloResult.value?.newLoserElo  ?? newLoserElo;
+          // ── ELO update ────────────────────────────────────────────────
+          try {
+            const eloData = await _updateElo(supabase, stayer.userId, leaver.userId, stayer.elo || 1000, leaver.elo || 1000);
+            newWinnerElo = eloData.newWinnerElo ?? newWinnerElo;
+            newLoserElo  = eloData.newLoserElo  ?? newLoserElo;
+          } catch (eloErr) {
+            console.error('[forfeit] elo update failed:', eloErr.message);
           }
-          if (settleResult.status === 'rejected') throw settleResult.reason;
 
-          const result = settleResult.value;
-          console.log(`[forfeit] settle OK — winnerPayout:${result?.winnerPayout} newWinnerElo:${newWinnerElo}`);
+          // ── Wallet settlement — direct DB reads/writes, no RPCs ───────
+          if (currency === 'diamonds') {
+            const fee_d = Math.floor(fee);
+            // Deduct from loser
+            const { data: lRow, error: lErr } = await supabase.from('profiles').select('diamonds').eq('id', leaver.userId).single();
+            if (lErr) throw new Error('fetch loser diamonds: ' + lErr.message);
+            const { error: ldErr } = await supabase.from('profiles').update({ diamonds: Math.max(0, (lRow?.diamonds || 0) - fee_d) }).eq('id', leaver.userId);
+            if (ldErr) throw new Error('deduct loser diamonds: ' + ldErr.message);
+            // Credit winner
+            const { data: wRow, error: wErr } = await supabase.from('profiles').select('diamonds').eq('id', stayer.userId).single();
+            if (wErr) throw new Error('fetch winner diamonds: ' + wErr.message);
+            const { error: wcErr } = await supabase.from('profiles').update({ diamonds: (wRow?.diamonds || 0) + fee_d }).eq('id', stayer.userId);
+            if (wcErr) throw new Error('credit winner diamonds: ' + wcErr.message);
+            winnerPayout = fee_d;
+          } else {
+            const fee_c = parseFloat(fee);
+            const gain  = parseFloat((fee_c * 0.9).toFixed(4));
+            // Deduct from loser
+            const { data: lRow, error: lErr } = await supabase.from('profiles').select('c_coins').eq('id', leaver.userId).single();
+            if (lErr) throw new Error('fetch loser coins: ' + lErr.message);
+            const { error: ldErr } = await supabase.from('profiles').update({ c_coins: Math.max(0, (lRow?.c_coins || 0) - fee_c) }).eq('id', leaver.userId);
+            if (ldErr) throw new Error('deduct loser coins: ' + ldErr.message);
+            // Credit winner
+            const { data: wRow, error: wErr } = await supabase.from('profiles').select('c_coins').eq('id', stayer.userId).single();
+            if (wErr) throw new Error('fetch winner coins: ' + wErr.message);
+            const { error: wcErr } = await supabase.from('profiles').update({ c_coins: parseFloat(((wRow?.c_coins || 0) + gain).toFixed(4)) }).eq('id', stayer.userId);
+            if (wcErr) throw new Error('credit winner coins: ' + wcErr.message);
+            winnerPayout = gain;
+          }
 
-          const prizePool = fee * 2;
-          const platformFee = parseFloat((prizePool * 0.05).toFixed(4));
-          supabase.from('matches').insert({
-            player1_id:          stayer.userId,
-            player2_id:          leaver.userId,
-            winner_id:           stayer.userId,
-            game_type:           gameType || null,
-            entry_fee_c:         currency === 'coins'    ? fee       : 0,
-            entry_fee_diamonds:  currency === 'diamonds' ? fee       : 0,
-            prize_pool_c:        currency === 'coins'    ? prizePool : 0,
-            prize_pool_diamonds: currency === 'diamonds' ? prizePool : 0,
-            platform_fee_c:      currency === 'coins'    ? platformFee : 0,
-          }).catch(() => {});
-
-          stayerSocket.emit('opponent_disconnected', {
-            winnerId:       stayer.userId,
-            loserId:        leaver.userId,
-            winnerUsername: stayer.username,
-            loserUsername:  leaver.username,
-            winnerPayout:   result?.winnerPayout ?? fallbackPayout,
-            newWinnerElo,
-            newLoserElo,
-            currency,
-          });
+          console.log(`[forfeit] settle OK — payout:${winnerPayout} newWinnerElo:${newWinnerElo}`);
+          unlockUser(stayer.userId);
+          unlockUser(leaver.userId);
         } catch (e) {
-          console.error('[forfeit] settle FAILED — currency:', currency, 'fee:', fee, 'winner:', stayer.userId, 'loser:', leaver.userId, '| error:', e?.message, '| code:', e?.code, '| details:', e?.details, '| hint:', e?.hint);
-          stayerSocket.emit('opponent_disconnected', {
-            winnerId:       stayer.userId,
-            loserId:        leaver.userId,
-            winnerUsername: stayer.username,
-            loserUsername:  leaver.username,
-            winnerPayout:   0,
-            newWinnerElo,
-            newLoserElo,
-            currency,
-          });
+          console.error('[forfeit] settle FAILED:', e.message);
+          unlockUser(stayer.userId);
+          unlockUser(leaver.userId);
         }
+
+        stayerSocket.emit('opponent_disconnected', {
+          winnerId:       stayer.userId,
+          loserId:        leaver.userId,
+          winnerUsername: stayer.username,
+          loserUsername:  leaver.username,
+          winnerPayout,
+          entryFee:       fee,
+          newWinnerElo,
+          newLoserElo,
+          currency,
+        });
       } else {
         // Both disconnected — refund both (unlock only, no coins moved)
         unlockUser(stayer.userId);
