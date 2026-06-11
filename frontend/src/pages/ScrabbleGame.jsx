@@ -207,7 +207,7 @@ export default function ScrabbleGame() {
 
   useEffect(() => { if (location.state?.betCurrency) setBetCurrency(location.state.betCurrency); }, []); // eslint-disable-line
 
-  const [phase, setPhase]         = useState(location.state?.autoQueue ? 'queue' : 'lobby');
+  const [phase, _setPhase]         = useState(location.state?.autoQueue ? 'queue' : 'lobby');
   const [privateCode, setPrivateCode] = useState('');
   const [entryFee, setEntryFee]   = useState(() => location.state?.entryFee ?? (betCurrency === 'diamonds' ? DIAMOND_FEES[0] : COIN_FEES[0]));
   const [opponent, setOpponent]   = useState(null);
@@ -245,6 +245,7 @@ export default function ScrabbleGame() {
   const roomIdRef    = useRef(null);
   const profileRef   = useRef(profile);
   const phaseRef     = useRef(location.state?.autoQueue ? 'queue' : 'lobby');
+  function setPhase(p) { phaseRef.current = p; _setPhase(p); }
   const eloBeforeRef = useRef(null);
   const timerRef     = useRef(null);
   // Keep a snapshot of the hand BEFORE placing tiles (so we can restore on error)
@@ -253,7 +254,6 @@ export default function ScrabbleGame() {
   const inActiveMatchRef = useRef(false);
 
   useEffect(() => { profileRef.current = profile; }, [profile]);
-  useEffect(() => { phaseRef.current   = phase;   }, [phase]);
   useEffect(() => { roomIdRef.current  = roomId;  }, [roomId]);
   useEffect(() => { socketRef.current  = socket;  }, [socket]);
 

@@ -148,7 +148,7 @@ export default function BlockBlastGame() {
   const { socket, authenticated, doAuth, playerCounts } = useSocket();
   const location = useLocation();
 
-  const [phase, setPhase]             = useState(location.state?.autoQueue ? 'queue' : 'lobby');
+  const [phase, _setPhase]             = useState(location.state?.autoQueue ? 'queue' : 'lobby');
   const { displayCurrency: betCurrency, setDisplayCurrency: setBetCurrency } = useCurrency();
   useEffect(() => { if (location.state?.betCurrency) setBetCurrency(location.state.betCurrency); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [entryFee, setEntryFee]       = useState(() => location.state?.entryFee ?? (betCurrency === 'diamonds' ? DIAMOND_FEES[0] : COIN_FEES[0]));
@@ -188,7 +188,8 @@ export default function BlockBlastGame() {
   const trayRef        = useRef([null, null, null]);
   const scoreRef       = useRef(0);
   const roomIdRef      = useRef(null);
-  const phaseRef       = useRef('lobby');
+  const phaseRef       = useRef(location.state?.autoQueue ? 'queue' : 'lobby');
+  function setPhase(p) { phaseRef.current = p; _setPhase(p); }
   const isSoloRef      = useRef(false);
   const stuckRef       = useRef(false);
   const profileRef     = useRef(profile);
@@ -208,7 +209,6 @@ export default function BlockBlastGame() {
 
   const socketRef        = useRef(socket);
   useEffect(() => { profileRef.current = profile; }, [profile]);
-  useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
   useEffect(() => { socketRef.current = socket; }, [socket]);
   // Forfeit on unmount only — fires whenever we hold a room (from match_found to result)
