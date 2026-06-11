@@ -91,11 +91,15 @@ function TileButton({ letter, selected, onClick, onDragStart, onDragEnd, draggin
   );
 }
 
-// Responsive cell size: max 70px but shrinks to fit the screen
-// Board = 6 cells + 5 gaps(4px) + 16px padding + 6px border = 6*cell + 42
+// Responsive cell size
+// Mobile: fit within screen width (max 52px) so board never overflows
+// Desktop: allow larger cells (max 72px)
+const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
 const CELL_SIZE = typeof window !== 'undefined'
-  ? Math.min(72, Math.floor((Math.min(window.innerWidth, 520) - 32) / 6))
-  : 72;
+  ? isMobile
+    ? Math.min(52, Math.floor((window.innerWidth - 24) / 6))
+    : Math.min(72, Math.floor((Math.min(window.innerWidth, 520) - 32) / 6))
+  : 60;
 
 function BoardCell({ row, col, cell, pending, myTurn, onClick, onRemove, onDragOver, onDrop }) {
   const prem      = PREMIUM[`${row},${col}`];
@@ -645,8 +649,18 @@ export default function ScrabbleGame() {
 
   return (
     <div
-      className={`min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center px-2 py-4 ${phase === 'game' ? 'justify-center overflow-y-auto' : 'justify-center'}`}
-      style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}
+      className={`bg-bg flex flex-col items-center px-2 ${phase === 'game' ? 'justify-center' : 'justify-center min-h-[calc(100vh-56px)]'}`}
+      style={{
+        opacity: ready ? 1 : 0,
+        transition: 'opacity 0.35s ease',
+        paddingBottom: 'env(safe-area-inset-bottom, 8px)',
+        paddingTop: 8,
+        // On mobile during game: lock to exact viewport, no scrolling
+        ...(phase === 'game' ? {
+          height: 'calc(100vh - 56px)',
+          overflow: 'hidden',
+        } : {}),
+      }}
     >
       {blankPick && <BlankPicker onPick={onBlankPick} onCancel={() => setBlankPick(null)} />}
 
@@ -732,7 +746,7 @@ export default function ScrabbleGame() {
 
       {/* GAME */}
       {phase === 'game' && (
-        <div className="w-full animate-fade-in px-1 flex flex-col items-center mx-auto" style={{ maxWidth: 660, paddingTop: 8 }}>
+        <div className="w-full animate-fade-in px-1 flex flex-col items-center mx-auto" style={{ maxWidth: 660 }}>
 
           {/* Turn timer bar */}
           {myTurn && turnSeconds > 0 && (
