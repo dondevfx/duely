@@ -624,6 +624,104 @@ export default function BlockBlastGame() {
   const isWinner = result && result.winnerId === profile?.id;
   const CELL_PX  = cellPx;
 
+  // ── Result screen (full-page, matches Blackjack/CoinFlip layout) ──
+  if (phase === 'result' && result) {
+    // PvP (normal win/loss) and draws → shared ResultScreen
+    if (!result.isSolo) {
+      return (
+        <div className="min-h-[calc(100vh-56px)] bg-bg flex items-center justify-center px-4">
+          <ResultScreen
+            isWinner={isWinner}
+            isDraw={result.draw}
+            winnerUsername={result.winnerUsername}
+            loserUsername={result.loserUsername}
+            newWinnerElo={result.newWinnerElo}
+            newLoserElo={result.newLoserElo}
+            eloBeforeRef={eloBeforeRef}
+            balanceChange={result.balanceChange}
+            currency={result.currency || betCurrency}
+            entryFee={result.entryFee ?? entryFee}
+            disconnected={result.disconnected}
+            winnerStreak={result.winnerStreak}
+            isFirstWin={result.isFirstWin}
+            profile={profile}
+            gameLabel="🟦 Block Burst"
+            extraRows={[{
+              label: 'Score',
+              value: `${(isWinner ? (result.winnerScore ?? 0) : (result.loserScore ?? 0)).toLocaleString()} — ${(isWinner ? (result.loserScore ?? 0) : (result.winnerScore ?? 0)).toLocaleString()}`,
+            }]}
+            onRematch={result.draw ? undefined : requestRematch}
+            onPlayAgain={backToLobby}
+            onBackToLobby={backToLobby}
+          />
+        </div>
+      );
+    }
+
+    // Bot match with wager
+    if (result.isSolo && result.humanWon !== null) {
+      return (
+        <div className="min-h-[calc(100vh-56px)] bg-bg flex items-center justify-center px-4">
+          <div className="w-full max-w-md bg-surface border border-surfaceLight rounded-3xl p-8 text-center animate-scale-in shadow-2xl overflow-y-auto">
+            <div className={`text-7xl mb-4 animate-pop-in ${result.humanWon ? '' : 'grayscale'}`}>
+              {result.humanWon ? '🏆' : '🤖'}
+            </div>
+            <h2 className={`text-4xl font-black mb-2 ${result.humanWon ? 'text-success' : 'text-danger'}`}>
+              {result.humanWon ? 'You Beat the Bot!' : 'Bot Wins!'}
+            </h2>
+            <div className="bg-bg rounded-xl p-4 mb-6 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted">Your score</span>
+                <span className="text-white font-bold">{(result.playerScore ?? 0).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted">Bot target</span>
+                <span className="text-white font-bold">{(result.botScore ?? 0).toLocaleString()}</span>
+              </div>
+              {result.humanWon && result.balanceChange?.winnerPayout > 0 ? (
+                <div className="flex justify-between border-t border-border pt-2">
+                  <span className="text-muted">Payout</span>
+                  <span className="text-success font-bold">
+                    {result.currency === 'diamonds'
+                      ? `+${Math.round(result.balanceChange.winnerPayout ?? 0)} 💎`
+                      : <span className="inline-flex items-center gap-1">+{(result.balanceChange.winnerPayout ?? 0).toFixed(2)} <CoinIcon size="0.85em" /></span>}
+                  </span>
+                </div>
+              ) : !result.humanWon && result.entryFee > 0 ? (
+                <div className="flex justify-between border-t border-border pt-2">
+                  <span className="text-muted">Entry lost</span>
+                  <span className="text-danger font-bold inline-flex items-center gap-1">-{result.entryFee} {result.currency === 'diamonds' ? '💎' : <CoinIcon size="0.85em" />}</span>
+                </div>
+              ) : null}
+            </div>
+            <div className="flex flex-col gap-3">
+              <GlowButton variant="primary" size="lg" onClick={playVsBot} className="w-full">Play Again</GlowButton>
+              <GlowButton variant="ghost" onClick={() => { window.location.href = '/'; }} className="w-full border border-border">Home</GlowButton>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Free solo
+    return (
+      <div className="min-h-[calc(100vh-56px)] bg-bg flex items-center justify-center px-4">
+        <div className="w-full max-w-md bg-surface border border-surfaceLight rounded-3xl p-8 text-center animate-scale-in shadow-2xl overflow-y-auto">
+          <div className="text-7xl mb-4 animate-pop-in">🎮</div>
+          <h2 className="text-4xl font-black mb-2 text-accent">Game Over!</h2>
+          <div className="bg-bg rounded-xl p-6 mb-6">
+            <div className="text-5xl font-black text-white mb-1">{(result.playerScore ?? 0).toLocaleString()}</div>
+            <div className="text-sm text-muted">Final Score</div>
+          </div>
+          <div className="flex flex-col gap-3">
+            <GlowButton onClick={playVsBotFree} variant="primary" size="lg" className="w-full">Play Again</GlowButton>
+            <GlowButton variant="ghost" onClick={() => { window.location.href = '/'; }} className="w-full border border-border">Home</GlowButton>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const _randomQueueFired = useRef(false);
   useEffect(() => {
     if (!location.state?.autoQueue || _randomQueueFired.current || !authenticated || !socket) return;
@@ -980,180 +1078,6 @@ export default function BlockBlastGame() {
         </div>
       )}
 
-      {/* ── RESULT ── */}
-      {phase === 'result' && result && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          {/* PvP result uses shared ResultScreen */}
-          {!result.isSolo && !result.draw ? (
-            <ResultScreen
-              isWinner={isWinner}
-              winnerUsername={result.winnerUsername}
-              loserUsername={result.loserUsername}
-              newWinnerElo={result.newWinnerElo}
-              newLoserElo={result.newLoserElo}
-              eloBeforeRef={eloBeforeRef}
-              balanceChange={result.balanceChange}
-              currency={result.currency || betCurrency}
-              entryFee={result.entryFee ?? entryFee}
-              disconnected={result.disconnected}
-              winnerStreak={result.winnerStreak}
-              isFirstWin={result.isFirstWin}
-              profile={profile}
-              gameLabel="🟦 Block Burst"
-              extraRows={[{
-                label: 'Score',
-                value: `${(isWinner ? (result.winnerScore ?? 0) : (result.loserScore ?? 0)).toLocaleString()} — ${(isWinner ? (result.loserScore ?? 0) : (result.winnerScore ?? 0)).toLocaleString()}`,
-              }]}
-              onRematch={requestRematch}
-              onPlayAgain={backToLobby}
-            />
-          ) : (
-          <div className="w-full max-w-md bg-surface border border-surfaceLight rounded-3xl p-8 text-center animate-scale-in shadow-2xl overflow-y-auto max-h-[90vh]">
-          {result.isSolo && result.humanWon !== null ? (
-            // Bot match with wager
-            <>
-              <div className={`text-7xl mb-4 animate-pop-in ${result.humanWon ? '' : 'grayscale'}`}>
-                {result.humanWon ? '🏆' : '🤖'}
-              </div>
-              <h2 className={`text-4xl font-black mb-2 ${result.humanWon ? 'text-success' : 'text-danger'}`}>
-                {result.humanWon ? 'You Beat the Bot!' : 'Bot Wins!'}
-              </h2>
-              <div className="bg-bg rounded-xl p-4 mb-6 space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted">Your score</span>
-                  <span className="text-white font-bold">{(result.playerScore ?? 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted">Bot target</span>
-                  <span className="text-white font-bold">{(result.botScore ?? 0).toLocaleString()}</span>
-                </div>
-                {result.humanWon && result.balanceChange?.winnerPayout > 0 ? (
-                  <div className="flex justify-between border-t border-border pt-2">
-                    <span className="text-muted">Payout</span>
-                    <span className="text-success font-bold">
-                      {result.currency === 'diamonds'
-                        ? `+${Math.round(result.balanceChange.winnerPayout ?? 0)} 💎`
-                        : <span className="inline-flex items-center gap-1">+{(result.balanceChange.winnerPayout ?? 0).toFixed(2)} <CoinIcon size="0.85em" /></span>}
-                    </span>
-                  </div>
-                ) : !result.humanWon && result.entryFee > 0 ? (
-                  <div className="flex justify-between border-t border-border pt-2">
-                    <span className="text-muted">Entry lost</span>
-                    <span className="text-danger font-bold inline-flex items-center gap-1">-{result.entryFee} {result.currency === 'diamonds' ? '💎' : <CoinIcon size="0.85em" />}</span>
-                  </div>
-                ) : null}
-              </div>
-              <div className="flex flex-col gap-3">
-                <GlowButton variant="primary" size="lg" onClick={playVsBot} className="w-full">Play Again</GlowButton>
-                <GlowButton variant="ghost" onClick={() => { window.location.href = '/'; }} className="w-full border border-border">Home</GlowButton>
-              </div>
-            </>
-          ) : result.isSolo ? (
-            // Free solo
-            <>
-              <div className="text-7xl mb-4 animate-pop-in">🎮</div>
-              <h2 className="text-4xl font-black mb-2 text-accent">Game Over!</h2>
-              <div className="bg-bg rounded-xl p-6 mb-6">
-                <div className="text-5xl font-black text-white mb-1">{(result.playerScore ?? 0).toLocaleString()}</div>
-                <div className="text-sm text-muted">Final Score</div>
-              </div>
-              <div className="flex flex-col gap-3">
-                <GlowButton onClick={playVsBotFree} variant="primary" size="lg" className="w-full">Play Again</GlowButton>
-                <GlowButton variant="ghost" onClick={() => { window.location.href = '/'; }} className="w-full border border-border">Home</GlowButton>
-              </div>
-            </>
-          ) : (
-            // PvP result
-            <>
-              <div className="text-7xl mb-4 animate-pop-in">
-                {result.draw ? '🤝' : isWinner ? '🏆' : '💀'}
-              </div>
-              <h2 className={`text-4xl font-black mb-2 ${result.draw ? 'text-accent' : isWinner ? 'text-success' : 'text-danger'}`}>
-                {result.draw ? 'Draw!' : isWinner ? 'You Win!' : 'You Lose'}
-              </h2>
-              {result.disconnected && (
-                <p className="text-sm text-muted mb-3">Opponent disconnected</p>
-              )}
-              {isWinner && (result.winnerStreak ?? 0) >= 2 && (
-                <p className="text-lg font-bold text-orange-400 mb-3" style={{ textShadow: '0 0 10px rgba(251,146,60,0.5)' }}>
-                  🔥 {result.winnerStreak} Win Streak!
-                </p>
-              )}
-              {isWinner && result.isFirstWin && (
-                <div className="mb-4 px-4 py-2 rounded-xl bg-yellow-400/10 border border-yellow-400/30 text-yellow-300 text-sm font-bold">
-                  🎉 First Victory! You're on the board!
-                </div>
-              )}
-              {!isWinner && !result?.draw && (
-                <p className="text-sm text-muted italic mb-4">
-                  {["So close — a few more combos and you'd have it.", "Your placements were solid — combos will click soon.", "Tight match — your setup was nearly there."][Math.floor(Date.now() / 1000) % 3]}
-                </p>
-              )}
-
-              <div className="bg-bg rounded-xl p-5 mb-6">
-                <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-                  <div>
-                    <p className="text-muted text-xs mb-1">{result.winnerUsername ?? '—'}</p>
-                    <p className="text-white font-bold text-lg">{(result.winnerScore ?? 0).toLocaleString()} pts</p>
-                  </div>
-                  <div>
-                    <p className="text-muted text-xs mb-1">{result.loserUsername ?? '—'}</p>
-                    <p className="text-white font-bold text-lg">{(result.loserScore ?? 0).toLocaleString()} pts</p>
-                  </div>
-                </div>
-                {!result.draw && (
-                  <div className="grid grid-cols-2 gap-4 text-xs border-t border-border pt-3">
-                    <div>
-                      <p className="text-muted">ELO</p>
-                      <p className="text-white font-semibold">
-                        {isWinner ? (result.newWinnerElo ?? '—') : (result.newLoserElo ?? '—')}
-                        {eloBeforeRef.current != null && (isWinner ? result.newWinnerElo : result.newLoserElo) != null && (
-                          <span className={`ml-1 ${isWinner ? 'text-success' : 'text-danger'}`}>
-                            ({isWinner
-                              ? `+${result.newWinnerElo - eloBeforeRef.current}`
-                              : `${result.newLoserElo - eloBeforeRef.current}`})
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                    {(result.balanceChange?.winnerPayout ?? 0) > 0 && (
-                      <div>
-                        <p className="text-muted">Payout</p>
-                        <p className={isWinner ? 'text-2xl font-black text-success' : `font-semibold text-danger`}
-                          style={isWinner ? { textShadow: '0 0 12px rgba(74,222,128,0.5)' } : {}}>
-                          {isWinner
-                            ? result.currency === 'diamonds'
-                              ? `+${Math.round(result.balanceChange.winnerPayout ?? 0)} 💎`
-                              : <span className="inline-flex items-center gap-1">+{(result.balanceChange.winnerPayout ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <CoinIcon size="0.85em" /></span>
-                            : result.currency === 'diamonds'
-                              ? `-${result.entryFee ?? 0} 💎`
-                              : <span className="inline-flex items-center gap-1">-{result.entryFee ?? 0} <CoinIcon size="0.85em" /></span>}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-3">
-                {!result.draw && (
-                  <GlowButton onClick={requestRematch} variant="primary" size="lg" className="w-full">
-                    Rematch
-                  </GlowButton>
-                )}
-                <GlowButton onClick={backToLobby} variant="ghost" size="lg" className="w-full border border-border">
-                  Back to Lobby
-                </GlowButton>
-                <GlowButton onClick={() => { window.location.href = '/'; }} variant="ghost" size="lg" className="w-full border border-border">
-                  Home
-                </GlowButton>
-              </div>
-            </>
-          )}
-          </div>
-          )}{/* end non-pvp fallback */}
-        </div>
-      )}
     </div>
   );
 }
