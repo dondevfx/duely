@@ -123,6 +123,7 @@ const {
   settleBotMatch,
 } = require('../services/walletService');
 const { lockUser, unlockUser, isLocked } = require('../services/lockService');
+const { updateElo: _updateElo } = require('../services/eloService');
 const { createClient } = require('@supabase/supabase-js');
 
 module.exports = function registerSocketHandlers(io, supabase) {
@@ -2336,18 +2337,38 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
       if (stayerSocket) {
         // Stayer is still connected → they win the forfeit
-        // Fallback only used for coins (settle_match_coins may return null data)
+        console.log(`[forfeit] settling — game:${gameType} currency:${currency} fee:${fee} winner:${stayer.userId} loser:${leaver.userId}`);
         const fallbackPayout = currency === 'diamonds'
-          ? fee  // diamonds: winner gets loser's full stake
-          : parseFloat(((fee * 2) * 0.95).toFixed(4)); // coins: 95% of prize pool
+          ? fee
+          : parseFloat((fee * 0.9).toFixed(4));
+
+        // Pre-calculate ELO so catch block always has valid values
+        let newWinnerElo = (stayer.elo || 1000) + 25;
+        let newLoserElo  = Math.max(0, (leaver.elo || 1000) - 25);
+
         try {
-          const result = currency === 'diamonds'
-            ? await forfeitSettleDiamonds(supabase, stayer.userId, leaver.userId, fee)
-            : await forfeitSettleCoins(supabase, stayer.userId, leaver.userId, fee);
+          // Run ELO update and wallet settle in parallel
+          const [eloResult, settleResult] = await Promise.allSettled([
+            _updateElo(supabase, stayer.userId, leaver.userId, stayer.elo || 1000, leaver.elo || 1000),
+            currency === 'diamonds'
+              ? forfeitSettleDiamonds(supabase, stayer.userId, leaver.userId, fee)
+              : forfeitSettleCoins(supabase, stayer.userId, leaver.userId, fee),
+          ]);
+
+          if (eloResult.status === 'rejected') {
+            console.error('[forfeit] elo update failed:', eloResult.reason?.message);
+          } else {
+            newWinnerElo = eloResult.value?.newWinnerElo ?? newWinnerElo;
+            newLoserElo  = eloResult.value?.newLoserElo  ?? newLoserElo;
+          }
+          if (settleResult.status === 'rejected') throw settleResult.reason;
+
+          const result = settleResult.value;
+          console.log(`[forfeit] settle OK — winnerPayout:${result?.winnerPayout} newWinnerElo:${newWinnerElo}`);
 
           const prizePool = fee * 2;
           const platformFee = parseFloat((prizePool * 0.05).toFixed(4));
-          await supabase.from('matches').insert({
+          supabase.from('matches').insert({
             player1_id:          stayer.userId,
             player2_id:          leaver.userId,
             winner_id:           stayer.userId,
@@ -2360,22 +2381,25 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           }).catch(() => {});
 
           stayerSocket.emit('opponent_disconnected', {
-            winnerId:      stayer.userId,
-            loserId:       leaver.userId,
+            winnerId:       stayer.userId,
+            loserId:        leaver.userId,
             winnerUsername: stayer.username,
             loserUsername:  leaver.username,
-            winnerPayout:  result?.winnerPayout ?? fallbackPayout,
+            winnerPayout:   result?.winnerPayout ?? fallbackPayout,
+            newWinnerElo,
+            newLoserElo,
             currency,
           });
         } catch (e) {
-          console.error('[forfeit] settle error — currency:', currency, 'fee:', fee, 'winner:', stayer.userId, 'loser:', leaver.userId, '| error:', e?.message, e?.code, e?.details, e?.hint);
-          // Still tell stayer they won even if payout failed
+          console.error('[forfeit] settle FAILED — currency:', currency, 'fee:', fee, 'winner:', stayer.userId, 'loser:', leaver.userId, '| error:', e?.message, '| code:', e?.code, '| details:', e?.details, '| hint:', e?.hint);
           stayerSocket.emit('opponent_disconnected', {
-            winnerId:      stayer.userId,
-            loserId:       leaver.userId,
+            winnerId:       stayer.userId,
+            loserId:        leaver.userId,
             winnerUsername: stayer.username,
             loserUsername:  leaver.username,
-            winnerPayout:  0,
+            winnerPayout:   0,
+            newWinnerElo,
+            newLoserElo,
             currency,
           });
         }

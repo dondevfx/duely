@@ -81,9 +81,9 @@ export default function ResultScreen({
 }) {
   // onBackToLobby falls back to onPlayAgain for pages that haven't split the two yet
   const goBack = onBackToLobby ?? onPlayAgain;
-  const elo    = isWinner ? (newWinnerElo ?? 0) : (newLoserElo ?? 0);
-  const eloBefore = eloBeforeRef?.current ?? elo;
-  const eloDelta  = elo - eloBefore;
+  const elo       = isWinner ? newWinnerElo : newLoserElo; // undefined = no ELO data yet
+  const eloBefore = eloBeforeRef?.current ?? null;
+  const eloDelta  = (elo != null && eloBefore != null) ? elo - eloBefore : null;
 
   const totalMatches = (profile?.wins ?? 0) + (profile?.losses ?? 0);
   const ranked = isRanked(profile);
@@ -157,10 +157,12 @@ export default function ResultScreen({
               <span className="text-muted">ELO</span>
               {ranked ? (
                 <span className="text-white font-bold">
-                  {elo}{' '}
-                  <span className={eloDelta >= 0 ? 'text-success' : 'text-danger'}>
-                    ({eloDelta >= 0 ? '+' : ''}{eloDelta})
-                  </span>
+                  {elo ?? '—'}{' '}
+                  {eloDelta != null && (
+                    <span className={eloDelta >= 0 ? 'text-success' : 'text-danger'}>
+                      ({eloDelta >= 0 ? '+' : ''}{eloDelta})
+                    </span>
+                  )}
                 </span>
               ) : (
                 <span className="font-bold" style={{ color: '#64748b' }}>Unranked</span>

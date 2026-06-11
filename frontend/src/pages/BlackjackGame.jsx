@@ -357,6 +357,8 @@ export default function BlackjackGame() {
         disconnected:   true,
         balanceChange:  (isWin && payout != null) ? { winnerPayout: payout } : undefined,
         currency:       data.currency,
+        newWinnerElo:   data.newWinnerElo,
+        newLoserElo:    data.newLoserElo,
       });
       setPhase('result');
       refreshProfile();

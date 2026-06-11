@@ -327,6 +327,8 @@ export default function BlockBlastGame() {
         disconnected:  true,
         balanceChange: (isWin && payout != null) ? { winnerPayout: payout } : undefined,
         currency:      data.currency,
+        newWinnerElo:  data.newWinnerElo,
+        newLoserElo:   data.newLoserElo,
       });
       setGameOver(true);
       setPhase('result');
@@ -1103,8 +1105,8 @@ export default function BlockBlastGame() {
                     <div>
                       <p className="text-muted">ELO</p>
                       <p className="text-white font-semibold">
-                        {isWinner ? result.newWinnerElo : result.newLoserElo}
-                        {eloBeforeRef.current != null && (
+                        {isWinner ? (result.newWinnerElo ?? '—') : (result.newLoserElo ?? '—')}
+                        {eloBeforeRef.current != null && (isWinner ? result.newWinnerElo : result.newLoserElo) != null && (
                           <span className={`ml-1 ${isWinner ? 'text-success' : 'text-danger'}`}>
                             ({isWinner
                               ? `+${result.newWinnerElo - eloBeforeRef.current}`

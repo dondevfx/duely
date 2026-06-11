@@ -435,14 +435,18 @@ export default function ScrabbleGame() {
     socket.on('opponent_disconnected', (data = {}) => {
       inActiveMatchRef.current = false;
       const myId = profileRef.current?.id;
+      const isWin = data.winnerId === myId;
+      const payout = data.winnerPayout ?? null;
       setResult({
         winnerId: data.winnerId || myId,
         loserId: data.loserId,
-        winnerUsername: data.winnerId === myId ? profileRef.current?.username : opponent?.username,
-        loserUsername: data.winnerId === myId ? opponent?.username : profileRef.current?.username,
+        winnerUsername: isWin ? profileRef.current?.username : opponent?.username,
+        loserUsername: isWin ? opponent?.username : profileRef.current?.username,
         disconnected: true,
-        balanceChange: data.winnerPayout != null ? { winnerPayout: data.winnerPayout } : undefined,
+        balanceChange: (isWin && payout != null) ? { winnerPayout: payout } : undefined,
         currency: data.currency,
+        newWinnerElo: data.newWinnerElo,
+        newLoserElo:  data.newLoserElo,
       });
       setPhase('result'); refreshProfile();
     });
