@@ -11,10 +11,12 @@ export default function GameCard({ title, description, icon, route, available = 
         ? 'bg-surface border-surfaceLight hover:border-primary/50 hover:shadow-glow cursor-pointer group'
         : 'bg-surface/50 border-surfaceLight/50 opacity-60'}
     `}>
-      <div className="absolute top-4 right-4 inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-success/10 text-success border border-success/30">
-        <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" style={{ boxShadow: '0 0 4px #4ade80' }} />
-        {liveCount > 0 ? `${liveCount} Live` : 'Live'}
-      </div>
+      {liveCount > 0 && (
+        <div className="absolute top-4 right-4 inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-success/10 text-success border border-success/30">
+          <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" style={{ boxShadow: '0 0 4px #4ade80' }} />
+          {liveCount} Live
+        </div>
+      )}
 
       <div className="text-4xl">{icon}</div>
 

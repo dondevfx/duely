@@ -2,6 +2,7 @@
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
+import { useSocket } from '../context/SocketContext';
 import { getRank, getDisplayRank } from '../utils/ranks';
 import { api } from '../utils/api';
 import CoinIcon from './CoinIcon';
@@ -16,11 +17,11 @@ const NAV_LINKS = [
 ];
 
 const GAME_LINKS = [
-  { icon: '⚡', label: 'Quick Match', to: '/game/quick-match' },
-  { icon: '🟦', label: 'Block Burst', to: '/game/block-blast' },
-  { icon: '🟡', label: 'Coin Flip',   to: '/game/coin-flip' },
-  { icon: '🔤', label: 'Word VS',     to: '/game/scrabble' },
-  { icon: '🃏', label: 'Blackjack',   to: '/game/blackjack' },
+  { icon: '⚡', label: 'Quick Match', to: '/game/quick-match', countKey: 'block-blast' },
+  { icon: '🟦', label: 'Block Burst', to: '/game/block-blast', countKey: 'block-blast' },
+  { icon: '🟡', label: 'Coin Flip',   to: '/game/coin-flip',   countKey: 'coin-flip' },
+  { icon: '🔤', label: 'Word VS',     to: '/game/scrabble',    countKey: 'scrabble' },
+  { icon: '🃏', label: 'Blackjack',   to: '/game/blackjack',   countKey: 'blackjack' },
 ];
 
 function compactNum(n) {
@@ -43,6 +44,7 @@ function fmtRakebackTimer(ms) {
 export default function Navbar() {
   const { profile, signOut } = useAuth();
   const { displayCurrency, setDisplayCurrency } = useCurrency();
+  const { playerCounts } = useSocket();
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen]   = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -520,19 +522,27 @@ export default function Navbar() {
             {/* Games section */}
             <div>
               <p className="text-xs text-muted uppercase tracking-widest font-semibold px-2 mb-2">Games</p>
-              {GAME_LINKS.map(item => (
-                <NavLink key={item.to} to={item.to}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-3 rounded-xl text-base font-medium mb-1 transition-all ${
-                      isActive ? 'bg-primary/15 text-primary border border-primary/20' : 'text-muted hover:text-white hover:bg-surfaceLight'
-                    }`
-                  }>
-                  <span className="text-xl">{item.icon}</span>
-                  <span className="flex-1">{item.label}</span>
-                  <span className="text-[10px] bg-success/20 text-success border border-success/30 px-1.5 py-0.5 rounded-full font-bold">LIVE</span>
-                </NavLink>
-              ))}
+              {GAME_LINKS.map(item => {
+                const count = playerCounts?.[item.countKey] ?? 0;
+                return (
+                  <NavLink key={item.to} to={item.to}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-3 py-3 rounded-xl text-base font-medium mb-1 transition-all ${
+                        isActive ? 'bg-primary/15 text-primary border border-primary/20' : 'text-muted hover:text-white hover:bg-surfaceLight'
+                      }`
+                    }>
+                    <span className="text-xl">{item.icon}</span>
+                    <span className="flex-1">{item.label}</span>
+                    {count > 0 && (
+                      <span className="text-[10px] bg-success/20 text-success border border-success/30 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1">
+                        <span className="w-1 h-1 rounded-full bg-success inline-block" />
+                        {count}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              })}
             </div>
 
             {/* Account */}
