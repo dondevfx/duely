@@ -338,7 +338,9 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
 
   // ── Gas reserve (player pays network fee) ────────────────────────────────────
   // SOL reserve is 0.003 to cover Jupiter's one-time USDC ATA creation (~0.002 SOL).
-  const gasReserveMap = { btc: 0.00002, eth: 0.0004, bnb: 0.0005, sol: 0.003, ltc: 0.001, trx: 5, doge: 1 };
+  // SOL reserve dropped from 0.003 → 0.0001: admin USDC ATA is pre-created,
+  // only need ~0.000005 SOL for the Jupiter tx fee (using 0.0001 as a small buffer)
+  const gasReserveMap = { btc: 0.00002, eth: 0.0004, bnb: 0.0005, sol: 0.0001, ltc: 0.001, trx: 5, doge: 1 };
   const gasRes    = gasReserveMap[coin] || 0;
   const netAmount = Math.max(0, amount - gasRes);
   if (netAmount <= 0) { console.warn(`[monitor] amount too small after gas — skipping`); return; }
