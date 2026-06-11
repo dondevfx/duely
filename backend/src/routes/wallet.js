@@ -15,7 +15,16 @@ const { isLocked } = require('../services/lockService');
 
 const WITHDRAW_COOLDOWN_MS = 60 * 1000;   // 60s between withdrawals
 const DEPOSIT_MAX_SINGLE   = 50_000;      // $50k hard cap per deposit
-const MIN_WITHDRAWAL       = 5;           // $5 minimum withdrawal
+
+// Per-coin withdrawal minimums
+// SOL/USDC go direct (Jupiter / SPL send) — no ChangeNow minimum
+// Everything else goes through ChangeNow — keep $5 to cover their minimums
+const WITHDRAW_MINS = {
+  sol:     2,
+  usdc:    2,
+  default: 5,
+};
+const MIN_WITHDRAWAL = 5;   // kept for fallback / non-coin checks
 
 // Coins accepted for deposit (Plisio supports all of these)
 const DEPOSIT_COINS = new Set(['btc','eth','sol','ltc','trx','doge','bnb','usdc']);
@@ -124,12 +133,14 @@ module.exports = function walletRoutes(supabase) {
       return res.status(400).json({ error: 'Invalid memo / destination tag' });
     }
 
+    const coinMin = WITHDRAW_MINS[coin.toLowerCase()] ?? WITHDRAW_MINS.default;
+
     let amount;
-    try { amount = sanitizeAmount(req.body.amountUsd, MIN_WITHDRAWAL, MAX_SINGLE_AMOUNT); }
+    try { amount = sanitizeAmount(req.body.amountUsd, coinMin, MAX_SINGLE_AMOUNT); }
     catch (e) { return res.status(400).json({ error: e.message }); }
 
-    if (amount < MIN_WITHDRAWAL) {
-      return res.status(400).json({ error: `Minimum withdrawal is $${MIN_WITHDRAWAL}.` });
+    if (amount < coinMin) {
+      return res.status(400).json({ error: `Minimum withdrawal is $${coinMin}.` });
     }
 
     try {
@@ -171,11 +182,23 @@ module.exports = function walletRoutes(supabase) {
 
       try {
         if (coin.toLowerCase() === 'sol') {
-          // ── SOL: Jupiter swap USDC→SOL directly to player (~0.3% fee) ──
+          // ── SOL: Jupiter USDC→SOL, sent directly to player (~0.3% fee) ─
           const { txHash, solReceived } = await swapUsdcToSol(privKey, amount, address.trim());
           payoutId  = txHash;
           cryptoAmt = solReceived;
           console.log(`[withdraw] Jupiter SOL payout ${amount} USDC → ${solReceived} SOL → ${address.trim()} tx=${txHash}`);
+
+        } else if (coin.toLowerCase() === 'usdc') {
+          // ── USDC: send directly, no swap needed (near-zero fee) ─────────
+          const sendTx = await sendCrypto({
+            coin:      'usdc',
+            privKey,
+            toAddress: address.trim(),
+            amount,
+          });
+          payoutId  = sendTx;
+          cryptoAmt = amount;
+          console.log(`[withdraw] Direct USDC send ${amount} → ${address.trim()} tx=${sendTx}`);
 
         } else {
           // ── Other coins: ChangeNow swap then send USDC to their address ─

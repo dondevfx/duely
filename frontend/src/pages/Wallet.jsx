@@ -32,7 +32,8 @@ const WITHDRAW_COINS = [
   { id: 'trx',  label: 'TRX',  network: 'TRON'     },
 ];
 
-const MIN_WITHDRAWAL = 5;
+const WITHDRAW_MINS = { sol: 2, usdc: 2, default: 5 };
+const getWithdrawMin = (coinId) => WITHDRAW_MINS[coinId] ?? WITHDRAW_MINS.default;
 
 function fmt(n) {
   return Number(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -173,7 +174,8 @@ export default function Wallet() {
 
   // ── Withdraw ──────────────────────────────────────────────────────────
   async function handleWithdraw() {
-    if (!witAmountUsd || parseFloat(witAmountUsd) < MIN_WITHDRAWAL || !witAddress.trim()) return;
+    const witMin = getWithdrawMin(witCoin.id);
+    if (!witAmountUsd || parseFloat(witAmountUsd) < witMin || !witAddress.trim()) return;
     if (hasMfa && witMfaCode.length !== 6) {
       setWitMsg({ type: 'error', text: 'Enter the 6-digit code from your authenticator app.' });
       return;
@@ -375,21 +377,21 @@ export default function Wallet() {
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-muted">Amount (USD) — <span className="text-success font-semibold">min ${MIN_WITHDRAWAL}</span></label>
+                <label className="text-xs text-muted">Amount (USD) — <span className="text-success font-semibold">min ${getWithdrawMin(witCoin.id)}</span></label>
                 <span className="text-xs text-muted">Balance: <span className="text-white font-bold inline-flex items-center gap-0.5">{fmt(profile?.c_coins)} <CoinIcon size="0.75em" /></span></span>
               </div>
               <input
-                type="number" min={MIN_WITHDRAWAL} max={profile?.c_coins ?? 0} step="1"
+                type="number" min={getWithdrawMin(witCoin.id)} max={profile?.c_coins ?? 0} step="1"
                 value={witAmountUsd}
                 onChange={e => setWitAmountUsd(e.target.value)}
-                placeholder={`min $${MIN_WITHDRAWAL}`}
+                placeholder={`min $${getWithdrawMin(witCoin.id)}`}
                 className="w-full bg-bg border border-surfaceLight rounded-lg px-4 py-3 text-white placeholder-muted text-sm focus:outline-none focus:border-primary transition-colors"
               />
               {witAmountUsd && parseFloat(witAmountUsd) > (profile?.c_coins ?? 0) && (
                 <p className="text-xs text-danger mt-1">Exceeds your balance of {fmt(profile?.c_coins)} coins</p>
               )}
-              {witAmountUsd && parseFloat(witAmountUsd) < MIN_WITHDRAWAL && parseFloat(witAmountUsd) > 0 && (
-                <p className="text-xs text-danger mt-1">Minimum withdrawal is ${MIN_WITHDRAWAL}</p>
+              {witAmountUsd && parseFloat(witAmountUsd) < getWithdrawMin(witCoin.id) && parseFloat(witAmountUsd) > 0 && (
+                <p className="text-xs text-danger mt-1">Minimum withdrawal is ${getWithdrawMin(witCoin.id)}</p>
               )}
             </div>
 
@@ -417,7 +419,7 @@ export default function Wallet() {
               disabled={
                 witLoading ||
                 !witAmountUsd ||
-                parseFloat(witAmountUsd) < MIN_WITHDRAWAL ||
+                parseFloat(witAmountUsd) < getWithdrawMin(witCoin.id) ||
                 !witAddress.trim() ||
                 parseFloat(witAmountUsd) > (profile?.c_coins ?? 0) ||
                 (hasMfa && witMfaCode.length !== 6)
