@@ -290,37 +290,7 @@ export default function ScrabbleGame() {
     joinQueue();
   }, [socket, authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Result screen (full-page, matches Blackjack/CoinFlip layout) ──
-  if (phase === 'result' && result) {
-    return (
-      <div className="min-h-[calc(100vh-56px)] bg-bg flex items-center justify-center px-4">
-        <ResultScreen
-          isWinner={isWinner}
-          winnerUsername={result.winnerUsername}
-          loserUsername={result.loserUsername}
-          newWinnerElo={result.newWinnerElo}
-          newLoserElo={result.newLoserElo}
-          eloBeforeRef={eloBeforeRef}
-          balanceChange={result.balanceChange}
-          currency={result.currency || betCurrency}
-          entryFee={entryFee}
-          disconnected={result.disconnected}
-          profile={profile}
-          gameLabel="🔤 Word VS"
-          extraRows={[
-            { label: 'Score', value: `${result.winnerScore ?? 0} — ${result.loserScore ?? 0}` },
-            { label: 'Reason', value:
-                result.reason === 'consecutive_passes' ? 'Both passed' :
-                result.reason === 'tiles_out' ? 'All tiles placed' :
-                result.reason === 'board_full' ? 'Board filled' : 'Disconnected' },
-          ]}
-          onRematch={null}
-          onPlayAgain={backToLobby}
-          onBackToLobby={backToLobby}
-        />
-      </div>
-    );
-  }
+
 
   // Touch drag-and-drop for tile placement (mobile iOS/Android)
   function handleTileTouchStart(idx, e) {
@@ -735,6 +705,36 @@ export default function ScrabbleGame() {
           opacity: 0.9,
         }}>
           {myHand[draggingIdx] === '?' ? '?' : myHand[draggingIdx]}
+        </div>
+      )}
+
+      {/* RESULT */}
+      {phase === 'result' && result && (
+        <div className="w-full flex items-center justify-center" style={{ minHeight: 'calc(100vh - 56px)' }}>
+          <ResultScreen
+            isWinner={isWinner}
+            winnerUsername={result.winnerUsername}
+            loserUsername={result.loserUsername}
+            newWinnerElo={result.newWinnerElo}
+            newLoserElo={result.newLoserElo}
+            eloBeforeRef={eloBeforeRef}
+            balanceChange={result.balanceChange}
+            currency={result.currency || betCurrency}
+            entryFee={entryFee}
+            disconnected={result.disconnected}
+            profile={profile}
+            gameLabel="🔤 Word VS"
+            extraRows={[
+              { label: 'Score', value: `${result.winnerScore ?? 0} — ${result.loserScore ?? 0}` },
+              { label: 'Reason', value:
+                  result.reason === 'consecutive_passes' ? 'Both passed' :
+                  result.reason === 'tiles_out' ? 'All tiles placed' :
+                  result.reason === 'board_full' ? 'Board filled' : 'Disconnected' },
+            ]}
+            onRematch={null}
+            onPlayAgain={backToLobby}
+            onBackToLobby={backToLobby}
+          />
         </div>
       )}
 

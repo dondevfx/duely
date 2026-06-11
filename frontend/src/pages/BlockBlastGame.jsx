@@ -632,12 +632,12 @@ export default function BlockBlastGame() {
     joinQueue();
   }, [socket, authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Result screen (full-page, matches Blackjack/CoinFlip layout) ──
-  if (phase === 'result' && result) {
-    // PvP (normal win/loss) and draws → shared ResultScreen
-    if (!result.isSolo) {
-      return (
-        <div className="min-h-[calc(100vh-56px)] bg-bg flex items-center justify-center px-4">
+  return (
+    <div className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-4" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}>
+
+      {/* ── RESULT ── */}
+      {phase === 'result' && result && !result.isSolo && (
+        <div className="w-full flex items-center justify-center" style={{ minHeight: 'calc(100vh - 56px)' }}>
           <ResultScreen
             isWinner={isWinner}
             isDraw={result.draw}
@@ -663,13 +663,9 @@ export default function BlockBlastGame() {
             onBackToLobby={backToLobby}
           />
         </div>
-      );
-    }
-
-    // Bot match with wager
-    if (result.isSolo && result.humanWon !== null) {
-      return (
-        <div className="min-h-[calc(100vh-56px)] bg-bg flex items-center justify-center px-4">
+      )}
+      {phase === 'result' && result && result.isSolo && result.humanWon !== null && (
+        <div className="w-full flex items-center justify-center" style={{ minHeight: 'calc(100vh - 56px)' }}>
           <div className="w-full max-w-md bg-surface border border-surfaceLight rounded-3xl p-8 text-center animate-scale-in shadow-2xl overflow-y-auto">
             <div className={`text-7xl mb-4 animate-pop-in ${result.humanWon ? '' : 'grayscale'}`}>
               {result.humanWon ? '🏆' : '🤖'}
@@ -708,30 +704,23 @@ export default function BlockBlastGame() {
             </div>
           </div>
         </div>
-      );
-    }
-
-    // Free solo
-    return (
-      <div className="min-h-[calc(100vh-56px)] bg-bg flex items-center justify-center px-4">
-        <div className="w-full max-w-md bg-surface border border-surfaceLight rounded-3xl p-8 text-center animate-scale-in shadow-2xl overflow-y-auto">
-          <div className="text-7xl mb-4 animate-pop-in">🎮</div>
-          <h2 className="text-4xl font-black mb-2 text-accent">Game Over!</h2>
-          <div className="bg-bg rounded-xl p-6 mb-6">
-            <div className="text-5xl font-black text-white mb-1">{(result.playerScore ?? 0).toLocaleString()}</div>
-            <div className="text-sm text-muted">Final Score</div>
-          </div>
-          <div className="flex flex-col gap-3">
-            <GlowButton onClick={playVsBotFree} variant="primary" size="lg" className="w-full">Play Again</GlowButton>
-            <GlowButton variant="ghost" onClick={() => { window.location.href = '/'; }} className="w-full border border-border">Home</GlowButton>
+      )}
+      {phase === 'result' && result && result.isSolo && result.humanWon === null && (
+        <div className="w-full flex items-center justify-center" style={{ minHeight: 'calc(100vh - 56px)' }}>
+          <div className="w-full max-w-md bg-surface border border-surfaceLight rounded-3xl p-8 text-center animate-scale-in shadow-2xl overflow-y-auto">
+            <div className="text-7xl mb-4 animate-pop-in">🎮</div>
+            <h2 className="text-4xl font-black mb-2 text-accent">Game Over!</h2>
+            <div className="bg-bg rounded-xl p-6 mb-6">
+              <div className="text-5xl font-black text-white mb-1">{(result.playerScore ?? 0).toLocaleString()}</div>
+              <div className="text-sm text-muted">Final Score</div>
+            </div>
+            <div className="flex flex-col gap-3">
+              <GlowButton onClick={playVsBotFree} variant="primary" size="lg" className="w-full">Play Again</GlowButton>
+              <GlowButton variant="ghost" onClick={() => { window.location.href = '/'; }} className="w-full border border-border">Home</GlowButton>
+            </div>
           </div>
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-4" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}>
+      )}
 
       {/* ── LOBBY ── */}
       {phase === 'lobby' && (
