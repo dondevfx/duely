@@ -104,9 +104,6 @@ export default function ResultScreen({
             <div className={`text-3xl font-black ${isDraw ? 'text-accent' : isWinner ? 'text-success' : 'text-danger'}`}>
               {isDraw ? 'Draw!' : isWinner ? 'Victory!' : 'Defeat'}
             </div>
-            {disconnected && (
-              <p className="text-sm text-warning mt-1">Opponent disconnected</p>
-            )}
             {!isDraw && isWinner && winnerStreak >= 1 && (
               <p className="text-base font-bold text-orange-400 mt-1" style={{ textShadow: '0 0 10px rgba(251,146,60,0.5)' }}>
                 🔥 {winnerStreak} Win Streak!
@@ -147,6 +144,12 @@ export default function ResultScreen({
               <span className="text-muted">{isWinner ? winnerUsername : loserUsername} vs {isWinner ? loserUsername : winnerUsername}</span>
               <span className="text-xs text-muted">{gameLabel}</span>
             </div>
+            {disconnected && (
+              <div className="flex justify-between">
+                <span className="text-muted">Reason</span>
+                <span className="text-warning font-bold">Opponent disconnected</span>
+              </div>
+            )}
             {extraRows.map(r => (
               <div key={r.label} className="flex justify-between">
                 <span className="text-muted">{r.label}</span>

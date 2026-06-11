@@ -740,10 +740,10 @@ export default function ScrabbleGame() {
             gameLabel="🔤 Word VS"
             extraRows={[
               { label: 'Score', value: `${result.winnerScore ?? 0} — ${result.loserScore ?? 0}` },
-              { label: 'Reason', value:
+              ...(!result.disconnected ? [{ label: 'Reason', value:
                   result.reason === 'consecutive_passes' ? 'Both passed' :
                   result.reason === 'tiles_out' ? 'All tiles placed' :
-                  result.reason === 'board_full' ? 'Board filled' : 'Disconnected' },
+                  result.reason === 'board_full' ? 'Board filled' : 'Game over' }] : []),
             ]}
             onRematch={null}
             onPlayAgain={backToLobby}
