@@ -282,6 +282,14 @@ export default function ScrabbleGame() {
   const insufficient = entryFee > 0 && balance < entryFee;
   const isWinner     = result && result.winnerId === profile?.id;
 
+  // These hooks must be declared before any early return (Rules of Hooks)
+  const _autoFired = useRef(false);
+  useEffect(() => {
+    if (!location.state?.autoQueue || _autoFired.current || !authenticated || !socket) return;
+    _autoFired.current = true;
+    joinQueue();
+  }, [socket, authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Result screen (full-page, matches Blackjack/CoinFlip layout) ──
   if (phase === 'result' && result) {
     return (
@@ -691,13 +699,6 @@ export default function ScrabbleGame() {
   const myScore    = mySocketId ? (scores[mySocketId] || 0) : 0;
   const oppSockets = Object.keys(scores).filter(k => k !== mySocketId);
   const oppScore   = oppSockets.length > 0 ? (scores[oppSockets[0]] || 0) : 0;
-
-  const _autoFired = useRef(false);
-  useEffect(() => {
-    if (!location.state?.autoQueue || _autoFired.current || !authenticated || !socket) return;
-    _autoFired.current = true;
-    joinQueue();
-  }, [socket, authenticated]); // eslint-disable-line
 
   return (
     <div

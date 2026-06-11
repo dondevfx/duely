@@ -624,6 +624,14 @@ export default function BlockBlastGame() {
   const isWinner = result && result.winnerId === profile?.id;
   const CELL_PX  = cellPx;
 
+  // These hooks must be declared before any early return (Rules of Hooks)
+  const _randomQueueFired = useRef(false);
+  useEffect(() => {
+    if (!location.state?.autoQueue || _randomQueueFired.current || !authenticated || !socket) return;
+    _randomQueueFired.current = true;
+    joinQueue();
+  }, [socket, authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Result screen (full-page, matches Blackjack/CoinFlip layout) ──
   if (phase === 'result' && result) {
     // PvP (normal win/loss) and draws → shared ResultScreen
@@ -721,13 +729,6 @@ export default function BlockBlastGame() {
       </div>
     );
   }
-
-  const _randomQueueFired = useRef(false);
-  useEffect(() => {
-    if (!location.state?.autoQueue || _randomQueueFired.current || !authenticated || !socket) return;
-    _randomQueueFired.current = true;
-    joinQueue();
-  }, [socket, authenticated]);
 
   return (
     <div className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-4" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}>
