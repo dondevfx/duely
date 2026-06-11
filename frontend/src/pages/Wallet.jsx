@@ -390,18 +390,21 @@ export default function Wallet() {
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-muted">Amount (USD)</label>
+                <label className="text-xs text-muted">Amount (USD) — <span className="text-success font-semibold">min ${MIN_WITHDRAWAL}</span></label>
                 <span className="text-xs text-muted">Balance: <span className="text-white font-bold inline-flex items-center gap-0.5">{fmt(profile?.c_coins)} <CoinIcon size="0.75em" /></span></span>
               </div>
               <input
                 type="number" min={MIN_WITHDRAWAL} max={profile?.c_coins ?? 0} step="1"
                 value={witAmountUsd}
                 onChange={e => setWitAmountUsd(e.target.value)}
-                placeholder={`e.g. 20`}
+                placeholder={`min $${MIN_WITHDRAWAL}`}
                 className="w-full bg-bg border border-surfaceLight rounded-lg px-4 py-3 text-white placeholder-muted text-sm focus:outline-none focus:border-primary transition-colors"
               />
               {witAmountUsd && parseFloat(witAmountUsd) > (profile?.c_coins ?? 0) && (
                 <p className="text-xs text-danger mt-1">Exceeds your balance of {fmt(profile?.c_coins)} coins</p>
+              )}
+              {witAmountUsd && parseFloat(witAmountUsd) < MIN_WITHDRAWAL && parseFloat(witAmountUsd) > 0 && (
+                <p className="text-xs text-danger mt-1">Minimum withdrawal is ${MIN_WITHDRAWAL}</p>
               )}
               {witEstimate && (
                 <p className="text-xs text-success mt-1">
