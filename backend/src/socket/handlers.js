@@ -2352,39 +2352,13 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
             console.error('[forfeit] elo update failed:', eloErr.message);
           }
 
-          // ── Wallet settlement — direct DB reads/writes, no RPCs ───────
-          if (currency === 'diamonds') {
-            const fee_d = Math.floor(fee);
-            // Deduct from loser
-            const { data: lRow, error: lErr } = await supabase.from('profiles').select('diamonds').eq('id', leaver.userId).single();
-            if (lErr) throw new Error('fetch loser diamonds: ' + lErr.message);
-            const { error: ldErr } = await supabase.from('profiles').update({ diamonds: Math.max(0, (lRow?.diamonds || 0) - fee_d) }).eq('id', leaver.userId);
-            if (ldErr) throw new Error('deduct loser diamonds: ' + ldErr.message);
-            // Credit winner
-            const { data: wRow, error: wErr } = await supabase.from('profiles').select('diamonds').eq('id', stayer.userId).single();
-            if (wErr) throw new Error('fetch winner diamonds: ' + wErr.message);
-            const { error: wcErr } = await supabase.from('profiles').update({ diamonds: (wRow?.diamonds || 0) + fee_d }).eq('id', stayer.userId);
-            if (wcErr) throw new Error('credit winner diamonds: ' + wcErr.message);
-            winnerPayout = fee_d;
-          } else {
-            const fee_c = parseFloat(fee);
-            const gain  = parseFloat((fee_c * 0.9).toFixed(4));
-            // Deduct from loser
-            const { data: lRow, error: lErr } = await supabase.from('profiles').select('c_coins').eq('id', leaver.userId).single();
-            if (lErr) throw new Error('fetch loser coins: ' + lErr.message);
-            const { error: ldErr } = await supabase.from('profiles').update({ c_coins: Math.max(0, (lRow?.c_coins || 0) - fee_c) }).eq('id', leaver.userId);
-            if (ldErr) throw new Error('deduct loser coins: ' + ldErr.message);
-            // Credit winner
-            const { data: wRow, error: wErr } = await supabase.from('profiles').select('c_coins').eq('id', stayer.userId).single();
-            if (wErr) throw new Error('fetch winner coins: ' + wErr.message);
-            const { error: wcErr } = await supabase.from('profiles').update({ c_coins: parseFloat(((wRow?.c_coins || 0) + gain).toFixed(4)) }).eq('id', stayer.userId);
-            if (wcErr) throw new Error('credit winner coins: ' + wcErr.message);
-            winnerPayout = gain;
-          }
+          // ── Wallet settlement — use dedicated forfeit RPCs ────────────
+          const result = currency === 'diamonds'
+            ? await forfeitSettleDiamonds(supabase, stayer.userId, leaver.userId, fee)
+            : await forfeitSettleCoins(supabase, stayer.userId, leaver.userId, fee);
+          winnerPayout = result.winnerPayout ?? 0;
 
           console.log(`[forfeit] settle OK — payout:${winnerPayout} newWinnerElo:${newWinnerElo}`);
-          unlockUser(stayer.userId);
-          unlockUser(leaver.userId);
         } catch (e) {
           console.error('[forfeit] settle FAILED:', e.message);
           unlockUser(stayer.userId);
