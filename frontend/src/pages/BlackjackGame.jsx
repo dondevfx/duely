@@ -163,9 +163,11 @@ export default function BlackjackGame() {
   const lastModeRef     = useRef(null); // 'pvp' | 'bot_free' | 'bot_paid'
   const lastSettingsRef = useRef({ entryFee: 0, currency: 'coins' });
   const socketRef       = useRef(socket);
+  const profileRef      = useRef(profile);
   const pendingStartRef = useRef(null); // buffers bj_start data until countdown finishes
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { socketRef.current = socket; }, [socket]);
+  useEffect(() => { profileRef.current = profile; }, [profile]);
 
   const [phase, _setPhase] = useState('lobby');
   const phaseRef = useRef('lobby');
@@ -367,7 +369,7 @@ export default function BlackjackGame() {
     socket.on('opponent_disconnected', (data = {}) => {
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
       pendingStartRef.current = null; // cancel any buffered start so countdown doesn't overwrite result
-      const myId = profile?.id;
+      const myId = profileRef.current?.id;
       const isWin = data.winnerId === myId;
       const payout = data.winnerPayout ?? null;
       setResultData({
@@ -446,6 +448,7 @@ export default function BlackjackGame() {
     eloBeforeRef.current = profile?.elo ?? 1000;
     lastModeRef.current = 'pvp';
     lastSettingsRef.current = { entryFee, currency: betCurrency };
+    setPhase('queue'); // go to queue phase immediately so countdown renders as soon as match_found fires
     socket.emit('join_bj_queue', { entryFee, currency: betCurrency });
   }
 
