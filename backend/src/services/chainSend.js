@@ -107,6 +107,15 @@ async function sendUsdcSpl(privKey, toAddress, amount) {
     || 'GGakQrHowCPNcd9VJJqTfwjYEtJfDm6bjwC2GvmSwAxV';
   const fromAta = new solWeb3.PublicKey(adminAtaAddr);
 
+  // Check admin wallet has enough SOL for fees + ATA creation (~0.003 SOL minimum)
+  const solBalance = await connection.getBalance(keypair.publicKey);
+  if (solBalance < 3_000_000) {   // 0.003 SOL in lamports
+    throw new Error(
+      `Admin wallet has insufficient SOL for fees (${solBalance / 1e9} SOL). ` +
+      `Send at least 0.05 SOL to ${keypair.publicKey.toBase58()}`
+    );
+  }
+
   // Recipient ATA — create if it doesn't exist (costs ~0.002 SOL from admin wallet)
   const toPubkey = new solWeb3.PublicKey(toAddress);
   const toAtaAccount = await splToken.getOrCreateAssociatedTokenAccount(
