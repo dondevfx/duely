@@ -195,7 +195,7 @@ export default function Wallet() {
         address:   witAddress.trim(),
         memo:      witMemo.trim() || undefined,
       });
-      setWitMsg({ type: 'success', text: `Withdrawal of ~${data.expected_output} ${witCoin.label} initiated. New balance: ${fmt(data.new_balance)} coins` });
+      setWitMsg({ type: 'success', text: `Withdrawal complete.` });
       setWitAddress('');
       setWitMemo('');
       setWitAmountUsd('');
