@@ -433,6 +433,7 @@ export default function ScrabbleGame() {
     });
 
     return () => {
+      socket.emit('player_forfeit');
       socket.emit('leave_game');
       socket.emit('leave_all_queues');
       socket.off('scrabble_match_found');

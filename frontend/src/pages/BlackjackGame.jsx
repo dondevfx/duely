@@ -359,6 +359,7 @@ export default function BlackjackGame() {
     });
 
     return () => {
+      socket.emit('player_forfeit');
       socket.emit('leave_game');
       socket.emit('leave_all_queues');
       socket.off('bj_queue_joined'); socket.off('bj_match_found');

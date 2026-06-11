@@ -301,6 +301,7 @@ export default function CoinFlipGame() {
     socket.on('error', ({ message }) => { setStatusMsg(message); setPhase('lobby'); });
 
     return () => {
+      socket.emit('player_forfeit');
       socket.emit('leave_game');
       socket.emit('leave_all_queues');
       socket.off('coin_flip_queue_joined');

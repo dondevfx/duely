@@ -14,7 +14,6 @@ const GAMES = [
     icon: '⚡',
     route: '/game/quick-match',
     available: true,
-    countKey: 'block-blast',
   },
   {
     title: 'Block Burst',

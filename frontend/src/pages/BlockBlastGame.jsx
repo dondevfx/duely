@@ -326,6 +326,7 @@ export default function BlockBlastGame() {
     });
 
     return () => {
+      socket.emit('player_forfeit');
       socket.emit('leave_game');
       socket.emit('leave_all_queues');
       socket.off('block_blast_match_found');

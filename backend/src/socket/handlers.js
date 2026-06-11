@@ -2125,6 +2125,41 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       }
     });
 
+    // ── Player forfeit: explicitly called when a player navigates away mid-match ──
+    socket.on('player_forfeit', async () => {
+      if (!authenticatedUser) return;
+      const roomLookups = [
+        [getRoomBySocket,           deleteRoom,           'reaction'],
+        [getTypeRoomBySocket,       deleteTypeRoom,       'type'],
+        [getMemoryRoomBySocket,     deleteMemoryRoom,     'memory'],
+        [getAimRoomBySocket,        deleteAimRoom,        'aim'],
+        [getC4RoomBySocket,         deleteC4Room,         'connectFour'],
+        [getDartRoomBySocket,       deleteDartRoom,       'darts'],
+        [getAsteroidRoomBySocket,   deleteAsteroidRoom,   'asteroids'],
+        [getPianoRoomBySocket,      deletePianoRoom,      'piano'],
+        [getClickRoomBySocket,      deleteClickRoom,      'clickRace'],
+        [getTTTRoomBySocket,        deleteTTTRoom,        'tictactoe'],
+        [getTetrisRoomBySocket,     deleteTetrisRoom,     'tetris'],
+        [getChessRoomBySocket,      deleteChessRoom,      'chess'],
+        [getStarshipRoomBySocket,   deleteStarshipRoom,   'starship'],
+        [getBlockBlastRoomBySocket, deleteBlockBlastRoom, 'blockBlast'],
+        [getCrossroadRoomBySocket,  deleteCrossroadRoom,  'crossroad'],
+        [getScrabbleRoomBySocket,   deleteScrabbleRoom,   'scrabble'],
+        [getCoinFlipRoomBySocket,   deleteCoinFlipRoom,   'coin_flip'],
+        [getBlackjackRoomBySocket,  deleteBlackjackRoom,  'blackjack'],
+      ];
+      for (const [getFn, delFn, gameType] of roomLookups) {
+        const found = getFn(socket.id);
+        if (!found) continue;
+        const { room } = found;
+        if (room.state === 'finished' || room.state === 'waiting') {
+          delFn(found.roomId); continue;
+        }
+        await _handleForfeit(io, supabase, found, socket.id, delFn, gameType);
+        break;
+      }
+    });
+
     socket.on('play_bj_vs_bot', async ({ entryFee = 0, currency = 'coins' } = {}) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
       if (currency !== 'diamonds') entryFee = 0;

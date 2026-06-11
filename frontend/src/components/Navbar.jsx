@@ -17,7 +17,7 @@ const NAV_LINKS = [
 ];
 
 const GAME_LINKS = [
-  { icon: '⚡', label: 'Quick Match', to: '/game/quick-match', countKey: 'block-blast' },
+  { icon: '⚡', label: 'Quick Match', to: '/game/quick-match' },
   { icon: '🟦', label: 'Block Burst', to: '/game/block-blast', countKey: 'block-blast' },
   { icon: '🟡', label: 'Coin Flip',   to: '/game/coin-flip',   countKey: 'coin-flip' },
   { icon: '🔤', label: 'Word VS',     to: '/game/scrabble',    countKey: 'scrabble' },
