@@ -77,4 +77,59 @@ async function swapSolToUsdc(privKey, amountSol, adminAddress) {
   return { txHash, usdcReceived };
 }
 
-module.exports = { swapSolToUsdc };
+/**
+ * Swap USDC → SOL using Jupiter, signed by the admin Phantom wallet.
+ * Used for SOL withdrawals — much cheaper than ChangeNow (~0.3% vs 5-7%).
+ * @param {Buffer} adminPrivKey  - 32-byte seed of admin Phantom wallet
+ * @param {number} amountUsdc   - USDC amount to swap
+ * @param {string} playerAddress - SOL wallet address to send SOL to
+ * @returns {{ txHash, solReceived }}
+ */
+async function swapUsdcToSol(adminPrivKey, amountUsdc, playerAddress) {
+  const rpc        = process.env.SOLANA_RPC || 'https://mainnet.helius-rpc.com/?api-key=' + (process.env.HELIUS_API_KEY || '');
+  const connection = new solWeb3.Connection(rpc, 'confirmed');
+  const keypair    = solWeb3.Keypair.fromSeed(new Uint8Array(adminPrivKey));
+  const usdcUnits  = Math.floor(amountUsdc * 1_000_000);   // USDC 6 decimals
+
+  // Step 1 — get quote USDC → SOL
+  const quoteUrl = `${JUPITER_API}/quote?inputMint=${USDC_MINT.toBase58()}&outputMint=${SOL_MINT}&amount=${usdcUnits}&slippageBps=50`;
+  const quoteRes = await fetch(quoteUrl);
+  if (!quoteRes.ok) throw new Error(`Jupiter quote HTTP ${quoteRes.status}`);
+  const quote = await quoteRes.json();
+  if (quote.error) throw new Error(`Jupiter quote error: ${quote.error}`);
+
+  const solReceived = parseFloat(quote.outAmount) / solWeb3.LAMPORTS_PER_SOL;
+  console.log(`[jupiter] USDC→SOL quote: ${amountUsdc} USDC → ${solReceived} SOL for ${playerAddress}`);
+
+  // Step 2 — get swap transaction, output SOL goes to player's wallet directly
+  const swapRes = await fetch(`${JUPITER_API}/swap`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({
+      quoteResponse:    quote,
+      userPublicKey:    keypair.publicKey.toBase58(),
+      // No destinationTokenAccount — SOL unwraps to player's native wallet
+      destinationWallet: playerAddress,
+      wrapAndUnwrapSol: true,
+    }),
+  });
+  if (!swapRes.ok) throw new Error(`Jupiter swap HTTP ${swapRes.status}`);
+  const swapData = await swapRes.json();
+  if (swapData.error) throw new Error(`Jupiter swap error: ${swapData.error}`);
+
+  // Step 3 — sign and send
+  const txBuf = Buffer.from(swapData.swapTransaction, 'base64');
+  const tx    = solWeb3.VersionedTransaction.deserialize(txBuf);
+  tx.sign([keypair]);
+
+  const txHash = await connection.sendRawTransaction(tx.serialize(), {
+    skipPreflight:       false,
+    preflightCommitment: 'confirmed',
+  });
+  await connection.confirmTransaction(txHash, 'confirmed');
+
+  console.log(`[jupiter] swapped ${amountUsdc} USDC → ${solReceived} SOL → ${playerAddress}, tx=${txHash}`);
+  return { txHash, solReceived };
+}
+
+module.exports = { swapSolToUsdc, swapUsdcToSol };

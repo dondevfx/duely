@@ -10,6 +10,7 @@ const {
 const { getOrCreateAddress } = require('../services/addressService');
 const { sendCrypto }         = require('../services/chainSend');
 const { createWithdrawalSwap, estimateWithdrawal, SS_TICKERS } = require('../services/simpleSwapService');
+const { swapUsdcToSol }      = require('../services/jupiterService');
 const { isLocked } = require('../services/lockService');
 
 const WITHDRAW_COOLDOWN_MS = 60 * 1000;   // 60s between withdrawals
@@ -155,40 +156,50 @@ module.exports = function walletRoutes(supabase) {
         return res.status(400).json({ error: 'Insufficient balance' });
       }
 
-      // ── Create SimpleSwap exchange (USDC SPL → player's coin) ────────
-      // We tell SimpleSwap to swap `amount` USDC → player's coin.
-      // SimpleSwap takes ~0.5% + network fee from the output — player receives less.
-      // Plisio also takes 0.5% on the outgoing USDC payout — also comes from amount.
-      // We deduct the full `amount` from the player's balance.
-      // After both fees: player receives roughly `amount * 0.990` worth of coin.
-      const swap = await createWithdrawalSwap({
-        coin:          coin.toLowerCase(),
-        amountUsd:     amount,
-        playerAddress: address.trim(),
-        playerMemo:    memo?.trim() || '',
-      });
-
-      // Deduct the full amount from player balance
+      // Deduct the full amount from player balance up front
       await deductCoins(supabase, req.user.id, amount);
 
-      // ── Send USDC from admin Phantom wallet to ChangeNow ─────────────
-      let payoutId = null;
+      // ── Decode admin private key (used for both paths) ───────────────
+      const bs58 = require('bs58');
+      const phantomKey = process.env.ADMIN_PHANTOM_PRIVATE_KEY;
+      if (!phantomKey) throw new Error('ADMIN_PHANTOM_PRIVATE_KEY not set');
+      const decoded = (bs58.default?.decode ?? bs58.decode)(phantomKey);
+      const privKey = Buffer.from(decoded).slice(0, 32);
+
+      let payoutId   = null;
+      let cryptoAmt  = null;
+
       try {
-        const bs58 = require('bs58');
-        const phantomKey = process.env.ADMIN_PHANTOM_PRIVATE_KEY;
-        if (!phantomKey) throw new Error('ADMIN_PHANTOM_PRIVATE_KEY not set');
-        const decoded = (bs58.default?.decode ?? bs58.decode)(phantomKey);
-        const privKey = Buffer.from(decoded).slice(0, 32);
-        const sendTx = await sendCrypto({
-          coin:      'usdc',
-          privKey,
-          toAddress: swap.depositAddress,
-          amount,
-        });
-        payoutId = sendTx;
+        if (coin.toLowerCase() === 'sol') {
+          // ── SOL: Jupiter swap USDC→SOL directly to player (~0.3% fee) ──
+          const { txHash, solReceived } = await swapUsdcToSol(privKey, amount, address.trim());
+          payoutId  = txHash;
+          cryptoAmt = solReceived;
+          console.log(`[withdraw] Jupiter SOL payout ${amount} USDC → ${solReceived} SOL → ${address.trim()} tx=${txHash}`);
+
+        } else {
+          // ── Other coins: ChangeNow swap then send USDC to their address ─
+          const swap = await createWithdrawalSwap({
+            coin:          coin.toLowerCase(),
+            amountUsd:     amount,
+            playerAddress: address.trim(),
+            playerMemo:    memo?.trim() || '',
+          });
+          cryptoAmt = swap.expectedOutput;
+
+          const sendTx = await sendCrypto({
+            coin:      'usdc',
+            privKey,
+            toAddress: swap.depositAddress,
+            amount,
+          });
+          payoutId = sendTx || swap.exchangeId;
+          console.log(`[withdraw] ChangeNow payout ${amount} USDC → ${coin} → ${address.trim()} exchange=${swap.exchangeId}`);
+        }
+
       } catch (payoutErr) {
         console.error(`[withdraw] payout failed user=${req.user.id} amount=${amount}:`, payoutErr);
-        // Payout failed — refund the deducted balance immediately
+        // Refund immediately on failure
         await creditCoins(supabase, req.user.id, amount).catch(e =>
           console.error(`CRITICAL: refund failed user=${req.user.id} amount=${amount}:`, e.message)
         );
@@ -197,14 +208,14 @@ module.exports = function walletRoutes(supabase) {
 
       // ── Record transaction ───────────────────────────────────────────
       await supabase.from('transactions').insert({
-        user_id:        req.user.id,
-        type:           'withdrawal',
-        amount_c:       amount,
-        crypto_amount:  swap.expectedOutput,
-        crypto_symbol:  coin.toUpperCase(),
-        tx_hash:        payoutId ? String(payoutId) : swap.exchangeId,
-        extra_id:       memo?.trim() || null,
-        status:         'pending',
+        user_id:       req.user.id,
+        type:          'withdrawal',
+        amount_c:      amount,
+        crypto_amount: cryptoAmt,
+        crypto_symbol: coin.toUpperCase(),
+        tx_hash:       String(payoutId),
+        extra_id:      memo?.trim() || null,
+        status:        'confirmed',
       });
 
       await recordWithdrawal(supabase, req.user.id, amount, 'crypto').catch(e =>
@@ -212,12 +223,7 @@ module.exports = function walletRoutes(supabase) {
       );
 
       const newBalance = await getBalance(supabase, req.user.id);
-      res.json({
-        success:         true,
-        expected_output: swap.expectedOutput,
-        coin:            coin.toUpperCase(),
-        new_balance:     newBalance,
-      });
+      res.json({ success: true, new_balance: newBalance });
 
     } catch (err) {
       const isBalanceError = err.message?.includes('Insufficient');
