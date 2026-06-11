@@ -2153,10 +2153,9 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         const found = getFn(socket.id);
         if (!found) continue;
         const { room } = found;
-        // 'waiting' = game not started yet (e.g. scrabble pre-start) — skip entirely, don't delete
-        if (room.state === 'waiting') continue;
         // 'finished' = already settled — just clean up
         if (room.state === 'finished') { delFn(found.roomId); continue; }
+        // 'waiting' rooms (countdown not yet started) still need forfeit notification to stayer
         await _handleForfeit(io, supabase, found, socket.id, delFn, gameType);
         // Clean up queue tracking so player can re-enter lobby cleanly
         if (authenticatedUser) userQueues.delete(authenticatedUser.userId);
@@ -2293,12 +2292,12 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           await _handleForfeit(io, supabase, found, socket.id, delFn, gameType);
           continue;
         }
-        if (room.state === 'finished' || room.state === 'waiting') {
+        if (room.state === 'finished') {
           delFn(found.roomId);
           continue;
         }
 
-        // Immediate forfeit — no rejoin window
+        // Immediate forfeit — includes 'waiting' (countdown phase) so stayer is notified
         await _handleForfeit(io, supabase, found, socket.id, delFn, gameType);
       }
     });
@@ -2308,7 +2307,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
   // One player left: stayer wins and gets paid. Both left: deduct both (fees).
   async function _handleForfeit(io, supabase, roomData, leaverSocketId, deleteFn, gameType) {
     const { roomId, room } = roomData;
-    if (!room || room.state === 'finished' || room.state === 'waiting') {
+    if (!room || room.state === 'finished') {
       deleteFn(roomId); return;
     }
     // Prevent double-processing if both disconnect near-simultaneously
