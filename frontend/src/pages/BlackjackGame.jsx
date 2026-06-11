@@ -163,6 +163,7 @@ export default function BlackjackGame() {
   const lastModeRef     = useRef(null); // 'pvp' | 'bot_free' | 'bot_paid'
   const lastSettingsRef = useRef({ entryFee: 0, currency: 'coins' });
   const socketRef       = useRef(socket);
+  const pendingStartRef = useRef(null); // buffers bj_start data until countdown finishes
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { socketRef.current = socket; }, [socket]);
 
@@ -215,12 +216,32 @@ export default function BlackjackGame() {
   const [flippingOpp, setFlippingOpp] = useState(false); // triggers FlipCard flip
   const prevHandLenRef = useRef(0);
 
-  // Visual countdown tick — counts 3→0; phase stays 'queue' throughout
+  // Countdown tick — when it hits 0, apply any buffered bj_start and go to 'playing'
   useEffect(() => {
-    if (countdown <= 0) return;
+    if (countdown <= 0) {
+      if (pendingStartRef.current) {
+        const d = pendingStartRef.current;
+        pendingStartRef.current = null;
+        prevHandLenRef.current = 0;
+        myHitCountRef.current  = 0;
+        oppBufferedRef.current = [];
+        oppRevealedRef.current = 0;
+        setMyHand(d.hand);
+        setMyScore(d.handScore);
+        setOpponentHandSize(d.oppSz);
+        setOppHand(d.opponentHand ?? []);
+        setStood(false); setBust(false); setFlippingOpp(false);
+        setNewCardIdx(null); setSplitData(null); setOppHasSplit(false);
+        setDealRevision(r => r + 1);
+        prevHandLenRef.current = d.hand.length;
+        setPhase('playing');
+        setTimeLeft(d.timeLimit || 20);
+      }
+      return;
+    }
     const id = setTimeout(() => setCountdown(c => c - 1), 1000);
     return () => clearTimeout(id);
-  }, [countdown]);
+  }, [countdown]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isDiamonds = betCurrency === 'diamonds';
   const fees = isDiamonds ? DIAMOND_FEES : COIN_FEES;
@@ -250,30 +271,15 @@ export default function BlackjackGame() {
 
     socket.on('bj_match_found', ({ roomId: rid, opponent }) => {
       roomIdRef.current = rid;
+      pendingStartRef.current = null;
       setRoomId(rid);
       setOpponentUsername(opponent.username);
-      setCountdown(3); // start visual countdown without changing phase
+      setCountdown(3); // triggers countdown → game starts when countdown hits 0
     });
 
     socket.on('bj_start', ({ hand, handScore, opponentHand, opponentHandSize: oppSz, timeLimit }) => {
-      prevHandLenRef.current = 0;
-      myHitCountRef.current  = 0;
-      oppBufferedRef.current = [];
-      oppRevealedRef.current = 0;
-      setMyHand(hand);
-      setMyScore(handScore);
-      setOpponentHandSize(oppSz);
-      setOppHand(opponentHand ?? []);
-      setStood(false);
-      setBust(false);
-      setFlippingOpp(false);
-      setNewCardIdx(null);
-      setSplitData(null);
-      setOppHasSplit(false);
-      setDealRevision(r => r + 1);
-      prevHandLenRef.current = hand.length;
-      setPhase('playing');
-      setTimeLeft(timeLimit || 20);
+      // Buffer the start data — countdown useEffect will apply it when it reaches 0
+      pendingStartRef.current = { hand, handScore, opponentHand, oppSz, timeLimit };
     });
 
     socket.on('bj_opp_card', ({ card }) => {
