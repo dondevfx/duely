@@ -94,8 +94,8 @@ function TileButton({ letter, selected, onClick, onDragStart, onDragEnd, draggin
 // Responsive cell size: max 70px but shrinks to fit the screen
 // Board = 6 cells + 5 gaps(4px) + 16px padding + 6px border = 6*cell + 42
 const CELL_SIZE = typeof window !== 'undefined'
-  ? Math.min(56, Math.floor((Math.min(window.innerWidth, 420) - 32) / 6))
-  : 56;
+  ? Math.min(72, Math.floor((Math.min(window.innerWidth, 520) - 32) / 6))
+  : 72;
 
 function BoardCell({ row, col, cell, pending, myTurn, onClick, onRemove, onDragOver, onDrop }) {
   const prem      = PREMIUM[`${row},${col}`];
@@ -733,7 +733,7 @@ export default function ScrabbleGame() {
 
       {/* GAME */}
       {phase === 'game' && (
-        <div className="w-full animate-fade-in px-1 flex flex-col items-center mx-auto" style={{ maxWidth: 580, paddingTop: 8 }}>
+        <div className="w-full animate-fade-in px-1 flex flex-col items-center mx-auto" style={{ maxWidth: 660, paddingTop: 8 }}>
 
           {/* Turn timer bar */}
           {myTurn && turnSeconds > 0 && (
