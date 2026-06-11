@@ -190,6 +190,7 @@ export default function BlockBlastGame() {
   const roomIdRef      = useRef(null);
   const phaseRef       = useRef(location.state?.autoQueue ? 'queue' : 'lobby');
   function setPhase(p) { phaseRef.current = p; _setPhase(p); }
+  const gameOverRef    = useRef(false); // true once result/forfeit received — blocks stale game events
   const isSoloRef      = useRef(false);
   const stuckRef       = useRef(false);
   const profileRef     = useRef(profile);
@@ -275,6 +276,7 @@ export default function BlockBlastGame() {
 
     socket.on('block_blast_match_found', ({ roomId: rid, opponent: opp, vsBot }) => {
       eloBeforeRef.current = profileRef.current?.elo ?? null;
+      gameOverRef.current = false; // reset for new match
       roomIdRef.current = rid;
       setOppScore(0);
       setRoomId(rid);
@@ -288,13 +290,14 @@ export default function BlockBlastGame() {
     socket.on('block_blast_countdown', ({ count }) => setCountdown(count));
 
     socket.on('block_blast_start', ({ seed }) => {
-      if (phaseRef.current === 'result') return; // opponent already left — don't overwrite result screen
+      if (gameOverRef.current) return; // opponent already left — don't overwrite result screen
       setPhase('active');
       initGame(seed);
     });
 
     socket.on('block_blast_result', (res) => {
       roomIdRef.current = null;
+      gameOverRef.current = true; // mark game over so no further game events are processed
       setResult(res);
       setPhase('result');
       setGameOver(true);
@@ -302,10 +305,12 @@ export default function BlockBlastGame() {
     });
 
     socket.on('block_blast_player_stuck', ({ stuckUserId }) => {
+      if (gameOverRef.current) return;
       if (stuckUserId !== profileRef.current?.id) setOppStuck(true);
     });
 
     socket.on('block_blast_keep_playing', ({ seconds }) => {
+      if (gameOverRef.current) return;
       setKeepPlayingSeconds(seconds);
       if (keepPlayingTimerRef.current) clearInterval(keepPlayingTimerRef.current);
       keepPlayingTimerRef.current = setInterval(() => {
@@ -316,10 +321,14 @@ export default function BlockBlastGame() {
       }, 1000);
     });
 
-    socket.on('block_blast_opponent_score', ({ score: s }) => setOppScore(s));
+    socket.on('block_blast_opponent_score', ({ score: s }) => {
+      if (gameOverRef.current) return;
+      setOppScore(s);
+    });
 
     socket.on('opponent_disconnected', (data = {}) => {
       roomIdRef.current = null;
+      gameOverRef.current = true; // mark game over — blocks any in-flight game events
       const myId = profileRef.current?.id;
       const isWin = data.winnerId === myId;
       const payout = data.winnerPayout ?? null;

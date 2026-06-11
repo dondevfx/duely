@@ -246,6 +246,7 @@ export default function ScrabbleGame() {
   const profileRef   = useRef(profile);
   const phaseRef     = useRef(location.state?.autoQueue ? 'queue' : 'lobby');
   function setPhase(p) { phaseRef.current = p; _setPhase(p); }
+  const gameOverRef  = useRef(false); // true once result/forfeit received — blocks stale game events
   const eloBeforeRef = useRef(null);
   const timerRef     = useRef(null);
   // Keep a snapshot of the hand BEFORE placing tiles (so we can restore on error)
@@ -362,13 +363,14 @@ export default function ScrabbleGame() {
     socket.on('scrabble_match_found', ({ roomId: rid, opponent: opp }) => {
       eloBeforeRef.current = profileRef.current?.elo ?? null;
       inActiveMatchRef.current = true; // mark active from match_found so forfeit fires during countdown too
+      gameOverRef.current = false; // reset for new match
       setRoomId(rid); setOpponent(opp); setPhase('countdown'); setCountdown(3);
     });
 
     socket.on('scrabble_countdown', ({ count }) => setCountdown(count));
 
     socket.on('scrabble_start', ({ board: b, scores: sc, bagCount: bc, firstTurnSocketId }) => {
-      if (phaseRef.current === 'result') return; // opponent already left — don't overwrite result screen
+      if (gameOverRef.current) return; // opponent already left — don't overwrite result screen
       inActiveMatchRef.current = true;
       setBoard(b.map(r => r.map(c => c)));
       setScores(sc); setBagCount(bc);
@@ -382,11 +384,13 @@ export default function ScrabbleGame() {
     });
 
     socket.on('scrabble_your_hand', ({ hand }) => {
+      if (gameOverRef.current) return;
       setMyHand(hand);
       handBeforeRef.current = hand;
     });
 
     socket.on('scrabble_word_played', ({ board: b, scores: sc, bagCount: bc, nextTurn, words, score }) => {
+      if (gameOverRef.current) return;
       setBoard(b.map(r => r.map(c => c)));
       setScores(sc); setBagCount(bc);
       setMyTurn(nextTurn === socket.id);
@@ -397,17 +401,20 @@ export default function ScrabbleGame() {
     });
 
     socket.on('scrabble_new_tiles', ({ hand }) => {
+      if (gameOverRef.current) return;
       setMyHand(hand);
       handBeforeRef.current = hand;
     });
 
     socket.on('scrabble_skipped', ({ nextTurn }) => {
+      if (gameOverRef.current) return;
       setMyTurn(nextTurn === socket.id);
       setLastWords([]); setLastScore(null);
       setTurnSeconds(0);
     });
 
     socket.on('scrabble_exchanged', ({ nextTurn, bagCount: bc }) => {
+      if (gameOverRef.current) return;
       setMyTurn(nextTurn === socket.id);
       setBagCount(bc);
       setExchangeMode(false); setExchangeSel(new Set());
@@ -415,6 +422,7 @@ export default function ScrabbleGame() {
     });
 
     socket.on('scrabble_turn', ({ socketId: sid, timeLimit }) => {
+      if (gameOverRef.current) return; // block after game over — prevents stale turn timer restart
       if (sid === socket.id) setTurnSeconds(timeLimit);
       else setTurnSeconds(0);
     });
@@ -435,6 +443,7 @@ export default function ScrabbleGame() {
 
     socket.on('scrabble_result', (res) => {
       inActiveMatchRef.current = false;
+      gameOverRef.current = true; // mark game over so no further game events are processed
       setResult(res); setPhase('result'); refreshProfile();
     });
 
@@ -448,6 +457,7 @@ export default function ScrabbleGame() {
 
     socket.on('opponent_disconnected', (data = {}) => {
       inActiveMatchRef.current = false;
+      gameOverRef.current = true; // mark game over — blocks any in-flight game events
       const myId = profileRef.current?.id;
       const isWin = data.winnerId === myId;
       const payout = data.winnerPayout ?? null;
