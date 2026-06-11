@@ -138,7 +138,7 @@ export default function CoinFlipGame() {
   const navigate = useNavigate();
   const location = useLocation();
   const { profile, session, refreshProfile } = useAuth();
-  const { socket, authenticated, playerCounts } = useSocket();
+  const { socket, authenticated, playerCounts, betCounts } = useSocket();
   const { displayCurrency: betCurrency, setDisplayCurrency: setBetCurrency } = useCurrency();
   const eloBeforeRef    = useRef(profile?.elo ?? 1000);
   const lastModeRef     = useRef(null); // 'pvp' | 'bot_free' | 'bot_paid'
@@ -459,12 +459,6 @@ export default function CoinFlipGame() {
           <div className="text-center mb-6">
             <h1 className="text-5xl font-black text-white mb-2">🟡 Coin Flip</h1>
             <p className="text-muted text-base">Pick a side — get matched with the opposite</p>
-            {(playerCounts?.['coin-flip'] ?? 0) > 0 && (
-              <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full bg-success/10 border border-success/30">
-                <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" style={{ boxShadow: '0 0 5px #4ade80' }} />
-                <span className="text-success text-xs font-bold">{playerCounts['coin-flip']} playing</span>
-              </div>
-            )}
           </div>
         )}
 
@@ -525,6 +519,18 @@ export default function CoinFlipGame() {
                   <div className="text-3xl font-black text-success" style={{ textShadow: '0 0 16px rgba(34,197,94,0.4)' }}>+{payout}</div>
                 </div>
               )}
+              {(playerCounts?.['coin-flip'] ?? 0) > 0 && (
+                <div className="flex items-center gap-1.5 mt-3">
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 6px #4ade80' }} />
+                  <span style={{ color: '#4ade80', fontSize: 12, fontWeight: 600 }}>{playerCounts['coin-flip']} playing</span>
+                </div>
+              )}
+              {(() => { const n = betCounts?.[`coin-flip:${entryFee}:${betCurrency}`] || 0; return n > 0 ? (
+                <div className="flex items-center gap-1.5 mt-1">
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#60a5fa', boxShadow: '0 0 6px #60a5fa' }} />
+                  <span style={{ color: '#60a5fa', fontSize: 12, fontWeight: 600 }}>{n} at this bet</span>
+                </div>
+              ) : null; })()}
               {insufficient && <p className="text-danger text-sm mt-2 text-center font-semibold">Insufficient balance.</p>}
             </div>
 

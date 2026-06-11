@@ -157,7 +157,7 @@ export default function BlackjackGame() {
   const navigate = useNavigate();
   const location = useLocation();
   const { profile, session, refreshProfile } = useAuth();
-  const { socket, authenticated, playerCounts } = useSocket();
+  const { socket, authenticated, playerCounts, betCounts } = useSocket();
   const { displayCurrency: betCurrency, setDisplayCurrency: setBetCurrency } = useCurrency();
   const eloBeforeRef    = useRef(profile?.elo ?? 1000);
   const lastModeRef     = useRef(null); // 'pvp' | 'bot_free' | 'bot_paid'
@@ -346,7 +346,6 @@ export default function BlackjackGame() {
 
     socket.on('opponent_disconnected', (data = {}) => {
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-      inActiveMatchRef.current = false;
       const myId = profile?.id;
       const isWin = data.winnerId === myId;
       const payout = data.winnerPayout ?? null;
@@ -861,6 +860,12 @@ export default function BlackjackGame() {
               <span style={{ color: '#4ade80', fontSize: 12, fontWeight: 600 }}>{playerCounts.blackjack} playing</span>
             </div>
           )}
+          {(() => { const n = betCounts?.[`blackjack:${entryFee}:${betCurrency}`] || 0; return n > 0 ? (
+            <div className="flex items-center gap-1.5 mt-1">
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#60a5fa', boxShadow: '0 0 6px #60a5fa' }} />
+              <span style={{ color: '#60a5fa', fontSize: 12, fontWeight: 600 }}>{n} at this bet</span>
+            </div>
+          ) : null; })()}
           {insufficient && <p className="text-danger text-sm mt-2 text-center font-semibold">Insufficient balance.</p>}
         </div>
 
