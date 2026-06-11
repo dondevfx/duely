@@ -724,7 +724,7 @@ export default function ScrabbleGame() {
 
       {/* RESULT */}
       {phase === 'result' && result && (
-        <div className="w-full flex items-center justify-center" style={{ minHeight: 'calc(100vh - 56px)' }}>
+        <div className="fixed inset-0 z-50 bg-bg flex items-center justify-center overflow-y-auto p-4">
           <ResultScreen
             isWinner={isWinner}
             winnerUsername={result.winnerUsername}

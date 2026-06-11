@@ -2312,6 +2312,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     }
     // Prevent double-processing if both disconnect near-simultaneously
     room.state = 'finished';
+    // Cancel any pending game timers (e.g. Blackjack auto-stand) so they don't fire after forfeit
+    if (room.timer) { clearTimeout(room.timer); room.timer = null; }
 
     const leaver = room.players.find(p => p.socketId === leaverSocketId);
     const stayer = room.players.find(p => p.socketId !== leaverSocketId);

@@ -10,14 +10,14 @@ import CoinIcon from '../components/CoinIcon';
 const GAMES = [
   {
     title: 'Quick Match',
-    description: 'Pick your bet and let fate decide — jump straight into Block Burst. Fast, competitive, no bots.',
+    description: 'Pick your bet and get matched instantly — jump straight into Block Burst. Fast, competitive, no bots.',
     icon: '⚡',
     route: '/game/quick-match',
     available: true,
   },
   {
     title: 'Block Burst',
-    description: 'Place pieces to clear rows and columns — score more than your opponent in 90 seconds.',
+    description: 'Drag blocks onto the grid to fill rows and columns. Clear them to earn points. Fill the energy bar to unlock Blast Mode!',
     icon: '🟦',
     route: '/game/block-blast',
     available: true,
@@ -25,7 +25,7 @@ const GAMES = [
   },
   {
     title: 'Coin Flip',
-    description: 'Pick Heads or Tails — matched with someone on the other side. Instant result.',
+    description: 'Pick a side — get matched with the opposite. Instant result.',
     icon: '🟡',
     route: '/game/coin-flip',
     available: true,
@@ -33,7 +33,7 @@ const GAMES = [
   },
   {
     title: 'Word VS',
-    description: 'Place words on the 6×6 board to outscore your opponent. Every word scores — no filters.',
+    description: 'Place words on the 6×6 board to outscore your opponent. Any word goes — no filters. 60s per turn.',
     icon: '🔤',
     route: '/game/scrabble',
     available: true,
@@ -41,7 +41,7 @@ const GAMES = [
   },
   {
     title: 'Blackjack',
-    description: 'Get closer to 21 than your opponent without busting. Both players act simultaneously.',
+    description: 'Get closer to 21 than your opponent. Both players act simultaneously — no waiting.',
     icon: '🃏',
     route: '/game/blackjack',
     available: true,
@@ -177,15 +177,15 @@ export default function Home() {
               <ul className="text-sm text-muted space-y-2">
                 <li className="flex items-start gap-2">
                   <span className="text-primary">•</span>
-                  1 C Coin = $1 USD — deposit ETH or MATIC
+                  1 C Coin = $1 USD
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-accent">•</span>
-                  Diamonds 💎 are free — claim 250 every 30 min
+                  💎 Diamonds are free — claim 250 every 30 min
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary">•</span>
-                  Bet <CoinIcon size="0.9em" /> Coins or Diamonds on any game
+                  Bet <CoinIcon size="0.9em" /> Coins or 💎 Diamonds on any game
                 </li>
               </ul>
               <Link

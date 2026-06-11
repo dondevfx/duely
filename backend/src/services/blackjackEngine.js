@@ -298,6 +298,11 @@ function _autoStandAll(io, supabase, roomId) {
   for (const p of room.players) {
     // If still on hand1 of a split, complete hand1 and transition
     if (!room.stood[p.socketId]) {
+      // Skip players whose socket is gone — the disconnect handler will forfeit them
+      if (!p.isBot) {
+        const sock = io.sockets.sockets.get(p.socketId);
+        if (!sock || !sock.connected) continue;
+      }
       if (room.splitHand[p.socketId]) {
         room.completedHand1[p.socketId] = [...room.hands[p.socketId]];
         room.hands[p.socketId] = room.splitHand[p.socketId];
