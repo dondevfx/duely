@@ -346,13 +346,18 @@ export default function BlackjackGame() {
 
     socket.on('opponent_disconnected', (data = {}) => {
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      inActiveMatchRef.current = false;
+      const myId = profile?.id;
+      const isWin = data.winnerId === myId;
       const payout = data.winnerPayout ?? null;
       setResultData({
-        winnerId: data.winnerId,
-        loserId: data.loserId,
-        disconnected: true,
-        balanceChange: payout != null ? { winnerPayout: payout } : undefined,
-        currency: data.currency,
+        winnerId:       data.winnerId,
+        loserId:        data.loserId,
+        winnerUsername: isWin ? profile?.username : data.winnerUsername,
+        loserUsername:  isWin ? data.loserUsername : profile?.username,
+        disconnected:   true,
+        balanceChange:  (isWin && payout != null) ? { winnerPayout: payout } : undefined,
+        currency:       data.currency,
       });
       setPhase('result');
       refreshProfile();
@@ -826,12 +831,6 @@ export default function BlackjackGame() {
         <div className="text-center mb-6">
           <h1 className="text-5xl font-black text-white mb-2">🃏 Blackjack</h1>
           <p className="text-muted text-base">Get closer to 21 than your opponent</p>
-          {(playerCounts?.blackjack ?? 0) > 0 && (
-            <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full bg-success/10 border border-success/30">
-              <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" style={{ boxShadow: '0 0 5px #4ade80' }} />
-              <span className="text-success text-xs font-bold">{playerCounts.blackjack} playing</span>
-            </div>
-          )}
         </div>
 
         <div className="mb-4 bg-surface border border-border rounded-2xl p-5">
@@ -854,6 +853,12 @@ export default function BlackjackGame() {
             <div className="mt-4 text-center">
               <div className="text-xs text-muted uppercase tracking-widest mb-1 font-semibold">Win Payout</div>
               <div className="text-3xl font-black text-success" style={{ textShadow: '0 0 16px rgba(34,197,94,0.4)' }}>+{payout}</div>
+            </div>
+          )}
+          {(playerCounts?.blackjack ?? 0) > 0 && (
+            <div className="flex items-center gap-1.5 mt-3">
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 6px #4ade80' }} />
+              <span style={{ color: '#4ade80', fontSize: 12, fontWeight: 600 }}>{playerCounts.blackjack} playing</span>
             </div>
           )}
           {insufficient && <p className="text-danger text-sm mt-2 text-center font-semibold">Insufficient balance.</p>}

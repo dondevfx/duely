@@ -2157,6 +2157,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         // 'finished' = already settled — just clean up
         if (room.state === 'finished') { delFn(found.roomId); continue; }
         await _handleForfeit(io, supabase, found, socket.id, delFn, gameType);
+        // Clean up queue tracking so player can re-enter lobby cleanly
+        if (authenticatedUser) userQueues.delete(authenticatedUser.userId);
         break;
       }
     });
@@ -2334,6 +2336,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
       if (stayerSocket) {
         // Stayer is still connected → they win the forfeit
+        const fallbackPayout = parseFloat(((fee * 2) * 0.95).toFixed(4));
         try {
           const result = currency === 'diamonds'
             ? await settleMatchDiamonds(supabase, stayer.userId, leaver.userId, fee)
@@ -2354,14 +2357,24 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           }).catch(() => {});
 
           stayerSocket.emit('opponent_disconnected', {
-            winnerId:     stayer.userId,
-            loserId:      leaver.userId,
-            winnerPayout: result?.winnerPayout ?? parseFloat(((fee * 2) * 0.95).toFixed(4)),
+            winnerId:      stayer.userId,
+            loserId:       leaver.userId,
+            winnerUsername: stayer.username,
+            loserUsername:  leaver.username,
+            winnerPayout:  result?.winnerPayout ?? fallbackPayout,
             currency,
           });
         } catch (e) {
           console.error('forfeit settle error:', e.message);
-          stayerSocket.emit('opponent_disconnected', {});
+          // Still tell stayer they won even if payout failed
+          stayerSocket.emit('opponent_disconnected', {
+            winnerId:      stayer.userId,
+            loserId:       leaver.userId,
+            winnerUsername: stayer.username,
+            loserUsername:  leaver.username,
+            winnerPayout:  0,
+            currency,
+          });
         }
       } else {
         // Both disconnected — refund both (unlock only, no coins moved)
@@ -2371,7 +2384,14 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     } else {
       // Free match — just notify opponent if still connected
       const stayerSocket = io.sockets.sockets.get(stayer.socketId);
-      if (stayerSocket && !stayer.isBot) stayerSocket.emit('opponent_disconnected', {});
+      if (stayerSocket && !stayer.isBot) stayerSocket.emit('opponent_disconnected', {
+        winnerId:      stayer.userId,
+        loserId:       leaver.userId,
+        winnerUsername: stayer.username,
+        loserUsername:  leaver.username,
+        winnerPayout:  0,
+        currency,
+      });
     }
 
     io.emit('active_game_ended', { id: roomId });

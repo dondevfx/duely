@@ -317,13 +317,16 @@ export default function BlockBlastGame() {
 
     socket.on('opponent_disconnected', (data = {}) => {
       const myId = profileRef.current?.id;
+      const isWin = data.winnerId === myId;
       const payout = data.winnerPayout ?? null;
       setResult({
-        winnerId: data.winnerId || myId,
-        loserId: data.loserId,
-        disconnected: true,
-        balanceChange: payout != null ? { winnerPayout: payout } : undefined,
-        currency: data.currency,
+        winnerId:      data.winnerId || myId,
+        loserId:       data.loserId,
+        winnerUsername: isWin ? (profileRef.current?.username) : (data.winnerUsername),
+        loserUsername:  isWin ? (data.loserUsername) : (profileRef.current?.username),
+        disconnected:  true,
+        balanceChange: (isWin && payout != null) ? { winnerPayout: payout } : undefined,
+        currency:      data.currency,
       });
       setGameOver(true);
       setPhase('result');

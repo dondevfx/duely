@@ -296,13 +296,17 @@ export default function CoinFlipGame() {
 
     socket.on('opponent_disconnected', (data = {}) => {
       inActiveMatchRef.current = false;
+      const myId = profile?.id;
+      const isWin = data.winnerId === myId;
       const payout = data.winnerPayout ?? null;
       setResultData({
-        winnerId: data.winnerId,
-        loserId: data.loserId,
-        disconnected: true,
-        balanceChange: payout != null ? { winnerPayout: payout } : undefined,
-        currency: data.currency,
+        winnerId:       data.winnerId,
+        loserId:        data.loserId,
+        winnerUsername: isWin ? profile?.username : data.winnerUsername,
+        loserUsername:  isWin ? data.loserUsername : profile?.username,
+        disconnected:   true,
+        balanceChange:  (isWin && payout != null) ? { winnerPayout: payout } : undefined,
+        currency:       data.currency,
       });
       setPhase('result');
       refreshProfile();
