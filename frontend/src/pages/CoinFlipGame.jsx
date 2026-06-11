@@ -299,6 +299,8 @@ export default function CoinFlipGame() {
       const myId = profile?.id;
       const isWin = data.winnerId === myId;
       const payout = data.winnerPayout ?? null;
+      // Use server-provided ELO values to compute accurate delta (avoids stale eloBeforeRef)
+      if (data.newWinnerElo != null) eloBeforeRef.current = isWin ? data.newWinnerElo - 25 : data.newLoserElo + 25;
       setResultData({
         winnerId:       data.winnerId,
         loserId:        data.loserId,
