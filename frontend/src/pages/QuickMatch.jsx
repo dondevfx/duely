@@ -11,7 +11,7 @@ import CoinIcon from '../components/CoinIcon';
 
 const POOL = [
   { route: '/game/block-blast', name: 'Block Burst',  icon: '🟦' },
-  { route: '/game/coin-flip',   name: 'Coin Flip',    icon: '🟡' },
+  { route: '/game/coin-flip',   name: 'Coin Flip',    icon: '🟡', coinsOnly: true },
   { route: '/game/blackjack',   name: 'Blackjack',    icon: '🃏' },
   { route: '/game/word-vs',     name: 'Word VS',       icon: '🔤' },
 ];
@@ -61,14 +61,16 @@ export default function QuickMatch() {
     setPicked(null);
 
     // Flash through games quickly for visual excitement
+    // Filter out coin flip for diamond matches
+    const pool = isDiamonds ? POOL.filter(g => !g.coinsOnly) : POOL;
     let count = 0;
     const flashes = 12;
     const interval = setInterval(() => {
-      setPicked(POOL[Math.floor(Math.random() * POOL.length)]);
+      setPicked(pool[Math.floor(Math.random() * pool.length)]);
       count++;
       if (count >= flashes) {
         clearInterval(interval);
-        const final = POOL[Math.floor(Math.random() * POOL.length)];
+        const final = pool[Math.floor(Math.random() * pool.length)];
         setPicked(final);
         setRolling(false);
         setTimeout(() => {

@@ -161,9 +161,9 @@ export default function BlockBlastGame() {
   const [isSolo, setIsSolo]           = useState(false);
 
   // Responsive cell size
-  const [cellPx, setCellPx] = useState(Math.min(60, Math.floor((window.innerWidth - 32) / GRID)));
+  const [cellPx, setCellPx] = useState(Math.min(48, Math.floor((window.innerWidth - 32) / GRID)));
   useEffect(() => {
-    const upd = () => setCellPx(Math.min(60, Math.floor((window.innerWidth - 32) / GRID)));
+    const upd = () => setCellPx(Math.min(48, Math.floor((window.innerWidth - 32) / GRID)));
     window.addEventListener('resize', upd);
     return () => window.removeEventListener('resize', upd);
   }, []);
