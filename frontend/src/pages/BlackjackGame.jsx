@@ -515,6 +515,7 @@ export default function BlackjackGame() {
           balanceChange={resultData.balanceChange}
           currency={resultData.currency}
           entryFee={resultData.entryFee}
+          disconnected={resultData.disconnected}
           winnerStreak={resultData.winnerStreak ?? 0}
           isFirstWin={resultData.isFirstWin ?? false}
           profile={profile}

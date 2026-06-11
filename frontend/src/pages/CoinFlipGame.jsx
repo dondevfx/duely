@@ -423,39 +423,42 @@ export default function CoinFlipGame() {
     }
   }
 
-  if (phase === 'result' && resultData) {
-    const isWinner = resultData.winnerId === profile?.id;
-    return (
-      <div className="min-h-[calc(100vh-56px)] bg-bg flex items-center justify-center px-4">
-        <ResultScreen
-          isWinner={isWinner}
-          isDraw={false}
-          winnerUsername={resultData.winnerUsername}
-          loserUsername={resultData.loserUsername}
-          newWinnerElo={resultData.newWinnerElo}
-          newLoserElo={resultData.newLoserElo}
-          eloBeforeRef={eloBeforeRef}
-          balanceChange={resultData.balanceChange}
-          currency={resultData.currency}
-          entryFee={resultData.entryFee}
-          winnerStreak={resultData.winnerStreak ?? 0}
-          isFirstWin={resultData.isFirstWin ?? false}
-          profile={profile}
-          gameLabel="🟡 Coin Flip"
-          extraRows={[
-            { label: 'Your Pick', value: side === 'heads' ? '🔵 Heads' : '⚪ Tails' },
-            { label: 'Landed On', value: resultData.result === 'heads' ? '🔵 Heads' : '⚪ Tails' },
-          ]}
-          onPlayAgain={playAgain}
-          onBackToLobby={() => { _resetCoin(); setPhase('lobby'); }}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-4"
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}>
+
+      {/* ── RESULT ── */}
+      {phase === 'result' && resultData && (() => {
+        const isWinner = resultData.winnerId === profile?.id;
+        return (
+          <div className="w-full flex items-center justify-center" style={{ minHeight: 'calc(100vh - 56px)' }}>
+            <ResultScreen
+              isWinner={isWinner}
+              isDraw={false}
+              winnerUsername={resultData.winnerUsername}
+              loserUsername={resultData.loserUsername}
+              newWinnerElo={resultData.newWinnerElo}
+              newLoserElo={resultData.newLoserElo}
+              eloBeforeRef={eloBeforeRef}
+              balanceChange={resultData.balanceChange}
+              currency={resultData.currency}
+              entryFee={resultData.entryFee}
+              disconnected={resultData.disconnected}
+              winnerStreak={resultData.winnerStreak ?? 0}
+              isFirstWin={resultData.isFirstWin ?? false}
+              profile={profile}
+              gameLabel="🟡 Coin Flip"
+              extraRows={[
+                { label: 'Your Pick', value: side === 'heads' ? '🔵 Heads' : '⚪ Tails' },
+                { label: 'Landed On', value: resultData.result === 'heads' ? '🔵 Heads' : '⚪ Tails' },
+              ]}
+              onPlayAgain={playAgain}
+              onBackToLobby={() => { _resetCoin(); setPhase('lobby'); }}
+            />
+          </div>
+        );
+      })()}
+
       <div className="w-full max-w-md animate-slide-up">
 
         {phase !== 'queue' && (
