@@ -316,18 +316,15 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
   const priceUsd     = await getPriceUsd(coin);
   const estimatedUsd = amount * priceUsd;
 
-  // Hidden minimum: $16 for non-SOL/USDC (shown as $20 in UI, but accept $16+ to avoid edge cases)
-  const hardMin = (coin === 'sol' || coin === 'usdc') ? MIN_USD : 16;
-  if (estimatedUsd < hardMin) {
-    console.warn(`[monitor] $${estimatedUsd.toFixed(2)} below minimum — skipping ${txHash}`);
-    return;
-  }
-
   const { creditCoins, recordDeposit } = require('./walletService');
   const usdcAddress = process.env.USDC_SPL_ADDRESS;
 
   // ── USDC: credit directly, no swap needed ────────────────────────────────────
   if (coin === 'usdc') {
+    if (estimatedUsd < MIN_USD) {
+      console.warn(`[monitor] USDC $${estimatedUsd.toFixed(2)} below minimum — skipping ${txHash}`);
+      return;
+    }
     const credited = Math.floor(amount * 100) / 100;
     await creditCoins(supabase, userId, credited);
     await recordDeposit(supabase, userId, credited, 'crypto');
@@ -346,36 +343,72 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
   const netAmount = Math.max(0, amount - gasRes);
   if (netAmount <= 0) { console.warn(`[monitor] amount too small after gas — skipping`); return; }
 
-  // ── SOL: credit instantly at spot price minus 1.1%, swap via Jupiter ─────────
+  // ── SOL: swap via Jupiter, credit exact USDC received minus 0.5% ─────────────
   if (coin === 'sol') {
-    const netUsd   = netAmount * priceUsd;
-    const credited = Math.floor(netUsd * 0.989 * 100) / 100;
-    await creditCoins(supabase, userId, credited);
-    await recordDeposit(supabase, userId, credited, 'crypto');
-    await supabase.from('transactions').insert({
-      user_id: userId, type: 'deposit', amount_c: credited,
-      crypto_amount: amount, crypto_symbol: 'SOL', tx_hash: txHash, status: 'confirmed',
-    });
-    console.log(`[monitor] ✓ SOL credited $${credited} to user ${userId} (fee=1.1%)`);
+    const netUsd     = netAmount * priceUsd;
+    const creditUser = netUsd >= 1.50;   // under $1.50 → platform keeps, no user credit
 
     if (!usdcAddress) { console.error('[monitor] USDC_SPL_ADDRESS not set'); return; }
     const { privKey } = getAddress(userId, coin);
-    (async () => {
+
+    // Record tx first to prevent reprocessing on next poll
+    await supabase.from('transactions').insert({
+      user_id: userId, type: 'deposit', amount_c: 0,
+      crypto_amount: amount, crypto_symbol: 'SOL', tx_hash: txHash, status: 'converting',
+    });
+
+    // Swap SOL → USDC (awaited so we get the real output amount)
+    let usdcReceived = 0;
+    let swapTxHash   = null;
+    try {
+      const result = await swapSolToUsdc(privKey, netAmount, usdcAddress);
+      usdcReceived  = result.usdcReceived;
+      swapTxHash    = result.txHash;
+      console.log(`[monitor] Jupiter swapped ${netAmount} SOL → ${usdcReceived} USDC tx=${swapTxHash}`);
+    } catch (e) {
+      console.error(`[monitor] Jupiter failed (${e.message}) — sending SOL to admin wallet`);
       try {
-        const swapTx = await swapSolToUsdc(privKey, netAmount, usdcAddress);
-        console.log(`[monitor] Jupiter swapped ${netAmount} SOL → USDC tx=${swapTx}`);
-      } catch (e) {
-        console.error(`[monitor] Jupiter failed (${e.message}) — sending SOL to admin wallet`);
-        try {
-          const tx = await sendCrypto({ coin, privKey, toAddress: usdcAddress, amount: netAmount });
-          console.log(`[monitor] fallback: sent ${netAmount} SOL to admin wallet tx=${tx}`);
-        } catch (e2) { console.error(`[monitor] fallback failed:`, e2.message); }
+        const tx = await sendCrypto({ coin, privKey, toAddress: usdcAddress, amount: netAmount });
+        console.log(`[monitor] fallback: sent ${netAmount} SOL to admin wallet tx=${tx}`);
+        // Estimate USDC from price for fallback credit
+        usdcReceived = netUsd;
+      } catch (e2) {
+        console.error(`[monitor] fallback failed:`, e2.message);
+        await supabase.from('transactions').update({ status: 'failed' }).eq('tx_hash', txHash);
+        return;
       }
-    })();
+    }
+
+    // Credit user with exact USDC received minus 0.5%, only if above threshold
+    const OUR_FEE  = 0.005;
+    const credited = creditUser ? Math.floor(usdcReceived * (1 - OUR_FEE) * 100) / 100 : 0;
+
+    if (creditUser && credited > 0) {
+      await creditCoins(supabase, userId, credited);
+      await recordDeposit(supabase, userId, credited, 'crypto');
+      console.log(`[monitor] ✓ SOL credited $${credited} to user ${userId} ($${usdcReceived} USDC received, 0.5% fee)`);
+    } else {
+      console.log(`[monitor] SOL $${netUsd.toFixed(2)} below $1.50 — swapped ${usdcReceived} USDC, no user credit`);
+    }
+
+    await supabase.from('transactions')
+      .update({ status: creditUser ? 'confirmed' : 'below_min', amount_c: credited })
+      .eq('tx_hash', txHash);
+
     return;
   }
 
-  // ── Non-SOL: forward to ChangeNow, swapPoller credits exact USDC received ────
+  // ── Non-SOL: threshold logic ─────────────────────────────────────────────────
+  // Under $7:      reject entirely (too small, not worth ChangeNow fees)
+  // $7 – $9.99:    forward to ChangeNow, platform keeps USDC, no user credit
+  // $10+:          forward to ChangeNow, swapPoller credits user minus 0.5%
+  if (estimatedUsd < 7) {
+    console.warn(`[monitor] non-SOL $${estimatedUsd.toFixed(2)} under $7 hard minimum — skipping ${txHash}`);
+    return;
+  }
+
+  const creditUser = estimatedUsd >= 10;   // $7-$9.99 = platform keeps, no credit
+
   if (!usdcAddress) { console.error('[monitor] USDC_SPL_ADDRESS not set'); return; }
   const { privKey } = getAddress(userId, coin);
 
@@ -387,11 +420,13 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     return;
   }
 
-  // Record as 'converting' — swapPoller will credit player with exact USDC minus 0.5%
+  // Record as 'converting' — swapPoller will credit player (if creditUser) when done
   await supabase.from('transactions').insert({
     user_id: userId, type: 'deposit', amount_c: 0,
     crypto_amount: netAmount, crypto_symbol: coin.toUpperCase(),
     tx_hash: swap.exchangeId, status: 'converting',
+    // Store whether to credit user when swap finishes
+    extra_id: creditUser ? 'credit' : 'no_credit',
   });
   // Mark original tx to prevent reprocessing
   await supabase.from('transactions').insert({
@@ -402,15 +437,15 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
 
   try {
     const sendTx = await sendCrypto({ coin, privKey, toAddress: swap.depositAddress, amount: netAmount });
-    console.log(`[monitor] forwarded ${netAmount} ${coin} → ChangeNow exchange=${swap.exchangeId} tx=${sendTx}`);
+    console.log(`[monitor] forwarded ${netAmount} ${coin} → ChangeNow exchange=${swap.exchangeId} creditUser=${creditUser} tx=${sendTx}`);
   } catch (e) {
     console.error(`[monitor] sendCrypto failed for ${txHash}:`, e.message);
     return;
   }
 
   const { watch } = require('./swapPoller');
-  watch(swap.exchangeId, userId);
-  console.log(`[monitor] watching exchange ${swap.exchangeId} — swapPoller will credit user when USDC arrives`);
+  watch(swap.exchangeId, userId, Date.now(), creditUser);
+  console.log(`[monitor] watching exchange ${swap.exchangeId} creditUser=${creditUser}`);
 }
 
 // ── Main polling loop ─────────────────────────────────────────────────────────

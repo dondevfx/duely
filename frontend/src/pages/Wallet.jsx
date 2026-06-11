@@ -12,12 +12,12 @@ import CoinIcon from '../components/CoinIcon';
 const COINS = [
   { id: 'sol',  label: 'SOL',  network: 'Solana',   minUsd: 2  },
   { id: 'usdc', label: 'USDC', network: 'Solana',   minUsd: 2  },
-  { id: 'btc',  label: 'BTC',  network: 'Bitcoin',  minUsd: 20 },
-  { id: 'eth',  label: 'ETH',  network: 'Ethereum', minUsd: 20 },
-  { id: 'bnb',  label: 'BNB',  network: 'BSC',      minUsd: 20 },
-  { id: 'ltc',  label: 'LTC',  network: 'Litecoin', minUsd: 20 },
-  { id: 'doge', label: 'DOGE', network: 'Dogecoin', minUsd: 20 },
-  { id: 'trx',  label: 'TRX',  network: 'TRON',     minUsd: 20 },
+  { id: 'btc',  label: 'BTC',  network: 'Bitcoin',  minUsd: 10 },
+  { id: 'eth',  label: 'ETH',  network: 'Ethereum', minUsd: 10 },
+  { id: 'bnb',  label: 'BNB',  network: 'BSC',      minUsd: 10 },
+  { id: 'ltc',  label: 'LTC',  network: 'Litecoin', minUsd: 10 },
+  { id: 'doge', label: 'DOGE', network: 'Dogecoin', minUsd: 10 },
+  { id: 'trx',  label: 'TRX',  network: 'TRON',     minUsd: 10 },
 ];
 
 // ── Supported withdrawal coins ────────────────────────────────────────
@@ -119,8 +119,6 @@ export default function Wallet() {
   const [witMsg, setWitMsg]             = useState(null);
   const [witMfaCode, setWitMfaCode]     = useState('');
   const [hasMfa, setHasMfa]             = useState(false);
-  const [witEstimate, setWitEstimate]   = useState(null);
-
   const [transactions, setTransactions] = useState([]);
 
   useEffect(() => {
@@ -129,19 +127,6 @@ export default function Wallet() {
       .then(({ data }) => setHasMfa(data?.totp?.some(f => f.status === 'verified') ?? false))
       .catch(() => {});
   }, []);
-
-  // Fetch withdrawal estimate when amount or coin changes
-  useEffect(() => {
-    setWitEstimate(null);
-    const amt = parseFloat(witAmountUsd);
-    if (!amt || amt < MIN_WITHDRAWAL) return;
-    const timer = setTimeout(() => {
-      api.get(`/wallet/estimate-withdrawal?coin=${witCoin.id}&amountUsd=${amt}`)
-        .then(d => setWitEstimate(d.estimated_amount))
-        .catch(() => {});
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [witAmountUsd, witCoin]);
 
   // ── Get deposit address ───────────────────────────────────────────────
   async function handleGetAddress() {
@@ -215,7 +200,7 @@ export default function Wallet() {
       setWitMemo('');
       setWitAmountUsd('');
       setWitMfaCode('');
-      setWitEstimate(null);
+
       await refreshProfile();
       api.get('/wallet/transactions?limit=50').then(setTransactions).catch(() => {});
     } catch (err) {
@@ -374,7 +359,7 @@ export default function Wallet() {
               <CoinGrid
                 coins={WITHDRAW_COINS}
                 selected={witCoin}
-                onSelect={c => { setWitCoin(c); setWitMemo(''); setWitEstimate(null); }}
+                onSelect={c => { setWitCoin(c); setWitMemo(''); }}
               />
             </div>
 
@@ -405,11 +390,6 @@ export default function Wallet() {
               )}
               {witAmountUsd && parseFloat(witAmountUsd) < MIN_WITHDRAWAL && parseFloat(witAmountUsd) > 0 && (
                 <p className="text-xs text-danger mt-1">Minimum withdrawal is ${MIN_WITHDRAWAL}</p>
-              )}
-              {witEstimate && (
-                <p className="text-xs text-success mt-1">
-                  ≈ {witEstimate} {witCoin.label} after all fees
-                </p>
               )}
             </div>
 

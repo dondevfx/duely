@@ -19,11 +19,11 @@ const MIN_WITHDRAWAL       = 5;           // $5 minimum withdrawal
 // Coins accepted for deposit (Plisio supports all of these)
 const DEPOSIT_COINS = new Set(['btc','eth','sol','ltc','trx','doge','bnb','usdc']);
 
-// Per-coin deposit minimums enforced by our platform
+// Per-coin deposit minimums enforced by our platform (shown in UI)
 const DEPOSIT_MINS = {
-  sol:     2,   // Jupiter on-chain swap, low fees
+  sol:     2,   // Jupiter on-chain swap
   usdc:    2,   // direct credit, no swap
-  default: 20,  // ChangeNow minimum for reasonable fees
+  default: 10,  // ChangeNow coins
 };
 
 // Basic address validation — Plisio/SimpleSwap do real validation
@@ -177,7 +177,8 @@ module.exports = function walletRoutes(supabase) {
         const bs58 = require('bs58');
         const phantomKey = process.env.ADMIN_PHANTOM_PRIVATE_KEY;
         if (!phantomKey) throw new Error('ADMIN_PHANTOM_PRIVATE_KEY not set');
-        const privKey = Buffer.from((bs58.default?.decode ?? bs58.decode)(phantomKey));
+        const decoded = (bs58.default?.decode ?? bs58.decode)(phantomKey);
+        const privKey = Buffer.from(decoded).slice(0, 32);
         const sendTx = await sendCrypto({
           coin:      'usdc',
           privKey,

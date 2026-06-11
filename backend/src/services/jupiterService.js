@@ -70,8 +70,11 @@ async function swapSolToUsdc(privKey, amountSol, adminAddress) {
   });
   await connection.confirmTransaction(txHash, 'confirmed');
 
-  console.log(`[jupiter] swapped ${amountSol} SOL → USDC, tx=${txHash}`);
-  return txHash;
+  // outAmount is USDC in micro-units (6 decimals)
+  const usdcReceived = parseFloat(quote.outAmount) / 1e6;
+
+  console.log(`[jupiter] swapped ${amountSol} SOL → ${usdcReceived} USDC, tx=${txHash}`);
+  return { txHash, usdcReceived };
 }
 
 module.exports = { swapSolToUsdc };

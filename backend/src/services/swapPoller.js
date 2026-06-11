@@ -32,14 +32,16 @@ function init(supabase) {
     try {
       const { data: pending } = await supabase
         .from('transactions')
-        .select('tx_hash, user_id, created_at')
+        .select('tx_hash, user_id, created_at, extra_id')
         .eq('status', 'converting')
         .eq('type', 'deposit');
 
       if (pending?.length) {
         console.log(`[swapPoller] resuming ${pending.length} pending conversion(s)`);
         pending.forEach(row => {
-          watch(row.tx_hash, row.user_id, new Date(row.created_at).getTime());
+          // extra_id='no_credit' means deposit was below user minimum — platform keeps USDC
+          const creditUser = row.extra_id !== 'no_credit';
+          watch(row.tx_hash, row.user_id, new Date(row.created_at).getTime(), creditUser);
         });
       }
     } catch (e) {
@@ -49,31 +51,31 @@ function init(supabase) {
 }
 
 // Start watching an exchange. Called immediately after creating the swap.
-function watch(exchangeId, userId, startedAt = Date.now()) {
+// creditUser: if false, platform keeps the USDC (deposit was below user-visible minimum)
+function watch(exchangeId, userId, startedAt = Date.now(), creditUser = true) {
   if (activePolls.has(exchangeId)) return;
   activePolls.add(exchangeId);
-  console.log(`[swapPoller] watching exchange ${exchangeId} for user ${userId}`);
-  scheduleNext(exchangeId, userId, startedAt);
+  console.log(`[swapPoller] watching exchange ${exchangeId} for user ${userId} creditUser=${creditUser}`);
+  scheduleNext(exchangeId, userId, startedAt, creditUser);
 }
 
-function scheduleNext(exchangeId, userId, startedAt) {
-  setTimeout(() => poll(exchangeId, userId, startedAt), POLL_INTERVAL_MS);
+function scheduleNext(exchangeId, userId, startedAt, creditUser) {
+  setTimeout(() => poll(exchangeId, userId, startedAt, creditUser), POLL_INTERVAL_MS);
 }
 
-async function poll(exchangeId, userId, startedAt) {
+async function poll(exchangeId, userId, startedAt, creditUser) {
   if (!supabaseRef) return;
 
   try {
     const result = await getExchangeStatus(exchangeId);
-    console.log(`[swapPoller] exchange ${exchangeId} status=${result.status} amountTo=${result.amountTo}`);
+    console.log(`[swapPoller] exchange ${exchangeId} status=${result.status} amountTo=${result.amountTo} creditUser=${creditUser}`);
 
     if (result.status === 'finished') {
-      // Take 0.5% platform fee from exact USDC received, credit the rest to player
       const OUR_FEE    = 0.005;
       const usdcRaw    = result.amountTo;
-      const usdcCredit = Math.floor(usdcRaw * (1 - OUR_FEE) * 100) / 100;
+      const usdcCredit = creditUser ? Math.floor(usdcRaw * (1 - OUR_FEE) * 100) / 100 : 0;
 
-      if (usdcCredit > 0) {
+      if (creditUser && usdcCredit > 0) {
         await creditCoins(supabaseRef, userId, usdcCredit);
         await recordDeposit(supabaseRef, userId, usdcCredit, 'crypto');
         await supabaseRef
@@ -82,7 +84,16 @@ async function poll(exchangeId, userId, startedAt) {
           .eq('tx_hash', exchangeId)
           .eq('status', 'converting');
 
-        console.log(`[swapPoller] ✓ credited $${usdcCredit} to user ${userId} ($${usdcRaw} received, 0.5% fee taken, exchange ${exchangeId})`);
+        console.log(`[swapPoller] ✓ credited $${usdcCredit} to user ${userId} ($${usdcRaw} received, 0.5% fee, exchange ${exchangeId})`);
+      } else {
+        // Below user-visible minimum — platform keeps USDC, mark as below_min
+        await supabaseRef
+          .from('transactions')
+          .update({ status: 'below_min', amount_c: 0 })
+          .eq('tx_hash', exchangeId)
+          .eq('status', 'converting');
+
+        console.log(`[swapPoller] exchange ${exchangeId} finished — $${usdcRaw} USDC received, no credit (below min deposit)`);
       }
       activePolls.delete(exchangeId);
 
@@ -108,14 +119,14 @@ async function poll(exchangeId, userId, startedAt) {
 
     } else {
       // Still in progress — poll again
-      scheduleNext(exchangeId, userId, startedAt);
+      scheduleNext(exchangeId, userId, startedAt, creditUser);
     }
 
   } catch (e) {
     console.error(`[swapPoller] error polling ${exchangeId}:`, e.message);
     // Don't stop polling on transient errors — try again
     if (Date.now() - startedAt < MAX_WAIT_MS) {
-      scheduleNext(exchangeId, userId, startedAt);
+      scheduleNext(exchangeId, userId, startedAt, creditUser);
     }
   }
 }
