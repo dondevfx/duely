@@ -702,13 +702,19 @@ export default function TetrisGame() {
     function onDisconnect(data = {}) {
       stopGame();
       const myId = profileRef.current?.id;
+      const isWin = data.winnerId === myId;
       const payout = data.winnerPayout ?? null;
       setResult({
-        winnerId: data.winnerId || myId,
-        loserId: data.loserId,
-        disconnected: true,
-        balanceChange: payout != null ? { winnerPayout: payout } : undefined,
-        currency: data.currency,
+        winnerId:       data.winnerId || myId,
+        loserId:        data.loserId,
+        winnerUsername: isWin ? profileRef.current?.username : data.winnerUsername,
+        loserUsername:  isWin ? data.loserUsername : profileRef.current?.username,
+        disconnected:   true,
+        balanceChange:  payout != null ? { winnerPayout: isWin ? payout : 0 } : undefined,
+        entryFee:       data.entryFee,
+        currency:       data.currency,
+        newWinnerElo:   data.newWinnerElo,
+        newLoserElo:    data.newLoserElo,
       });
       setResultCurrency(data.currency || 'coins');
       setPhase('result');

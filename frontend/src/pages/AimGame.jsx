@@ -125,13 +125,19 @@ export default function AimGame() {
     });
     socket.on('opponent_disconnected', (data = {}) => {
       const myId = profile?.id;
+      const isWin = data.winnerId === myId;
       const payout = data.winnerPayout ?? null;
       setResult({
-        winnerId: data.winnerId || myId,
-        loserId: data.loserId,
-        disconnected: true,
-        balanceChange: payout != null ? { winnerPayout: payout } : undefined,
-        currency: data.currency,
+        winnerId:       data.winnerId || myId,
+        loserId:        data.loserId,
+        winnerUsername: isWin ? profile?.username : data.winnerUsername,
+        loserUsername:  isWin ? data.loserUsername : profile?.username,
+        disconnected:   true,
+        balanceChange:  payout != null ? { winnerPayout: isWin ? payout : 0 } : undefined,
+        entryFee:       data.entryFee,
+        currency:       data.currency,
+        newWinnerElo:   data.newWinnerElo,
+        newLoserElo:    data.newLoserElo,
       });
       setResultCurrency(data.currency || 'coins');
       setTarget(null);

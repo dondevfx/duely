@@ -615,13 +615,19 @@ export default function GalagaGame() {
     socket.on('opponent_disconnected', (data = {}) => {
       stopGame();
       const myId = profileRef.current?.id;
+      const isWin = data.winnerId === myId;
       const payout = data.winnerPayout ?? null;
       setResult({
-        winnerId: data.winnerId || myId,
-        loserId: data.loserId,
-        disconnected: true,
-        balanceChange: payout != null ? { winnerPayout: payout } : undefined,
-        currency: data.currency || 'coins',
+        winnerId:       data.winnerId || myId,
+        loserId:        data.loserId,
+        winnerUsername: isWin ? profileRef.current?.username : data.winnerUsername,
+        loserUsername:  isWin ? data.loserUsername : profileRef.current?.username,
+        disconnected:   true,
+        balanceChange:  payout != null ? { winnerPayout: isWin ? payout : 0 } : undefined,
+        entryFee:       data.entryFee,
+        currency:       data.currency || 'coins',
+        newWinnerElo:   data.newWinnerElo,
+        newLoserElo:    data.newLoserElo,
       });
       setPhase('result');
       refreshProfile();
