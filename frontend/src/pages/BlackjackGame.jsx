@@ -814,15 +814,11 @@ export default function BlackjackGame() {
       return (
         <div className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-4">
           <div className="text-center animate-fade-in">
-            <div className="text-5xl mb-4">🃏</div>
-            <p className="text-muted text-sm mb-2">vs <span className="text-white font-bold">{opponentUsername}</span></p>
-            <div
-              className="text-8xl font-black font-mono"
-              style={{ color: countdown <= 1 ? '#ef4444' : countdown === 2 ? '#f97316' : '#4ade80' }}
-            >
+            <div className="text-8xl font-black text-primary mb-4" style={{ textShadow: '0 0 40px #1E90FF' }}>
               {countdown}
             </div>
-            <p className="text-muted text-sm mt-4">Get ready…</p>
+            <p className="text-muted">Get ready...</p>
+            <p className="text-xs text-muted mt-2">vs {opponentUsername}</p>
           </div>
         </div>
       );
