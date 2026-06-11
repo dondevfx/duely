@@ -170,10 +170,13 @@ export default function BlackjackGame() {
   const phaseRef = useRef('lobby');
   function setPhase(p) { phaseRef.current = p; _setPhase(p); }
 
-  // Forfeit on unmount only
+  // Tracks whether we are in an active room (set on match_found, cleared on result/reset)
+  const roomIdRef = useRef(null);
+
+  // Forfeit on unmount — fires whenever we hold a room (matched but not yet finished)
   useEffect(() => {
     return () => {
-      if (['playing', 'reveal'].includes(phaseRef.current) && socketRef.current) {
+      if (roomIdRef.current && phaseRef.current !== 'result' && socketRef.current) {
         socketRef.current.emit('player_forfeit');
       }
     };
@@ -238,6 +241,7 @@ export default function BlackjackGame() {
     });
 
     socket.on('bj_match_found', ({ roomId: rid, opponent }) => {
+      roomIdRef.current = rid;
       setRoomId(rid);
       setOpponentUsername(opponent.username);
     });
@@ -339,6 +343,7 @@ export default function BlackjackGame() {
       // Brief pause then flip opponent cards
       setTimeout(() => setFlippingOpp(true), 150);
       setTimeout(() => {
+        roomIdRef.current = null;
         setResultData(data);
         setPhase('result');
       }, 3500);
@@ -361,6 +366,7 @@ export default function BlackjackGame() {
         newWinnerElo:   data.newWinnerElo,
         newLoserElo:    data.newLoserElo,
       });
+      roomIdRef.current = null;
       setPhase('result');
       refreshProfile();
     });

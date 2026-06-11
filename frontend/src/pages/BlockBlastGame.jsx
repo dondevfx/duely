@@ -211,10 +211,10 @@ export default function BlockBlastGame() {
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
   useEffect(() => { socketRef.current = socket; }, [socket]);
-  // Forfeit on unmount only — fires even if socket dep hasn't changed
+  // Forfeit on unmount only — fires whenever we hold a room (from match_found to result)
   useEffect(() => {
     return () => {
-      if (['active', 'countdown'].includes(phaseRef.current) && socketRef.current) {
+      if (roomIdRef.current && phaseRef.current !== 'result' && socketRef.current) {
         socketRef.current.emit('player_forfeit');
       }
     };
@@ -275,6 +275,7 @@ export default function BlockBlastGame() {
 
     socket.on('block_blast_match_found', ({ roomId: rid, opponent: opp, vsBot }) => {
       eloBeforeRef.current = profileRef.current?.elo ?? null;
+      roomIdRef.current = rid;
       setOppScore(0);
       setRoomId(rid);
       setOpponent(opp);
@@ -292,6 +293,7 @@ export default function BlockBlastGame() {
     });
 
     socket.on('block_blast_result', (res) => {
+      roomIdRef.current = null;
       setResult(res);
       setPhase('result');
       setGameOver(true);
@@ -316,6 +318,7 @@ export default function BlockBlastGame() {
     socket.on('block_blast_opponent_score', ({ score: s }) => setOppScore(s));
 
     socket.on('opponent_disconnected', (data = {}) => {
+      roomIdRef.current = null;
       const myId = profileRef.current?.id;
       const isWin = data.winnerId === myId;
       const payout = data.winnerPayout ?? null;

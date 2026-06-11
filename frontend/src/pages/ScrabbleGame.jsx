@@ -359,6 +359,7 @@ export default function ScrabbleGame() {
 
     socket.on('scrabble_match_found', ({ roomId: rid, opponent: opp }) => {
       eloBeforeRef.current = profileRef.current?.elo ?? null;
+      inActiveMatchRef.current = true; // mark active from match_found so forfeit fires during countdown too
       setRoomId(rid); setOpponent(opp); setPhase('countdown'); setCountdown(3);
     });
 
