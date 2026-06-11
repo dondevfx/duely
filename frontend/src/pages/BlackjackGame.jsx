@@ -187,7 +187,7 @@ export default function BlackjackGame() {
   const [entryFee, setEntryFee] = useState(() => location.state?.entryFee ?? (betCurrency === 'diamonds' ? DIAMOND_FEES[0] : COIN_FEES[0]));
   const [statusMsg, setStatusMsg] = useState('');
   const [roomId, setRoomId] = useState(null);
-  const [countdown, setCountdown] = useState(0);
+  const [countdown, setCountdown] = useState(0); // visual countdown only — does not change phase
 
   const [opponentUsername, setOpponentUsername] = useState('');
   const [myHand, setMyHand] = useState([]);
@@ -215,12 +215,12 @@ export default function BlackjackGame() {
   const [flippingOpp, setFlippingOpp] = useState(false); // triggers FlipCard flip
   const prevHandLenRef = useRef(0);
 
-  // Countdown tick — counts 3→1 then stops (bj_start from server triggers phase='playing')
+  // Visual countdown tick — counts 3→0; phase stays 'queue' throughout
   useEffect(() => {
-    if (phase !== 'countdown' || countdown <= 0) return;
+    if (countdown <= 0) return;
     const id = setTimeout(() => setCountdown(c => c - 1), 1000);
     return () => clearTimeout(id);
-  }, [phase, countdown]);
+  }, [countdown]);
 
   const isDiamonds = betCurrency === 'diamonds';
   const fees = isDiamonds ? DIAMOND_FEES : COIN_FEES;
@@ -252,8 +252,7 @@ export default function BlackjackGame() {
       roomIdRef.current = rid;
       setRoomId(rid);
       setOpponentUsername(opponent.username);
-      setCountdown(3);
-      setPhase('countdown');
+      setCountdown(3); // start visual countdown without changing phase
     });
 
     socket.on('bj_start', ({ hand, handScore, opponentHand, opponentHandSize: oppSz, timeLimit }) => {
@@ -808,27 +807,26 @@ export default function BlackjackGame() {
     );
   }
 
-  // ── Countdown ──
-  if (phase === 'countdown') {
-    return (
-      <div className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-4">
-        <div className="text-center animate-fade-in">
-          <div className="text-5xl mb-4">🃏</div>
-          <p className="text-muted text-sm mb-2">vs <span className="text-white font-bold">{opponentUsername}</span></p>
-          <div
-            className="text-8xl font-black font-mono transition-all"
-            style={{ color: countdown <= 1 ? '#ef4444' : countdown === 2 ? '#f97316' : '#4ade80', textShadow: `0 0 40px currentColor` }}
-          >
-            {countdown > 0 ? countdown : '🂠'}
-          </div>
-          <p className="text-muted text-sm mt-4">Get ready…</p>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Queue ──
+  // ── Queue / Countdown ──
   if (phase === 'queue') {
+    // Once matched, show countdown; before match show searching spinner
+    if (roomId && countdown > 0) {
+      return (
+        <div className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-4">
+          <div className="text-center animate-fade-in">
+            <div className="text-5xl mb-4">🃏</div>
+            <p className="text-muted text-sm mb-2">vs <span className="text-white font-bold">{opponentUsername}</span></p>
+            <div
+              className="text-8xl font-black font-mono"
+              style={{ color: countdown <= 1 ? '#ef4444' : countdown === 2 ? '#f97316' : '#4ade80' }}
+            >
+              {countdown}
+            </div>
+            <p className="text-muted text-sm mt-4">Get ready…</p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-4">
         <div className="text-center animate-fade-in">
