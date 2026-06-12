@@ -125,7 +125,7 @@ const {
 } = require('../services/walletService');
 const { lockUser, unlockUser, isLocked } = require('../services/lockService');
 const { updateElo: _updateElo } = require('../services/eloService');
-const { createClient } = require('@supabase/supabase-js');
+const { verifyToken } = require('../middleware/auth');
 
 module.exports = function registerSocketHandlers(io, supabase) {
   // ── Shared private-room registry (all game types) ─────────────
@@ -216,9 +216,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ── Auth ──────────────────────────────────────────────────────────
     socket.on('authenticate', async ({ token }) => {
       try {
-        const anonClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-        const { data: { user }, error } = await anonClient.auth.getUser(token);
-        if (error || !user) { socket.emit('error', { message: 'Authentication failed' }); return; }
+        const user = await verifyToken(token);
+        if (!user) { socket.emit('error', { message: 'Authentication failed' }); return; }
         const { data: profile } = await supabase
           .from('profiles').select('id,username,elo,c_coins,profile_color,current_streak').eq('id', user.id).single();
         if (!profile) { socket.emit('error', { message: 'Profile not found' }); return; }
