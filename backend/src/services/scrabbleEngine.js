@@ -3,6 +3,7 @@ const { isValidWord } = require('./wordValidator');
 const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
 const { updateHighscore } = require('./highscoreService');
+const { creditRakeback } = require('./rakebackService');
 const gameEvents = require('./gameEvents');
 
 // ── Board constants ─────────────────────────────────────────────────────────
@@ -490,6 +491,11 @@ async function _endGame(io, supabase, roomId, reason) {
         prize_pool_diamonds: currency === 'diamonds' ? fee * 2 : 0,
         platform_fee_c:      currency === 'coins'    ? parseFloat((fee * 2 * 0.05).toFixed(4)) : 0,
       }).catch(() => {});
+    }
+    if (fee > 0) {
+      const p1Id = winner.isBot ? null : winner.userId;
+      const p2Id = loser.isBot  ? null : loser.userId;
+      await creditRakeback(supabase, p1Id, p2Id, fee * 2, currency);
     }
   }
 

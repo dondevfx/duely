@@ -153,6 +153,7 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
       if (room.entryFee > 0) {
         try {
           balanceChange = await settleBotMatch(supabase, player.userId, room.entryFee, room.currency || 'coins', humanWon);
+          await creditRakeback(supabase, player.userId, null, room.entryFee * 2, room.currency || 'coins');
         } catch (e) { console.error('[blockBlastEngine] solo settle:', e.message); }
       }
       if (supabase) {
