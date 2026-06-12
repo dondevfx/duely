@@ -142,36 +142,36 @@ export function AuthProvider({ children }) {
 
         if (!sess) return; // not logged in
 
-        // Token expiry handling:
-        // - Actually expired: must refresh (or bail if that too fails)
-        // - Near-expiry (within 90s): try to refresh, but if it fails and the AT is
-        //   still technically valid, proceed anyway — _scheduleRefresh fires in ≤5s
-        //   and will retry. This avoids a sign-out when two rapid page loads race
-        //   on the same refresh token (Supabase rotates it; the second caller gets
-        //   invalid_grant but the AT is still usable for a few more seconds).
+        // Only refresh during init() when the token is ACTUALLY expired.
+        //
+        // Do NOT refresh for near-expiry tokens here — that causes "ghost rotations":
+        // the HTTP call consumes the refresh token on Supabase's server, but if the
+        // user pressed F5 before the response arrives the new token is never written
+        // to storage. Every subsequent page load then fails with invalid_grant on the
+        // same consumed RT, and the user gets signed out when the access token expires.
+        //
+        // Near-expiry is handled by _scheduleRefresh (min 5s delay). F5 always cancels
+        // that timer on page unload, so no ghost rotation can occur from the timer path.
         const nowMs = Date.now();
         const expiresMs = sess.expires_at ? sess.expires_at * 1000 : Infinity;
         const isExpired = expiresMs < nowMs;
-        const isNearExpiry = expiresMs - nowMs < REFRESH_MARGIN_MS;
 
-        if (isExpired || isNearExpiry) {
+        if (isExpired) {
           const refreshed = await doTokenRefresh(sess.refresh_token);
           if (refreshed) {
             sess = refreshed;
-          } else if (isExpired) {
-            // AT already expired — see if a concurrent page already refreshed
+          } else {
+            // Refresh failed — maybe a concurrent page already refreshed
             const latest = readSessionFromStorage();
             if (latest && latest.access_token !== sess.access_token) {
-              sess = latest; // another tab wrote a fresh session
+              sess = latest;
             } else {
               return; // truly expired with no way to recover
             }
           }
-          // else: near-expiry but not expired, refresh failed — proceed with current
-          // session; _scheduleRefresh will retry within 5s
         }
-
-        if (!sess) return;
+        // Near-expiry but not expired: proceed with current token.
+        // _scheduleRefresh fires in ≤5s and will refresh safely after page settles.
 
         // Check for MFA requirement (only on saved-login path or when flag is set)
         const needsMfaCheck = sessionStorage.getItem('duely_needs_mfa_check');
@@ -202,6 +202,16 @@ export function AuthProvider({ children }) {
     init();
     return () => _clearRefreshTimer();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Safety net: if we have a valid session but profile never loaded (e.g. backend
+  // was briefly unavailable during init), retry every 3s until it succeeds.
+  useEffect(() => {
+    if (!session || profile || loading) return;
+    const interval = setInterval(() => {
+      fetchProfile({ clearOnFail: false }).catch(() => {});
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [session, !!profile, loading, fetchProfile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auth operations ────────────────────────────────────────────────────
 
