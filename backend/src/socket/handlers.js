@@ -1134,6 +1134,12 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       bot.entryFee = entryFee;
       const { roomId } = createDirectBlockBlastRoom(player, bot);
       socket.join(roomId);
+      if (socket._pendingForfeit) {
+        socket._pendingForfeit = false;
+        if (socket._pendingForfeitTimer) { clearTimeout(socket._pendingForfeitTimer); socket._pendingForfeitTimer = null; }
+        await _handleForfeit(io, supabase, { roomId, room: getBlockBlastRoom(roomId) }, socket.id, deleteBlockBlastRoom, 'blockBlast');
+        return;
+      }
       incrementCount('block-blast', socket.id, entryFee, currency);
       socket.emit('block_blast_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo }, entryFee, vsBot: true });
       startBlockBlastCountdown(io, supabase, roomId);
@@ -1927,6 +1933,12 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       const bot = { socketId: botSocketId, userId: botSocketId, username: 'Duely Bot', elo: 1000, entryFee, currency, isBot: true };
       const { roomId } = createDirectScrabbleRoom(player, bot);
       socket.join(roomId);
+      if (socket._pendingForfeit) {
+        socket._pendingForfeit = false;
+        if (socket._pendingForfeitTimer) { clearTimeout(socket._pendingForfeitTimer); socket._pendingForfeitTimer = null; }
+        await _handleForfeit(io, supabase, { roomId, room: getScrabbleRoom(roomId) }, socket.id, deleteScrabbleRoom, 'scrabble');
+        return;
+      }
       socket.emit('scrabble_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo }, entryFee, vsBot: true });
       socket.emit('scrabble_countdown', { count: 3 });
       await new Promise(r => setTimeout(r, 1000));
@@ -2016,6 +2028,12 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       // fires → fee is settled and room cleaned up properly.
       const { roomId } = createDirectCoinFlipRoom(player, bot);
       socket.join(roomId);
+      if (socket._pendingForfeit) {
+        socket._pendingForfeit = false;
+        if (socket._pendingForfeitTimer) { clearTimeout(socket._pendingForfeitTimer); socket._pendingForfeitTimer = null; }
+        await _handleForfeit(io, supabase, { roomId, room: getCoinFlipRoom(roomId) }, socket.id, deleteCoinFlipRoom, 'coin_flip');
+        return;
+      }
       socket.emit('coin_flip_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo }, side, entryFee, vsBot: true });
       // Resolve after countdown (6s) + flip animation via the standard resolveCoinFlip
       setTimeout(() => resolveCoinFlip(io, supabase, roomId), 6000);
@@ -2113,6 +2131,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         [getCoinFlipRoomBySocket,   deleteCoinFlipRoom,   'coin_flip'],
         [getBlackjackRoomBySocket,  deleteBlackjackRoom,  'blackjack'],
       ];
+      let forfeited = false;
       for (const [getFn, delFn, gameType] of roomLookups) {
         const found = getFn(socket.id);
         if (!found) continue;
@@ -2123,7 +2142,15 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         await _handleForfeit(io, supabase, found, socket.id, delFn, gameType);
         // Clean up queue tracking so player can re-enter lobby cleanly
         if (authenticatedUser) userQueues.delete(authenticatedUser.userId);
+        forfeited = true;
         break;
+      }
+      // No active room found — bot game handler may be mid-await on its DB query (before room
+      // creation). Mark socket so the handler can trigger the forfeit immediately on room creation.
+      if (!forfeited) {
+        socket._pendingForfeit = true;
+        if (socket._pendingForfeitTimer) clearTimeout(socket._pendingForfeitTimer);
+        socket._pendingForfeitTimer = setTimeout(() => { socket._pendingForfeit = false; }, 5000);
       }
     });
 
@@ -2141,6 +2168,12 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       const bot = { socketId: null, userId: 'bot_bj_' + uuidv4(), username: 'Duely Bot', elo: 1000, entryFee, currency, isBot: true };
       const { roomId } = createDirectBlackjackRoom(player, bot);
       socket.join(roomId);
+      if (socket._pendingForfeit) {
+        socket._pendingForfeit = false;
+        if (socket._pendingForfeitTimer) { clearTimeout(socket._pendingForfeitTimer); socket._pendingForfeitTimer = null; }
+        await _handleForfeit(io, supabase, { roomId, room: getBlackjackRoom(roomId) }, socket.id, deleteBlackjackRoom, 'blackjack');
+        return;
+      }
       incrementCount('blackjack', socket.id, entryFee, currency);
       socket.emit('bj_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo }, entryFee, vsBot: true });
       startBlackjackGame(io, supabase, roomId);
