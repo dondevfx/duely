@@ -158,7 +158,6 @@ async function handleBlockBlastStuck(io, supabase, roomId, socketId, score = 0) 
   }
 
   // If opponent already has a higher score → instant resolve
-  const trackedScore = room.pingScores[socketId] ?? 0;
   const otherScore = otherPlayer ? (room.scores[otherPlayer.socketId] ?? -1) : -1;
   if (otherScore > trackedScore) {
     await _resolveFromScores(io, supabase, roomId);
