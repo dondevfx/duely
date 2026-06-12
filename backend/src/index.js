@@ -52,6 +52,15 @@ app.use('/api/webhooks', webhookRoutes(supabase));
 app.use(express.json());
 app.use('/api', apiLimiter);
 
+// /me is a frequent profile-read — register it before authLimiter so it
+// only hits the generous apiLimiter, not the tight auth rate limit.
+const { requireAuth } = require('./middleware/auth');
+const _supabaseRef = supabase;
+app.get('/api/auth/me', requireAuth, async (req, res) => {
+  const { data, error } = await _supabaseRef.from('profiles').select('*').eq('id', req.user.id).single();
+  if (error) return res.status(404).json({ error: 'Profile not found' });
+  res.json({ ...data, is_admin: req.user.id === process.env.ADMIN_USER_ID });
+});
 app.use('/api/auth', authLimiter, authRoutes(supabase));
 app.use('/api/wallet', walletRoutes(supabase));
 app.use('/api/leaderboard', leaderboardRoutes(supabase));

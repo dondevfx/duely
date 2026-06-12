@@ -99,6 +99,8 @@ export function AuthProvider({ children }) {
         setProfile(data);
         return data;
       } catch (e) {
+        // Don't retry on 429 — back off and let the safety-net handle it
+        if (e.message?.includes('429') || e.status === 429) break;
         if (attempt < 2) {
           await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
         }
@@ -209,9 +211,11 @@ export function AuthProvider({ children }) {
     if (!session || profile || loading) return;
     const interval = setInterval(() => {
       fetchProfile({ clearOnFail: false }).catch(() => {});
-    }, 3000);
+    }, 10_000);
     return () => clearInterval(interval);
   }, [session, !!profile, loading, fetchProfile]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Safety net interval is 10s (not 3s) to avoid hammering /auth/me when it's
+  // temporarily slow or rate-limited during rapid page refreshes.
 
   // ── Auth operations ────────────────────────────────────────────────────
 
