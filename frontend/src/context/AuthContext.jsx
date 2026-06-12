@@ -1,9 +1,22 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { supabase, getStartupSession, persistTokens, clearSavedSession, allowSessionRemoval, SAVE_LOGIN_KEY } from '../utils/supabase';
+import {
+  supabase,
+  storeSession,
+  readSessionFromStorage,
+  persistTokens,
+  clearSavedSession,
+  loadSavedTokens,
+  doTokenRefresh,
+  getCurrentSession,
+  SAVE_LOGIN_KEY,
+} from '../utils/supabase';
 import { api } from '../utils/api';
 
 const AuthContext = createContext(null);
 const PENDING_USERNAME_KEY = 'rd_pending_username';
+
+// How many ms before expiry we proactively refresh the token.
+const REFRESH_MARGIN_MS = 90 * 1000;
 
 export function AuthProvider({ children }) {
   const [session, setSession]             = useState(null);
@@ -12,9 +25,58 @@ export function AuthProvider({ children }) {
   const [mfaPending, setMfaPending]       = useState(false);
   const [mfaFactorId, setMfaFactorId]     = useState(null);
   const [showSaveLogin, setShowSaveLogin] = useState(false);
-  const initializedRef   = useRef(false);
-  const _pendingMfaCreds = useRef(null);
-  const _isUserSignOut   = useRef(false);
+
+  const _pendingMfaCreds  = useRef(null);
+  const _refreshTimer     = useRef(null);
+  const _refreshingRef    = useRef(false); // prevent concurrent refreshes
+
+  // ── Session helpers ────────────────────────────────────────────────────
+
+  function _applySession(sess) {
+    storeSession(sess);
+    setSession(sess);
+    if (sess) _scheduleRefresh(sess);
+    else _clearRefreshTimer();
+  }
+
+  function _clearRefreshTimer() {
+    if (_refreshTimer.current) {
+      clearTimeout(_refreshTimer.current);
+      _refreshTimer.current = null;
+    }
+  }
+
+  function _scheduleRefresh(sess) {
+    _clearRefreshTimer();
+    if (!sess?.expires_at) return;
+    const msUntilRefresh = sess.expires_at * 1000 - Date.now() - REFRESH_MARGIN_MS;
+    const delay = Math.max(msUntilRefresh, 5000); // at least 5s
+    _refreshTimer.current = setTimeout(() => _doRefresh(), delay);
+  }
+
+  async function _doRefresh() {
+    if (_refreshingRef.current) return;
+    _refreshingRef.current = true;
+    try {
+      const current = getCurrentSession();
+      if (!current?.refresh_token) return;
+      const newSess = await doTokenRefresh(current.refresh_token);
+      if (newSess) {
+        _applySession(newSess);
+        if (localStorage.getItem(SAVE_LOGIN_KEY)) {
+          persistTokens(newSess.access_token, newSess.refresh_token);
+        }
+      } else {
+        // Refresh failed — clear session and profile
+        _applySession(null);
+        setProfile(null);
+      }
+    } finally {
+      _refreshingRef.current = false;
+    }
+  }
+
+  // ── Profile helpers ────────────────────────────────────────────────────
 
   const fetchProfile = useCallback(async ({ clearOnFail = true } = {}) => {
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -44,97 +106,77 @@ export function AuthProvider({ children }) {
     } catch { return null; }
   }, [fetchProfile]);
 
+  // ── Initialisation ─────────────────────────────────────────────────────
+
   useEffect(() => {
-    // onAuthStateChange must be synchronous — no await — to avoid Web Lock deadlock
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sess) => {
-      // Keep persisted tokens in sync whenever Supabase auto-refreshes them
-      if (event === 'TOKEN_REFRESHED' && sess && localStorage.getItem(SAVE_LOGIN_KEY)) {
-        persistTokens(sess.access_token, sess.refresh_token);
-      }
-      // Don't update session state from here during init — init() manages state directly
-      if (!initializedRef.current) return;
-      // After init, keep React session in sync — but not while MFA is pending
-      if (_pendingMfaCreds.current) return;
-
-      if (event === 'SIGNED_OUT') {
-        if (_isUserSignOut.current) {
-          // Explicit user sign-out — honour it
-          _isUserSignOut.current = false;
-          setSession(null);
-          setProfile(null);
-        } else {
-          // Spurious SIGNED_OUT (rapid refresh, BroadcastChannel from old tab, etc.).
-          // Storage guard kept the session in sessionStorage — but Supabase still stops
-          // its auto-refresh timer. Restart it so proactive token rotation continues.
-          setTimeout(() => supabase.auth.startAutoRefresh?.(), 100);
-        }
-        return;
-      }
-
-      if (!sess) return; // never null-out session from non-SIGNED_OUT events
-
-      setSession(sess);
-      setTimeout(() => ensureProfile(), 0);
-    });
-
     async function init() {
       try {
-        const { session: restored, source } = await getStartupSession();
+        let sess = readSessionFromStorage();
 
-        if (!restored) {
-          // No session anywhere — stay logged out
-          return;
+        if (!sess) {
+          // No sessionStorage session — check localStorage save-login
+          const saved = loadSavedTokens();
+          if (saved?.refresh_token) {
+            const refreshed = await doTokenRefresh(saved.refresh_token);
+            if (refreshed) {
+              sess = refreshed;
+              persistTokens(sess.access_token, sess.refresh_token);
+            } else {
+              clearSavedSession();
+            }
+          }
         }
 
-        if (source === 'saved') {
-          // Restored from localStorage (new visit after closing tab)
-          // Check for verified 2FA factors
+        if (!sess) return; // not logged in
+
+        // If token is already near-expiry, refresh before proceeding
+        const nearExpiry =
+          sess.expires_at && sess.expires_at * 1000 - Date.now() < REFRESH_MARGIN_MS;
+        if (nearExpiry) {
+          const refreshed = await doTokenRefresh(sess.refresh_token);
+          sess = refreshed || null;
+        }
+
+        if (!sess) return;
+
+        // Check for MFA requirement (only on saved-login path or when flag is set)
+        const needsMfaCheck = sessionStorage.getItem('duely_needs_mfa_check');
+        if (needsMfaCheck) {
+          // Restored from localStorage — need to verify MFA level
           const { data: factors } = await supabase.auth.mfa.listFactors();
           const factor = factors?.totp?.find(f => f.status === 'verified');
           if (factor) {
-            // Has 2FA — session is alive in Supabase memory for challengeAndVerify
-            // Fetch profile so navbar shows user info while waiting for MFA code
-            // Session stays null in React so pages remain locked until code entered
+            // MFA required — show profile info in nav but keep page locked
             _pendingMfaCreds.current = { fromSavedSession: true, factorId: factor.id };
+            _applySession(sess);
             setMfaPending(true);
             setMfaFactorId(factor.id);
-            fetchProfile().catch(() => {}); // show profile info in nav during MFA wait
-            // session intentionally left null — Shell will redirect to /login
-          } else {
-            // No 2FA — log straight in
-            setSession(restored);
-            await ensureProfile();
-          }
-        } else {
-          // Restored from sessionStorage (page refresh — same tab session)
-          setSession(restored);
-          const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-          if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
-            const { data: factors } = await supabase.auth.mfa.listFactors();
-            const factor = factors?.totp?.[0];
-            setMfaPending(true);
-            setMfaFactorId(factor?.id ?? null);
-          } else {
-            await ensureProfile();
+            fetchProfile().catch(() => {});
+            return;
           }
         }
+
+        _applySession(sess);
+        await ensureProfile();
       } catch (e) {
         console.error('[AuthContext] init error:', e);
       } finally {
-        initializedRef.current = true;
         setLoading(false);
       }
     }
 
     init();
-    return () => subscription.unsubscribe();
-  }, [ensureProfile]);
+    return () => _clearRefreshTimer();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Auth operations ────────────────────────────────────────────────────
 
   async function signUp(email, password, username) {
     sessionStorage.setItem(PENDING_USERNAME_KEY, username.trim());
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) { sessionStorage.removeItem(PENDING_USERNAME_KEY); throw error; }
     if (data.session) {
+      _applySession(data.session);
       await api.post('/auth/profile', { username: username.trim() });
       sessionStorage.removeItem(PENDING_USERNAME_KEY);
       await fetchProfile();
@@ -147,21 +189,19 @@ export function AuthProvider({ children }) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
 
+    // Check MFA requirement
     const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
       const { data: factors } = await supabase.auth.mfa.listFactors();
       const factor = factors?.totp?.[0];
-      const factorId = factor?.id ?? null;
-      // Sign out partial AAL1 session — user isn't logged in until MFA passes
-      await supabase.auth.signOut();
-      _pendingMfaCreds.current = { email, password, factorId };
+      _pendingMfaCreds.current = { email, password, factorId: factor?.id ?? null };
       setMfaPending(true);
-      setMfaFactorId(factorId);
-      return { mfaRequired: true, factorId };
+      setMfaFactorId(factor?.id ?? null);
+      return { mfaRequired: true, factorId: factor?.id };
     }
 
+    _applySession(data.session);
     const profile = await ensureProfile();
-    // Show save-login prompt — clear any stale SAVE_LOGIN_KEY first so prompt always appears
     clearSavedSession();
     setShowSaveLogin(true);
     return profile;
@@ -171,15 +211,23 @@ export function AuthProvider({ children }) {
     const creds = _pendingMfaCreds.current;
     if (!creds) throw new Error('Session expired — please sign in again.');
 
-    if (!creds.fromSavedSession) {
-      // Fresh login: re-authenticate with email/password to get AAL1 session
-      const { error: signInErr } = await supabase.auth.signInWithPassword({
+    if (creds.fromSavedSession) {
+      // Session is in our storage — load it into Supabase in-memory so challengeAndVerify works
+      const current = getCurrentSession();
+      if (!current) throw new Error('Session expired — please sign in again.');
+      const { error: setErr } = await supabase.auth.setSession({
+        access_token: current.access_token,
+        refresh_token: current.refresh_token,
+      });
+      if (setErr) throw setErr;
+    } else {
+      // Fresh login — get AAL1 session into Supabase in-memory
+      const { data, error: signInErr } = await supabase.auth.signInWithPassword({
         email: creds.email,
         password: creds.password,
       });
       if (signInErr) throw signInErr;
     }
-    // For fromSavedSession: session is already in Supabase memory — just verify
 
     const fid = creds.factorId || factorId;
     if (!fid) throw new Error('No MFA factor found — try signing in again.');
@@ -187,20 +235,18 @@ export function AuthProvider({ children }) {
     const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: fid, code });
     if (error) throw error;
 
-    // MFA passed — clear the MFA-check flag and expose session to React
+    // MFA passed — pull the new AAL2 session from Supabase in-memory state
     sessionStorage.removeItem('duely_needs_mfa_check');
     const { data: { session: freshSession } } = await supabase.auth.getSession();
     _pendingMfaCreds.current = null;
-    setSession(freshSession);
+    _applySession(freshSession);
     setMfaPending(false);
     setMfaFactorId(null);
     ensureProfile().catch(() => {});
 
-    // Update saved tokens if user had save-login active (token was rotated by MFA verify)
     if (freshSession && localStorage.getItem(SAVE_LOGIN_KEY)) {
       persistTokens(freshSession.access_token, freshSession.refresh_token);
     }
-    // Always show save-login prompt after fresh login (clear stale key first)
     if (!creds.fromSavedSession) {
       clearSavedSession();
       setShowSaveLogin(true);
@@ -209,20 +255,26 @@ export function AuthProvider({ children }) {
   }
 
   async function signOut() {
-    _isUserSignOut.current = true;
-    allowSessionRemoval(); // let Supabase actually clear storage this time
-    await supabase.auth.signOut();
+    _clearRefreshTimer();
+    const current = getCurrentSession();
+    if (current?.access_token) {
+      // Best-effort server-side invalidation — don't block UI on failure
+      supabase.auth.signOut().catch(() => {});
+    }
+    _applySession(null);
+    setProfile(null);
     clearSavedSession();
     _pendingMfaCreds.current = null;
-    setSession(null);
-    setProfile(null);
     setMfaPending(false);
     setMfaFactorId(null);
     setShowSaveLogin(false);
   }
 
-  // clearOnFail: false so a failed post-game refresh doesn't wipe the visible profile
-  const refreshProfile = useCallback(() => fetchProfile({ clearOnFail: false }), [fetchProfile]);
+  // refreshProfile: post-game balance update — don't wipe profile on failure
+  const refreshProfile = useCallback(
+    () => fetchProfile({ clearOnFail: false }),
+    [fetchProfile],
+  );
 
   return (
     <AuthContext.Provider value={{

@@ -1,17 +1,18 @@
-import { supabase } from './supabase';
+import { getCurrentSession } from './supabase';
 
 const BASE = import.meta.env.VITE_API_URL || '/api';
 
-async function getAuthHeaders() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return {};
-  return { Authorization: `Bearer ${session.access_token}` };
+// Reads the in-memory session — synchronous, no Supabase state machine, no lock contention.
+function getAuthHeaders() {
+  const sess = getCurrentSession();
+  if (!sess?.access_token) return {};
+  return { Authorization: `Bearer ${sess.access_token}` };
 }
 
 async function apiFetch(path, options = {}) {
   const headers = {
     'Content-Type': 'application/json',
-    ...(await getAuthHeaders()),
+    ...getAuthHeaders(),
     ...options.headers,
   };
   const res = await fetch(`${BASE}${path}`, { ...options, headers });

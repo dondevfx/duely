@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
-import { supabase } from '../utils/supabase';
+import { getCurrentSession } from '../utils/supabase';
 
 const SocketContext = createContext(null);
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
@@ -20,10 +20,10 @@ export function SocketProvider({ children }) {
   const [activeGames, setActiveGames] = useState([]);
   const reconnectTimerRef = useRef(null);
 
-  async function doAuth(socket) {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      socket.emit('authenticate', { token: session.access_token });
+  function doAuth(socket) {
+    const sess = getCurrentSession();
+    if (sess?.access_token) {
+      socket.emit('authenticate', { token: sess.access_token });
     }
   }
 
@@ -168,20 +168,6 @@ export function SocketProvider({ children }) {
     return () => socket.disconnect();
   }, []);
 
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      const socket = socketRef.current;
-      // Re-authenticate the socket whenever Supabase confirms a valid session
-      // (SIGNED_IN, TOKEN_REFRESHED, etc.). Do NOT call setAuthenticated(false)
-      // on null-session events — spurious SIGNED_OUT during rapid refresh would
-      // break socket auth even though the session is being recovered. Socket auth
-      // state is driven solely by the server's 'authenticated' event and 'disconnect'.
-      if (session?.access_token && socket?.connected) {
-        socket.emit('authenticate', { token: session.access_token });
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, []);
 
   const clearForfeitWin = useCallback(() => setForfeitWin(null), []);
   const clearRejoinResult = useCallback(() => setRejoinResult(null), []);
