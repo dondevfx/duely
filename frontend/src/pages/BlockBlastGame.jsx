@@ -222,9 +222,9 @@ export default function BlockBlastGame() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      if (roomIdRef.current && phaseRef.current !== 'result' && socketRef.current) {
-        socketRef.current.emit('player_forfeit');
-      }
+      // Always emit on SPA navigation (logo click, sidebar links, etc.)
+      // Server is a no-op if no active room exists for this socket
+      if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
     };
   }, []);
   // Refresh balance on mount; delayed second call catches server settle that races with reload

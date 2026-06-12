@@ -32,7 +32,7 @@ async function creditRakeback(supabase, player1Id, player2Id, prizePool, currenc
         supabase.rpc('add_rakeback_weekly',  { p_user_id: userId, p_amount: share }),
       ]);
     } catch (e) {
-      // Silently fail — don't break game results
+      console.error(`[rakeback] userId=${userId} failed:`, e.message);
     }
   }
 }

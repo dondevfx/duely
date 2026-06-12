@@ -95,25 +95,27 @@ module.exports = function affiliateRoutes(supabase) {
 
   // POST /api/affiliate/collect-earnings — transfer accumulated earnings to balance
   router.post('/collect-earnings', requireAuth, async (req, res) => {
-    // Atomically zero out earnings and return the amount that was there.
-    // Using a single UPDATE...RETURNING prevents a race where a match settles
-    // between our SELECT and our UPDATE, causing those earnings to be wiped.
-    const { data, error } = await supabase
+    // Read first so we know the old value (Supabase .update().select() returns
+    // the NEW value after update, so we can't use it to get the pre-zero amount).
+    const { data: profile, error: readErr } = await supabase
+      .from('profiles')
+      .select('affiliate_earnings_c')
+      .eq('id', req.user.id)
+      .single();
+
+    if (readErr || !profile) return res.status(500).json({ error: 'Failed to read profile' });
+
+    const earningsC = parseFloat(profile.affiliate_earnings_c ?? 0);
+    if (earningsC <= 0) return res.status(400).json({ error: 'No earnings to collect' });
+
+    // Zero out — use .gte so floating-point noise doesn't block the update
+    const { error: zeroErr } = await supabase
       .from('profiles')
       .update({ affiliate_earnings_c: 0 })
       .eq('id', req.user.id)
-      .gt('affiliate_earnings_c', 0)
-      .select('affiliate_earnings_c')
-      .single();
+      .gte('affiliate_earnings_c', earningsC);
 
-    if (error || !data) {
-      return res.status(400).json({ error: 'No earnings to collect' });
-    }
-
-    const earningsC = parseFloat(data.affiliate_earnings_c ?? 0);
-    if (earningsC <= 0) {
-      return res.status(400).json({ error: 'No earnings to collect' });
-    }
+    if (zeroErr) return res.status(500).json({ error: 'Failed to zero earnings' });
 
     try {
       await creditCoins(supabase, req.user.id, earningsC);

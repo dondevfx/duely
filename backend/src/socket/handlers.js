@@ -1041,11 +1041,19 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       }
     });
 
+    // ── Allowed entry fees for active games ──────────────────────────────────
+    const VALID_COIN_FEES    = new Set([0, 1, 5, 10]);
+    const VALID_DIAMOND_FEES = new Set([0, 100, 250, 500]);
+    function isValidFee(fee, cur) {
+      return cur === 'diamonds' ? VALID_DIAMOND_FEES.has(Number(fee)) : VALID_COIN_FEES.has(Number(fee));
+    }
+
     // ════════════════════════════════════════════════════════════════
     //  BLOCK BLAST
     // ════════════════════════════════════════════════════════════════
     socket.on('join_block_blast_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      if (!isValidFee(entryFee, currency)) return socket.emit('error', { message: 'Invalid entry fee' });
       if (inMatchOrQueue(authenticatedUser.userId))
         return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
       const { data: profile } = await supabase
@@ -1846,6 +1854,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_scrabble_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      if (!isValidFee(entryFee, currency)) return socket.emit('error', { message: 'Invalid entry fee' });
       if (userQueues.has(authenticatedUser.userId))
         return socket.emit('error', { message: 'Already in a queue' });
       const { data: profile } = await supabase
@@ -1945,6 +1954,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     socket.on('join_coin_flip_queue', async ({ entryFee = 0, currency = 'coins', side }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
       if (!['heads', 'tails'].includes(side)) return socket.emit('error', { message: 'Pick heads or tails' });
+      if (!isValidFee(entryFee, currency)) return socket.emit('error', { message: 'Invalid entry fee' });
       // Coin flip only allows PvP for coins; diamonds = bot only
       if (currency === 'diamonds') return socket.emit('error', { message: 'Diamond Coin Flip is vs bot only' });
       if (userQueues.has(authenticatedUser.userId))
@@ -1980,6 +1990,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     socket.on('play_coin_flip_vs_bot', async ({ entryFee = 0, currency = 'coins', side } = {}) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
       if (!['heads', 'tails'].includes(side)) return socket.emit('error', { message: 'Pick heads or tails' });
+      // CoinFlip bot is diamonds-only; never allow a coins bet vs bot
+      if (currency !== 'diamonds') entryFee = 0;
       const { data: profile } = await supabase.from('profiles').select('elo,username,c_coins,diamonds').eq('id', authenticatedUser.userId).single();
       if (entryFee > 0) {
         try {
@@ -2007,6 +2019,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_bj_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      if (!isValidFee(entryFee, currency)) return socket.emit('error', { message: 'Invalid entry fee' });
       if (userQueues.has(authenticatedUser.userId)) return socket.emit('error', { message: 'Already in a queue' });
       const { data: profile } = await supabase.from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
       if (entryFee > 0) {

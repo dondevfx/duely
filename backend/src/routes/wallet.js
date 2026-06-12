@@ -14,6 +14,7 @@ const { swapUsdcToSol }      = require('../services/jupiterService');
 const { isLocked } = require('../services/lockService');
 
 const WITHDRAW_COOLDOWN_MS = 60 * 1000;   // 60s between withdrawals
+const activeWithdrawals = new Set();       // in-memory per-user lock to prevent concurrent withdrawals
 const DEPOSIT_MAX_SINGLE   = 50_000;      // $50k hard cap per deposit
 
 // Per-coin withdrawal minimums
@@ -119,6 +120,10 @@ module.exports = function walletRoutes(supabase) {
     if (isLocked(req.user.id)) {
       return res.status(400).json({ error: 'Cannot withdraw while in a queue or active match' });
     }
+    if (activeWithdrawals.has(req.user.id)) {
+      return res.status(429).json({ error: 'A withdrawal is already in progress' });
+    }
+    activeWithdrawals.add(req.user.id);
 
     const { coin, address, memo } = req.body;
 
@@ -251,6 +256,8 @@ module.exports = function walletRoutes(supabase) {
     } catch (err) {
       const isBalanceError = err.message?.includes('Insufficient');
       res.status(isBalanceError ? 400 : 500).json({ error: err.message });
+    } finally {
+      activeWithdrawals.delete(req.user.id);
     }
   });
 

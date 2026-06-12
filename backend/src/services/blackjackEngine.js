@@ -382,13 +382,11 @@ async function _resolveGame(io, supabase, roomId) {
   if (supabase) {
     if (!isDraw && !isFree) {
       if (!winner.isBot) {
-        await applyEloUpdate(supabase, winner.userId, newWinnerElo); const eloWinErr = null;
-        if (eloWinErr) console.error('[blackjackEngine] elo winner update failed:', eloWinErr.message);
+        try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch (eloWinErr) { console.error('[blackjackEngine] elo winner update failed:', eloWinErr.message); }
         try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch (e) { console.error('[blackjackEngine] increment_win:', e.message); }
       }
       if (!loser.isBot) {
-        await applyEloUpdate(supabase, loser.userId, newLoserElo); const eloLoseErr = null;
-        if (eloLoseErr) console.error('[blackjackEngine] elo loser update failed:', eloLoseErr.message);
+        try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch (eloLoseErr) { console.error('[blackjackEngine] elo loser update failed:', eloLoseErr.message); }
         try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch (e) { console.error('[blackjackEngine] increment_loss:', e.message); }
       }
       if (!winner.isBot) {
