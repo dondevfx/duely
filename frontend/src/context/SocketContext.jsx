@@ -171,10 +171,13 @@ export function SocketProvider({ children }) {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       const socket = socketRef.current;
+      // Re-authenticate the socket whenever Supabase confirms a valid session
+      // (SIGNED_IN, TOKEN_REFRESHED, etc.). Do NOT call setAuthenticated(false)
+      // on null-session events — spurious SIGNED_OUT during rapid refresh would
+      // break socket auth even though the session is being recovered. Socket auth
+      // state is driven solely by the server's 'authenticated' event and 'disconnect'.
       if (session?.access_token && socket?.connected) {
         socket.emit('authenticate', { token: session.access_token });
-      } else if (!session) {
-        setAuthenticated(false);
       }
     });
     return () => subscription.unsubscribe();

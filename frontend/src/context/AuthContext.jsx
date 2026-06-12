@@ -12,9 +12,11 @@ export function AuthProvider({ children }) {
   const [mfaPending, setMfaPending]       = useState(false);
   const [mfaFactorId, setMfaFactorId]     = useState(null);
   const [showSaveLogin, setShowSaveLogin] = useState(false);
-  const initializedRef   = useRef(false);
-  const _pendingMfaCreds = useRef(null);
-  const _isUserSignOut   = useRef(false);
+  const initializedRef      = useRef(false);
+  const _pendingMfaCreds    = useRef(null);
+  const _isUserSignOut      = useRef(false);
+  const _lastKnownTokens    = useRef(null); // last good { access_token, refresh_token }
+  const _isRecoveringSignOut = useRef(false); // prevent re-entrant recovery
 
   const fetchProfile = useCallback(async () => {
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -47,7 +49,11 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     // onAuthStateChange must be synchronous — no await — to avoid Web Lock deadlock
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sess) => {
-      // Keep saved tokens in sync whenever Supabase auto-refreshes them
+      // Cache tokens on every successful session event so we can restore after spurious sign-out
+      if (sess?.access_token) {
+        _lastKnownTokens.current = { access_token: sess.access_token, refresh_token: sess.refresh_token };
+      }
+      // Keep persisted tokens in sync whenever Supabase auto-refreshes them
       if (event === 'TOKEN_REFRESHED' && sess && localStorage.getItem(SAVE_LOGIN_KEY)) {
         persistTokens(sess.access_token, sess.refresh_token);
       }
@@ -60,22 +66,43 @@ export function AuthProvider({ children }) {
         if (_isUserSignOut.current) {
           // Explicit user sign-out — honour it
           _isUserSignOut.current = false;
+          _lastKnownTokens.current = null;
           setSession(null);
           setProfile(null);
+          return;
         }
-        // Non-user SIGNED_OUT: ignore entirely. These fire spuriously during rapid
-        // page refreshes due to token rotation races and Web Lock contention.
-        // Session state is authoritative from init() on each page load; real auth
-        // failures surface through fetchProfile returning null after 3 retries.
+        // Non-user SIGNED_OUT (spurious from rapid refresh / BroadcastChannel from old page):
+        // Supabase cleared its internal session state, but the tokens are likely still valid.
+        // Re-establish the Supabase client session using the last known tokens so that
+        // getSession() and the socket continue to work. If the tokens are genuinely invalid
+        // (refresh_token revoked), setSession() will fail and we properly sign out then.
+        if (!_isRecoveringSignOut.current && _lastKnownTokens.current) {
+          _isRecoveringSignOut.current = true;
+          const tokens = _lastKnownTokens.current;
+          supabase.auth.setSession(tokens).then(({ data, error }) => {
+            _isRecoveringSignOut.current = false;
+            if (error || !data?.session) {
+              // Tokens genuinely invalid — accept sign-out
+              _lastKnownTokens.current = null;
+              clearSavedSession();
+              setSession(null);
+              setProfile(null);
+            }
+            // On success: SIGNED_IN fires → handler below updates session + profile ✓
+          }).catch(() => {
+            _isRecoveringSignOut.current = false;
+            _lastKnownTokens.current = null;
+            setSession(null);
+            setProfile(null);
+          });
+        }
         return;
       }
 
+      if (!sess) return; // never null-out session from non-SIGNED_OUT events
+
       setSession(sess);
-      if (sess) {
-        setTimeout(() => ensureProfile(), 0);
-      } else {
-        setProfile(null);
-      }
+      setTimeout(() => ensureProfile(), 0);
     });
 
     async function init() {
@@ -103,11 +130,13 @@ export function AuthProvider({ children }) {
             // session intentionally left null — Shell will redirect to /login
           } else {
             // No 2FA — log straight in
+            _lastKnownTokens.current = { access_token: restored.access_token, refresh_token: restored.refresh_token };
             setSession(restored);
             await ensureProfile();
           }
         } else {
           // Restored from sessionStorage (page refresh — same tab session)
+          _lastKnownTokens.current = { access_token: restored.access_token, refresh_token: restored.refresh_token };
           setSession(restored);
           const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
           if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
@@ -211,6 +240,7 @@ export function AuthProvider({ children }) {
 
   async function signOut() {
     _isUserSignOut.current = true;
+    _lastKnownTokens.current = null;
     await supabase.auth.signOut();
     clearSavedSession();
     _pendingMfaCreds.current = null;
