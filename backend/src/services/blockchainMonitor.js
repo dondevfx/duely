@@ -314,6 +314,12 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     .maybeSingle();
   if (dup) { _seenTxs.add(txHash); return; } // already in DB — cache and skip silently
 
+  // ── Gas reserve check (before any logging so dust txs produce no output) ──────
+  const gasReserveMap = { btc: 0.00002, eth: 0.0004, bnb: 0.0005, sol: 0.0001, ltc: 0.001, trx: 5, doge: 1 };
+  const gasRes    = (coin !== 'usdc') ? (gasReserveMap[coin] || 0) : 0;
+  const netAmount = Math.max(0, amount - gasRes);
+  if (coin !== 'usdc' && netAmount <= 0) { _seenTxs.add(txHash); return; } // dust — silent
+
   console.log(`[monitor] deposit detected userId=${userId} coin=${coin} amount=${amount} tx=${txHash}`);
 
   const priceUsd     = await getPriceUsd(coin);
@@ -326,6 +332,7 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
   if (coin === 'usdc') {
     if (estimatedUsd < MIN_USD) {
       console.warn(`[monitor] USDC $${estimatedUsd.toFixed(2)} below minimum — skipping ${txHash}`);
+      _seenTxs.add(txHash);
       return;
     }
     const credited = Math.floor(amount * 100) / 100;
@@ -336,17 +343,11 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
       crypto_amount: amount, crypto_symbol: 'USDC', tx_hash: txHash, status: 'confirmed',
     });
     console.log(`[monitor] USDC deposit — credited $${credited} to user ${userId}`);
+    _seenTxs.add(txHash);
     return;
   }
 
-  // ── Gas reserve (player pays network fee) ────────────────────────────────────
-  // SOL reserve is 0.003 to cover Jupiter's one-time USDC ATA creation (~0.002 SOL).
-  // SOL reserve dropped from 0.003 → 0.0001: admin USDC ATA is pre-created,
-  // only need ~0.000005 SOL for the Jupiter tx fee (using 0.0001 as a small buffer)
-  const gasReserveMap = { btc: 0.00002, eth: 0.0004, bnb: 0.0005, sol: 0.0001, ltc: 0.001, trx: 5, doge: 1 };
-  const gasRes    = gasReserveMap[coin] || 0;
-  const netAmount = Math.max(0, amount - gasRes);
-  if (netAmount <= 0) { _seenTxs.add(txHash); return; } // dust tx — cache and skip silently
+  // netAmount already computed above (amount - gasRes)
 
   // ── SOL: swap via Jupiter, credit exact USDC received minus 0.5% ─────────────
   if (coin === 'sol') {
