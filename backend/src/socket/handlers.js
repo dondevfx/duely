@@ -1056,8 +1056,16 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (!isValidFee(entryFee, currency)) return socket.emit('error', { message: 'Invalid entry fee' });
       if (inMatchOrQueue(authenticatedUser.userId))
         return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
+      socket._startingGame = 'block_blast';
+      try {
       const { data: profile } = await supabase
         .from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
+      // Player navigated away while we were awaiting the DB query — bail out cleanly
+      if (socket._pendingForfeitGame === 'block_blast') {
+        socket._pendingForfeitGame = null;
+        if (socket._pendingForfeitGameTimer) { clearTimeout(socket._pendingForfeitGameTimer); socket._pendingForfeitGameTimer = null; }
+        return;
+      }
       if (entryFee > 0) {
         if (currency === 'diamonds' && (profile.diamonds || 0) < entryFee)
           return socket.emit('error', { message: 'Insufficient diamonds' });
@@ -1105,6 +1113,9 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           currentStreak: authenticatedUser.current_streak || 0,
         });
       }
+      } finally {
+        socket._startingGame = null;
+      }
     });
 
     socket.on('leave_block_blast_queue', () => {
@@ -1116,33 +1127,38 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
     socket.on('play_block_blast_vs_bot', async ({ entryFee = 0, currency = 'coins' } = {}) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
-      if (currency !== 'diamonds') entryFee = 0; // bot games are free for coins
-      const { data: profile } = await supabase.from('profiles').select('elo,username,c_coins,diamonds').eq('id', authenticatedUser.userId).single();
-      if (entryFee > 0) {
-        try {
-          if (currency === 'diamonds') {
-            await deductDiamonds(supabase, authenticatedUser.userId, Math.floor(entryFee));
-          } else {
-            await deductCoins(supabase, authenticatedUser.userId, parseFloat(entryFee));
+      socket._startingGame = 'block_blast';
+      try {
+        if (currency !== 'diamonds') entryFee = 0; // bot games are free for coins
+        const { data: profile } = await supabase.from('profiles').select('elo,username,c_coins,diamonds').eq('id', authenticatedUser.userId).single();
+        if (entryFee > 0) {
+          try {
+            if (currency === 'diamonds') {
+              await deductDiamonds(supabase, authenticatedUser.userId, Math.floor(entryFee));
+            } else {
+              await deductCoins(supabase, authenticatedUser.userId, parseFloat(entryFee));
+            }
+          } catch (e) {
+            return socket.emit('error', { message: e.message || 'Insufficient balance' });
           }
-        } catch (e) {
-          return socket.emit('error', { message: e.message || 'Insufficient balance' });
         }
+        const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+        const bot = createBotPlayer(entryFee, 'block_blast');
+        bot.entryFee = entryFee;
+        const { roomId } = createDirectBlockBlastRoom(player, bot);
+        socket.join(roomId);
+        if (socket._pendingForfeitGame === 'block_blast') {
+          socket._pendingForfeitGame = null;
+          if (socket._pendingForfeitGameTimer) { clearTimeout(socket._pendingForfeitGameTimer); socket._pendingForfeitGameTimer = null; }
+          await _handleForfeit(io, supabase, { roomId, room: getBlockBlastRoom(roomId) }, socket.id, deleteBlockBlastRoom, 'blockBlast');
+          return;
+        }
+        incrementCount('block-blast', socket.id, entryFee, currency);
+        socket.emit('block_blast_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo }, entryFee, vsBot: true });
+        startBlockBlastCountdown(io, supabase, roomId);
+      } finally {
+        socket._startingGame = null;
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
-      const bot = createBotPlayer(entryFee, 'block_blast');
-      bot.entryFee = entryFee;
-      const { roomId } = createDirectBlockBlastRoom(player, bot);
-      socket.join(roomId);
-      if (socket._pendingForfeit) {
-        socket._pendingForfeit = false;
-        if (socket._pendingForfeitTimer) { clearTimeout(socket._pendingForfeitTimer); socket._pendingForfeitTimer = null; }
-        await _handleForfeit(io, supabase, { roomId, room: getBlockBlastRoom(roomId) }, socket.id, deleteBlockBlastRoom, 'blockBlast');
-        return;
-      }
-      incrementCount('block-blast', socket.id, entryFee, currency);
-      socket.emit('block_blast_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo }, entryFee, vsBot: true });
-      startBlockBlastCountdown(io, supabase, roomId);
     });
 
     socket.on('block_blast_complete', ({ roomId, score = 0 }) => {
@@ -1863,8 +1879,16 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (!isValidFee(entryFee, currency)) return socket.emit('error', { message: 'Invalid entry fee' });
       if (userQueues.has(authenticatedUser.userId))
         return socket.emit('error', { message: 'Already in a queue' });
+      socket._startingGame = 'scrabble';
+      try {
       const { data: profile } = await supabase
         .from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
+      // Player navigated away while we were awaiting the DB query — bail out cleanly
+      if (socket._pendingForfeitGame === 'scrabble') {
+        socket._pendingForfeitGame = null;
+        if (socket._pendingForfeitGameTimer) { clearTimeout(socket._pendingForfeitGameTimer); socket._pendingForfeitGameTimer = null; }
+        return;
+      }
       if (entryFee > 0) {
         if (currency === 'diamonds' && (profile.diamonds || 0) < entryFee)
           return socket.emit('error', { message: 'Insufficient diamonds' });
@@ -1907,6 +1931,9 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           currentStreak: authenticatedUser.current_streak || 0,
         });
       }
+      } finally {
+        socket._startingGame = null;
+      }
     });
 
     socket.on('leave_scrabble_queue', () => {
@@ -1919,37 +1946,42 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
     socket.on('play_scrabble_vs_bot', async ({ entryFee = 0, currency = 'coins' } = {}) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
-      if (currency !== 'diamonds') entryFee = 0; // bot games free for coins
-      const { data: profile } = await supabase.from('profiles').select('elo,username,c_coins,diamonds').eq('id', authenticatedUser.userId).single();
-      if (entryFee > 0) {
-        try {
-          if (currency === 'diamonds') await deductDiamonds(supabase, authenticatedUser.userId, Math.floor(entryFee));
-          else await deductCoins(supabase, authenticatedUser.userId, parseFloat(entryFee));
-        } catch (e) { return socket.emit('error', { message: e.message || 'Insufficient balance' }); }
+      socket._startingGame = 'scrabble';
+      try {
+        if (currency !== 'diamonds') entryFee = 0; // bot games free for coins
+        const { data: profile } = await supabase.from('profiles').select('elo,username,c_coins,diamonds').eq('id', authenticatedUser.userId).single();
+        if (entryFee > 0) {
+          try {
+            if (currency === 'diamonds') await deductDiamonds(supabase, authenticatedUser.userId, Math.floor(entryFee));
+            else await deductCoins(supabase, authenticatedUser.userId, parseFloat(entryFee));
+          } catch (e) { return socket.emit('error', { message: e.message || 'Insufficient balance' }); }
+        }
+        const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+        const { v4: uuid } = require('uuid');
+        const botSocketId = 'bot_scrabble_' + uuid();
+        const bot = { socketId: botSocketId, userId: botSocketId, username: 'Duely Bot', elo: 1000, entryFee, currency, isBot: true };
+        const { roomId } = createDirectScrabbleRoom(player, bot);
+        socket.join(roomId);
+        if (socket._pendingForfeitGame === 'scrabble') {
+          socket._pendingForfeitGame = null;
+          if (socket._pendingForfeitGameTimer) { clearTimeout(socket._pendingForfeitGameTimer); socket._pendingForfeitGameTimer = null; }
+          await _handleForfeit(io, supabase, { roomId, room: getScrabbleRoom(roomId) }, socket.id, deleteScrabbleRoom, 'scrabble');
+          return;
+        }
+        socket.emit('scrabble_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo }, entryFee, vsBot: true });
+        socket.emit('scrabble_countdown', { count: 3 });
+        await new Promise(r => setTimeout(r, 1000));
+        if (!getScrabbleRoom(roomId)) return;
+        socket.emit('scrabble_countdown', { count: 2 });
+        await new Promise(r => setTimeout(r, 1000));
+        if (!getScrabbleRoom(roomId)) return;
+        socket.emit('scrabble_countdown', { count: 1 });
+        await new Promise(r => setTimeout(r, 1000));
+        if (!getScrabbleRoom(roomId)) return;
+        startScrabbleGame(io, supabase, roomId);
+      } finally {
+        socket._startingGame = null;
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
-      const { v4: uuid } = require('uuid');
-      const botSocketId = 'bot_scrabble_' + uuid();
-      const bot = { socketId: botSocketId, userId: botSocketId, username: 'Duely Bot', elo: 1000, entryFee, currency, isBot: true };
-      const { roomId } = createDirectScrabbleRoom(player, bot);
-      socket.join(roomId);
-      if (socket._pendingForfeit) {
-        socket._pendingForfeit = false;
-        if (socket._pendingForfeitTimer) { clearTimeout(socket._pendingForfeitTimer); socket._pendingForfeitTimer = null; }
-        await _handleForfeit(io, supabase, { roomId, room: getScrabbleRoom(roomId) }, socket.id, deleteScrabbleRoom, 'scrabble');
-        return;
-      }
-      socket.emit('scrabble_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo }, entryFee, vsBot: true });
-      socket.emit('scrabble_countdown', { count: 3 });
-      await new Promise(r => setTimeout(r, 1000));
-      if (!getScrabbleRoom(roomId)) return;
-      socket.emit('scrabble_countdown', { count: 2 });
-      await new Promise(r => setTimeout(r, 1000));
-      if (!getScrabbleRoom(roomId)) return;
-      socket.emit('scrabble_countdown', { count: 1 });
-      await new Promise(r => setTimeout(r, 1000));
-      if (!getScrabbleRoom(roomId)) return;
-      startScrabbleGame(io, supabase, roomId);
     });
 
     socket.on('scrabble_play_word', ({ roomId, placements }) => {
@@ -2009,34 +2041,39 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     socket.on('play_coin_flip_vs_bot', async ({ entryFee = 0, currency = 'coins', side } = {}) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
       if (!['heads', 'tails'].includes(side)) return socket.emit('error', { message: 'Pick heads or tails' });
-      // CoinFlip bot is diamonds-only; never allow a coins bet vs bot
-      if (currency !== 'diamonds') entryFee = 0;
-      const { data: profile } = await supabase.from('profiles').select('elo,username,c_coins,diamonds').eq('id', authenticatedUser.userId).single();
-      if (entryFee > 0) {
-        try {
-          if (currency === 'diamonds') {
-            await deductDiamonds(supabase, authenticatedUser.userId, Math.floor(entryFee));
-          } else {
-            await deductCoins(supabase, authenticatedUser.userId, parseFloat(entryFee));
-          }
-        } catch (e) { return socket.emit('error', { message: e.message || 'Insufficient balance' }); }
+      socket._startingGame = 'coin_flip';
+      try {
+        // CoinFlip bot is diamonds-only; never allow a coins bet vs bot
+        if (currency !== 'diamonds') entryFee = 0;
+        const { data: profile } = await supabase.from('profiles').select('elo,username,c_coins,diamonds').eq('id', authenticatedUser.userId).single();
+        if (entryFee > 0) {
+          try {
+            if (currency === 'diamonds') {
+              await deductDiamonds(supabase, authenticatedUser.userId, Math.floor(entryFee));
+            } else {
+              await deductCoins(supabase, authenticatedUser.userId, parseFloat(entryFee));
+            }
+          } catch (e) { return socket.emit('error', { message: e.message || 'Insufficient balance' }); }
+        }
+        const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, side };
+        const bot = { socketId: `bot_cf_${uuidv4()}`, userId: `bot_cf_${uuidv4()}`, username: 'Duely Bot', elo: 1000, entryFee, currency, side: side === 'heads' ? 'tails' : 'heads', isBot: true };
+        // Use createDirectCoinFlipRoom so the room is tracked in coinFlipRooms map.
+        // This means getCoinFlipRoomBySocket finds it on disconnect → _handleForfeit
+        // fires → fee is settled and room cleaned up properly.
+        const { roomId } = createDirectCoinFlipRoom(player, bot);
+        socket.join(roomId);
+        if (socket._pendingForfeitGame === 'coin_flip') {
+          socket._pendingForfeitGame = null;
+          if (socket._pendingForfeitGameTimer) { clearTimeout(socket._pendingForfeitGameTimer); socket._pendingForfeitGameTimer = null; }
+          await _handleForfeit(io, supabase, { roomId, room: getCoinFlipRoom(roomId) }, socket.id, deleteCoinFlipRoom, 'coin_flip');
+          return;
+        }
+        socket.emit('coin_flip_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo }, side, entryFee, vsBot: true });
+        // Resolve after countdown (6s) + flip animation via the standard resolveCoinFlip
+        setTimeout(() => resolveCoinFlip(io, supabase, roomId), 6000);
+      } finally {
+        socket._startingGame = null;
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, side };
-      const bot = { socketId: `bot_cf_${uuidv4()}`, userId: `bot_cf_${uuidv4()}`, username: 'Duely Bot', elo: 1000, entryFee, currency, side: side === 'heads' ? 'tails' : 'heads', isBot: true };
-      // Use createDirectCoinFlipRoom so the room is tracked in coinFlipRooms map.
-      // This means getCoinFlipRoomBySocket finds it on disconnect → _handleForfeit
-      // fires → fee is settled and room cleaned up properly.
-      const { roomId } = createDirectCoinFlipRoom(player, bot);
-      socket.join(roomId);
-      if (socket._pendingForfeit) {
-        socket._pendingForfeit = false;
-        if (socket._pendingForfeitTimer) { clearTimeout(socket._pendingForfeitTimer); socket._pendingForfeitTimer = null; }
-        await _handleForfeit(io, supabase, { roomId, room: getCoinFlipRoom(roomId) }, socket.id, deleteCoinFlipRoom, 'coin_flip');
-        return;
-      }
-      socket.emit('coin_flip_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo }, side, entryFee, vsBot: true });
-      // Resolve after countdown (6s) + flip animation via the standard resolveCoinFlip
-      setTimeout(() => resolveCoinFlip(io, supabase, roomId), 6000);
     });
 
     // ════════════════════════════════════════════════════════════════
@@ -2046,7 +2083,15 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
       if (!isValidFee(entryFee, currency)) return socket.emit('error', { message: 'Invalid entry fee' });
       if (userQueues.has(authenticatedUser.userId)) return socket.emit('error', { message: 'Already in a queue' });
+      socket._startingGame = 'blackjack';
+      try {
       const { data: profile } = await supabase.from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
+      // Player navigated away while we were awaiting the DB query — bail out cleanly
+      if (socket._pendingForfeitGame === 'blackjack') {
+        socket._pendingForfeitGame = null;
+        if (socket._pendingForfeitGameTimer) { clearTimeout(socket._pendingForfeitGameTimer); socket._pendingForfeitGameTimer = null; }
+        return;
+      }
       if (entryFee > 0) {
         if (currency === 'diamonds' && (profile.diamonds || 0) < entryFee) return socket.emit('error', { message: 'Insufficient diamonds' });
         if (currency === 'coins' && profile.c_coins < entryFee) return socket.emit('error', { message: 'Insufficient C Coins' });
@@ -2065,6 +2110,9 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         startBlackjackGame(io, supabase, match.roomId);
       } else {
         socket.emit('bj_queue_joined');
+      }
+      } finally {
+        socket._startingGame = null;
       }
     });
 
@@ -2145,38 +2193,44 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         forfeited = true;
         break;
       }
-      // No active room found — bot game handler may be mid-await on its DB query (before room
-      // creation). Mark socket so the handler can trigger the forfeit immediately on room creation.
-      if (!forfeited) {
-        socket._pendingForfeit = true;
-        if (socket._pendingForfeitTimer) clearTimeout(socket._pendingForfeitTimer);
-        socket._pendingForfeitTimer = setTimeout(() => { socket._pendingForfeit = false; }, 5000);
+      // No active room found — a bot/queue handler may be mid-await on its DB query (before room
+      // creation). Only mark a pending forfeit if that specific handler set _startingGame, so we
+      // never false-positive on a lobby exit followed by a different game starting within 5s.
+      if (!forfeited && socket._startingGame) {
+        socket._pendingForfeitGame = socket._startingGame;
+        if (socket._pendingForfeitGameTimer) clearTimeout(socket._pendingForfeitGameTimer);
+        socket._pendingForfeitGameTimer = setTimeout(() => { socket._pendingForfeitGame = null; }, 8000);
       }
     });
 
     socket.on('play_bj_vs_bot', async ({ entryFee = 0, currency = 'coins' } = {}) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
-      if (currency !== 'diamonds') entryFee = 0;
-      const { data: profile } = await supabase.from('profiles').select('elo,username,c_coins,diamonds').eq('id', authenticatedUser.userId).single();
-      if (entryFee > 0) {
-        try {
-          if (currency === 'diamonds') await deductDiamonds(supabase, authenticatedUser.userId, Math.floor(entryFee));
-          else await deductCoins(supabase, authenticatedUser.userId, parseFloat(entryFee));
-        } catch (e) { return socket.emit('error', { message: e.message || 'Insufficient balance' }); }
+      socket._startingGame = 'blackjack';
+      try {
+        if (currency !== 'diamonds') entryFee = 0;
+        const { data: profile } = await supabase.from('profiles').select('elo,username,c_coins,diamonds').eq('id', authenticatedUser.userId).single();
+        if (entryFee > 0) {
+          try {
+            if (currency === 'diamonds') await deductDiamonds(supabase, authenticatedUser.userId, Math.floor(entryFee));
+            else await deductCoins(supabase, authenticatedUser.userId, parseFloat(entryFee));
+          } catch (e) { return socket.emit('error', { message: e.message || 'Insufficient balance' }); }
+        }
+        const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+        const bot = { socketId: null, userId: 'bot_bj_' + uuidv4(), username: 'Duely Bot', elo: 1000, entryFee, currency, isBot: true };
+        const { roomId } = createDirectBlackjackRoom(player, bot);
+        socket.join(roomId);
+        if (socket._pendingForfeitGame === 'blackjack') {
+          socket._pendingForfeitGame = null;
+          if (socket._pendingForfeitGameTimer) { clearTimeout(socket._pendingForfeitGameTimer); socket._pendingForfeitGameTimer = null; }
+          await _handleForfeit(io, supabase, { roomId, room: getBlackjackRoom(roomId) }, socket.id, deleteBlackjackRoom, 'blackjack');
+          return;
+        }
+        incrementCount('blackjack', socket.id, entryFee, currency);
+        socket.emit('bj_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo }, entryFee, vsBot: true });
+        startBlackjackGame(io, supabase, roomId);
+      } finally {
+        socket._startingGame = null;
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
-      const bot = { socketId: null, userId: 'bot_bj_' + uuidv4(), username: 'Duely Bot', elo: 1000, entryFee, currency, isBot: true };
-      const { roomId } = createDirectBlackjackRoom(player, bot);
-      socket.join(roomId);
-      if (socket._pendingForfeit) {
-        socket._pendingForfeit = false;
-        if (socket._pendingForfeitTimer) { clearTimeout(socket._pendingForfeitTimer); socket._pendingForfeitTimer = null; }
-        await _handleForfeit(io, supabase, { roomId, room: getBlackjackRoom(roomId) }, socket.id, deleteBlackjackRoom, 'blackjack');
-        return;
-      }
-      incrementCount('blackjack', socket.id, entryFee, currency);
-      socket.emit('bj_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo }, entryFee, vsBot: true });
-      startBlackjackGame(io, supabase, roomId);
     });
 
     socket.on('bj_hit', ({ roomId }) => {

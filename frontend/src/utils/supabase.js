@@ -81,7 +81,7 @@ export async function getStartupSession() {
     return { session: data.session, source: 'saved' };
   } catch (e) {
     console.error('[save-login] getStartupSession error:', e);
-    clearSavedSession();
+    // Don't clearSavedSession here — error may be transient (network hiccup, Web Lock timeout)
     return { session: null, source: null };
   }
 }
