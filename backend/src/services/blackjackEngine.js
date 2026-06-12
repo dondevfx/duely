@@ -356,19 +356,13 @@ async function _resolveGame(io, supabase, roomId) {
       if (hasBot) {
         const humanId = p1.isBot ? p2.userId : p1.userId;
         if (isDraw) {
-          // Bot draw: fee already deducted upfront — refund 95% (5% platform fee applies on draws)
-          const adminId = process.env.ADMIN_USER_ID;
+          // Bot draw: fee already deducted upfront — full refund (bot matches are diamonds-only, no platform fee)
           if (room.currency === 'diamonds') {
-            const refund = Math.floor(room.entryFee * 0.95);
-            await creditDiamonds(supabase, humanId, refund);
-            if (adminId) await supabase.rpc('credit_fee_balance', { user_id: adminId, amount: room.entryFee - refund }).catch(() => {});
-            balanceChange = { winnerPayout: refund };
+            await creditDiamonds(supabase, humanId, Math.floor(room.entryFee));
           } else {
-            const refund = parseFloat((room.entryFee * 0.95).toFixed(4));
-            await creditCoins(supabase, humanId, refund);
-            if (adminId) await supabase.rpc('credit_fee_balance', { user_id: adminId, amount: parseFloat((room.entryFee - refund).toFixed(4)) }).catch(() => {});
-            balanceChange = { winnerPayout: refund };
+            await creditCoins(supabase, humanId, parseFloat(room.entryFee));
           }
+          balanceChange = { winnerPayout: room.entryFee };
         } else {
           balanceChange = await settleBotMatch(supabase, humanId, room.entryFee, room.currency, !winner.isBot);
         }

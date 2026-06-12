@@ -360,9 +360,8 @@ async function forfeitSettleCoins(supabase, winnerId, loserId, entryFee, adminId
   }
 }
 
-// Draw settlement — each player pays 5% platform fee, gets back 95% of their entry fee.
-// Both players' entry fees are deducted then partially refunded.
-// Affiliates and creator codes are paid the same way as a regular win.
+// Draw settlement (coins) — 5% platform fee applies; each player gets 95% of their entry fee back.
+// Fee is split: affiliates/codes + rakeback + admin, identical to a normal match.
 async function settleDrawMatch(supabase, p1Id, p2Id, entryFee) {
   const fee = parseFloat(entryFee);
   if (fee <= 0) return { winnerPayout: 0, fee: 0 };
@@ -376,9 +375,12 @@ async function settleDrawMatch(supabase, p1Id, p2Id, entryFee) {
   await supabase.rpc('credit_coins', { user_id: p1Id, amount: refund });
   await supabase.rpc('credit_coins', { user_id: p2Id, amount: refund });
 
-  // Pay affiliates / creator codes (same logic as a win — they earn on every wagered game)
-  // platformFeePercent is reduced when affiliates are present (4.5% or 3% instead of 5%)
-  let platformFeePercent = 0.045; // default: 4.5% (5% fee − 0.5% rakeback)
+  // Rakeback — 0.5% of prize pool split across instant/daily/weekly buckets
+  const { creditRakeback } = require('./rakebackService');
+  await creditRakeback(supabase, p1Id, p2Id, prizePool, 'coins').catch(() => {});
+
+  // Pay affiliates / creator codes + admin fee (same as a normal match)
+  let platformFeePercent = 0.045; // default: 4.5% (5% − 0.5% rakeback)
   if (adminId) {
     try {
       const { owner1, owner2 } = await resolveAffiliates(supabase, p1Id, p2Id)
@@ -388,7 +390,6 @@ async function settleDrawMatch(supabase, p1Id, p2Id, entryFee) {
       platformFeePercent = platformFee;
     } catch {}
     const adminAmount = parseFloat((prizePool * platformFeePercent).toFixed(4));
-    // Accumulate into fee_balance — admin collects manually via dashboard
     await supabase.rpc('credit_fee_balance', { user_id: adminId, amount: adminAmount }).catch(() => {});
   }
 
@@ -401,29 +402,22 @@ async function settleDrawMatch(supabase, p1Id, p2Id, entryFee) {
   return { winnerPayout: refund, fee: totalPlatformFee };
 }
 
+// Draw settlement (diamonds) — no platform fee; full refund to both players.
 async function settleDrawMatchDiamonds(supabase, p1Id, p2Id, entryFee) {
-  const fee    = Math.floor(parseFloat(entryFee));
+  const fee = Math.floor(parseFloat(entryFee));
   if (fee <= 0) return { winnerPayout: 0, fee: 0 };
-  const refund = Math.floor(fee * 0.95);
-  const adminId = process.env.ADMIN_USER_ID;
 
   await supabase.rpc('deduct_diamonds', { user_id: p1Id, amount: fee });
   await supabase.rpc('deduct_diamonds', { user_id: p2Id, amount: fee });
-  await supabase.rpc('credit_diamonds', { user_id: p1Id, amount: refund });
-  await supabase.rpc('credit_diamonds', { user_id: p2Id, amount: refund });
-
-  // 5% platform fee (diamonds) goes to admin fee_balance
-  if (adminId) {
-    const adminFee = (fee * 2) - (refund * 2);
-    await supabase.rpc('credit_fee_balance', { user_id: adminId, amount: adminFee }).catch(() => {});
-  }
+  await supabase.rpc('credit_diamonds', { user_id: p1Id, amount: fee });
+  await supabase.rpc('credit_diamonds', { user_id: p2Id, amount: fee });
 
   supabase.from('transactions').insert([
-    { user_id: p1Id, type: 'match_draw', amount_c: 0, crypto_amount: refund, crypto_symbol: 'diamonds', status: 'confirmed' },
-    { user_id: p2Id, type: 'match_draw', amount_c: 0, crypto_amount: refund, crypto_symbol: 'diamonds', status: 'confirmed' },
+    { user_id: p1Id, type: 'match_draw', amount_c: 0, crypto_amount: fee, crypto_symbol: 'diamonds', status: 'confirmed' },
+    { user_id: p2Id, type: 'match_draw', amount_c: 0, crypto_amount: fee, crypto_symbol: 'diamonds', status: 'confirmed' },
   ]).then().catch(() => {});
 
-  return { winnerPayout: refund, fee: (fee * 2) - (refund * 2) };
+  return { winnerPayout: fee, fee: 0 };
 }
 
 module.exports = {
