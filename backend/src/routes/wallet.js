@@ -23,17 +23,18 @@ const DEPOSIT_MAX_SINGLE   = 50_000;      // $50k hard cap per deposit
 const WITHDRAW_MINS = {
   sol:     2,
   usdc:    2,
-  default: 5,
+  default: 10,  // BTC, ETH, BNB, LTC, TRX, DOGE — ChangeNow minimum
 };
-const MIN_WITHDRAWAL = 5;   // kept for fallback / non-coin checks
+const MIN_WITHDRAWAL = 10;   // fallback
 
 // Coins accepted for deposit (Plisio supports all of these)
 const DEPOSIT_COINS = new Set(['btc','eth','sol','ltc','trx','doge','bnb','usdc']);
 
-// Per-coin deposit minimums enforced by our platform (shown in UI)
+// Per-coin deposit minimums shown in UI
+// (actual processing has a lower buffer — see blockchainMonitor)
 const DEPOSIT_MINS = {
   sol:     2,   // Jupiter on-chain swap
-  usdc:    10,  // direct credit — same $10 min as other non-SOL coins
+  usdc:    2,   // direct credit
   default: 10,  // ChangeNow coins (BTC, ETH, BNB, LTC, TRX, DOGE)
 };
 

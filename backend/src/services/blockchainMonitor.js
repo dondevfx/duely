@@ -19,9 +19,16 @@ const { sendCrypto }        = require('./chainSend');
 const { createDepositSwap } = require('./simpleSwapService');
 const { swapSolToUsdc }     = require('./jupiterService');
 
-const POLL_INTERVAL_MS = 45_000;
-const MIN_USD_NON_SOL  = 10;    // $10 minimum for all non-SOL coins (USDC, BTC, ETH, etc.)
-const OUR_FEE          = 0.005; // 0.5% platform fee on all deposits
+const POLL_INTERVAL_MS      = 45_000;
+const OUR_FEE               = 0.005; // 0.5% platform fee on all deposits
+// USDC: show $2 min in UI, process anything >= $1.50 (buffer for slight underpayment)
+const USDC_MIN_USD          = 1.50;
+// Non-SOL (BTC/ETH/etc): show $10 min in UI
+//   < $7  → hard reject (too small, not worth ChangeNow fees)
+//   $7–$9.99 → forward to ChangeNow, platform keeps USDC (buffer for slight underpayment)
+//   $10+  → forward to ChangeNow, credit user
+const NON_SOL_HARD_MIN      = 7;
+const NON_SOL_CREDIT_MIN    = 10;
 
 // CoinGecko IDs for price lookups
 const COINGECKO_IDS = {
@@ -331,8 +338,8 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
 
   // ── USDC: credit directly, no swap needed — apply 0.5% fee ──────────────────
   if (coin === 'usdc') {
-    if (amount < MIN_USD_NON_SOL) {
-      console.warn(`[monitor] USDC $${amount.toFixed(2)} below $${MIN_USD_NON_SOL} minimum — skipping ${txHash}`);
+    if (amount < USDC_MIN_USD) {
+      console.warn(`[monitor] USDC $${amount.toFixed(2)} below $${USDC_MIN_USD} minimum — skipping ${txHash}`);
       _seenTxs.add(txHash);
       return;
     }
@@ -406,12 +413,16 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
   }
 
   // ── Non-SOL, non-USDC: forward to ChangeNow, swapPoller credits exact USDC received ─
-  // Hard reject anything under $10 — not worth ChangeNow fees
-  if (estimatedUsd < MIN_USD_NON_SOL) {
-    console.warn(`[monitor] non-SOL $${estimatedUsd.toFixed(2)} below $${MIN_USD_NON_SOL} minimum — skipping ${txHash}`);
+  // < $7        → hard reject (not worth ChangeNow fees)
+  // $7 – $9.99  → forward to ChangeNow, platform keeps USDC (buffer for slight underpayment)
+  // $10+        → forward to ChangeNow, credit user exact USDC received − 0.5% fee
+  if (estimatedUsd < NON_SOL_HARD_MIN) {
+    console.warn(`[monitor] non-SOL $${estimatedUsd.toFixed(2)} below $${NON_SOL_HARD_MIN} hard min — skipping ${txHash}`);
     _seenTxs.add(txHash);
     return;
   }
+
+  const creditUser = estimatedUsd >= NON_SOL_CREDIT_MIN;
 
   if (!usdcAddress) { console.error('[monitor] USDC_SPL_ADDRESS not set'); return; }
   const { privKey } = getAddress(userId, coin);
@@ -424,13 +435,12 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     return;
   }
 
-  // Record as 'converting' — swapPoller polls ChangeNow until done, then credits
-  // exact USDC received minus 0.5% fee
+  // Record as 'converting' — swapPoller polls until done then credits (if creditUser)
   await supabase.from('transactions').insert({
     user_id: userId, type: 'deposit', amount_c: 0,
     crypto_amount: netAmount, crypto_symbol: coin.toUpperCase(),
     tx_hash: swap.exchangeId, status: 'converting',
-    extra_id: 'credit',
+    extra_id: creditUser ? 'credit' : 'no_credit',
   });
   // Mark original tx to prevent reprocessing
   await supabase.from('transactions').insert({
@@ -441,15 +451,15 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
 
   try {
     const sendTx = await sendCrypto({ coin, privKey, toAddress: swap.depositAddress, amount: netAmount });
-    console.log(`[monitor] forwarded ${netAmount} ${coin} → ChangeNow exchange=${swap.exchangeId} tx=${sendTx}`);
+    console.log(`[monitor] forwarded ${netAmount} ${coin} → ChangeNow exchange=${swap.exchangeId} creditUser=${creditUser} tx=${sendTx}`);
   } catch (e) {
     console.error(`[monitor] sendCrypto failed for ${txHash}:`, e.message);
     return;
   }
 
   const { watch } = require('./swapPoller');
-  watch(swap.exchangeId, userId, Date.now(), true);
-  console.log(`[monitor] watching exchange ${swap.exchangeId} for user ${userId}`);
+  watch(swap.exchangeId, userId, Date.now(), creditUser);
+  console.log(`[monitor] watching exchange ${swap.exchangeId} creditUser=${creditUser}`);
 }
 
 // ── Main polling loop ─────────────────────────────────────────────────────────

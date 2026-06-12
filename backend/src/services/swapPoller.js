@@ -73,9 +73,9 @@ async function poll(exchangeId, userId, startedAt, creditUser) {
     if (result.status === 'finished') {
       const OUR_FEE    = 0.005; // 0.5% platform fee
       const usdcRaw    = parseFloat(result.amountTo); // exact USDC that arrived at our address
-      const usdcCredit = Math.floor(usdcRaw * (1 - OUR_FEE) * 100) / 100;
+      const usdcCredit = creditUser ? Math.floor(usdcRaw * (1 - OUR_FEE) * 100) / 100 : 0;
 
-      if (usdcCredit > 0) {
+      if (creditUser && usdcCredit > 0) {
         await creditCoins(supabaseRef, userId, usdcCredit);
         await recordDeposit(supabaseRef, userId, usdcCredit, 'crypto');
         await supabaseRef
@@ -84,14 +84,15 @@ async function poll(exchangeId, userId, startedAt, creditUser) {
           .eq('tx_hash', exchangeId)
           .eq('status', 'converting');
 
-        console.log(`[swapPoller] ✓ credited $${usdcCredit} to user ${userId} (received $${usdcRaw} USDC, 0.5% fee taken, exchange ${exchangeId})`);
+        console.log(`[swapPoller] ✓ credited $${usdcCredit} to user ${userId} (received $${usdcRaw} USDC, 0.5% fee, exchange ${exchangeId})`);
       } else {
+        // $7–$9.99 buffer band — platform keeps USDC, no user credit
         await supabaseRef
           .from('transactions')
-          .update({ status: 'failed', amount_c: 0 })
+          .update({ status: 'below_min', amount_c: 0 })
           .eq('tx_hash', exchangeId)
           .eq('status', 'converting');
-        console.warn(`[swapPoller] exchange ${exchangeId} finished but usdcRaw=${usdcRaw} rounded to $0 — no credit`);
+        console.log(`[swapPoller] exchange ${exchangeId} finished — $${usdcRaw} USDC received, no user credit (buffer band or zero)`);
       }
       activePolls.delete(exchangeId);
 
