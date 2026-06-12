@@ -242,66 +242,71 @@ async function getWithdrawable(supabase, userId) {
   return { crypto: bal, fiat: bal };
 }
 
-// Forfeit settlement for diamonds — only deducts from the loser (leaver), credits winner.
-// Net result: winner +fee, loser -fee (same as a normal win).
-// Uses RPC with direct-update fallback so it works even if RPCs are unavailable.
+// Forfeit settlement for diamonds — same as a normal match: both players pay, winner gets full 2x.
+// No platform fee on diamonds. Deducts fee from both, credits winner fee*2.
 async function forfeitSettleDiamonds(supabase, winnerId, loserId, entryFee) {
   try {
     const fee = Math.floor(entryFee);
     if (fee <= 0) return { winnerPayout: 0 };
+    const winnerPayout = fee * 2;
 
     // ── Deduct from loser ──────────────────────────────────────────────
-    const { error: deductErr } = await supabase.rpc('deduct_diamonds', { user_id: loserId, amount: fee });
-    if (deductErr) {
-      console.error('[forfeit] deduct_diamonds RPC failed, trying direct update:', deductErr.message);
-      // Fallback: read-modify-write directly on profiles table
+    const { error: deductLoserErr } = await supabase.rpc('deduct_diamonds', { user_id: loserId, amount: fee });
+    if (deductLoserErr) {
       const { data: loserRow, error: fetchErr } = await supabase
         .from('profiles').select('diamonds').eq('id', loserId).single();
       if (fetchErr) throw fetchErr;
       const newLoserBal = Math.max(0, (loserRow?.diamonds || 0) - fee);
-      const { error: updErr } = await supabase
-        .from('profiles').update({ diamonds: newLoserBal }).eq('id', loserId);
+      const { error: updErr } = await supabase.from('profiles').update({ diamonds: newLoserBal }).eq('id', loserId);
       if (updErr) throw updErr;
     }
 
-    // ── Credit winner ──────────────────────────────────────────────────
-    const { error: creditErr } = await supabase.rpc('credit_diamonds', { user_id: winnerId, amount: fee });
+    // ── Deduct from winner ─────────────────────────────────────────────
+    const { error: deductWinnerErr } = await supabase.rpc('deduct_diamonds', { user_id: winnerId, amount: fee });
+    if (deductWinnerErr) {
+      const { data: winnerRow, error: fetchErr } = await supabase
+        .from('profiles').select('diamonds').eq('id', winnerId).single();
+      if (fetchErr) throw fetchErr;
+      const newWinnerBal = Math.max(0, (winnerRow?.diamonds || 0) - fee);
+      const { error: updErr } = await supabase.from('profiles').update({ diamonds: newWinnerBal }).eq('id', winnerId);
+      if (updErr) throw updErr;
+    }
+
+    // ── Credit winner full 2x ──────────────────────────────────────────
+    const { error: creditErr } = await supabase.rpc('credit_diamonds', { user_id: winnerId, amount: winnerPayout });
     if (creditErr) {
-      console.error('[forfeit] credit_diamonds RPC failed, trying direct update:', creditErr.message);
-      const { data: winnerRow, error: fetchErr2 } = await supabase
+      const { data: winnerRow2, error: fetchErr2 } = await supabase
         .from('profiles').select('diamonds').eq('id', winnerId).single();
       if (fetchErr2) throw fetchErr2;
-      const newWinnerBal = (winnerRow?.diamonds || 0) + fee;
-      const { error: updErr2 } = await supabase
-        .from('profiles').update({ diamonds: newWinnerBal }).eq('id', winnerId);
+      const newBal2 = (winnerRow2?.diamonds || 0) + winnerPayout;
+      const { error: updErr2 } = await supabase.from('profiles').update({ diamonds: newBal2 }).eq('id', winnerId);
       if (updErr2) throw updErr2;
     }
 
     supabase.from('transactions').insert([
-      { user_id: winnerId, type: 'match_win',  amount_c: 0, crypto_amount: fee, crypto_symbol: 'diamonds', status: 'confirmed' },
-      { user_id: loserId,  type: 'match_loss', amount_c: 0, crypto_amount: fee, crypto_symbol: 'diamonds', status: 'confirmed' },
+      { user_id: winnerId, type: 'match_win',  amount_c: 0, crypto_amount: winnerPayout, crypto_symbol: 'diamonds', status: 'confirmed' },
+      { user_id: loserId,  type: 'match_loss', amount_c: 0, crypto_amount: fee,          crypto_symbol: 'diamonds', status: 'confirmed' },
     ]).then().catch(e => console.error('[tx] forfeit diamond insert failed:', e.message));
 
-    return { winnerPayout: fee };
+    return { winnerPayout };
   } finally {
     unlockUser(winnerId);
     unlockUser(loserId);
   }
 }
 
-// Forfeit settlement for coins — only deducts from the loser, credits winner 90% of fee.
-// Net: winner +fee*0.9, loser -fee, platform +fee*0.1. Same outcome as normal settlement.
-// Uses RPC with direct-update fallback so it works even if settle_match_coins is unavailable.
-async function forfeitSettleCoins(supabase, winnerId, loserId, entryFee) {
+// Forfeit settlement for coins — same as a normal match: both players pay, winner gets 95% of pot.
+// Deducts fee from both players, credits winner fee*2*0.95, distributes 5% (affiliates, rakeback, admin).
+async function forfeitSettleCoins(supabase, winnerId, loserId, entryFee, adminId) {
   try {
     const fee = parseFloat(entryFee);
     if (fee <= 0) return { winnerPayout: 0 };
-    const winnerPayout = parseFloat((fee * 0.9).toFixed(4)); // 90% net gain
+    const prizePool    = parseFloat((fee * 2).toFixed(4));
+    const winnerPayout = parseFloat((prizePool * 0.95).toFixed(4));
 
     // ── Deduct from loser ──────────────────────────────────────────────
-    const { error: deductErr } = await supabase.rpc('deduct_coins', { user_id: loserId, amount: fee });
-    if (deductErr) {
-      console.error('[forfeit] deduct_coins RPC failed, trying direct update:', deductErr.message);
+    const { error: deductLoserErr } = await supabase.rpc('deduct_coins', { user_id: loserId, amount: fee });
+    if (deductLoserErr) {
       const { data: loserRow, error: fetchErr } = await supabase
         .from('profiles').select('c_coins').eq('id', loserId).single();
       if (fetchErr) throw fetchErr;
@@ -310,16 +315,37 @@ async function forfeitSettleCoins(supabase, winnerId, loserId, entryFee) {
       if (updErr) throw updErr;
     }
 
-    // ── Credit winner ──────────────────────────────────────────────────
+    // ── Deduct from winner ─────────────────────────────────────────────
+    const { error: deductWinnerErr } = await supabase.rpc('deduct_coins', { user_id: winnerId, amount: fee });
+    if (deductWinnerErr) {
+      const { data: winnerRow, error: fetchErr } = await supabase
+        .from('profiles').select('c_coins').eq('id', winnerId).single();
+      if (fetchErr) throw fetchErr;
+      const newBal = parseFloat(Math.max(0, (winnerRow?.c_coins || 0) - fee).toFixed(4));
+      const { error: updErr } = await supabase.from('profiles').update({ c_coins: newBal }).eq('id', winnerId);
+      if (updErr) throw updErr;
+    }
+
+    // ── Credit winner 95% of pot ───────────────────────────────────────
     const { error: creditErr } = await supabase.rpc('credit_coins', { user_id: winnerId, amount: winnerPayout });
     if (creditErr) {
-      console.error('[forfeit] credit_coins RPC failed, trying direct update:', creditErr.message);
-      const { data: winnerRow, error: fetchErr2 } = await supabase
+      const { data: winnerRow2, error: fetchErr2 } = await supabase
         .from('profiles').select('c_coins').eq('id', winnerId).single();
       if (fetchErr2) throw fetchErr2;
-      const newBal2 = parseFloat(((winnerRow?.c_coins || 0) + winnerPayout).toFixed(4));
+      const newBal2 = parseFloat(((winnerRow2?.c_coins || 0) + winnerPayout).toFixed(4));
       const { error: updErr2 } = await supabase.from('profiles').update({ c_coins: newBal2 }).eq('id', winnerId);
       if (updErr2) throw updErr2;
+    }
+
+    // ── Distribute 5% fee (affiliates + admin) ─────────────────────────
+    if (adminId) {
+      const { owner1, owner2 } = await resolveAffiliates(supabase, winnerId, loserId)
+        .catch(() => ({ owner1: null, owner2: null }));
+      const { platformFee } = await payAffiliatesCoins(supabase, owner1, owner2, prizePool)
+        .catch(() => ({ platformFee: 0.045 }));
+      const adminFeeAmount = parseFloat((prizePool * platformFee).toFixed(4));
+      await supabase.rpc('credit_fee_balance', { user_id: adminId, amount: adminFeeAmount })
+        .catch(err => console.error('[forfeit-fee] credit_fee_balance failed:', err.message));
     }
 
     supabase.from('transactions').insert([

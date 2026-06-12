@@ -2354,11 +2354,19 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
             console.error('[forfeit] elo update failed:', eloErr.message);
           }
 
-          // ── Wallet settlement — use dedicated forfeit RPCs ────────────
+          // ── Wallet settlement — mirrors normal match: both pay, winner gets 95% (coins) or 100% (diamonds) ──
+          const adminId = process.env.ADMIN_USER_ID;
           const result = currency === 'diamonds'
             ? await forfeitSettleDiamonds(supabase, stayer.userId, leaver.userId, fee)
-            : await forfeitSettleCoins(supabase, stayer.userId, leaver.userId, fee);
+            : await forfeitSettleCoins(supabase, stayer.userId, leaver.userId, fee, adminId);
           winnerPayout = result.winnerPayout ?? 0;
+
+          // ── Rakeback (coins only, same as normal match) ───────────────
+          if (currency === 'coins') {
+            const { creditRakeback } = require('../services/rakebackService');
+            await creditRakeback(supabase, stayer.userId, leaver.userId, fee * 2, 'coins')
+              .catch(e => console.error('[forfeit] rakeback failed:', e.message));
+          }
 
           console.log(`[forfeit] settle OK — payout:${winnerPayout} newWinnerElo:${newWinnerElo}`);
         } catch (e) {
