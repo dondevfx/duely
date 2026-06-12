@@ -299,14 +299,20 @@ async function fetchTxs(coin, address) {
 
 // ── Deposit processor ─────────────────────────────────────────────────────────
 
+// In-memory cache of tx hashes we've already seen (processed OR skipped).
+// Prevents repeated DB lookups and log spam for old/dust transactions.
+const _seenTxs = new Set();
+
 async function processDeposit(supabase, { userId, coin, address, txHash, amount }) {
+  if (_seenTxs.has(txHash)) return; // already handled this poll cycle or prior
+
   // Idempotency check — did we already process this tx?
   const { data: dup } = await supabase
     .from('transactions')
     .select('id')
     .eq('tx_hash', txHash)
     .maybeSingle();
-  if (dup) return; // already handled — silent skip, no log spam
+  if (dup) { _seenTxs.add(txHash); return; } // already in DB — cache and skip silently
 
   console.log(`[monitor] deposit detected userId=${userId} coin=${coin} amount=${amount} tx=${txHash}`);
 
@@ -340,7 +346,7 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
   const gasReserveMap = { btc: 0.00002, eth: 0.0004, bnb: 0.0005, sol: 0.0001, ltc: 0.001, trx: 5, doge: 1 };
   const gasRes    = gasReserveMap[coin] || 0;
   const netAmount = Math.max(0, amount - gasRes);
-  if (netAmount <= 0) { console.warn(`[monitor] amount too small after gas — skipping`); return; }
+  if (netAmount <= 0) { _seenTxs.add(txHash); return; } // dust tx — cache and skip silently
 
   // ── SOL: swap via Jupiter, credit exact USDC received minus 0.5% ─────────────
   if (coin === 'sol') {
