@@ -27,9 +27,20 @@ export const SAVE_SESSION_KEY = 'duely_saved_session';
 // In-memory reference — kept in sync with sessionStorage.
 // api.js and SocketContext read this for zero-async token access.
 let _currentSession = null;
+const _sessionListeners = [];
 
 export function getCurrentSession() {
   return _currentSession;
+}
+
+// Subscribe to session changes (sign-in, refresh, sign-out).
+// Returns an unsubscribe function.
+export function onSessionChange(cb) {
+  _sessionListeners.push(cb);
+  return () => {
+    const i = _sessionListeners.indexOf(cb);
+    if (i >= 0) _sessionListeners.splice(i, 1);
+  };
 }
 
 export function storeSession(sess) {
@@ -39,6 +50,7 @@ export function storeSession(sess) {
   } else {
     sessionStorage.removeItem(SESSION_KEY);
   }
+  _sessionListeners.forEach(cb => cb(sess));
 }
 
 export function readSessionFromStorage() {

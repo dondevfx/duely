@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
-import { getCurrentSession } from '../utils/supabase';
+import { getCurrentSession, readSessionFromStorage, onSessionChange } from '../utils/supabase';
 
 const SocketContext = createContext(null);
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
@@ -21,7 +21,8 @@ export function SocketProvider({ children }) {
   const reconnectTimerRef = useRef(null);
 
   function doAuth(socket) {
-    const sess = getCurrentSession();
+    // getCurrentSession() may be null during init() — fall back to sessionStorage
+    const sess = getCurrentSession() || readSessionFromStorage();
     if (sess?.access_token) {
       socket.emit('authenticate', { token: sess.access_token });
     }
@@ -165,7 +166,16 @@ export function SocketProvider({ children }) {
       setActiveGames(prev => prev.map(g => g.id === id ? { ...g, score1, score2 } : g));
     });
 
-    return () => socket.disconnect();
+    // Re-authenticate whenever the session changes: after init() sets the session,
+    // after a token refresh, or after the user signs in.
+    // This covers the race where the socket connects before init() has set _currentSession.
+    const unsubSessionChange = onSessionChange((sess) => {
+      if (sess?.access_token && socket.connected) {
+        socket.emit('authenticate', { token: sess.access_token });
+      }
+    });
+
+    return () => { socket.disconnect(); unsubSessionChange(); };
   }, []);
 
 
