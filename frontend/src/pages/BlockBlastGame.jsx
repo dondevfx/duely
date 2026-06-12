@@ -296,6 +296,7 @@ export default function BlockBlastGame() {
     });
 
     socket.on('block_blast_result', (res) => {
+      if (!roomIdRef.current) return; // stale event after leaving — ignore
       roomIdRef.current = null;
       gameOverRef.current = true; // mark game over so no further game events are processed
       setResult(res);
@@ -327,6 +328,7 @@ export default function BlockBlastGame() {
     });
 
     socket.on('opponent_disconnected', (data = {}) => {
+      if (!roomIdRef.current) return; // stale event after leaving — ignore
       roomIdRef.current = null;
       gameOverRef.current = true; // mark game over — blocks any in-flight game events
       const myId = profileRef.current?.id;

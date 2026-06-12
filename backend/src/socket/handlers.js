@@ -2328,14 +2328,10 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     const currency = room.currency || 'coins';
 
     if (fee > 0 && stayer.isBot) {
-      // Human forfeited a bot game — they lose their bet
+      // Human forfeited a bot game — they lose their bet (fee already deducted upfront)
+      // No result event sent to leaver — they chose to leave, lobby screen should show
       try {
         await settleBotMatch(supabase, leaver.userId, fee, currency, false);
-        const leaverSocket = io.sockets.sockets.get(leaver.socketId);
-        if (leaverSocket) leaverSocket.emit('opponent_disconnected', {
-          winnerId: stayer.userId, loserId: leaver.userId,
-          winnerPayout: 0, currency,
-        });
       } catch (e) { console.error('bot forfeit settle error:', e.message); }
     } else if (fee > 0 && !stayer.isBot) {
       const stayerSocket = io.sockets.sockets.get(stayer.socketId);

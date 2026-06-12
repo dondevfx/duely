@@ -353,6 +353,7 @@ export default function BlackjackGame() {
     });
 
     socket.on('bj_result', (data) => {
+      if (!roomIdRef.current) return; // stale event after leaving — ignore
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
       setRevealData(data);
       setPhase('reveal');
@@ -367,6 +368,7 @@ export default function BlackjackGame() {
     });
 
     socket.on('opponent_disconnected', (data = {}) => {
+      if (!roomIdRef.current) return; // stale event after leaving — ignore
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
       pendingStartRef.current = null; // cancel any buffered start so countdown doesn't overwrite result
       const myId = profileRef.current?.id;

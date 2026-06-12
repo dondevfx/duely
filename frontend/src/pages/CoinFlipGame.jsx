@@ -287,6 +287,7 @@ export default function CoinFlipGame() {
     });
 
     socket.on('coin_flip_result', (data) => {
+      if (!inActiveMatchRef.current) return; // stale event after leaving — ignore
       inActiveMatchRef.current = false;
       pendingResultRef.current = data;
       setFlipResult(data.result);
@@ -302,6 +303,7 @@ export default function CoinFlipGame() {
     });
 
     socket.on('opponent_disconnected', (data = {}) => {
+      if (!inActiveMatchRef.current) return; // stale event — ignore
       inActiveMatchRef.current = false;
       const myId = profile?.id;
       const isWin = data.winnerId === myId;
