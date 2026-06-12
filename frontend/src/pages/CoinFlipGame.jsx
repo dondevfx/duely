@@ -380,8 +380,10 @@ export default function CoinFlipGame() {
     setFlipResult(null);
     setResultLanded(false);
     rotRef.current = 0;
-    setPhase('flipping');
     setStatusMsg('vs Duely Bot');
+    // Show countdown — coin_flip_match_found will transition to 'flipping' after 3s
+    setCountdown(3);
+    setPhase('countdown');
   }
 
   function leaveQueue() {
