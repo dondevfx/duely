@@ -33,8 +33,8 @@ const DEPOSIT_COINS = new Set(['btc','eth','sol','ltc','trx','doge','bnb','usdc'
 // Per-coin deposit minimums enforced by our platform (shown in UI)
 const DEPOSIT_MINS = {
   sol:     2,   // Jupiter on-chain swap
-  usdc:    2,   // direct credit, no swap
-  default: 10,  // ChangeNow coins
+  usdc:    10,  // direct credit — same $10 min as other non-SOL coins
+  default: 10,  // ChangeNow coins (BTC, ETH, BNB, LTC, TRX, DOGE)
 };
 
 // Basic address validation — Plisio/SimpleSwap do real validation
