@@ -33,6 +33,7 @@ export function AuthProvider({ children }) {
   // ── Session helpers ────────────────────────────────────────────────────
 
   function _applySession(sess) {
+    if (!sess) console.trace('[AuthContext] session cleared');
     storeSession(sess);
     setSession(sess);
     if (sess) _scheduleRefresh(sess);
