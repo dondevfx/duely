@@ -44,7 +44,6 @@ async function verifyToken(token) {
   if (process.env.SUPABASE_JWT_SECRET) {
     try {
       const payload = jwt.verify(token, process.env.SUPABASE_JWT_SECRET);
-      // Build a minimal user object compatible with what Supabase returns.
       return {
         id: payload.sub,
         email: payload.email ?? null,
@@ -52,8 +51,12 @@ async function verifyToken(token) {
         app_metadata: payload.app_metadata ?? {},
         user_metadata: payload.user_metadata ?? {},
       };
-    } catch {
-      return null; // invalid signature or expired
+    } catch (e) {
+      // TokenExpiredError → token is genuinely expired, no point hitting network.
+      if (e.name === 'TokenExpiredError') return null;
+      // Any other error (wrong secret, malformed) → fall through to network path
+      // so a misconfigured secret doesn't lock everyone out.
+      console.warn('[auth] JWT local verify failed, falling back to network:', e.message);
     }
   }
 
