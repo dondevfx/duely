@@ -1991,75 +1991,15 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         } catch (e) { return socket.emit('error', { message: e.message || 'Insufficient balance' }); }
       }
       const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, side };
-      const botSide = side === 'heads' ? 'tails' : 'heads';
-      const bot = { socketId: null, userId: 'bot_cf_' + uuidv4(), username: 'Duely Bot', elo: 1000, entryFee, currency, side: botSide, isBot: true };
-      const roomId = 'coinflip_' + uuidv4();
-      const { getCoinFlipRoom: _gcfr } = require('../services/coinFlipEngine');
-      // Manually create the room without going through queue
-      const cfRooms = require('../services/coinFlipEngine');
-      const room = { roomId, players: [player, bot], entryFee, currency, state: 'active' };
-      // Store via internal map — use resolveCoinFlip directly
+      const bot = { socketId: `bot_cf_${uuidv4()}`, userId: `bot_cf_${uuidv4()}`, username: 'Duely Bot', elo: 1000, entryFee, currency, side: side === 'heads' ? 'tails' : 'heads', isBot: true };
+      // Use createDirectCoinFlipRoom so the room is tracked in coinFlipRooms map.
+      // This means getCoinFlipRoomBySocket finds it on disconnect → _handleForfeit
+      // fires → fee is settled and room cleaned up properly.
+      const { roomId } = createDirectCoinFlipRoom(player, bot);
       socket.join(roomId);
       socket.emit('coin_flip_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo }, side, entryFee, vsBot: true });
-      // Resolve via internal logic — inject room directly
-      const coinFlipMod = require('../services/coinFlipEngine');
-      coinFlipMod.getCoinFlipRoom; // touch to ensure loaded
-      // Resolve immediately after animation
-      setTimeout(async () => {
-        const result = Math.random() < 0.5 ? 'heads' : 'tails';
-        const playerWon = player.side === result;
-        const winner = playerWon ? player : bot;
-        const loser  = playerWon ? bot : player;
-        const isFree = entryFee === 0;
-
-        const { calculateNewRatings, applyEloUpdate: _applyElo } = require('../services/eloService');
-        const { newWinnerElo, newLoserElo } = isFree
-          ? { newWinnerElo: winner.elo, newLoserElo: loser.elo }
-          : calculateNewRatings(winner.elo, loser.elo);
-
-        let balanceChange = null;
-        if (entryFee > 0) {
-          try {
-            balanceChange = await require('../services/walletService').settleBotMatch(supabase, player.userId, entryFee, currency, playerWon);
-          } catch (e) { console.error('[coinflip bot]', e.message); }
-        }
-        let winnerStreak = 0, isFirstWin = false;
-        if (!isFree) {
-          if (playerWon) {
-            try { await _applyElo(supabase, player.userId, newWinnerElo); } catch {}
-            try { await supabase.rpc('increment_win', { uid: player.userId }); } catch {}
-            try { ({ winnerStreak, isFirstWin } = await require('../services/eloService').updateStreaks(supabase, player.userId, null)); } catch {}
-          } else {
-            try { await _applyElo(supabase, player.userId, newLoserElo); } catch {}
-            try { await supabase.rpc('increment_loss', { uid: player.userId }); } catch {}
-            try { await supabase.from('profiles').update({ current_streak: 0 }).eq('id', player.userId); } catch {}
-          }
-        }
-        try {
-          await supabase.from('matches').insert({
-            player1_id: player.userId, player2_id: null,
-            winner_id: playerWon ? player.userId : null,
-            game_type: 'coin_flip',
-            entry_fee_c: currency === 'coins' ? entryFee : 0,
-            entry_fee_diamonds: currency === 'diamonds' ? entryFee : 0,
-          });
-        } catch {}
-        gameEvents.emit('game_ended', { socketIds: [socket.id] });
-        socket.emit('coin_flip_result', {
-          result,
-          winnerId: winner.userId,
-          loserId: loser.userId,
-          winnerUsername: winner.username,
-          loserUsername: loser.username,
-          newWinnerElo,
-          newLoserElo,
-          balanceChange,
-          currency,
-          entryFee,
-          winnerStreak: winnerStreak ?? 0,
-          isFirstWin: isFirstWin ?? false,
-        });
-      }, 3000);
+      // Resolve after countdown (6s) + flip animation via the standard resolveCoinFlip
+      setTimeout(() => resolveCoinFlip(io, supabase, roomId), 6000);
     });
 
     // ════════════════════════════════════════════════════════════════

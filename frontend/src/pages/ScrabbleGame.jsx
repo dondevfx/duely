@@ -266,6 +266,7 @@ export default function ScrabbleGame() {
       }
     };
   }, []);
+  useEffect(() => { refreshProfile(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lock scroll during active game on mobile
   useEffect(() => {

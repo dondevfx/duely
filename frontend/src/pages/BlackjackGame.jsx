@@ -184,6 +184,7 @@ export default function BlackjackGame() {
       }
     };
   }, []);
+  useEffect(() => { refreshProfile(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [privateCode, setPrivateCode] = useState('');
   const [privateMode, setPrivateMode] = useState(null);
   const [joinCode, setJoinCode] = useState('');

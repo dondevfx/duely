@@ -220,6 +220,7 @@ export default function BlockBlastGame() {
       }
     };
   }, []);
+  useEffect(() => { refreshProfile(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lock page scroll on mobile while game is active (prevents scroll while dragging pieces)
   useEffect(() => {

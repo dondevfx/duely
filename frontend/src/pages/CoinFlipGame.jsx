@@ -154,6 +154,8 @@ export default function CoinFlipGame() {
       }
     };
   }, []);
+  // Refresh balance on mount so balance is accurate after returning from a match
+  useEffect(() => { refreshProfile(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [phase, setPhase] = useState('lobby');
   const [countdown, setCountdown] = useState(0);
