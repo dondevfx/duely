@@ -212,15 +212,27 @@ export default function BlockBlastGame() {
   useEffect(() => { profileRef.current = profile; }, [profile]);
   useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
   useEffect(() => { socketRef.current = socket; }, [socket]);
-  // Forfeit on unmount only — fires whenever we hold a room (from match_found to result)
+  // Forfeit on unmount and on page refresh/close
   useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (roomIdRef.current && phaseRef.current !== 'result' && socketRef.current) {
+        socketRef.current.emit('player_forfeit');
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       if (roomIdRef.current && phaseRef.current !== 'result' && socketRef.current) {
         socketRef.current.emit('player_forfeit');
       }
     };
   }, []);
-  useEffect(() => { refreshProfile(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Refresh balance on mount; delayed second call catches server settle that races with reload
+  useEffect(() => {
+    refreshProfile();
+    const t = setTimeout(refreshProfile, 2500);
+    return () => clearTimeout(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lock page scroll on mobile while game is active (prevents scroll while dragging pieces)
   useEffect(() => {

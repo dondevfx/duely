@@ -176,15 +176,27 @@ export default function BlackjackGame() {
   // Tracks whether we are in an active room (set on match_found, cleared on result/reset)
   const roomIdRef = useRef(null);
 
-  // Forfeit on unmount — fires whenever we hold a room (matched but not yet finished)
+  // Forfeit on unmount and on page refresh/close
   useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (roomIdRef.current && phaseRef.current !== 'result' && socketRef.current) {
+        socketRef.current.emit('player_forfeit');
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       if (roomIdRef.current && phaseRef.current !== 'result' && socketRef.current) {
         socketRef.current.emit('player_forfeit');
       }
     };
   }, []);
-  useEffect(() => { refreshProfile(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Refresh balance on mount; delayed second call catches server settle that races with reload
+  useEffect(() => {
+    refreshProfile();
+    const t = setTimeout(refreshProfile, 2500);
+    return () => clearTimeout(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [privateCode, setPrivateCode] = useState('');
   const [privateMode, setPrivateMode] = useState(null);
   const [joinCode, setJoinCode] = useState('');

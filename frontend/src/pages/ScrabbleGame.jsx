@@ -258,15 +258,27 @@ export default function ScrabbleGame() {
   useEffect(() => { roomIdRef.current  = roomId;  }, [roomId]);
   useEffect(() => { socketRef.current  = socket;  }, [socket]);
 
-  // Forfeit on unmount only (not on dep changes)
+  // Forfeit on unmount and on page refresh/close
   useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (inActiveMatchRef.current && socketRef.current) {
+        socketRef.current.emit('player_forfeit');
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       if (inActiveMatchRef.current && socketRef.current) {
         socketRef.current.emit('player_forfeit');
       }
     };
   }, []);
-  useEffect(() => { refreshProfile(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Refresh balance on mount; delayed second call catches server settle that races with reload
+  useEffect(() => {
+    refreshProfile();
+    const t = setTimeout(refreshProfile, 2500);
+    return () => clearTimeout(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lock scroll during active game on mobile
   useEffect(() => {

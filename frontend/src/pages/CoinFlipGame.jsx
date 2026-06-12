@@ -146,16 +146,27 @@ export default function CoinFlipGame() {
   const socketRef        = useRef(socket);
   const inActiveMatchRef = useRef(false);
   useEffect(() => { socketRef.current = socket; }, [socket]);
-  // Forfeit on unmount only
+  // Forfeit on unmount and on page refresh/close
   useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (inActiveMatchRef.current && socketRef.current) {
+        socketRef.current.emit('player_forfeit');
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       if (inActiveMatchRef.current && socketRef.current) {
         socketRef.current.emit('player_forfeit');
       }
     };
   }, []);
-  // Refresh balance on mount so balance is accurate after returning from a match
-  useEffect(() => { refreshProfile(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Refresh balance on mount; delayed second call catches server settle that races with reload
+  useEffect(() => {
+    refreshProfile();
+    const t = setTimeout(refreshProfile, 2500);
+    return () => clearTimeout(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [phase, setPhase] = useState('lobby');
   const [countdown, setCountdown] = useState(0);
