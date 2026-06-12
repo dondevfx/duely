@@ -95,28 +95,34 @@ module.exports = function affiliateRoutes(supabase) {
 
   // POST /api/affiliate/collect-earnings — transfer accumulated earnings to balance
   router.post('/collect-earnings', requireAuth, async (req, res) => {
+    // Atomically zero out earnings and return the amount that was there.
+    // Using a single UPDATE...RETURNING prevents a race where a match settles
+    // between our SELECT and our UPDATE, causing those earnings to be wiped.
     const { data, error } = await supabase
       .from('profiles')
-      .select('affiliate_earnings_c, affiliate_earnings_diamonds')
+      .update({ affiliate_earnings_c: 0 })
       .eq('id', req.user.id)
+      .gt('affiliate_earnings_c', 0)
+      .select('affiliate_earnings_c')
       .single();
-    if (error) return res.status(500).json({ error: error.message });
+
+    if (error || !data) {
+      return res.status(400).json({ error: 'No earnings to collect' });
+    }
 
     const earningsC = parseFloat(data.affiliate_earnings_c ?? 0);
-
     if (earningsC <= 0) {
       return res.status(400).json({ error: 'No earnings to collect' });
     }
 
-    const { error: resetError } = await supabase
-      .from('profiles')
-      .update({ affiliate_earnings_c: 0 })
-      .eq('id', req.user.id);
-    if (resetError) return res.status(500).json({ error: resetError.message });
-
     try {
       await creditCoins(supabase, req.user.id, earningsC);
     } catch (e) {
+      // Credit failed — restore earnings so they aren't lost
+      await supabase
+        .from('profiles')
+        .update({ affiliate_earnings_c: earningsC })
+        .eq('id', req.user.id);
       return res.status(500).json({ error: e.message });
     }
 

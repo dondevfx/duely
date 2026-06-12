@@ -156,6 +156,7 @@ export default function CoinFlipGame() {
   }, []);
 
   const [phase, setPhase] = useState('lobby');
+  const [countdown, setCountdown] = useState(0);
   const [side, setSide] = useState('heads');
   const [privateCode, setPrivateCode] = useState('');
   const [privateMode, setPrivateMode] = useState(null);
@@ -275,8 +276,14 @@ export default function CoinFlipGame() {
       setFlipResult(null);
       setResultLanded(false);
       rotRef.current = 0;
-      setPhase('flipping'); // triggers the useEffect that calls startSpin
       setStatusMsg(`vs ${opponent.username}`);
+      // 3-second countdown before coin starts spinning
+      setCountdown(3);
+      setPhase('countdown');
+      const t1 = setTimeout(() => setCountdown(2), 1000);
+      const t2 = setTimeout(() => setCountdown(1), 2000);
+      const t3 = setTimeout(() => { setCountdown(0); setPhase('flipping'); }, 3000);
+      return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
     });
 
     socket.on('coin_flip_result', (data) => {
@@ -357,7 +364,7 @@ export default function CoinFlipGame() {
     eloBeforeRef.current = profile?.elo ?? 1000;
     lastModeRef.current = 'pvp';
     lastSettingsRef.current = { entryFee, currency: betCurrency, side };
-    socket.emit('join_coin_flip_queue', { entryFee, currency: 'coins', side });
+    socket.emit('join_coin_flip_queue', { entryFee, currency: betCurrency === 'diamonds' ? 'diamonds' : 'coins', side });
   }
 
   function playVsBot(free = false) {
@@ -463,10 +470,21 @@ export default function CoinFlipGame() {
 
       <div className="w-full max-w-md animate-slide-up">
 
-        {phase !== 'queue' && (
+        {phase !== 'queue' && phase !== 'countdown' && phase !== 'flipping' && (
           <div className="text-center mb-6">
             <h1 className="text-5xl font-black text-white mb-2">🟡 Coin Flip</h1>
             <p className="text-muted text-base">Pick a side — get matched with the opposite</p>
+          </div>
+        )}
+
+        {/* Countdown phase */}
+        {phase === 'countdown' && (
+          <div className="text-center animate-fade-in mb-6">
+            <div className="text-8xl font-black text-primary mb-4" style={{ textShadow: '0 0 40px #1E90FF' }}>
+              {countdown}
+            </div>
+            <p className="text-muted">Get ready…</p>
+            {statusMsg && <p className="text-xs text-muted mt-2">{statusMsg}</p>}
           </div>
         )}
 

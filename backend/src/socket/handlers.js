@@ -56,6 +56,7 @@ const {
   addToBlockBlastQueue, removeFromBlockBlastQueue,
   getBlockBlastRoom, deleteBlockBlastRoom, getBlockBlastRoomBySocket,
   startBlockBlastCountdown, handleBlockBlastComplete, handleBlockBlastStuck,
+  trackBlockBlastScorePing,
 } = require('../services/blockBlastEngine');
 const {
   createDirectPianoRoom,
@@ -1144,12 +1145,15 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (!authenticatedUser) return;
       const room = getBlockBlastRoom(roomId);
       if (!room || room.state !== 'active') return;
+      // Validate and track — returns the clamped authoritative score
+      const verified = trackBlockBlastScorePing(roomId, socket.id, score || 0);
+      if (verified === null) return;
       const opp = room.players.find(p => p.socketId !== socket.id);
-      if (opp && !opp.isBot) io.to(opp.socketId).emit('block_blast_opponent_score', { score: score || 0 });
+      if (opp && !opp.isBot) io.to(opp.socketId).emit('block_blast_opponent_score', { score: verified });
       if (!room.isSolo) {
         const [rp1, rp2] = room.players;
-        const s1 = socket.id === rp1.socketId ? (score || 0) : (room.scores[rp1.socketId] || 0);
-        const s2 = socket.id === rp2.socketId ? (score || 0) : (room.scores[rp2.socketId] || 0);
+        const s1 = socket.id === rp1.socketId ? verified : (room.pingScores[rp1.socketId] || 0);
+        const s2 = socket.id === rp2.socketId ? verified : (room.pingScores[rp2.socketId] || 0);
         io.emit('active_game_score', { id: roomId, score1: s1, score2: s2 });
       }
     });
@@ -1959,8 +1963,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         const s2 = io.sockets.sockets.get(match.p2.socketId);
         if (s1) { s1.join(match.roomId); s1.emit('coin_flip_match_found', { roomId: match.roomId, opponent: { userId: match.p2.userId, username: match.p2.username, elo: match.p2.elo }, side: match.p1.side, entryFee }); }
         if (s2) { s2.join(match.roomId); s2.emit('coin_flip_match_found', { roomId: match.roomId, opponent: { userId: match.p1.userId, username: match.p1.username, elo: match.p1.elo }, side: match.p2.side, entryFee }); }
-        // Resolve after 3s animation
-        setTimeout(() => resolveCoinFlip(io, supabase, match.roomId), 3000);
+        // 3s countdown + 3s spin = 6s before resolving
+        setTimeout(() => resolveCoinFlip(io, supabase, match.roomId), 6000);
       } else {
         socket.emit('coin_flip_queue_joined', { side });
       }
@@ -2711,7 +2715,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         s1.join(roomId); s2.join(roomId);
         s1.emit('coin_flip_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, side: p1.side, entryFee: p1.entryFee });
         s2.emit('coin_flip_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, side: p2cf.side, entryFee: p2.entryFee });
-        setTimeout(() => resolveCoinFlip(io, supabase, roomId), 3000);
+        setTimeout(() => resolveCoinFlip(io, supabase, roomId), 6000);
         break;
       }
       case 'blackjack': {

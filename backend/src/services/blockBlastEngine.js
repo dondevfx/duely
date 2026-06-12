@@ -2,7 +2,10 @@
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
 const { v4: uuidv4 } = require('uuid');
 const { updateHighscore } = require('./highscoreService');
-const MAX_SCORE = 15_000_000; // sanity cap — prevents score spoofing
+const MAX_SCORE = 15_000_000;
+// Max points a single move can legitimately award:
+// scoreForClear(16 lines, 5 cells, chain=3) ≈ 77k — use 150k to give headroom for combos
+const MAX_DELTA_PER_PING = 150_000;
 const { creditRakeback } = require('./rakebackService');
 const gameEvents = require('./gameEvents');
 
@@ -63,7 +66,43 @@ function _makeRoom(roomId, p1, p2) {
     stuck:          new Set(),
     isSolo,
     botTargetScore: isSolo ? Math.floor(Math.random() * 1800) + 400 : 0,
+    // Server-tracked scores from pings — authoritative source for final score
+    pingScores:     {},
+    pingTimes:      {},
   };
+}
+
+// Called by the score_ping socket handler. Returns the clamped, validated score
+// that should be forwarded to the opponent (and stored as the authoritative score).
+function trackBlockBlastScorePing(roomId, socketId, rawScore) {
+  const room = getBlockBlastRoom(roomId);
+  if (!room || room.state !== 'active') return null;
+
+  const now       = Date.now();
+  const prev      = room.pingScores[socketId] ?? 0;
+  const lastTime  = room.pingTimes[socketId]  ?? (room.startTime || now);
+  const delta     = (rawScore || 0) - prev;
+  const elapsed   = now - lastTime;
+
+  // Score must be non-decreasing
+  if (rawScore < prev) return prev;
+
+  // If the jump in one ping exceeds what's physically possible, clamp it.
+  // This means a cheater sending fake high scores gets their score clamped to
+  // prev + MAX_DELTA rather than the spoofed value.
+  const clamped = delta > MAX_DELTA_PER_PING
+    ? Math.min(prev + MAX_DELTA_PER_PING, MAX_SCORE)
+    : Math.min(rawScore, MAX_SCORE);
+
+  // Log suspicious pings (big jumps that got clamped) for review
+  if (delta > MAX_DELTA_PER_PING) {
+    const player = room.players.find(p => p.socketId === socketId);
+    console.warn(`[blockBlast] suspicious score ping — user:${player?.userId} claimed:${rawScore} prev:${prev} delta:${delta} clamped to:${clamped}`);
+  }
+
+  room.pingScores[socketId] = clamped;
+  room.pingTimes[socketId]  = now;
+  return clamped;
 }
 
 async function startBlockBlastCountdown(io, supabase, roomId) {
@@ -106,7 +145,10 @@ async function handleBlockBlastStuck(io, supabase, roomId, socketId, score = 0) 
   if (room.stuck.has(socketId)) return; // already stuck
 
   room.stuck.add(socketId);
-  room.scores[socketId] = Math.min(Math.max(0, score || 0), MAX_SCORE);
+  // Use server-tracked ping score as authoritative; client-submitted score is ignored
+  // to prevent sending a fake high score at the last moment.
+  const trackedScore = room.pingScores[socketId] ?? 0;
+  room.scores[socketId] = trackedScore;
 
   const stuckPlayer = room.players.find(p => p.socketId === socketId);
   const otherPlayer = room.players.find(p => p.socketId !== socketId && !p.isBot);
@@ -116,8 +158,9 @@ async function handleBlockBlastStuck(io, supabase, roomId, socketId, score = 0) 
   }
 
   // If opponent already has a higher score → instant resolve
+  const trackedScore = room.pingScores[socketId] ?? 0;
   const otherScore = otherPlayer ? (room.scores[otherPlayer.socketId] ?? -1) : -1;
-  if (otherScore > score) {
+  if (otherScore > trackedScore) {
     await _resolveFromScores(io, supabase, roomId);
     return;
   }
@@ -139,7 +182,9 @@ async function handleBlockBlastStuck(io, supabase, roomId, socketId, score = 0) 
 async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 0) {
   const room = getBlockBlastRoom(roomId);
   if (!room || room.state !== 'active') return;
-  room.scores[socketId] = Math.min(Math.max(0, score || 0), MAX_SCORE);
+  // Use server-tracked ping score as authoritative — ignores client's submitted value
+  const verifiedScore = room.pingScores[socketId] ?? 0;
+  room.scores[socketId] = verifiedScore;
   (room.botTimers || []).forEach(t => { clearTimeout(t); clearInterval(t); });
   room.botTimers = [];
 
@@ -148,7 +193,7 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
     if (player) {
       room.state = 'finished';
       const botScore = room.botTargetScore || 0;
-      const humanWon = score > botScore;
+      const humanWon = verifiedScore > botScore;
       let balanceChange = null;
       if (room.entryFee > 0) {
         try {
@@ -175,14 +220,14 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
             game_type: 'blockBlast', entry_fee_c: (room.currency || 'coins') === 'coins' ? (room.entryFee || 0) : 0, entry_fee_diamonds: (room.currency || 'coins') === 'diamonds' ? (room.entryFee || 0) : 0,
           });
         } catch (e) { console.error('[blockBlastEngine] matches insert:', e.message); }
-        await updateHighscore(supabase, player.userId, 'blockBlast', score);
+        await updateHighscore(supabase, player.userId, 'blockBlast', verifiedScore);
       }
       io.emit('active_game_ended', { id: roomId });
       gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId) });
       io.to(roomId).emit('block_blast_result', {
         isSolo:      true,
         playerId:    player.userId,
-        playerScore: score,
+        playerScore: verifiedScore,
         botScore,
         humanWon,
         balanceChange,
@@ -308,6 +353,7 @@ module.exports = {
   addToBlockBlastQueue, removeFromBlockBlastQueue,
   getBlockBlastRoom, deleteBlockBlastRoom, getBlockBlastRoomBySocket,
   startBlockBlastCountdown, handleBlockBlastComplete, handleBlockBlastStuck,
+  trackBlockBlastScorePing,
 };
 
 
