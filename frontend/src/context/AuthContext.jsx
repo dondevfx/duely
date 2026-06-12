@@ -67,9 +67,22 @@ export function AuthProvider({ children }) {
           persistTokens(newSess.access_token, newSess.refresh_token);
         }
       } else {
-        // Refresh failed — clear session and profile
-        _applySession(null);
-        setProfile(null);
+        // Refresh failed — be resilient before signing the user out.
+        const latest = readSessionFromStorage();
+        if (latest && latest.access_token !== current.access_token) {
+          // Another tab already refreshed and wrote a new session — adopt it.
+          _applySession(latest);
+          if (localStorage.getItem(SAVE_LOGIN_KEY)) {
+            persistTokens(latest.access_token, latest.refresh_token);
+          }
+        } else if (current.expires_at && current.expires_at * 1000 < Date.now()) {
+          // Access token is genuinely expired — sign out.
+          _applySession(null);
+          setProfile(null);
+        } else {
+          // Token still valid, refresh just failed transiently — retry in 15s.
+          _refreshTimer.current = setTimeout(() => _doRefresh(), 15_000);
+        }
       }
     } finally {
       _refreshingRef.current = false;
@@ -95,7 +108,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const ensureProfile = useCallback(async () => {
-    const existing = await fetchProfile();
+    const existing = await fetchProfile({ clearOnFail: false });
     if (existing) return existing;
     const pendingUsername = sessionStorage.getItem(PENDING_USERNAME_KEY);
     if (!pendingUsername) return null;
@@ -129,12 +142,33 @@ export function AuthProvider({ children }) {
 
         if (!sess) return; // not logged in
 
-        // If token is already near-expiry, refresh before proceeding
-        const nearExpiry =
-          sess.expires_at && sess.expires_at * 1000 - Date.now() < REFRESH_MARGIN_MS;
-        if (nearExpiry) {
+        // Token expiry handling:
+        // - Actually expired: must refresh (or bail if that too fails)
+        // - Near-expiry (within 90s): try to refresh, but if it fails and the AT is
+        //   still technically valid, proceed anyway — _scheduleRefresh fires in ≤5s
+        //   and will retry. This avoids a sign-out when two rapid page loads race
+        //   on the same refresh token (Supabase rotates it; the second caller gets
+        //   invalid_grant but the AT is still usable for a few more seconds).
+        const nowMs = Date.now();
+        const expiresMs = sess.expires_at ? sess.expires_at * 1000 : Infinity;
+        const isExpired = expiresMs < nowMs;
+        const isNearExpiry = expiresMs - nowMs < REFRESH_MARGIN_MS;
+
+        if (isExpired || isNearExpiry) {
           const refreshed = await doTokenRefresh(sess.refresh_token);
-          sess = refreshed || null;
+          if (refreshed) {
+            sess = refreshed;
+          } else if (isExpired) {
+            // AT already expired — see if a concurrent page already refreshed
+            const latest = readSessionFromStorage();
+            if (latest && latest.access_token !== sess.access_token) {
+              sess = latest; // another tab wrote a fresh session
+            } else {
+              return; // truly expired with no way to recover
+            }
+          }
+          // else: near-expiry but not expired, refresh failed — proceed with current
+          // session; _scheduleRefresh will retry within 5s
         }
 
         if (!sess) return;
@@ -189,15 +223,20 @@ export function AuthProvider({ children }) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
 
-    // Check MFA requirement
-    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
-      const { data: factors } = await supabase.auth.mfa.listFactors();
-      const factor = factors?.totp?.[0];
-      _pendingMfaCreds.current = { email, password, factorId: factor?.id ?? null };
-      setMfaPending(true);
-      setMfaFactorId(factor?.id ?? null);
-      return { mfaRequired: true, factorId: factor?.id };
+    // Check MFA requirement — wrap in try/catch so a network failure here never
+    // blocks the session from being stored.
+    try {
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
+        const { data: factors } = await supabase.auth.mfa.listFactors();
+        const factor = factors?.totp?.[0];
+        _pendingMfaCreds.current = { email, password, factorId: factor?.id ?? null };
+        setMfaPending(true);
+        setMfaFactorId(factor?.id ?? null);
+        return { mfaRequired: true, factorId: factor?.id };
+      }
+    } catch (e) {
+      console.warn('[signIn] AAL check failed, assuming no MFA:', e.message);
     }
 
     _applySession(data.session);

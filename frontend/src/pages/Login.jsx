@@ -39,7 +39,15 @@ export default function Login() {
       if (result?.mfaRequired) {
         setMfaState({ factorId: result.factorId });
       } else if (!result) {
-        setNeedsUsername(true);
+        // `signIn` returns null when ensureProfile fails. For sign-in (not sign-up)
+        // this is almost always a transient backend error — the session IS valid.
+        // Only show the username form if there's a pending sign-up username to claim;
+        // otherwise navigate home so the user isn't stuck on this page.
+        if (sessionStorage.getItem('rd_pending_username')) {
+          setNeedsUsername(true);
+        } else {
+          navigate('/');
+        }
       } else {
         navigate('/');
       }

@@ -42,7 +42,7 @@ function fmtRakebackTimer(ms) {
 }
 
 export default function Navbar() {
-  const { profile, signOut } = useAuth();
+  const { profile, session, signOut } = useAuth();
   const { displayCurrency, setDisplayCurrency } = useCurrency();
   const { playerCounts } = useSocket();
   const navigate = useNavigate();
@@ -483,6 +483,10 @@ export default function Navbar() {
                   Sign out
                 </button>
               </>
+            ) : session ? (
+              // Session exists but profile still loading — show a placeholder so
+              // we never flash "Sign in" for an authenticated user.
+              <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-primary/20 animate-pulse" />
             ) : (
               <>
                 <Link to="/login" className="text-sm text-muted hover:text-white transition-colors hidden sm:block">Sign in</Link>
@@ -573,7 +577,7 @@ export default function Navbar() {
               </>
             )}
 
-            {!profile && (
+            {!session && (
               <>
                 <div className="border-t border-border" />
                 <div className="flex flex-col gap-3">
