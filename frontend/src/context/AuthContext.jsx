@@ -16,7 +16,7 @@ export function AuthProvider({ children }) {
   const _pendingMfaCreds = useRef(null);
   const _isUserSignOut   = useRef(false);
 
-  const fetchProfile = useCallback(async () => {
+  const fetchProfile = useCallback(async ({ clearOnFail = true } = {}) => {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const data = await api.get('/auth/me');
@@ -28,7 +28,7 @@ export function AuthProvider({ children }) {
         }
       }
     }
-    setProfile(null);
+    if (clearOnFail) setProfile(null);
     return null;
   }, []);
 
@@ -62,10 +62,12 @@ export function AuthProvider({ children }) {
           _isUserSignOut.current = false;
           setSession(null);
           setProfile(null);
+        } else {
+          // Spurious SIGNED_OUT (rapid refresh, BroadcastChannel from old tab, etc.).
+          // Storage guard kept the session in sessionStorage — but Supabase still stops
+          // its auto-refresh timer. Restart it so proactive token rotation continues.
+          setTimeout(() => supabase.auth.startAutoRefresh?.(), 100);
         }
-        // Non-user SIGNED_OUT: storage guard in supabase.js blocked the actual removal,
-        // so the session is still in sessionStorage. getSession() will still return it.
-        // Just ignore the event — no state change needed.
         return;
       }
 
@@ -105,7 +107,6 @@ export function AuthProvider({ children }) {
           }
         } else {
           // Restored from sessionStorage (page refresh — same tab session)
-          _lastKnownTokens.current = { access_token: restored.access_token, refresh_token: restored.refresh_token };
           setSession(restored);
           const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
           if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
@@ -220,7 +221,8 @@ export function AuthProvider({ children }) {
     setShowSaveLogin(false);
   }
 
-  const refreshProfile = useCallback(() => fetchProfile(), [fetchProfile]);
+  // clearOnFail: false so a failed post-game refresh doesn't wipe the visible profile
+  const refreshProfile = useCallback(() => fetchProfile({ clearOnFail: false }), [fetchProfile]);
 
   return (
     <AuthContext.Provider value={{
