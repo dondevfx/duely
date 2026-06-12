@@ -152,26 +152,25 @@ export function AuthProvider({ children }) {
         //
         // Near-expiry is handled by _scheduleRefresh (min 5s delay). F5 always cancels
         // that timer on page unload, so no ghost rotation can occur from the timer path.
+        // Do NOT refresh during init() — even for expired tokens.
+        //
+        // Refreshing here causes ghost rotation: Supabase consumes the RT on its
+        // server, but if F5 is pressed before the response arrives the new token
+        // is never written to storage. With RT rotation disabled this is no longer
+        // a hard sign-out, but we still avoid the unnecessary network call.
+        //
+        // If the token is expired the backend will return 401 and ensureProfile
+        // will fail — _scheduleRefresh (delay: 0 for expired tokens) will fire
+        // immediately after the page settles and refresh the token safely.
         const nowMs = Date.now();
         const expiresMs = sess.expires_at ? sess.expires_at * 1000 : Infinity;
         const isExpired = expiresMs < nowMs;
 
         if (isExpired) {
-          const refreshed = await doTokenRefresh(sess.refresh_token);
-          if (refreshed) {
-            sess = refreshed;
-          } else {
-            // Refresh failed — maybe a concurrent page already refreshed
-            const latest = readSessionFromStorage();
-            if (latest && latest.access_token !== sess.access_token) {
-              sess = latest;
-            } else {
-              return; // truly expired with no way to recover
-            }
-          }
+          // Token expired: schedule an immediate refresh AFTER the page settles,
+          // then proceed — the safety-net useEffect will retry profile once refreshed.
+          _refreshTimer.current = setTimeout(() => _doRefresh(), 100);
         }
-        // Near-expiry but not expired: proceed with current token.
-        // _scheduleRefresh fires in ≤5s and will refresh safely after page settles.
 
         // Check for MFA requirement (only on saved-login path or when flag is set)
         const needsMfaCheck = sessionStorage.getItem('duely_needs_mfa_check');
