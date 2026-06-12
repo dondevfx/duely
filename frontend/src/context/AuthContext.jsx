@@ -56,24 +56,19 @@ export function AuthProvider({ children }) {
       // After init, keep React session in sync — but not while MFA is pending
       if (_pendingMfaCreds.current) return;
 
-      // Guard against spurious SIGNED_OUT events from Web Lock contention during rapid
-      // page refreshes. Supabase fires SIGNED_OUT when background token refresh fails
-      // transiently. If the user didn't explicitly sign out, wait 500ms and try to
-      // recover the session before actually clearing state.
-      if (event === 'SIGNED_OUT' && !_isUserSignOut.current) {
-        setTimeout(async () => {
-          const { data: { session: recovered } } = await supabase.auth.getSession();
-          if (recovered) {
-            setSession(recovered);
-            ensureProfile();
-          } else {
-            setSession(null);
-            setProfile(null);
-          }
-        }, 500);
+      if (event === 'SIGNED_OUT') {
+        if (_isUserSignOut.current) {
+          // Explicit user sign-out — honour it
+          _isUserSignOut.current = false;
+          setSession(null);
+          setProfile(null);
+        }
+        // Non-user SIGNED_OUT: ignore entirely. These fire spuriously during rapid
+        // page refreshes due to token rotation races and Web Lock contention.
+        // Session state is authoritative from init() on each page load; real auth
+        // failures surface through fetchProfile returning null after 3 retries.
         return;
       }
-      _isUserSignOut.current = false;
 
       setSession(sess);
       if (sess) {
