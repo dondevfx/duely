@@ -1,6 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
-const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds } = require('./walletService');
+const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
 const { creditRakeback } = require('./rakebackService');
 const gameEvents = require('./gameEvents');
 
@@ -352,13 +352,24 @@ async function _resolveGame(io, supabase, roomId) {
   let balanceChange = null;
   if (supabase && room.entryFee > 0) {
     try {
-      if (isDraw) {
+      const hasBot = winner.isBot || loser.isBot || p1.isBot || p2.isBot;
+      if (hasBot) {
+        const humanId = p1.isBot ? p2.userId : p1.userId;
+        if (isDraw) {
+          // Bot draw: fee already deducted upfront — just refund it in full
+          if (room.currency === 'diamonds') {
+            await creditDiamonds(supabase, humanId, Math.floor(room.entryFee));
+          } else {
+            await creditCoins(supabase, humanId, parseFloat(room.entryFee));
+          }
+          balanceChange = { winnerPayout: room.entryFee };
+        } else {
+          balanceChange = await settleBotMatch(supabase, humanId, room.entryFee, room.currency, !winner.isBot);
+        }
+      } else if (isDraw) {
         balanceChange = room.currency === 'diamonds'
           ? await settleDrawMatchDiamonds(supabase, p1.userId, p2.userId, room.entryFee)
           : await settleDrawMatch(supabase, p1.userId, p2.userId, room.entryFee);
-      } else if (winner.isBot || loser.isBot) {
-        const humanId = winner.isBot ? loser.userId : winner.userId;
-        balanceChange = await settleBotMatch(supabase, humanId, room.entryFee, room.currency, !winner.isBot);
       } else {
         balanceChange = room.currency === 'diamonds'
           ? await settleMatchDiamonds(supabase, winner.userId, loser.userId, room.entryFee)
