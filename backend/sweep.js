@@ -14,7 +14,7 @@ require('dotenv').config();
 const USER_ID = '423d2b0c-1dae-4947-8340-b07575954383';
 const COIN    = 'sol';
 const AMOUNT  = 0.066757677;
-const GAS_RES = 0.000005;
+const GAS_RES = 0.003; // covers tx fee + rent-exempt minimum
 
 async function main() {
   const { getAddress }    = require('./src/services/addressService');
