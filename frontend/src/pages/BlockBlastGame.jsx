@@ -215,9 +215,7 @@ export default function BlockBlastGame() {
   // Forfeit on unmount and on page refresh/close
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (roomIdRef.current && phaseRef.current !== 'result' && socketRef.current) {
-        socketRef.current.emit('player_forfeit');
-      }
+      if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {

@@ -149,9 +149,7 @@ export default function CoinFlipGame() {
   // Forfeit on unmount and on page refresh/close
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (inActiveMatchRef.current && socketRef.current) {
-        socketRef.current.emit('player_forfeit');
-      }
+      if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {

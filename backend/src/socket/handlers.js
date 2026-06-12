@@ -1879,11 +1879,14 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         if (s2) { s2.join(roomId); s2.emit('scrabble_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee }); }
         io.emit('queue_entry_removed', { id: p1.socketId });
         io.emit('queue_entry_removed', { id: p2.socketId });
-        // Brief countdown then start
+        // Brief countdown then start — check room still alive after each tick
+        // in case a player disconnected/forfeited during the countdown window
         io.to(roomId).emit('scrabble_countdown', { count: 3 });
         await new Promise(r => setTimeout(r, 1000));
+        if (!getScrabbleRoom(roomId)) return;
         io.to(roomId).emit('scrabble_countdown', { count: 2 });
         await new Promise(r => setTimeout(r, 1000));
+        if (!getScrabbleRoom(roomId)) return;
         io.to(roomId).emit('scrabble_countdown', { count: 1 });
         await new Promise(r => setTimeout(r, 1000));
         startScrabbleGame(io, supabase, roomId);
@@ -1926,8 +1929,10 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       socket.emit('scrabble_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo }, entryFee, vsBot: true });
       socket.emit('scrabble_countdown', { count: 3 });
       await new Promise(r => setTimeout(r, 1000));
+      if (!getScrabbleRoom(roomId)) return;
       socket.emit('scrabble_countdown', { count: 2 });
       await new Promise(r => setTimeout(r, 1000));
+      if (!getScrabbleRoom(roomId)) return;
       socket.emit('scrabble_countdown', { count: 1 });
       await new Promise(r => setTimeout(r, 1000));
       startScrabbleGame(io, supabase, roomId);
