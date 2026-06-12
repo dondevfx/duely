@@ -16,14 +16,19 @@ export function AuthProvider({ children }) {
   const _pendingMfaCreds = useRef(null);
 
   const fetchProfile = useCallback(async () => {
-    try {
-      const data = await api.get('/auth/me');
-      setProfile(data);
-      return data;
-    } catch {
-      setProfile(null);
-      return null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const data = await api.get('/auth/me');
+        setProfile(data);
+        return data;
+      } catch (e) {
+        if (attempt < 2) {
+          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        }
+      }
     }
+    setProfile(null);
+    return null;
   }, []);
 
   const ensureProfile = useCallback(async () => {

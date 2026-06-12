@@ -1889,6 +1889,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         if (!getScrabbleRoom(roomId)) return;
         io.to(roomId).emit('scrabble_countdown', { count: 1 });
         await new Promise(r => setTimeout(r, 1000));
+        if (!getScrabbleRoom(roomId)) return;
         startScrabbleGame(io, supabase, roomId);
       } else {
         socket.emit('scrabble_queue_joined');
@@ -1935,6 +1936,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (!getScrabbleRoom(roomId)) return;
       socket.emit('scrabble_countdown', { count: 1 });
       await new Promise(r => setTimeout(r, 1000));
+      if (!getScrabbleRoom(roomId)) return;
       startScrabbleGame(io, supabase, roomId);
     });
 

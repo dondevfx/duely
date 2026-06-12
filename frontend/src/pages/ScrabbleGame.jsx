@@ -524,7 +524,7 @@ export default function ScrabbleGame() {
 
   function playVsBot() {
     if (!authenticated) { doAuth(); return; }
-    socket.emit('play_scrabble_vs_bot', { entryFee: 0, currency: 'coins' });
+    socket.emit('play_scrabble_vs_bot', { entryFee, currency: betCurrency });
     setPhase('queue'); setStatusMsg('Starting bot match…');
   }
 
