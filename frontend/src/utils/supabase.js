@@ -6,7 +6,12 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const SAVE_LOGIN_KEY = 'duely_save_login';
 export const SAVE_SESSION_KEY = 'duely_saved_session';
 
-// sessionStorage: survives refresh, cleared on tab/window close
+// sessionStorage: survives refresh, cleared on tab/window close.
+// Lock is a no-op: navigator.locks uses an exclusive lock keyed on storageKey.
+// On rapid page refreshes the old page's lock request overlaps with the new page's,
+// queueing exclusive locks until they time out (5s default) — breaking both getSession()
+// and signInWithPassword(). sessionStorage is per-tab so there's no cross-tab conflict
+// risk; locking is unnecessary and only causes harm here.
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
@@ -14,6 +19,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: true,
     storage: window.sessionStorage,
     storageKey: 'duely_session',
+    lock: (_name, _acquireTimeout, fn) => fn(),
   },
 });
 
