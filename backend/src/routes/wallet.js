@@ -173,67 +173,57 @@ module.exports = function walletRoutes(supabase) {
         return res.status(400).json({ error: 'Insufficient balance' });
       }
 
-      // Deduct the full amount from player balance up front
-      await deductCoins(supabase, req.user.id, amount);
-
-      // ── Decode admin private key (used for both paths) ───────────────
+      // ── Decode admin private key before touching balance ─────────────
       const bs58 = require('bs58');
       const phantomKey = process.env.ADMIN_PHANTOM_PRIVATE_KEY;
       if (!phantomKey) throw new Error('ADMIN_PHANTOM_PRIVATE_KEY not set');
       const decoded = (bs58.default?.decode ?? bs58.decode)(phantomKey);
       const privKey = Buffer.from(decoded).slice(0, 32);
 
+      // ── Execute payout FIRST — only deduct if it succeeds ────────────
+      // This eliminates the refund race: if the payout fails for any reason,
+      // the user's balance is untouched and they can simply retry.
       let payoutId   = null;
       let cryptoAmt  = null;
 
-      try {
-        if (coin.toLowerCase() === 'sol') {
-          // ── SOL: Jupiter USDC→SOL, sent directly to player (~0.3% fee) ─
-          const { txHash, solReceived } = await swapUsdcToSol(privKey, amount, address.trim());
-          payoutId  = txHash;
-          cryptoAmt = solReceived;
-          console.log(`[withdraw] Jupiter SOL payout ${amount} USDC → ${solReceived} SOL → ${address.trim()} tx=${txHash}`);
+      if (coin.toLowerCase() === 'sol') {
+        const { txHash, solReceived } = await swapUsdcToSol(privKey, amount, address.trim());
+        payoutId  = txHash;
+        cryptoAmt = solReceived;
+        console.log(`[withdraw] Jupiter SOL payout ${amount} USDC → ${solReceived} SOL → ${address.trim()} tx=${txHash}`);
 
-        } else if (coin.toLowerCase() === 'usdc') {
-          // ── USDC: send directly, no swap needed (near-zero fee) ─────────
-          const sendTx = await sendCrypto({
-            coin:      'usdc',
-            privKey,
-            toAddress: address.trim(),
-            amount,
-          });
-          payoutId  = sendTx;
-          cryptoAmt = amount;
-          console.log(`[withdraw] Direct USDC send ${amount} → ${address.trim()} tx=${sendTx}`);
+      } else if (coin.toLowerCase() === 'usdc') {
+        const sendTx = await sendCrypto({
+          coin:      'usdc',
+          privKey,
+          toAddress: address.trim(),
+          amount,
+        });
+        payoutId  = sendTx;
+        cryptoAmt = amount;
+        console.log(`[withdraw] Direct USDC send ${amount} → ${address.trim()} tx=${sendTx}`);
 
-        } else {
-          // ── Other coins: ChangeNow swap then send USDC to their address ─
-          const swap = await createWithdrawalSwap({
-            coin:          coin.toLowerCase(),
-            amountUsd:     amount,
-            playerAddress: address.trim(),
-            playerMemo:    memo?.trim() || '',
-          });
-          cryptoAmt = swap.expectedOutput;
+      } else {
+        const swap = await createWithdrawalSwap({
+          coin:          coin.toLowerCase(),
+          amountUsd:     amount,
+          playerAddress: address.trim(),
+          playerMemo:    memo?.trim() || '',
+        });
+        cryptoAmt = swap.estimatedOutput;
 
-          const sendTx = await sendCrypto({
-            coin:      'usdc',
-            privKey,
-            toAddress: swap.depositAddress,
-            amount,
-          });
-          payoutId = sendTx || swap.exchangeId;
-          console.log(`[withdraw] ChangeNow payout ${amount} USDC → ${coin} → ${address.trim()} exchange=${swap.exchangeId}`);
-        }
-
-      } catch (payoutErr) {
-        console.error(`[withdraw] payout failed user=${req.user.id} amount=${amount}:`, payoutErr);
-        // Refund immediately on failure
-        await creditCoins(supabase, req.user.id, amount).catch(e =>
-          console.error(`CRITICAL: refund failed user=${req.user.id} amount=${amount}:`, e.message)
-        );
-        return res.status(500).json({ error: `Payout failed: ${payoutErr.message}` });
+        const sendTx = await sendCrypto({
+          coin:      'usdc',
+          privKey,
+          toAddress: swap.depositAddress,
+          amount,
+        });
+        payoutId = sendTx || swap.exchangeId;
+        console.log(`[withdraw] ChangeNow payout ${amount} USDC → ${coin} → ${address.trim()} exchange=${swap.exchangeId}`);
       }
+
+      // Payout succeeded — now deduct from balance (safe to do, crypto is already sent)
+      await deductCoins(supabase, req.user.id, amount);
 
       // ── Record transaction ───────────────────────────────────────────
       await supabase.from('transactions').insert({
