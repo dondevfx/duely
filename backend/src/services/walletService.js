@@ -402,16 +402,28 @@ async function settleDrawMatch(supabase, p1Id, p2Id, entryFee) {
 }
 
 async function settleDrawMatchDiamonds(supabase, p1Id, p2Id, entryFee) {
-  const fee = Math.floor(parseFloat(entryFee));
+  const fee    = Math.floor(parseFloat(entryFee));
   if (fee <= 0) return { winnerPayout: 0, fee: 0 };
+  const refund = Math.floor(fee * 0.95);
+  const adminId = process.env.ADMIN_USER_ID;
 
-  // No fee on diamonds — full refund to both players
   await supabase.rpc('deduct_diamonds', { user_id: p1Id, amount: fee });
   await supabase.rpc('deduct_diamonds', { user_id: p2Id, amount: fee });
-  await supabase.rpc('credit_diamonds', { user_id: p1Id, amount: fee });
-  await supabase.rpc('credit_diamonds', { user_id: p2Id, amount: fee });
+  await supabase.rpc('credit_diamonds', { user_id: p1Id, amount: refund });
+  await supabase.rpc('credit_diamonds', { user_id: p2Id, amount: refund });
 
-  return { winnerPayout: fee, fee: 0 };
+  // 5% platform fee (diamonds) goes to admin fee_balance
+  if (adminId) {
+    const adminFee = (fee * 2) - (refund * 2);
+    await supabase.rpc('credit_fee_balance', { user_id: adminId, amount: adminFee }).catch(() => {});
+  }
+
+  supabase.from('transactions').insert([
+    { user_id: p1Id, type: 'match_draw', amount_c: 0, crypto_amount: refund, crypto_symbol: 'diamonds', status: 'confirmed' },
+    { user_id: p2Id, type: 'match_draw', amount_c: 0, crypto_amount: refund, crypto_symbol: 'diamonds', status: 'confirmed' },
+  ]).then().catch(() => {});
+
+  return { winnerPayout: refund, fee: (fee * 2) - (refund * 2) };
 }
 
 module.exports = {
