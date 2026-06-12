@@ -300,18 +300,15 @@ async function fetchTxs(coin, address) {
 // ── Deposit processor ─────────────────────────────────────────────────────────
 
 async function processDeposit(supabase, { userId, coin, address, txHash, amount }) {
-  console.log(`[monitor] deposit detected userId=${userId} coin=${coin} amount=${amount} tx=${txHash}`);
-
   // Idempotency check — did we already process this tx?
   const { data: dup } = await supabase
     .from('transactions')
     .select('id')
     .eq('tx_hash', txHash)
     .maybeSingle();
-  if (dup) {
-    console.log(`[monitor] ${txHash} already processed — skipping`);
-    return;
-  }
+  if (dup) return; // already handled — silent skip, no log spam
+
+  console.log(`[monitor] deposit detected userId=${userId} coin=${coin} amount=${amount} tx=${txHash}`);
 
   const priceUsd     = await getPriceUsd(coin);
   const estimatedUsd = amount * priceUsd;
