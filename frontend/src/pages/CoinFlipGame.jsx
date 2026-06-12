@@ -145,8 +145,10 @@ export default function CoinFlipGame() {
   const lastSettingsRef = useRef({ entryFee: 0, currency: 'coins', side: 'heads' });
   const socketRef        = useRef(socket);
   const inActiveMatchRef = useRef(false);
+  const refreshProfileRef = useRef(refreshProfile);
   useEffect(() => { socketRef.current = socket; }, [socket]);
-  // Forfeit on unmount and on page refresh/close
+  useEffect(() => { refreshProfileRef.current = refreshProfile; }, [refreshProfile]);
+  // Forfeit on unmount and on page refresh/close; also refresh balance so leaver sees updated balance
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
@@ -157,6 +159,8 @@ export default function CoinFlipGame() {
       // Always emit on SPA navigation (logo click, sidebar links, etc.)
       // Server is a no-op if no active room exists for this socket
       if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
+      // Refresh balance after 2.5s so the leaver sees the deducted/settled balance
+      setTimeout(() => refreshProfileRef.current?.(), 2500);
     };
   }, []);
   // Refresh balance on mount; delayed second call catches server settle that races with reload

@@ -162,12 +162,14 @@ export default function BlackjackGame() {
   const eloBeforeRef    = useRef(profile?.elo ?? 1000);
   const lastModeRef     = useRef(null); // 'pvp' | 'bot_free' | 'bot_paid'
   const lastSettingsRef = useRef({ entryFee: 0, currency: 'coins' });
-  const socketRef       = useRef(socket);
-  const profileRef      = useRef(profile);
-  const pendingStartRef = useRef(null); // buffers bj_start data until countdown finishes
+  const socketRef         = useRef(socket);
+  const profileRef        = useRef(profile);
+  const refreshProfileRef = useRef(refreshProfile);
+  const pendingStartRef   = useRef(null); // buffers bj_start data until countdown finishes
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { socketRef.current = socket; }, [socket]);
   useEffect(() => { profileRef.current = profile; }, [profile]);
+  useEffect(() => { refreshProfileRef.current = refreshProfile; }, [refreshProfile]);
 
   const [phase, _setPhase] = useState('lobby');
   const phaseRef = useRef('lobby');
@@ -176,7 +178,7 @@ export default function BlackjackGame() {
   // Tracks whether we are in an active room (set on match_found, cleared on result/reset)
   const roomIdRef = useRef(null);
 
-  // Forfeit on unmount and on page refresh/close
+  // Forfeit on unmount and on page refresh/close; also refresh balance so leaver sees updated balance
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
@@ -187,6 +189,8 @@ export default function BlackjackGame() {
       // Always emit on SPA navigation (logo click, sidebar links, etc.)
       // Server is a no-op if no active room exists for this socket
       if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
+      // Refresh balance after 2.5s so the leaver sees the deducted/settled balance
+      setTimeout(() => refreshProfileRef.current?.(), 2500);
     };
   }, []);
   // Refresh balance on mount; delayed second call catches server settle that races with reload
