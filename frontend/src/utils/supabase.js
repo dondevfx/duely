@@ -17,11 +17,16 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 // ── Our own session storage ────────────────────────────────────────────────
-// sessionStorage: lives for the tab's lifetime, cleared on tab close.
-// We own reads/writes — no Supabase state machine involved.
+// Primary: sessionStorage (tab-scoped, fast).
+// Backup:  localStorage under SESSION_LS_KEY — written on every storeSession so
+//          it is always current. Chrome silently returns null from sessionStorage
+//          during rapid successive page reloads (4+ F5 presses in quick succession),
+//          which was causing the user to appear signed-out. The localStorage copy
+//          survives that browser quirk.
 
-const SESSION_KEY = 'duely_session';
-export const SAVE_LOGIN_KEY = 'duely_save_login';
+const SESSION_KEY    = 'duely_session';
+const SESSION_LS_KEY = 'duely_session_ls'; // always-current localStorage backup
+export const SAVE_LOGIN_KEY  = 'duely_save_login';
 export const SAVE_SESSION_KEY = 'duely_saved_session';
 
 // In-memory reference — kept in sync with sessionStorage.
@@ -46,16 +51,22 @@ export function onSessionChange(cb) {
 export function storeSession(sess) {
   _currentSession = sess;
   if (sess) {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(sess));
+    const raw = JSON.stringify(sess);
+    try { sessionStorage.setItem(SESSION_KEY, raw); } catch {}
+    try { localStorage.setItem(SESSION_LS_KEY, raw); } catch {}
   } else {
-    sessionStorage.removeItem(SESSION_KEY);
+    try { sessionStorage.removeItem(SESSION_KEY); } catch {}
+    try { localStorage.removeItem(SESSION_LS_KEY); } catch {}
   }
   _sessionListeners.forEach(cb => cb(sess));
 }
 
 export function readSessionFromStorage() {
   try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
+    // sessionStorage first; fall back to localStorage copy if the browser
+    // returns nothing (Chrome quirk on rapid successive reloads).
+    const raw = sessionStorage.getItem(SESSION_KEY)
+             ?? localStorage.getItem(SESSION_LS_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
