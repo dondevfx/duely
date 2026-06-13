@@ -4,7 +4,7 @@ const {
   getBalance, creditCoins, deductCoins,
   getDiamondBalance, creditDiamonds, deductDiamonds,
   sanitizeAmount, sanitizeDiamondAmount,
-  VALID_COINS, MAX_SINGLE_AMOUNT,
+  MAX_SINGLE_AMOUNT,
   recordWithdrawal, getWithdrawable,
 } = require('../services/walletService');
 const { getOrCreateAddress } = require('../services/addressService');

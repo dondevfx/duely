@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
 
 const MAX_MESSAGES = 100;
-const ADMIN_ID  = '423d2b0c-1dae-4947-8340-b07575954383';
+const ADMIN_ID  = import.meta.env.VITE_ADMIN_ID || '';
 const BOT_ID    = 'duely-bot-v1';
 const BOT_NAME  = 'Duely Bot';
 const BOT_COLOR = '#00BFFF';
