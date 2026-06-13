@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import CoinIcon from './CoinIcon';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
@@ -468,10 +468,14 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
   );
 }
 
+export { ProfilePopup };
+
 // ── ChatSidebar ───────────────────────────────────────────────────────────────
 export default function ChatSidebar({ open, onToggle }) {
   const { socket, authenticated } = useSocket();
   const { profile } = useAuth();
+  const location = useLocation();
+  const isHome = location.pathname === '/';
   const [messages, setMessages] = useState([
     { id: 'sys-1', system: true, message: 'Welcome to World Chat!', timestamp: Date.now() },
   ]);
@@ -733,8 +737,8 @@ export default function ChatSidebar({ open, onToggle }) {
         </button>
       )}
 
-      {/* Mobile floating chat button */}
-      {!mobileOpen && (
+      {/* Mobile floating chat button — home screen only */}
+      {!mobileOpen && isHome && (
         <button
           onClick={() => setMobileOpen(true)}
           className="lg:hidden fixed bottom-5 right-4 z-40 flex items-center gap-2 bg-surface border border-primary/40 hover:border-primary rounded-full px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition-all"
@@ -829,10 +833,11 @@ export default function ChatSidebar({ open, onToggle }) {
                 <input ref={mobileInputRef} value={input} onChange={e => setInput(e.target.value)}
                   onKeyDown={handleKey} maxLength={150}
                   placeholder="Message... use @ to mention"
-                  className="flex-1 bg-surfaceLight border border-border rounded-xl px-3 py-2 text-white text-xs placeholder-muted focus:outline-none focus:border-primary transition-colors"
+                  className="flex-1 bg-surfaceLight border border-border rounded-xl px-3 py-2 text-white placeholder-muted focus:outline-none focus:border-primary transition-colors"
+                  style={{ fontSize: '16px' }}
                 />
                 <button onClick={send} disabled={!input.trim()}
-                  className="px-3 py-2 bg-primary rounded-xl text-white text-xs font-bold hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-glow">
+                  className="px-3 py-2 bg-primary rounded-xl text-white text-sm font-bold hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-glow">
                   ↑
                 </button>
               </div>

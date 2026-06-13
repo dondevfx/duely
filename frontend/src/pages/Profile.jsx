@@ -9,6 +9,7 @@ import GlowButton from '../components/GlowButton';
 import { getRank } from '../utils/ranks';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
+import { ProfilePopup } from '../components/ChatSidebar';
 
 const GAME_INFO = {
   scrabble:      { emoji: '🔤', name: 'Word VS' },
@@ -957,60 +958,6 @@ function CoinHistorySection({ userId }) {
 }
 
 // ── Friends Panel ─────────────────────────────────────────────────────────────
-function FriendProfilePopup({ userId, username, onClose }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api.get(`/auth/public/${userId}`)
-      .then(setData)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [userId]);
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-surface border border-surfaceLight rounded-2xl w-[420px] max-w-[calc(100vw-32px)] shadow-2xl animate-slide-up" onClick={e => e.stopPropagation()}>
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-5">
-            <span className="text-sm text-muted uppercase tracking-widest font-semibold">Player Profile</span>
-            <button onClick={onClose} className="text-muted hover:text-white text-base w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surfaceLight transition-colors">✕</button>
-          </div>
-          {loading ? (
-            <div className="flex justify-center py-10"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
-          ) : data ? (
-            <>
-              <div className="flex items-center gap-4 mb-5">
-                <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl font-black shrink-0"
-                  style={{ backgroundColor: `${data.profile_color || '#1E90FF'}22`, border: `3px solid ${data.profile_color || '#1E90FF'}`, color: data.profile_color || '#1E90FF' }}>
-                  {data.username?.[0]?.toUpperCase()}
-                </div>
-                <div>
-                  <div className="text-2xl font-black text-white">{data.username}</div>
-                  <div className="text-sm text-muted">Rank #{data.rank}</div>
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-3 mb-2">
-                {[
-                  { label: 'ELO', value: data.elo ?? 0 },
-                  { label: 'Wins', value: data.wins ?? 0 },
-                  { label: 'Losses', value: data.losses ?? 0 },
-                ].map(s => (
-                  <div key={s.label} className="bg-bg rounded-xl p-3 text-center">
-                    <div className="text-xl font-black text-white">{s.value}</div>
-                    <div className="text-[10px] text-muted uppercase tracking-wider mt-0.5">{s.label}</div>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-muted text-center py-6">Could not load profile.</p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function FriendsPanel({ myId, activeGames }) {
   const navigate = useNavigate();
@@ -1211,9 +1158,14 @@ function FriendsPanel({ myId, activeGames }) {
 
       {/* Friend profile popup */}
     {viewingFriend && (
-      <FriendProfilePopup
+      <ProfilePopup
         userId={viewingFriend.id}
         username={viewingFriend.username}
+        isBot={false}
+        isAdmin={false}
+        isBanned={false}
+        onBan={() => {}}
+        onUnban={() => {}}
         onClose={() => setViewingFriend(null)}
       />
     )}
