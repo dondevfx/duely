@@ -41,25 +41,8 @@ function _jwtExpMs(token) {
  */
 async function verifyToken(token) {
   // Fast path: local verification with JWT secret (no network call, no rate limits).
-  if (process.env.SUPABASE_JWT_SECRET) {
-    try {
-      // Decode header to get the actual algorithm Supabase signed with
-      const headerJson = JSON.parse(Buffer.from(token.split('.')[0], 'base64url').toString());
-      const alg = headerJson.alg || 'HS256';
-      const payload = jwt.verify(token, process.env.SUPABASE_JWT_SECRET, { algorithms: [alg] });
-      return {
-        id: payload.sub,
-        email: payload.email ?? null,
-        role: payload.role ?? 'authenticated',
-        app_metadata: payload.app_metadata ?? {},
-        user_metadata: payload.user_metadata ?? {},
-      };
-    } catch (e) {
-      if (e.name === 'TokenExpiredError') return null;
-      // Wrong secret or unsupported algorithm — fall through to network path
-      console.warn('[auth] JWT local verify failed, falling back to network:', e.message);
-    }
-  }
+  // Supabase uses ES256 (asymmetric) — local verification requires the public key,
+  // not the JWT secret. We rely on the cache below instead.
 
   // Slow path: check cache first, then call Supabase.
   const cached = _tokenCache.get(token);
