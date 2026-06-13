@@ -43,7 +43,10 @@ async function verifyToken(token) {
   // Fast path: local verification with JWT secret (no network call, no rate limits).
   if (process.env.SUPABASE_JWT_SECRET) {
     try {
-      const payload = jwt.verify(token, process.env.SUPABASE_JWT_SECRET, { algorithms: ['HS256'] });
+      // Decode header to get the actual algorithm Supabase signed with
+      const headerJson = JSON.parse(Buffer.from(token.split('.')[0], 'base64url').toString());
+      const alg = headerJson.alg || 'HS256';
+      const payload = jwt.verify(token, process.env.SUPABASE_JWT_SECRET, { algorithms: [alg] });
       return {
         id: payload.sub,
         email: payload.email ?? null,
@@ -52,10 +55,8 @@ async function verifyToken(token) {
         user_metadata: payload.user_metadata ?? {},
       };
     } catch (e) {
-      // TokenExpiredError → token is genuinely expired, no point hitting network.
       if (e.name === 'TokenExpiredError') return null;
-      // Any other error (wrong secret, malformed) → fall through to network path
-      // so a misconfigured secret doesn't lock everyone out.
+      // Wrong secret or unsupported algorithm — fall through to network path
       console.warn('[auth] JWT local verify failed, falling back to network:', e.message);
     }
   }
