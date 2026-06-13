@@ -69,22 +69,32 @@ export default function MatchTicker() {
   const timerRef  = useRef(null);
   const realPool  = useRef([]); // cached real match items
 
-  // Fetch recent real matches once on mount
+  // Fetch recent real matches once on mount — seed display immediately when loaded
   useEffect(() => {
     api.get('/match/recent').then(matches => {
       if (Array.isArray(matches) && matches.length > 0) {
-        realPool.current = matches.map(makeRealItem).filter(m => m.payout > 0);
+        const real = matches.map(makeRealItem).filter(m => m.payout > 0);
+        realPool.current = real;
+        if (real.length > 0) {
+          // Replace initial fakes with real matches mixed in
+          setItems(prev => {
+            const seeded = [...prev];
+            real.slice(0, MAX).forEach((r, i) => {
+              seeded[i * 2] = { ...r, id: `real-seed-${i}` };
+            });
+            return seeded.slice(0, MAX);
+          });
+        }
       }
     }).catch(() => {});
   }, []);
 
   useEffect(() => {
     function scheduleNext() {
-      // New item every 3–5 seconds
       const delay = 3000 + Math.random() * 2000;
       timerRef.current = setTimeout(() => {
-        // 30% chance to show a real match if we have any
-        const useReal = realPool.current.length > 0 && Math.random() < 0.30;
+        // 70% chance to show a real match if we have any
+        const useReal = realPool.current.length > 0 && Math.random() < 0.70;
         const next = useReal
           ? { ...realPool.current[Math.floor(Math.random() * realPool.current.length)], id: `real-${Date.now()}` }
           : makeFakeItem();

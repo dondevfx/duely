@@ -262,11 +262,22 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
     Promise.all([
       api.get(`/auth/public/${userId}`),
       api.get(`/auth/coin-history/${userId}`).catch(() => null),
-    ]).then(([prof, hist]) => {
+      api.get('/auth/friends').catch(() => []),
+    ]).then(([prof, hist, friendships]) => {
       setData(prof);
       setHistory(hist);
+      // Determine existing friendship status so we don't show "Add Friend" for existing friends
+      const myId = myProfile?.id;
+      const match = Array.isArray(friendships) && friendships.find(f =>
+        (f.requester?.id === userId || f.addressee?.id === userId)
+      );
+      if (match) {
+        if (match.status === 'accepted') setFriendStatus('friends');
+        else if (match.requester?.id === myId) setFriendStatus('sent');
+        else setFriendStatus(null); // incoming request — still show Add Friend (will accept elsewhere)
+      }
     }).catch(() => {}).finally(() => setLoading(false));
-  }, [userId, isBot]);
+  }, [userId, isBot, myProfile?.id]);
 
   async function handleTip() {
     const amt = tipCurrency === 'diamonds' ? Math.floor(parseFloat(tipAmount)) : parseFloat(tipAmount);
