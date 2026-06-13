@@ -116,7 +116,7 @@ export default function MatchTicker() {
     >
       <span className="text-3xl leading-none shrink-0">{item.game.icon}</span>
       <span className="text-[9px] text-muted font-medium leading-none w-full text-center truncate px-1">
-        {item.game.name}{item.vsBot ? ' · Bot' : ''}
+        {item.game.name}
       </span>
       <span className="text-[10px] font-bold text-success leading-none truncate w-full text-center px-1">
         {fmtPayout(item.payout, item.diamonds)}
