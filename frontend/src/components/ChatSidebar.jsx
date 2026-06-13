@@ -478,9 +478,12 @@ export default function ChatSidebar({ open, onToggle }) {
   const [input, setInput]         = useState('');
   const [popup, setPopup]         = useState(null);
   const [bannedUsers, setBannedUsers] = useState(new Set());
-  const bottomRef  = useRef(null);
-  const inputRef   = useRef(null);
-  const botTimerRef = useRef(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const bottomRef      = useRef(null);
+  const mobileBottomRef = useRef(null);
+  const inputRef       = useRef(null);
+  const mobileInputRef = useRef(null);
+  const botTimerRef    = useRef(null);
 
   const isAdmin = profile?.id === ADMIN_ID;
 
@@ -555,7 +558,8 @@ export default function ChatSidebar({ open, onToggle }) {
 
   useEffect(() => {
     if (open) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, open]);
+    if (mobileOpen) mobileBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, open, mobileOpen]);
 
   const send = useCallback(() => {
     const text = input.trim();
@@ -727,6 +731,116 @@ export default function ChatSidebar({ open, onToggle }) {
           <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
           World Chat
         </button>
+      )}
+
+      {/* Mobile floating chat button */}
+      {!mobileOpen && (
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="lg:hidden fixed bottom-5 right-4 z-40 flex items-center gap-2 bg-surface border border-primary/40 hover:border-primary rounded-full px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition-all"
+        >
+          <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
+          World Chat
+        </button>
+      )}
+
+      {/* Mobile chat overlay */}
+      {mobileOpen && (
+        <div className="lg:hidden fixed inset-0 z-[55] flex flex-col bg-surface">
+          {/* Header */}
+          <div className="px-4 py-3 border-b border-border flex items-center gap-2 shrink-0 pt-safe" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
+            <div className="w-2 h-2 rounded-full bg-success animate-pulse shrink-0" />
+            <span className="text-sm font-bold text-white flex-1">World Chat</span>
+            <button
+              onClick={() => setMobileOpen(false)}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-muted hover:text-white hover:bg-surfaceLight transition-colors text-base"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2.5">
+            {messages.map(msg => {
+              if (msg.system) {
+                return (
+                  <div key={msg.id} className="text-center py-1">
+                    <span className="text-xs text-muted/60 italic">{msg.message}</span>
+                  </div>
+                );
+              }
+              const isOwn       = msg.userId === profile?.id;
+              const isMentioned = profile?.username && (msg.mentions || []).includes(profile.username.toLowerCase());
+              const msgColor    = msg.color || '#1E90FF';
+              return (
+                <div key={msg.id} className={`text-sm group ${isOwn ? 'flex flex-col items-end' : 'flex flex-col items-start'}`}>
+                  <div className={`flex items-center gap-1.5 mb-0.5 px-1 ${isOwn ? 'flex-row-reverse' : ''}`}>
+                    <div
+                      onClick={() => openPopup(msg)}
+                      className="relative shrink-0"
+                      style={{ cursor: (msg.userId === ADMIN_ID && !isAdmin) ? 'default' : 'pointer' }}
+                    >
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black"
+                        style={{ backgroundColor: `${msgColor}33`, border: `1.5px solid ${msgColor}`, color: msgColor }}>
+                        {msg.isBot ? '🤖' : msg.username?.[0]?.toUpperCase()}
+                      </div>
+                      {(msg.currentStreak ?? 0) >= 1 && (
+                        <span className="absolute -top-1 -left-1 flex items-center justify-center min-w-[14px] h-[14px] rounded-full font-black leading-none px-0.5"
+                          style={{ background: 'rgba(0,0,0,0.9)', color: '#fb923c', border: '1px solid rgba(251,146,60,0.5)', fontSize: 7 }}>
+                          🔥{msg.currentStreak}
+                        </span>
+                      )}
+                    </div>
+                    <span
+                      onClick={() => openPopup(msg)}
+                      className={`text-xs font-semibold ${(msg.userId === ADMIN_ID && !isAdmin) ? '' : 'hover:underline'}`}
+                      style={{ color: msgColor, cursor: (msg.userId === ADMIN_ID && !isAdmin) ? 'default' : 'pointer' }}>
+                      {msg.username}
+                      {msg.isBot && (
+                        <span className="ml-1 text-[9px] px-1 py-0.5 rounded font-bold"
+                          style={{ background: `${BOT_COLOR}18`, color: BOT_COLOR }}>BOT</span>
+                      )}
+                    </span>
+                    {isAdmin && !msg.isBot && (
+                      <button onClick={() => deleteMessage(msg.id)}
+                        className="opacity-0 group-hover:opacity-100 text-[10px] text-danger/60 hover:text-danger transition-all ml-1" title="Delete">✕</button>
+                    )}
+                  </div>
+                  <div
+                    onClick={() => openPopup(msg)}
+                    className={`px-3 py-2 rounded-2xl max-w-[85%] break-words text-xs leading-relaxed transition-opacity
+                      ${(msg.userId === ADMIN_ID && !isAdmin) ? '' : 'cursor-pointer hover:opacity-80'}
+                      ${isOwn ? 'text-white' : `bg-surfaceLight text-white ${isMentioned ? 'border border-warning/60 bg-warning/10' : ''}`}`}
+                    style={isOwn ? { backgroundColor: `${msgColor}33`, border: `1px solid ${msgColor}44` } : {}}
+                  >
+                    {renderMessage(msg.message, profile?.username)}
+                  </div>
+                  <span className="text-[10px] text-muted/40 mt-0.5 px-1">{formatTime(msg.timestamp)}</span>
+                </div>
+              );
+            })}
+            <div ref={mobileBottomRef} />
+          </div>
+
+          {/* Input */}
+          <div className="p-3 border-t border-border shrink-0 pb-safe" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+            {authenticated ? (
+              <div className="flex gap-2">
+                <input ref={mobileInputRef} value={input} onChange={e => setInput(e.target.value)}
+                  onKeyDown={handleKey} maxLength={150}
+                  placeholder="Message... use @ to mention"
+                  className="flex-1 bg-surfaceLight border border-border rounded-xl px-3 py-2 text-white text-xs placeholder-muted focus:outline-none focus:border-primary transition-colors"
+                />
+                <button onClick={send} disabled={!input.trim()}
+                  className="px-3 py-2 bg-primary rounded-xl text-white text-xs font-bold hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-glow">
+                  ↑
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs text-muted text-center py-1">Sign in to chat</p>
+            )}
+          </div>
+        </div>
       )}
     </>
   );

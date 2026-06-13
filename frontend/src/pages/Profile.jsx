@@ -957,6 +957,61 @@ function CoinHistorySection({ userId }) {
 }
 
 // ── Friends Panel ─────────────────────────────────────────────────────────────
+function FriendProfilePopup({ userId, username, onClose }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get(`/auth/public/${userId}`)
+      .then(setData)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [userId]);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-surface border border-surfaceLight rounded-2xl w-[420px] max-w-[calc(100vw-32px)] shadow-2xl animate-slide-up" onClick={e => e.stopPropagation()}>
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-5">
+            <span className="text-sm text-muted uppercase tracking-widest font-semibold">Player Profile</span>
+            <button onClick={onClose} className="text-muted hover:text-white text-base w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surfaceLight transition-colors">✕</button>
+          </div>
+          {loading ? (
+            <div className="flex justify-center py-10"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+          ) : data ? (
+            <>
+              <div className="flex items-center gap-4 mb-5">
+                <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl font-black shrink-0"
+                  style={{ backgroundColor: `${data.profile_color || '#1E90FF'}22`, border: `3px solid ${data.profile_color || '#1E90FF'}`, color: data.profile_color || '#1E90FF' }}>
+                  {data.username?.[0]?.toUpperCase()}
+                </div>
+                <div>
+                  <div className="text-2xl font-black text-white">{data.username}</div>
+                  <div className="text-sm text-muted">Rank #{data.rank}</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3 mb-2">
+                {[
+                  { label: 'ELO', value: data.elo ?? 0 },
+                  { label: 'Wins', value: data.wins ?? 0 },
+                  { label: 'Losses', value: data.losses ?? 0 },
+                ].map(s => (
+                  <div key={s.label} className="bg-bg rounded-xl p-3 text-center">
+                    <div className="text-xl font-black text-white">{s.value}</div>
+                    <div className="text-[10px] text-muted uppercase tracking-wider mt-0.5">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted text-center py-6">Could not load profile.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FriendsPanel({ myId, activeGames }) {
   const navigate = useNavigate();
   const [friendships, setFriendships] = useState([]);
@@ -964,6 +1019,8 @@ function FriendsPanel({ myId, activeGames }) {
   const [addMsg, setAddMsg] = useState(null);
   const [adding, setAdding] = useState(false);
   const [showRequests, setShowRequests] = useState(false);
+  const [confirmUnadd, setConfirmUnadd] = useState(null); // { id, username }
+  const [viewingFriend, setViewingFriend] = useState(null); // { id, username }
 
   const load = useCallback(async () => {
     try { setFriendships(await api.get('/auth/friends')); } catch {}
@@ -998,6 +1055,7 @@ function FriendsPanel({ myId, activeGames }) {
   async function remove(id) { await api.delete(`/auth/friend/${id}`).catch(() => {}); load(); }
 
   return (
+    <>
     <div className="bg-surface border border-surfaceLight rounded-2xl p-5 sticky top-20">
       <div className="text-base font-black text-white mb-4">👥 Friends</div>
 
@@ -1074,17 +1132,23 @@ function FriendsPanel({ myId, activeGames }) {
             const game = findGame(p?.username);
             return (
               <div key={f.id} className="flex items-center gap-2 group">
-                <div className="relative shrink-0">
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-black"
+                <button
+                  className="relative shrink-0 cursor-pointer"
+                  onClick={() => setViewingFriend({ id: p?.id, username: p?.username })}
+                >
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-black hover:ring-2 hover:ring-primary/50 transition-all"
                     style={{ backgroundColor: `${p?.profile_color || '#1E90FF'}22`, border: `1.5px solid ${p?.profile_color || '#1E90FF'}`, color: p?.profile_color || '#1E90FF' }}>
                     {(p?.username || '?')[0].toUpperCase()}
                   </div>
                   {game && <div className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-red-500 animate-pulse border border-bg" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-bold text-white truncate">{p?.username}</div>
+                </button>
+                <button
+                  className="flex-1 min-w-0 text-left cursor-pointer"
+                  onClick={() => setViewingFriend({ id: p?.id, username: p?.username })}
+                >
+                  <div className="text-xs font-bold text-white truncate hover:text-primary transition-colors">{p?.username}</div>
                   <div className="text-[10px] text-muted">{p?.elo} ELO{game ? ' · In game' : ''}</div>
-                </div>
+                </button>
                 <div className="flex gap-1 items-center">
                   {game && (
                     <button
@@ -1095,11 +1159,10 @@ function FriendsPanel({ myId, activeGames }) {
                     </button>
                   )}
                   <button
-                    onClick={() => remove(f.id)}
-                    className="text-[10px] px-1.5 py-1 text-muted hover:text-danger opacity-0 group-hover:opacity-100 transition-all"
-                    title="Remove"
+                    onClick={() => setConfirmUnadd({ id: f.id, username: p?.username })}
+                    className="text-[10px] px-2 py-1 text-muted hover:text-danger border border-transparent hover:border-danger/30 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
                   >
-                    ✕
+                    Unadd
                   </button>
                 </div>
               </div>
@@ -1126,6 +1189,35 @@ function FriendsPanel({ myId, activeGames }) {
         </div>
       )}
     </div>
+
+    {/* Unadd confirmation modal */}
+      {confirmUnadd && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setConfirmUnadd(null)}>
+          <div className="bg-surface border border-surfaceLight rounded-2xl w-80 shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+            <div className="text-base font-black text-white mb-1">Unadd friend?</div>
+            <div className="text-sm text-muted mb-5">Remove <span className="text-white font-bold">{confirmUnadd.username}</span> from your friends list.</div>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setConfirmUnadd(null)} className="px-4 py-2 text-sm text-muted hover:text-white border border-surfaceLight rounded-xl transition-all">Cancel</button>
+              <button
+                onClick={() => { remove(confirmUnadd.id); setConfirmUnadd(null); }}
+                className="px-4 py-2 text-sm font-bold text-white bg-danger/80 hover:bg-danger rounded-xl transition-all"
+              >
+                Unadd
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Friend profile popup */}
+    {viewingFriend && (
+      <FriendProfilePopup
+        userId={viewingFriend.id}
+        username={viewingFriend.username}
+        onClose={() => setViewingFriend(null)}
+      />
+    )}
+    </>
   );
 }
 
