@@ -43,7 +43,7 @@ async function verifyToken(token) {
   // Fast path: local verification with JWT secret (no network call, no rate limits).
   if (process.env.SUPABASE_JWT_SECRET) {
     try {
-      const payload = jwt.verify(token, process.env.SUPABASE_JWT_SECRET);
+      const payload = jwt.verify(token, process.env.SUPABASE_JWT_SECRET, { algorithms: ['HS256'] });
       return {
         id: payload.sub,
         email: payload.email ?? null,
