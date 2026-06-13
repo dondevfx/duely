@@ -211,7 +211,7 @@ export function AuthProvider({ children }) {
     if (!session || profile || loading) return;
     const interval = setInterval(() => {
       fetchProfile({ clearOnFail: false }).catch(() => {});
-    }, 10_000);
+    }, 4_000);
     return () => clearInterval(interval);
   }, [session, !!profile, loading, fetchProfile]); // eslint-disable-line react-hooks/exhaustive-deps
   // Safety net interval is 10s (not 3s) to avoid hammering /auth/me when it's
