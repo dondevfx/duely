@@ -690,7 +690,6 @@ export default function BlockBlastGame() {
               label: 'Score',
               value: `${(isWinner ? (result.winnerScore ?? 0) : (result.loserScore ?? 0)).toLocaleString()} — ${(isWinner ? (result.loserScore ?? 0) : (result.winnerScore ?? 0)).toLocaleString()}`,
             }]}
-            onRematch={result.draw || result.disconnected ? undefined : requestRematch}
             onPlayAgain={backToLobby}
             onBackToLobby={backToLobby}
           />
