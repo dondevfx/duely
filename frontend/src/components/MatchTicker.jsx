@@ -112,11 +112,7 @@ export default function MatchTicker() {
       className={`flex flex-col items-center justify-center gap-1.5 py-3 px-1 bg-surface border rounded-xl overflow-hidden shrink-0${
         i === 0 ? ' animate-pop-in' : ''
       }`}
-      style={{
-        height: 90,
-        width: 80,
-        borderColor: item.fake ? undefined : 'rgba(30,144,255,0.3)',
-      }}
+      style={{ height: 90, width: 80 }}
     >
       <span className="text-3xl leading-none shrink-0">{item.game.icon}</span>
       <span className="text-[9px] text-muted font-medium leading-none w-full text-center truncate px-1">
