@@ -24,7 +24,8 @@ function ResultTimer({ seconds = 10, onTimeout }) {
   return (
     <div className="text-center mt-4">
       <div
-        className={`text-5xl font-black font-mono transition-colors ${flashing ? 'animate-pulse' : ''}`}
+        key={remaining}
+        className={`text-5xl font-black font-mono ${flashing ? 'animate-pulse' : ''}`}
         style={{ color: remaining <= 3 ? '#ef4444' : flashing ? '#f97316' : '#64748b' }}
       >
         {remaining}

@@ -157,14 +157,18 @@ async function handleBlockBlastStuck(io, supabase, roomId, socketId, score = 0) 
     io.to(roomId).emit('block_blast_player_stuck', { stuckUserId: stuckPlayer.userId });
   }
 
-  // If opponent already has a higher score → instant resolve
-  const otherScore = otherPlayer ? (room.scores[otherPlayer.socketId] ?? -1) : -1;
-  if (otherScore > trackedScore) {
+  // Use live ping score (updated every few seconds) to check if opponent is already ahead.
+  // room.scores is only set when a player finishes — not reliable for live comparison.
+  const otherLiveScore = otherPlayer
+    ? (room.pingScores[otherPlayer.socketId] ?? room.scores[otherPlayer.socketId] ?? -1)
+    : -1;
+  if (otherLiveScore > trackedScore) {
+    // Opponent is already winning — no comeback possible, end immediately
     await _resolveFromScores(io, supabase, roomId);
     return;
   }
 
-  // Otherwise give the other player 30 seconds to beat the stuck player's score
+  // Opponent is behind or tied — give them 30 seconds to try and beat the stuck player's score
   if (otherPlayer) {
     io.to(otherPlayer.socketId).emit('block_blast_keep_playing', { seconds: 30 });
     room.stuckTimer = setTimeout(async () => {
@@ -264,8 +268,9 @@ async function _resolveFromScores(io, supabase, roomId) {
   const room = getBlockBlastRoom(roomId);
   if (!room) return;
   const [p1, p2] = room.players;
-  const s1 = room.scores[p1.socketId] ?? 0;
-  const s2 = room.scores[p2.socketId] ?? 0;
+  // Prefer submitted final score; fall back to last ping score for players still playing
+  const s1 = room.scores[p1.socketId] ?? room.pingScores[p1.socketId] ?? 0;
+  const s2 = room.scores[p2.socketId] ?? room.pingScores[p2.socketId] ?? 0;
   const winner = s1 >= s2 ? p1 : p2;
   const loser  = s1 >= s2 ? p2 : p1;
   await _resolve(io, supabase, roomId, winner, loser, Math.max(s1, s2), Math.min(s1, s2));
