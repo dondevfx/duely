@@ -227,20 +227,22 @@ module.exports = function authRoutes(supabase) {
     res.json(data || []);
   });
 
+  const ADMIN_ID = process.env.ADMIN_USER_ID;
+
   // Send by username (from profile friends panel)
   router.post('/friend-request', requireAuth, async (req, res) => {
     const myId = req.user.id;
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Username required' });
     const { data: target } = await supabase.from('profiles').select('id').eq('username', username.trim()).maybeSingle();
-    if (!target) return res.status(404).json({ error: 'User not found' });
+    if (!target || target.id === ADMIN_ID) return res.status(404).json({ error: 'User not found' });
     if (target.id === myId) return res.status(400).json({ error: 'Cannot friend yourself' });
     const { data: existing } = await supabase.from('friends').select('id,status')
       .or(`and(requester_id.eq.${myId},addressee_id.eq.${target.id}),and(requester_id.eq.${target.id},addressee_id.eq.${myId})`)
       .maybeSingle();
     if (existing) return res.status(400).json({ error: existing.status === 'accepted' ? 'Already friends' : 'Request already sent' });
     const { error } = await supabase.from('friends').insert({ requester_id: myId, addressee_id: target.id });
-    if (error) return res.status(400).json({ error: error.message });
+    if (error) return res.status(400).json({ error: 'User not found' });
     res.json({ ok: true });
   });
 
@@ -250,12 +252,13 @@ module.exports = function authRoutes(supabase) {
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId required' });
     if (userId === myId) return res.status(400).json({ error: 'Cannot friend yourself' });
+    if (userId === ADMIN_ID) return res.status(404).json({ error: 'User not found' });
     const { data: existing } = await supabase.from('friends').select('id,status')
       .or(`and(requester_id.eq.${myId},addressee_id.eq.${userId}),and(requester_id.eq.${userId},addressee_id.eq.${myId})`)
       .maybeSingle();
     if (existing) return res.status(400).json({ error: existing.status === 'accepted' ? 'Already friends' : 'Request already sent' });
     const { error } = await supabase.from('friends').insert({ requester_id: myId, addressee_id: userId });
-    if (error) return res.status(400).json({ error: error.message });
+    if (error) return res.status(400).json({ error: 'User not found' });
     res.json({ ok: true });
   });
 
