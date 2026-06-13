@@ -15,7 +15,7 @@ function RankBadge({ rank }) {
 
 const TABS = [
   { id: 'elo',             label: 'ELO',             icon: '⚔️', endpoint: '/leaderboard',                 valueKey: 'elo',           isDiamond: false, label2: 'Rating' },
-  { id: 'wagered',         label: 'Wagered',          icon: '',   endpoint: '/leaderboard/wagered',         valueKey: 'total_wagered', isDiamond: false, label2: 'Wagered' },
+  { id: 'wagered',         label: 'Wagered',          icon: 'coin', endpoint: '/leaderboard/wagered',       valueKey: 'total_wagered', isDiamond: false, label2: 'Wagered' },
   { id: 'wagered-diamonds',label: '💎 Wagered',       icon: '',   endpoint: '/leaderboard/wagered-diamonds',valueKey: 'total_wagered', isDiamond: true,  label2: 'Wagered' },
   { id: 'games',           label: 'Games',           icon: '🎮', endpoint: null,                           valueKey: null,            isDiamond: false, label2: 'Score' },
   { id: 'streak',          label: '🔥 Streaks',       icon: '',   endpoint: '/leaderboard/streak',          valueKey: 'current_streak',isDiamond: false, label2: 'Streak' },
@@ -115,7 +115,7 @@ export default function Leaderboard() {
       const myEntry = players.find(p => p.id === profile.id);
       const w = myEntry?.total_wagered ?? current?.userWagered ?? 0;
       if (tab.isDiamond) return `💎 ${Number(w).toLocaleString()}`;
-      return `${Number(w).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} coins`;
+      return <span className="inline-flex items-center gap-1"><CoinIcon size="0.85em" />{Number(w).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
     }
     if (tab.id === 'streak') return `🔥 ${profile?.current_streak ?? 0}`;
     return '';
@@ -162,7 +162,7 @@ export default function Leaderboard() {
                   : 'text-muted hover:text-white'
               }`}
             >
-              {t.icon && <span>{t.icon}</span>}
+              {t.icon === 'coin' ? <CoinIcon size="0.9em" /> : t.icon ? <span>{t.icon}</span> : null}
               <span>{t.icon ? t.label2 || t.label : t.label}</span>
             </button>
           ))}

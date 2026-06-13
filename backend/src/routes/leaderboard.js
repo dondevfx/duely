@@ -174,14 +174,24 @@ module.exports = function leaderboardRoutes(supabase) {
     res.json({ players, userRank });
   });
 
-  // Total wagered leaderboard — computed from matches table
+  // Returns the start of the current week (Monday 00:00:00 UTC)
+  function weekStart() {
+    const now = new Date();
+    const day = now.getUTCDay(); // 0=Sun, 1=Mon … 6=Sat
+    const diff = (day === 0 ? 6 : day - 1); // days since Monday
+    const mon = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - diff));
+    return mon.toISOString();
+  }
+
+  // Total wagered leaderboard — current week only (resets every Monday)
   router.get('/wagered', async (req, res) => {
     const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
     const { data: matchData, error } = await supabase
       .from('matches')
       .select('player1_id, player2_id, entry_fee_c')
       .not('entry_fee_c', 'is', null)
-      .gt('entry_fee_c', 0);
+      .gt('entry_fee_c', 0)
+      .gte('played_at', weekStart());
     if (error) return res.status(500).json({ error: error.message });
 
     const wageredMap = {};
@@ -229,14 +239,15 @@ module.exports = function leaderboardRoutes(supabase) {
     res.json({ players, userRank, userWagered });
   });
 
-  // Total wagered diamonds leaderboard — computed from matches table
+  // Total wagered diamonds leaderboard — current week only (resets every Monday)
   router.get('/wagered-diamonds', async (req, res) => {
     const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
     const { data: matchData, error } = await supabase
       .from('matches')
       .select('player1_id, player2_id, entry_fee_diamonds')
       .not('entry_fee_diamonds', 'is', null)
-      .gt('entry_fee_diamonds', 0);
+      .gt('entry_fee_diamonds', 0)
+      .gte('played_at', weekStart());
     if (error) return res.status(500).json({ error: error.message });
 
     const wageredMap = {};
