@@ -329,12 +329,18 @@ export function AuthProvider({ children }) {
     [fetchProfile],
   );
 
+  // updateProfile: optimistic balance patch — merges partial state instantly
+  const updateProfile = useCallback(
+    (partial) => setProfile(prev => prev ? { ...prev, ...partial } : prev),
+    [],
+  );
+
   return (
     <AuthContext.Provider value={{
       session, profile, loading,
       mfaPending, mfaFactorId,
       showSaveLogin, setShowSaveLogin,
-      signUp, signIn, signOut, refreshProfile, completeMfaLogin,
+      signUp, signIn, signOut, refreshProfile, updateProfile, completeMfaLogin,
     }}>
       {children}
     </AuthContext.Provider>

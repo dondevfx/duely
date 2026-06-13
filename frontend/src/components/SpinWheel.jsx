@@ -69,7 +69,7 @@ function fmtCountdown(ms) {
 }
 
 export default function SpinWheel({ locked = false }) {
-  const { refreshProfile } = useAuth();
+  const { refreshProfile, updateProfile, profile } = useAuth();
   const [status,    setStatus]    = useState({ canSpin: false });
   const [spinning,  setSpinning]  = useState(false);
   const [rotation,  setRotation]  = useState(0);
@@ -124,6 +124,7 @@ export default function SpinWheel({ locked = false }) {
     setErr('');
     try {
       const { prize } = await api.post('/bonus/spin', {});
+      updateProfile({ diamonds: Math.max(0, (profile?.diamonds ?? 0) + prize) });
       const idx    = prizeToSeg(prize);
       const center = idx * STEP + STEP / 2;
       const curMod = ((rotRef.current % 360) + 360) % 360;

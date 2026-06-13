@@ -144,7 +144,7 @@ function checkIsStuck(grid, tray) {
 
 export default function BlockBlastGame() {
   const ready = usePageReady();
-  const { profile, refreshProfile } = useAuth();
+  const { profile, refreshProfile, updateProfile } = useAuth();
   const { socket, authenticated, doAuth, playerCounts } = useSocket();
   const location = useLocation();
 
@@ -317,6 +317,17 @@ export default function BlockBlastGame() {
       setResult(res);
       setPhase('result');
       setGameOver(true);
+      const myId = profileRef.current?.id;
+      const isWin = res.winnerId === myId;
+      const payout = res.balanceChange?.winnerPayout ?? res.winnerPayout;
+      const fee = res.entryFee ?? 0;
+      if (payout != null) {
+        const isDiamonds = res.currency === 'diamonds';
+        updateProfile(isDiamonds
+          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + (isWin ? payout : -fee)) }
+          : { c_coins: Math.max(0, (profileRef.current?.c_coins ?? 0) + (isWin ? payout : -fee)) }
+        );
+      }
       refreshProfile();
     });
 
@@ -349,6 +360,13 @@ export default function BlockBlastGame() {
       const myId = profileRef.current?.id;
       const isWin = data.winnerId === myId;
       const payout = data.winnerPayout ?? null;
+      if (payout != null) {
+        const isDiamonds = data.currency === 'diamonds';
+        updateProfile(isDiamonds
+          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + (isWin ? payout : -(data.entryFee ?? 0))) }
+          : { c_coins: Math.max(0, (profileRef.current?.c_coins ?? 0) + (isWin ? payout : -(data.entryFee ?? 0))) }
+        );
+      }
       // Use server-provided ELO values to compute accurate delta (avoids stale eloBeforeRef)
       if (data.newWinnerElo != null) eloBeforeRef.current = isWin ? data.newWinnerElo - 25 : data.newLoserElo + 25;
       setResult({

@@ -156,7 +156,7 @@ export default function BlackjackGame() {
   const ready = usePageReady();
   const navigate = useNavigate();
   const location = useLocation();
-  const { profile, session, refreshProfile } = useAuth();
+  const { profile, session, refreshProfile, updateProfile } = useAuth();
   const { socket, authenticated, playerCounts, betCounts } = useSocket();
   const { displayCurrency: betCurrency, setDisplayCurrency: setBetCurrency } = useCurrency();
   const eloBeforeRef    = useRef(profile?.elo ?? 1000);
@@ -372,6 +372,17 @@ export default function BlackjackGame() {
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
       setRevealData(data);
       setPhase('reveal');
+      const myId = profileRef.current?.id;
+      const isWin = data.winnerId === myId;
+      const payout = data.balanceChange?.winnerPayout ?? data.winnerPayout;
+      const fee = data.entryFee ?? 0;
+      if (payout != null) {
+        const isDiamonds = data.currency === 'diamonds';
+        updateProfile(isDiamonds
+          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + (isWin ? payout : -fee)) }
+          : { c_coins: Math.max(0, (profileRef.current?.c_coins ?? 0) + (isWin ? payout : -fee)) }
+        );
+      }
       refreshProfile();
       // Brief pause then flip opponent cards
       setTimeout(() => setFlippingOpp(true), 150);
@@ -389,6 +400,13 @@ export default function BlackjackGame() {
       const myId = profileRef.current?.id;
       const isWin = data.winnerId === myId;
       const payout = data.winnerPayout ?? null;
+      if (payout != null) {
+        const isDiamonds = data.currency === 'diamonds';
+        updateProfile(isDiamonds
+          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + (isWin ? payout : -(data.entryFee ?? 0))) }
+          : { c_coins: Math.max(0, (profileRef.current?.c_coins ?? 0) + (isWin ? payout : -(data.entryFee ?? 0))) }
+        );
+      }
       // Use server-provided ELO values to compute accurate delta (avoids stale eloBeforeRef)
       if (data.newWinnerElo != null) eloBeforeRef.current = isWin ? data.newWinnerElo - 25 : data.newLoserElo + 25;
       setResultData({

@@ -137,7 +137,7 @@ export default function CoinFlipGame() {
   const ready = usePageReady();
   const navigate = useNavigate();
   const location = useLocation();
-  const { profile, session, refreshProfile } = useAuth();
+  const { profile, session, refreshProfile, updateProfile } = useAuth();
   const { socket, authenticated, playerCounts, betCounts } = useSocket();
   const { displayCurrency: betCurrency, setDisplayCurrency: setBetCurrency } = useCurrency();
   const eloBeforeRef    = useRef(profile?.elo ?? 1000);
@@ -308,12 +308,25 @@ export default function CoinFlipGame() {
       setFlipResult(data.result);
       landCoin(data.result);
 
+      // Optimistic balance update — backend has already settled by the time this event fires
+      const myId = profile?.id;
+      const isWin = data.winnerId === myId;
+      const payout = data.balanceChange?.winnerPayout;
+      const fee = data.entryFee ?? 0;
+      if (payout != null) {
+        const isDiamonds = data.currency === 'diamonds';
+        updateProfile(isDiamonds
+          ? { diamonds: Math.max(0, (profile?.diamonds ?? 0) + (isWin ? payout : -fee)) }
+          : { c_coins: Math.max(0, (profile?.c_coins ?? 0) + (isWin ? payout : -fee)) }
+        );
+      }
+
       // After transition completes show label for 2s, then result screen
       setTimeout(() => setResultLanded(true), 4200);
       setTimeout(() => {
         setResultData(pendingResultRef.current);
         setPhase('result');
-        refreshProfile(); // update balance/ELO when result screen shows
+        refreshProfile(); // server-confirm balance
       }, 6200);
     });
 
@@ -323,6 +336,13 @@ export default function CoinFlipGame() {
       const myId = profile?.id;
       const isWin = data.winnerId === myId;
       const payout = data.winnerPayout ?? null;
+      if (payout != null) {
+        const isDiamonds = data.currency === 'diamonds';
+        updateProfile(isDiamonds
+          ? { diamonds: Math.max(0, (profile?.diamonds ?? 0) + (isWin ? payout : -(data.entryFee ?? 0))) }
+          : { c_coins: Math.max(0, (profile?.c_coins ?? 0) + (isWin ? payout : -(data.entryFee ?? 0))) }
+        );
+      }
       // Use server-provided ELO values to compute accurate delta (avoids stale eloBeforeRef)
       if (data.newWinnerElo != null) eloBeforeRef.current = isWin ? data.newWinnerElo - 25 : data.newLoserElo + 25;
       setResultData({

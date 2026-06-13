@@ -157,7 +157,7 @@ function fmtCountdown(ms) {
 
 // ── Single rank wheel card ─────────────────────────────────────────────────
 // Each card owns its own spin state independently
-function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete, lockText }) {
+function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete, lockText, onPrizeWon }) {
   const [spinning,       setSpinning]       = useState(false);
   const [won,            setWon]            = useState(null);
   const [err,            setErr]            = useState('');
@@ -218,6 +218,7 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
     setErr('');
     try {
       const { prize, nextSpinAt } = await api.post('/rewards/spin', { tier: tier.id });
+      if (onPrizeWon) onPrizeWon(prize);
 
       const idx = prizeToSegIdx(prize, tier.prizes);
       const center = idx * STEP + STEP / 2;
@@ -514,7 +515,7 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
 
 // ── Main Rewards page ──────────────────────────────────────────────────────
 export default function Rewards() {
-  const { profile, session, refreshProfile } = useAuth();
+  const { profile, session, refreshProfile, updateProfile } = useAuth();
   const elo        = profile?.elo ?? 1000;
   const activeTier = getTierId(elo);
 
@@ -580,6 +581,7 @@ export default function Rewards() {
                 isActive={isActive}
                 statusInfo={session ? statusMap[tier.id] : undefined}
                 onSpinComplete={() => { fetchStatus(); refreshProfile(); }}
+                onPrizeWon={(prize) => updateProfile({ diamonds: Math.max(0, (profile?.diamonds ?? 0) + prize) })}
                 lockText={lockText}
               />
             );
