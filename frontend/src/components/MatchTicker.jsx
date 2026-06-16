@@ -16,22 +16,38 @@ const GAME_LIST = Object.values(GAME_META);
 const COIN_POOL    = [1, 5, 10];
 const DIAMOND_POOL = [100, 250, 500];
 
-function makeFakeItem() {
+// Unique key for a game+payout combo — used to detect repeats
+function itemKey(item) {
+  return `${item.game.name}-${item.payout}-${item.diamonds ? 'd' : 'c'}`;
+}
+
+// Returns true if the same key appears 2+ times in the last 2 items
+function wouldRepeat(key, recentItems) {
+  return recentItems.slice(0, 2).filter(it => itemKey(it) === key).length >= 2;
+}
+
+function makeFakeItem(recentItems = []) {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const game    = GAME_LIST[Math.floor(Math.random() * GAME_LIST.length)];
+    const diamonds = Math.random() < 0.4;
+    const pool    = diamonds ? DIAMOND_POOL : COIN_POOL;
+    const fee     = pool[Math.floor(Math.random() * pool.length)];
+    const payout  = diamonds ? fee * 2 : parseFloat((fee * 2 * 0.95).toFixed(2));
+    const candidate = {
+      id: `fake-${Date.now()}-${Math.random()}`,
+      game, payout, diamonds,
+      vsBot: Math.random() < 0.25,
+      fake: true,
+    };
+    if (!wouldRepeat(itemKey(candidate), recentItems)) return candidate;
+  }
+  // Fallback — generate without constraint if all combos exhausted
   const game    = GAME_LIST[Math.floor(Math.random() * GAME_LIST.length)];
   const diamonds = Math.random() < 0.4;
-  const fee     = diamonds
-    ? DIAMOND_POOL[Math.floor(Math.random() * DIAMOND_POOL.length)]
-    : COIN_POOL[Math.floor(Math.random() * COIN_POOL.length)];
+  const pool    = diamonds ? DIAMOND_POOL : COIN_POOL;
+  const fee     = pool[Math.floor(Math.random() * pool.length)];
   const payout  = diamonds ? fee * 2 : parseFloat((fee * 2 * 0.95).toFixed(2));
-  const vsBot   = Math.random() < 0.25;
-  return {
-    id: `fake-${Date.now()}-${Math.random()}`,
-    game,
-    payout,
-    diamonds,
-    vsBot,
-    fake: true,
-  };
+  return { id: `fake-${Date.now()}-${Math.random()}`, game, payout, diamonds, vsBot: Math.random() < 0.25, fake: true };
 }
 
 function makeRealItem(match) {
@@ -42,13 +58,28 @@ function makeRealItem(match) {
   const payout = diamonds ? fee * 2 : parseFloat((fee * 2 * 0.95).toFixed(2));
   return {
     id: `real-${match.id}`,
-    game,
-    payout,
-    diamonds,
+    game, payout, diamonds,
     vsBot: !match.player2_id,
     fake: false,
-    winner: match.winner_username,
   };
+}
+
+// Pick the next item to display, avoiding repeating the same game+payout within 2 consecutive tiles
+function pickNext(recentItems, realPool) {
+  const useReal = realPool.length > 0 && Math.random() < 0.70;
+
+  if (useReal) {
+    // Shuffle real pool and find first non-repeating candidate
+    const shuffled = [...realPool].sort(() => Math.random() - 0.5);
+    for (const candidate of shuffled) {
+      if (!wouldRepeat(itemKey(candidate), recentItems)) {
+        return { ...candidate, id: `real-${Date.now()}-${Math.random()}` };
+      }
+    }
+    // All real combos would repeat — fall through to fake
+  }
+
+  return makeFakeItem(recentItems);
 }
 
 function fmtPayout(payout, diamonds) {
@@ -64,19 +95,27 @@ function fmtPayout(payout, diamonds) {
 
 const MAX = 14;
 
-export default function MatchTicker() {
-  const [items, setItems] = useState(() => Array.from({ length: MAX }, () => makeFakeItem()));
-  const timerRef  = useRef(null);
-  const realPool  = useRef([]); // cached real match items
+// Build the initial list with variety enforced from the start
+function buildInitialItems() {
+  const result = [];
+  for (let i = 0; i < MAX; i++) {
+    result.push(makeFakeItem(result));
+  }
+  return result;
+}
 
-  // Fetch recent real matches once on mount — seed display immediately when loaded
+export default function MatchTicker() {
+  const [items, setItems] = useState(buildInitialItems);
+  const timerRef  = useRef(null);
+  const realPool  = useRef([]);
+
+  // Fetch recent real matches once on mount
   useEffect(() => {
     api.get('/match/recent').then(matches => {
       if (Array.isArray(matches) && matches.length > 0) {
         const real = matches.map(makeRealItem).filter(m => m.payout > 0);
         realPool.current = real;
         if (real.length > 0) {
-          // Replace initial fakes with real matches mixed in
           setItems(prev => {
             const seeded = [...prev];
             real.slice(0, MAX).forEach((r, i) => {
@@ -93,12 +132,10 @@ export default function MatchTicker() {
     function scheduleNext() {
       const delay = 3000 + Math.random() * 2000;
       timerRef.current = setTimeout(() => {
-        // 70% chance to show a real match if we have any
-        const useReal = realPool.current.length > 0 && Math.random() < 0.70;
-        const next = useReal
-          ? { ...realPool.current[Math.floor(Math.random() * realPool.current.length)], id: `real-${Date.now()}` }
-          : makeFakeItem();
-        setItems(prev => [next, ...prev].slice(0, MAX));
+        setItems(prev => {
+          const next = pickNext(prev, realPool.current);
+          return [next, ...prev].slice(0, MAX);
+        });
         scheduleNext();
       }, delay);
     }
