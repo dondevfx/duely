@@ -130,7 +130,8 @@ export default function MatchTicker() {
 
   useEffect(() => {
     function scheduleNext() {
-      const delay = 3000 + Math.random() * 2000;
+      // 450–600ms between tiles — feels like a live match feed (~2/sec)
+      const delay = 450 + Math.random() * 150;
       timerRef.current = setTimeout(() => {
         setItems(prev => {
           const next = pickNext(prev, realPool.current);
