@@ -308,11 +308,12 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
     try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
     try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
     try {
-      // Human won: increment their streak, reset loser streak if loser is human
-      ({ winnerStreak, isFirstWin } = await updateStreaks(supabase, winner.userId, loser.isBot ? null : loser.userId));
+      // Human won: increment their streak
+      ({ winnerStreak, isFirstWin } = await updateStreaks(supabase, winner.userId, null));
     } catch { /* streak columns may not exist yet */ }
-  } else if (supabase && !isFree && winner.isBot && !loser.isBot) {
-    // Bot won a paid game: reset human loser's streak
+  }
+  // Always reset human loser's streak — any game, free or paid, vs bot or human
+  if (supabase && !loser.isBot) {
     try { await supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId); } catch {}
   }
   if (supabase && !isFree && !loser.isBot) {

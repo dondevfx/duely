@@ -390,12 +390,13 @@ async function _resolveGame(io, supabase, roomId) {
         try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch (e) { console.error('[blackjackEngine] increment_loss:', e.message); }
       }
       if (!winner.isBot) {
-        // Human won: increment their streak, and reset loser streak if loser is also human
-        try { ({ winnerStreak, isFirstWin } = await updateStreaks(supabase, winner.userId, loser.isBot ? null : loser.userId)); } catch (e) { console.error('[blackjackEngine] updateStreaks:', e.message); }
-      } else if (!loser.isBot) {
-        // Bot won a paid game: reset human loser's streak
-        try { await supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId); } catch (e) { console.error('[blackjackEngine] reset streak:', e.message); }
+        // Human won: increment their streak
+        try { ({ winnerStreak, isFirstWin } = await updateStreaks(supabase, winner.userId, null)); } catch (e) { console.error('[blackjackEngine] updateStreaks:', e.message); }
       }
+    }
+    // Always reset human loser's streak — any game, free or paid, vs bot or human
+    if (!loser.isBot) {
+      try { await supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId); } catch (e) { console.error('[blackjackEngine] reset streak:', e.message); }
     }
     try {
       await supabase.from('matches').insert({

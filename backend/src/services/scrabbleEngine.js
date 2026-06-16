@@ -468,16 +468,17 @@ async function _endGame(io, supabase, roomId, reason) {
       if (!winner.isBot) {
         await applyEloUpdate(supabase, winner.userId, newWinnerElo);
         await supabase.rpc('increment_win', { uid: winner.userId }).catch(() => {});
-        // Human won: increment their streak, reset loser streak if loser is human
-        try { await updateStreaks(supabase, winner.userId, loser.isBot ? null : loser.userId); } catch {}
-      } else if (!loser.isBot) {
-        // Bot won a paid game: reset human loser's streak
-        await supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId).catch(() => {});
+        // Human won: increment their streak
+        try { await updateStreaks(supabase, winner.userId, null); } catch {}
       }
       if (!loser.isBot) {
         await applyEloUpdate(supabase, loser.userId, newLoserElo);
         await supabase.rpc('increment_loss', { uid: loser.userId }).catch(() => {});
       }
+    }
+    // Always reset human loser's streak — any game, free or paid, vs bot or human
+    if (!loser.isBot) {
+      supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId).catch(() => {});
     }
     if (!winner.isBot) await updateHighscore(supabase, winner.userId, 'wordVS', winnerScore).catch(() => {});
     if (!loser.isBot)  await updateHighscore(supabase, loser.userId,  'wordVS', loserScore).catch(() => {});

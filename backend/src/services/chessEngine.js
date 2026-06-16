@@ -184,8 +184,12 @@ async function handleChessGameOver(io, supabase, roomId, winnerSocketId, reason)
       await supabase.rpc('increment_win', { uid: winner.userId });
     } catch (e) { console.error('[chessEngine] RPC failed:', e.message); }
     try {
-      ({ winnerStreak, isFirstWin } = await updateStreaks(supabase, winner.userId, loser.isBot ? null : loser.userId));
+      ({ winnerStreak, isFirstWin } = await updateStreaks(supabase, winner.userId, null));
     } catch { /* streak columns may not exist yet */ }
+  }
+  // Always reset human loser's streak — any game, free or paid, vs bot or human
+  if (supabase && !loser.isBot) {
+    supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId).catch(() => {});
   }
   if (supabase && !loser.isBot) {
     try {

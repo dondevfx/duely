@@ -202,8 +202,12 @@ async function handlePianoDeath(io, supabase, roomId, socketId, tilesHit) {
       await supabase.rpc('increment_win', { uid: actualWinner.userId });
     } catch (e) { console.error('[pianoTilesEngine] RPC failed:', e.message); }
     try {
-      ({ winnerStreak, isFirstWin } = await updateStreaks(supabase, actualWinner.userId, actualLoser.isBot ? null : actualLoser.userId));
+      ({ winnerStreak, isFirstWin } = await updateStreaks(supabase, actualWinner.userId, null));
     } catch { /* streak columns may not exist yet */ }
+  }
+  // Always reset human loser's streak — any game, free or paid, vs bot or human
+  if (supabase && !actualLoser.isBot) {
+    supabase.from('profiles').update({ current_streak: 0 }).eq('id', actualLoser.userId).catch(() => {});
   }
   if (supabase && !actualLoser.isBot) {
     try {

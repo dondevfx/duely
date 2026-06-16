@@ -118,12 +118,13 @@ async function resolveCoinFlip(io, supabase, roomId) {
         try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch {}
       }
       if (!winner.isBot) {
-        // Human won: increment their streak, reset loser streak if loser is human
-        try { ({ winnerStreak, isFirstWin } = await updateStreaks(supabase, winner.userId, loser.isBot ? null : loser.userId)); } catch {}
-      } else if (!loser.isBot) {
-        // Bot won a paid game: reset human loser's streak
-        try { await supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId); } catch {}
+        // Human won: increment their streak
+        try { ({ winnerStreak, isFirstWin } = await updateStreaks(supabase, winner.userId, null)); } catch {}
       }
+    }
+    // Always reset human loser's streak — any game, free or paid, vs bot or human
+    if (!loser.isBot) {
+      try { await supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId); } catch {}
     }
     try {
       await supabase.from('matches').insert({
