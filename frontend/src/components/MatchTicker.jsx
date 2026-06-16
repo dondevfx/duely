@@ -12,9 +12,9 @@ const GAME_META = {
 
 const GAME_LIST = Object.values(GAME_META);
 
-// Match real bet sizes exactly
-const COIN_POOL    = [1, 1, 1, 5, 5, 10];
-const DIAMOND_POOL = [100, 100, 250, 250, 500];
+// All real bet sizes available across games
+const COIN_POOL    = [0.5, 1, 1, 2, 5, 5, 10, 25];
+const DIAMOND_POOL = [50, 100, 100, 250, 250, 500, 1000];
 
 function makeFakeItem() {
   const game    = GAME_LIST[Math.floor(Math.random() * GAME_LIST.length)];

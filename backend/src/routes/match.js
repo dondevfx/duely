@@ -12,6 +12,7 @@ module.exports = function matchRoutes(supabase) {
         id,
         winner_id,
         entry_fee_c,
+        entry_fee_diamonds,
         game_type,
         played_at,
         winner:profiles!winner_id(username)
@@ -22,7 +23,6 @@ module.exports = function matchRoutes(supabase) {
 
     if (error) return res.status(500).json({ error: error.message });
 
-    // also try to get diamond fee if column exists (added by later migration)
     const rows = (data ?? []).map(r => ({ ...r, entry_fee_diamonds: r.entry_fee_diamonds ?? 0 }));
     res.json(rows);
   });
