@@ -128,15 +128,20 @@ export default function MatchTicker() {
     }).catch(() => {});
   }, []);
 
+  const itemsRef   = useRef(items);
+  const lastRealRef = useRef(false);
+  useEffect(() => { itemsRef.current = items; }, [items]);
+
   useEffect(() => {
     function scheduleNext() {
-      // 450–600ms between tiles — feels like a live match feed (~2/sec)
-      const delay = 450 + Math.random() * 150;
+      // Real matches pop in fast (~2/sec); fake items fill gaps slower
+      const delay = lastRealRef.current
+        ? 450 + Math.random() * 150    // 450–600ms after a real match
+        : 3000 + Math.random() * 2000; // 3–5s for fake filler
       timerRef.current = setTimeout(() => {
-        setItems(prev => {
-          const next = pickNext(prev, realPool.current);
-          return [next, ...prev].slice(0, MAX);
-        });
+        const next = pickNext(itemsRef.current, realPool.current);
+        lastRealRef.current = !next.fake;
+        setItems(prev => [next, ...prev].slice(0, MAX));
         scheduleNext();
       }, delay);
     }
