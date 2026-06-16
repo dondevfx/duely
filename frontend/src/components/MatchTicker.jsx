@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import CoinIcon from './CoinIcon';
 import { api } from '../utils/api';
 
-// Only games currently live on the site
 const GAME_META = {
   block_blast: { icon: '🟦', name: 'Block Burst' },
   scrabble:    { icon: '🔤', name: 'Word VS'     },
@@ -11,75 +10,42 @@ const GAME_META = {
 };
 
 const GAME_LIST = Object.values(GAME_META);
-
-// Matches the 3 bet sizes on the bet screen
 const COIN_POOL    = [1, 5, 10];
 const DIAMOND_POOL = [100, 250, 500];
 
-// Unique key for a game+payout combo — used to detect repeats
-function itemKey(item) {
-  return `${item.game.name}-${item.payout}-${item.diamonds ? 'd' : 'c'}`;
+// Just the fee amount (not game) — used for fake repeat check
+function feeKey(item) {
+  return `${item.fee}-${item.diamonds ? 'd' : 'c'}`;
 }
 
-// Returns true if the same key appears 2+ times in the last 2 items
-function wouldRepeat(key, recentItems) {
-  return recentItems.slice(0, 2).filter(it => itemKey(it) === key).length >= 2;
-}
-
-function makeFakeItem(recentItems = []) {
+function makeFakeItem(lastFeeKey = null) {
+  // Try up to 10 times to avoid the same bet size as the previous fake
   for (let attempt = 0; attempt < 10; attempt++) {
-    const game    = GAME_LIST[Math.floor(Math.random() * GAME_LIST.length)];
+    const game     = GAME_LIST[Math.floor(Math.random() * GAME_LIST.length)];
     const diamonds = Math.random() < 0.4;
-    const pool    = diamonds ? DIAMOND_POOL : COIN_POOL;
-    const fee     = pool[Math.floor(Math.random() * pool.length)];
-    const payout  = diamonds ? fee * 2 : parseFloat((fee * 2 * 0.95).toFixed(2));
-    const candidate = {
-      id: `fake-${Date.now()}-${Math.random()}`,
-      game, payout, diamonds,
-      vsBot: Math.random() < 0.25,
-      fake: true,
-    };
-    if (!wouldRepeat(itemKey(candidate), recentItems)) return candidate;
+    const pool     = diamonds ? DIAMOND_POOL : COIN_POOL;
+    const fee      = pool[Math.floor(Math.random() * pool.length)];
+    const key      = `${fee}-${diamonds ? 'd' : 'c'}`;
+    if (key !== lastFeeKey) {
+      const payout = diamonds ? fee * 2 : parseFloat((fee * 2 * 0.95).toFixed(2));
+      return { id: `fake-${Date.now()}-${Math.random()}`, game, payout, fee, diamonds, fake: true };
+    }
   }
-  // Fallback — generate without constraint if all combos exhausted
-  const game    = GAME_LIST[Math.floor(Math.random() * GAME_LIST.length)];
+  // Fallback — just pick anything
+  const game     = GAME_LIST[Math.floor(Math.random() * GAME_LIST.length)];
   const diamonds = Math.random() < 0.4;
-  const pool    = diamonds ? DIAMOND_POOL : COIN_POOL;
-  const fee     = pool[Math.floor(Math.random() * pool.length)];
-  const payout  = diamonds ? fee * 2 : parseFloat((fee * 2 * 0.95).toFixed(2));
-  return { id: `fake-${Date.now()}-${Math.random()}`, game, payout, diamonds, vsBot: Math.random() < 0.25, fake: true };
+  const pool     = diamonds ? DIAMOND_POOL : COIN_POOL;
+  const fee      = pool[Math.floor(Math.random() * pool.length)];
+  const payout   = diamonds ? fee * 2 : parseFloat((fee * 2 * 0.95).toFixed(2));
+  return { id: `fake-${Date.now()}-${Math.random()}`, game, payout, fee, diamonds, fake: true };
 }
 
 function makeRealItem(match) {
-  const key = match.game_type || 'block_blast';
-  const game = GAME_META[key] || GAME_META.block_blast;
+  const game     = GAME_META[match.game_type] || GAME_META.block_blast;
   const diamonds = (match.entry_fee_diamonds ?? 0) > 0;
-  const fee = diamonds ? (match.entry_fee_diamonds ?? 0) : (match.entry_fee_c ?? 0);
-  const payout = diamonds ? fee * 2 : parseFloat((fee * 2 * 0.95).toFixed(2));
-  return {
-    id: `real-${match.id}`,
-    game, payout, diamonds,
-    vsBot: !match.player2_id,
-    fake: false,
-  };
-}
-
-// Pick the next item to display, avoiding repeating the same game+payout within 2 consecutive tiles
-function pickNext(recentItems, realPool) {
-  const useReal = realPool.length > 0 && Math.random() < 0.70;
-
-  if (useReal) {
-    // Shuffle real pool and find first non-repeating candidate
-    const shuffled = [...realPool].sort(() => Math.random() - 0.5);
-    for (const candidate of shuffled) {
-      if (!wouldRepeat(itemKey(candidate), recentItems)) {
-        return { ...candidate, id: `real-${Date.now()}-${Math.random()}` };
-      }
-    }
-    // All real combos would repeat — fall through to fake
-  }
-
-  return makeFakeItem(recentItems);
+  const fee      = diamonds ? (match.entry_fee_diamonds ?? 0) : (match.entry_fee_c ?? 0);
+  const payout   = diamonds ? fee * 2 : parseFloat((fee * 2 * 0.95).toFixed(2));
+  return { id: `real-${match.id}`, game, payout, fee, diamonds, fake: false };
 }
 
 function fmtPayout(payout, diamonds) {
@@ -94,53 +60,66 @@ function fmtPayout(payout, diamonds) {
 }
 
 const MAX = 14;
+const MIN_REAL_INTERVAL = 500; // max 2 real matches per second
 
-// Build the initial list with variety enforced from the start
 function buildInitialItems() {
   const result = [];
   for (let i = 0; i < MAX; i++) {
-    result.push(makeFakeItem(result));
+    const last = result[result.length - 1];
+    result.push(makeFakeItem(last ? feeKey(last) : null));
   }
   return result;
 }
 
 export default function MatchTicker() {
-  const [items, setItems] = useState(buildInitialItems);
-  const timerRef  = useRef(null);
-  const realPool  = useRef([]);
+  const [items, setItems]   = useState(buildInitialItems);
+  const timerRef            = useRef(null);
+  const realPool            = useRef([]);
+  const itemsRef            = useRef(items);
+  const lastRealShownAt     = useRef(0);   // timestamp of last real match shown
+  const lastFakeKeyRef      = useRef(null); // fee key of last fake shown
+
+  useEffect(() => { itemsRef.current = items; }, [items]);
 
   // Fetch recent real matches once on mount
   useEffect(() => {
     api.get('/match/recent').then(matches => {
-      if (Array.isArray(matches) && matches.length > 0) {
-        const real = matches.map(makeRealItem).filter(m => m.payout > 0);
-        realPool.current = real;
-        if (real.length > 0) {
-          setItems(prev => {
-            const seeded = [...prev];
-            real.slice(0, MAX).forEach((r, i) => {
-              seeded[i * 2] = { ...r, id: `real-seed-${i}` };
-            });
-            return seeded.slice(0, MAX);
+      if (!Array.isArray(matches)) return;
+      const real = matches.map(makeRealItem).filter(m => m.payout > 0);
+      realPool.current = real;
+      if (real.length > 0) {
+        setItems(prev => {
+          const seeded = [...prev];
+          real.slice(0, MAX).forEach((r, i) => {
+            seeded[i * 2] = { ...r, id: `real-seed-${i}` };
           });
-        }
+          return seeded.slice(0, MAX);
+        });
       }
     }).catch(() => {});
   }, []);
 
-  const itemsRef   = useRef(items);
-  const lastRealRef = useRef(false);
-  useEffect(() => { itemsRef.current = items; }, [items]);
-
   useEffect(() => {
     function scheduleNext() {
-      // Real matches pop in fast (~2/sec); fake items fill gaps slower
-      const delay = lastRealRef.current
-        ? 450 + Math.random() * 150    // 450–600ms after a real match
-        : 3000 + Math.random() * 2000; // 3–5s for fake filler
+      // Fake items: 2–5 second interval
+      const delay = 2000 + Math.random() * 3000;
       timerRef.current = setTimeout(() => {
-        const next = pickNext(itemsRef.current, realPool.current);
-        lastRealRef.current = !next.fake;
+        const pool = realPool.current;
+        const now  = Date.now();
+        const canShowReal = pool.length > 0 && (now - lastRealShownAt.current) >= MIN_REAL_INTERVAL;
+
+        let next;
+        if (canShowReal && Math.random() < 0.70) {
+          // Pick a random real match
+          const pick = pool[Math.floor(Math.random() * pool.length)];
+          next = { ...pick, id: `real-${Date.now()}-${Math.random()}` };
+          lastRealShownAt.current = now;
+        } else {
+          // Fake — avoid same bet size as last fake
+          next = makeFakeItem(lastFakeKeyRef.current);
+          lastFakeKeyRef.current = feeKey(next);
+        }
+
         setItems(prev => [next, ...prev].slice(0, MAX));
         scheduleNext();
       }, delay);
@@ -169,11 +148,9 @@ export default function MatchTicker() {
 
   return (
     <>
-      {/* Mobile: horizontal scroll strip */}
       <div className="lg:hidden flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
         {items.map((item, i) => card(item, i))}
       </div>
-      {/* Desktop: full grid */}
       <div className="hidden lg:grid gap-2" style={{ gridTemplateColumns: `repeat(${MAX}, 1fr)` }}>
         {items.map((item, i) => card(item, i))}
       </div>
