@@ -14,7 +14,7 @@ function RankBadge({ rank }) {
 }
 
 const TABS = [
-  { id: 'elo',             label: 'ELO',             icon: '⚔️', endpoint: '/leaderboard',                 valueKey: 'elo',           isDiamond: false, label2: 'Rating' },
+  { id: 'elo',             label: 'ELO',             icon: '⚔️', endpoint: '/leaderboard',                 valueKey: 'elo',           isDiamond: false, label2: 'ELO' },
   { id: 'wagered',         label: 'Wagered',          icon: 'coin', endpoint: '/leaderboard/wagered',       valueKey: 'total_wagered', isDiamond: false, label2: 'Wagered' },
   { id: 'wagered-diamonds',label: '💎 Wagered',       icon: '',   endpoint: '/leaderboard/wagered-diamonds',valueKey: 'total_wagered', isDiamond: true,  label2: 'Wagered' },
   { id: 'games',           label: 'Games',           icon: '🎮', endpoint: null,                           valueKey: null,            isDiamond: false, label2: 'Score' },

@@ -133,18 +133,21 @@ function FlipCard({ card, flipped, flipDelay = 0 }) {
   );
 }
 
-function ScoreBadge({ score, bust, stood }) {
+function ScoreBadge({ score, bust, stood, isLight = false }) {
   if (score == null) return null;
   const isBust = bust || score > 21;
   const is21 = score === 21;
+  const neutralBg = isLight ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.1)';
+  const neutralColor = isLight ? '#111' : '#fff';
+  const neutralBorder = isLight ? '1px solid rgba(0,0,0,0.15)' : '1px solid rgba(255,255,255,0.15)';
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 4,
       padding: '5px 14px', borderRadius: 20,
       fontWeight: 900, fontSize: 20,
-      background: isBust ? 'rgba(239,68,68,0.2)' : is21 ? 'rgba(251,191,36,0.2)' : 'rgba(255,255,255,0.1)',
-      color: isBust ? '#f87171' : is21 ? '#fbbf24' : '#fff',
-      border: isBust ? '1px solid rgba(239,68,68,0.4)' : is21 ? '1px solid rgba(251,191,36,0.4)' : '1px solid rgba(255,255,255,0.15)',
+      background: isBust ? 'rgba(239,68,68,0.2)' : is21 ? 'rgba(251,191,36,0.2)' : neutralBg,
+      color: isBust ? '#f87171' : is21 ? '#fbbf24' : neutralColor,
+      border: isBust ? '1px solid rgba(239,68,68,0.4)' : is21 ? '1px solid rgba(251,191,36,0.4)' : neutralBorder,
       textShadow: isBust ? '0 0 10px rgba(239,68,68,0.5)' : is21 ? '0 0 10px rgba(251,191,36,0.5)' : 'none',
     }}>
       {isBust ? `Bust (${score})` : stood ? `${score} — Stood` : score}
@@ -626,10 +629,18 @@ export default function BlackjackGame() {
     const timerPct = (timeLeft / 20) * 100;
     const timerColor = timeLeft <= 5 ? '#ef4444' : timeLeft <= 10 ? '#f97316' : '#22c55e';
 
+    const isLight = document.documentElement.classList.contains('light');
+    const gameBg = isLight ? '#ffffff' : '#000000';
+    const textPrimary = isLight ? '#111111' : '#ffffff';
+    const textMuted = isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.4)';
+    const textDim = isLight ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.3)';
+    const divider = isLight ? '1px solid rgba(0,0,0,0.1)' : '1px solid rgba(255,255,255,0.07)';
+    const timerTrack = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
+
     return (
       <div style={{
         minHeight: 'calc(100vh - 56px)',
-        background: '#000000',
+        background: gameBg,
         display: 'flex', flexDirection: 'column',
         opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease',
       }}>
@@ -639,19 +650,19 @@ export default function BlackjackGame() {
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           padding: '12px 16px',
-          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          borderBottom: divider,
         }}>
-          <span style={{ fontWeight: 900, fontSize: 16, color: '#fff', letterSpacing: 0.5 }}>🃏 Blackjack</span>
+          <span style={{ fontWeight: 900, fontSize: 16, color: textPrimary, letterSpacing: 0.5 }}>🃏 Blackjack</span>
           {phase === 'playing' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 120, height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ width: 120, height: 6, background: timerTrack, borderRadius: 3, overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${timerPct}%`, background: timerColor, transition: 'width 1s linear', borderRadius: 3 }} />
               </div>
               <span style={{ fontSize: 14, fontWeight: 900, color: timerColor, minWidth: 30 }}>{timeLeft}s</span>
             </div>
           )}
           {phase === 'reveal' && (
-            <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>Revealing…</span>
+            <span style={{ fontSize: 13, color: textMuted, fontWeight: 600 }}>Revealing…</span>
           )}
         </div>
 
@@ -660,7 +671,7 @@ export default function BlackjackGame() {
           flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center',
           padding: '12px 12px 10px',
-          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          borderBottom: divider,
           position: 'relative',
         }}>
           <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -673,19 +684,19 @@ export default function BlackjackGame() {
               {(opponentUsername || 'Bot')[0].toUpperCase()}
             </div>
             <div>
-              <div style={{ fontWeight: 800, fontSize: 15, color: '#fff' }}>
+              <div style={{ fontWeight: 800, fontSize: 15, color: textPrimary }}>
                 {opponentUsername || 'Duely Bot'}
                 {rd && rd.winnerId === oppId && <span style={{ marginLeft: 6, fontSize: 14 }}>👑</span>}
               </div>
               {/* Score: reveal-phase uses server data; playing phase uses live visible cards (no bust until reveal) */}
               {oppReveal
-                ? <ScoreBadge score={oppReveal.score} bust={oppReveal.score > 21} />
+                ? <ScoreBadge score={oppReveal.score} bust={oppReveal.score > 21} isLight={isLight} />
                 : oppHand.length > 0
-                  ? (() => { const s = calcScore(oppHand); return s <= 21 ? <ScoreBadge score={s} /> : null; })()
-                  : <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>{oppHasSplit ? '✂️ Split · ' : ''}{opponentHandSize} cards</span>
+                  ? (() => { const s = calcScore(oppHand); return s <= 21 ? <ScoreBadge score={s} isLight={isLight} /> : null; })()
+                  : <span style={{ fontSize: 12, color: textMuted }}>{oppHasSplit ? '✂️ Split · ' : ''}{opponentHandSize} cards</span>
               }
               {!oppReveal && oppBufferedRef.current.length > oppRevealedRef.current && (
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginLeft: 4 }}>
+                <span style={{ fontSize: 11, color: textDim, marginLeft: 4 }}>
                   +{oppBufferedRef.current.length - oppRevealedRef.current} hidden
                 </span>
               )}
@@ -725,7 +736,7 @@ export default function BlackjackGame() {
               {(profile?.username || 'Y')[0].toUpperCase()}
             </div>
             <div>
-              <div style={{ fontWeight: 800, fontSize: 15, color: '#fff' }}>
+              <div style={{ fontWeight: 800, fontSize: 15, color: textPrimary }}>
                 {profile?.username || 'You'}
                 {rd && rd.winnerId === profile?.id && <span style={{ marginLeft: 6, fontSize: 14 }}>👑</span>}
               </div>
@@ -733,6 +744,7 @@ export default function BlackjackGame() {
                 score={rd ? (myReveal?.score ?? myScore) : myScore}
                 bust={bust || (rd && myReveal?.score > 21)}
                 stood={stood}
+                isLight={isLight}
               />
             </div>
           </div>
@@ -742,7 +754,7 @@ export default function BlackjackGame() {
               {/* Hand 1 (completed when on hand 2) or pending hand 2 label */}
               {splitData.activeHand === 2 ? (
                 <div style={{ marginBottom: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
                     Hand 1 — Completed
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', opacity: 0.55 }}>
@@ -752,13 +764,13 @@ export default function BlackjackGame() {
                       </div>
                     ))}
                   </div>
-                  <div style={{ textAlign: 'center', marginTop: 6, fontSize: 12, color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>
+                  <div style={{ textAlign: 'center', marginTop: 6, fontSize: 12, color: textMuted, fontWeight: 700 }}>
                     {splitData.score1 > 21 ? `Bust (${splitData.score1})` : splitData.score1}
                   </div>
                 </div>
               ) : (
                 <div style={{ marginBottom: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
                     Hand 2 — Waiting
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', opacity: 0.45 }}>
@@ -803,9 +815,9 @@ export default function BlackjackGame() {
                     padding: '16px 0', borderRadius: 14, border: 'none',
                     cursor: stood || bust ? 'not-allowed' : 'pointer',
                     background: stood || bust
-                      ? 'rgba(255,255,255,0.07)'
+                      ? (isLight ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.07)')
                       : 'linear-gradient(135deg, #1E90FF 0%, #0055bb 100%)',
-                    color: stood || bust ? 'rgba(255,255,255,0.25)' : '#fff',
+                    color: stood || bust ? (isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.25)') : '#fff',
                     fontSize: 18, fontWeight: 900, letterSpacing: 1,
                     boxShadow: stood || bust ? 'none' : '0 4px 16px rgba(30,144,255,0.35)',
                     transition: 'all 0.15s',
@@ -822,9 +834,9 @@ export default function BlackjackGame() {
                     cursor: stood || bust ? 'not-allowed' : 'pointer',
                     background: 'transparent',
                     border: stood || bust
-                      ? '2px solid rgba(255,255,255,0.07)'
-                      : '2px solid rgba(255,255,255,0.25)',
-                    color: stood || bust ? 'rgba(255,255,255,0.25)' : '#fff',
+                      ? `2px solid ${isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.07)'}`
+                      : `2px solid ${isLight ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.25)'}`,
+                    color: stood || bust ? (isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.25)') : textPrimary,
                     fontSize: 18, fontWeight: 900, letterSpacing: 1,
                     transition: 'all 0.15s',
                   }}
@@ -855,7 +867,7 @@ export default function BlackjackGame() {
 
           {/* Waiting status */}
           {phase === 'playing' && stood && !bust && (
-            <p style={{ marginTop: 14, fontSize: 13, color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>
+            <p style={{ marginTop: 14, fontSize: 13, color: textMuted, fontWeight: 600 }}>
               ✅ Stood — waiting for opponent…
             </p>
           )}
