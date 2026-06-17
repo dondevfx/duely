@@ -2231,11 +2231,11 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     const currency = room.currency || 'coins';
 
     if (fee > 0 && stayer.isBot) {
-      // Human forfeited a bot game — they lose their bet (fee already deducted upfront)
-      // No result event sent to leaver — they chose to leave, lobby screen should show
+      // Human forfeited a paid bot game — loses bet and streak
       try {
         await settleBotMatch(supabase, leaver.userId, fee, currency, false);
       } catch (e) { console.error('bot forfeit settle error:', e.message); }
+      supabase.from('profiles').update({ current_streak: 0 }).eq('id', leaver.userId).catch(() => {});
     } else if (fee > 0 && !stayer.isBot) {
       const stayerSocket = io.sockets.sockets.get(stayer.socketId);
 
@@ -2270,6 +2270,11 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
             await creditRakeback(supabase, stayer.userId, leaver.userId, fee * 2, 'coins')
               .catch(e => console.error('[forfeit] rakeback failed:', e.message));
           }
+
+          // ── Streak: leaver loses streak, stayer gains ─────────────────
+          supabase.from('profiles').update({ current_streak: 0 }).eq('id', leaver.userId).catch(() => {});
+          const { updateStreaks } = require('../services/eloService');
+          updateStreaks(supabase, stayer.userId, null).catch(() => {});
 
           console.log(`[forfeit] settle OK — payout:${winnerPayout} newWinnerElo:${newWinnerElo}`);
         } catch (e) {

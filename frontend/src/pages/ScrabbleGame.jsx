@@ -200,7 +200,7 @@ function BlankPicker({ onPick, onCancel }) {
 
 export default function ScrabbleGame() {
   const ready = usePageReady();
-  const { profile, refreshProfile } = useAuth();
+  const { profile, refreshProfile, updateProfile } = useAuth();
   const { socket, authenticated, doAuth, playerCounts } = useSocket();
   const location = useLocation();
   const { displayCurrency: betCurrency, setDisplayCurrency: setBetCurrency } = useCurrency();
@@ -459,7 +459,18 @@ export default function ScrabbleGame() {
     socket.on('scrabble_result', (res) => {
       if (!inActiveMatchRef.current) return; // stale event after leaving — ignore
       inActiveMatchRef.current = false;
-      gameOverRef.current = true; // mark game over so no further game events are processed
+      gameOverRef.current = true;
+      const myId = profileRef.current?.id;
+      const isWin = res.winnerId === myId;
+      const payout = res.balanceChange?.winnerPayout ?? res.winnerPayout;
+      const fee = res.entryFee ?? 0;
+      const isDiamonds = res.currency === 'diamonds';
+      if (payout != null) {
+        updateProfile(isDiamonds
+          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + (isWin ? payout : -fee)) }
+          : { c_coins:  Math.max(0, (profileRef.current?.c_coins  ?? 0) + (isWin ? payout : -fee)) }
+        );
+      }
       setResult(res); setPhase('result'); refreshProfile();
     });
 
@@ -474,11 +485,17 @@ export default function ScrabbleGame() {
     socket.on('opponent_disconnected', (data = {}) => {
       if (!inActiveMatchRef.current) return; // stale event after leaving — ignore
       inActiveMatchRef.current = false;
-      gameOverRef.current = true; // mark game over — blocks any in-flight game events
+      gameOverRef.current = true;
       const myId = profileRef.current?.id;
       const isWin = data.winnerId === myId;
       const payout = data.winnerPayout ?? null;
-      // Use server-provided ELO values to compute accurate delta (avoids stale eloBeforeRef)
+      const isDiamonds = data.currency === 'diamonds';
+      if (payout != null && isWin) {
+        updateProfile(isDiamonds
+          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + payout) }
+          : { c_coins:  Math.max(0, (profileRef.current?.c_coins  ?? 0) + payout) }
+        );
+      }
       if (data.newWinnerElo != null) eloBeforeRef.current = isWin ? data.newWinnerElo - 25 : data.newLoserElo + 25;
       setResult({
         winnerId: data.winnerId || myId,
