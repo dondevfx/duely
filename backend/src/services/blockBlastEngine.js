@@ -64,7 +64,9 @@ function _makeRoom(roomId, p1, p2) {
     scores:         {},
     stuck:          new Set(),
     isSolo,
-    botTargetScore: isSolo ? Math.floor(Math.random() * 1800) + 400 : 0,
+    // Bot wins ~45% of the time; ratio controls how bot score tracks the human
+    botWins:        isSolo ? Math.random() < 0.45 : false,
+    botRatio:       isSolo ? (Math.random() * 0.25 + (Math.random() < 0.45 ? 1.05 : 0.70)) : 0,
     // Server-tracked scores from pings — authoritative source for final score
     pingScores:     {},
     pingTimes:      {},
@@ -120,27 +122,45 @@ async function startBlockBlastCountdown(io, supabase, roomId) {
   const seed = Math.floor(Math.random() * 999999);
   io.to(roomId).emit('block_blast_start', { seed });
 
-  // If bot mode, simulate bot scoring toward its target over 2 minutes
+  // Bot mode: score trails the human's live ping score, scaled by botRatio
   if (current.isSolo) {
     const human = current.players.find(p => !p.isBot);
     if (human) {
-      let botCurrentScore = 0;
-      const target = current.botTargetScore;
+      let botDisplayScore = 0;
       const pingInterval = setInterval(() => {
         const r = getBlockBlastRoom(roomId);
         if (!r || r.state !== 'active') { clearInterval(pingInterval); return; }
-        botCurrentScore = Math.min(target, botCurrentScore + Math.floor(Math.random() * 80) + 20);
-        io.to(human.socketId).emit('block_blast_opponent_score', { score: botCurrentScore });
-      }, 6000);
+        const humanScore = r.pingScores[human.socketId] ?? 0;
+        // Target = human score * ratio, approached gradually with small random noise
+        const target = Math.floor(humanScore * r.botRatio);
+        const step   = Math.floor(Math.random() * 60) + 10;
+        if (target > botDisplayScore) {
+          botDisplayScore = Math.min(target, botDisplayScore + step);
+        }
+        r.pingScores['bot'] = botDisplayScore;
+        io.to(human.socketId).emit('block_blast_opponent_score', { score: botDisplayScore });
+      }, 4000);
       current.botTimers.push(pingInterval);
     }
   }
 }
 
-// Player got stuck (no valid placements left) — PvP only
+// Player got stuck (no valid placements left)
 async function handleBlockBlastStuck(io, supabase, roomId, socketId, score = 0) {
   const room = getBlockBlastRoom(roomId);
-  if (!room || room.state !== 'active' || room.isSolo) return;
+  if (!room || room.state !== 'active') return;
+
+  // Solo mode: end immediately using final ping score vs bot's display score
+  if (room.isSolo) {
+    const player = room.players.find(p => !p.isBot);
+    if (!player) return;
+    (room.botTimers || []).forEach(t => { clearTimeout(t); clearInterval(t); });
+    room.botTimers = [];
+    const verifiedScore = room.pingScores[player.socketId] ?? 0;
+    room.scores[player.socketId] = verifiedScore;
+    await handleBlockBlastComplete(io, supabase, roomId, player.socketId, verifiedScore);
+    return;
+  }
   if (room.stuck.has(socketId)) return; // already stuck
 
   room.stuck.add(socketId);
@@ -194,7 +214,8 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
     const player = room.players.find(p => !p.isBot);
     if (player) {
       room.state = 'finished';
-      const botScore = room.botTargetScore || 0;
+      // Final bot score = human score * ratio (ensures outcome matches what was shown)
+      const botScore = Math.floor(verifiedScore * (room.botRatio ?? 0.8));
       const humanWon = verifiedScore > botScore;
       let balanceChange = null;
       if (room.entryFee > 0) {

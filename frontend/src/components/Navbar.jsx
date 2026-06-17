@@ -42,7 +42,7 @@ function fmtRakebackTimer(ms) {
 }
 
 export default function Navbar() {
-  const { profile, session, signOut } = useAuth();
+  const { profile, session, signOut, refreshProfile } = useAuth();
   const { displayCurrency, setDisplayCurrency } = useCurrency();
   const { playerCounts } = useSocket();
   const navigate = useNavigate();
@@ -110,7 +110,7 @@ export default function Navbar() {
   async function handleRakebackClaim(type) {
     try {
       await api.post(`/rakeback/claim/${type}`, {});
-      await fetchRakeback();
+      await Promise.all([fetchRakeback(), refreshProfile()]);
     } catch {
       // ignore — button stays disabled
     }
