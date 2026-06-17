@@ -11,7 +11,7 @@ const GAME_META = {
 
 const GAME_LIST = Object.values(GAME_META);
 const COIN_POOL    = [1, 5, 10];
-const DIAMOND_POOL = [100, 250, 500];
+const DIAMOND_POOL = [100, 250, 500, 50000];
 
 // Just the fee amount (not game) — used for fake repeat check
 function feeKey(item) {

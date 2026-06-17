@@ -9,7 +9,7 @@ import ResultScreen from '../components/ResultScreen';
 import { usePageReady } from '../hooks/usePageReady';
 
 const COIN_FEES    = [1, 5, 10];
-const DIAMOND_FEES = [100, 500];
+const DIAMOND_FEES = [100, 500, 50000];
 
 const BOARD_SIZE = 6;
 
