@@ -2082,7 +2082,6 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // Removes socket from every queue and clears the userQueues lock so they can
     // join a new queue immediately without getting "Already in a queue".
     socket.on('leave_all_queues', () => {
-      removeFromQueue(socket.id);
       removeFromTypeQueue(socket.id);
       removeFromMemoryQueue(socket.id);
       removeFromAimQueue(socket.id);
@@ -2247,7 +2246,6 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       }
 
       // Remove from all queues
-      removeFromQueue(socket.id);
       removeFromTypeQueue(socket.id);
       removeFromMemoryQueue(socket.id);
       removeFromAimQueue(socket.id);
