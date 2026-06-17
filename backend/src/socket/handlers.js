@@ -207,6 +207,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     socket.emit('player_counts', { counts: _buildPlayerCounts() });
     socket.emit('bet_counts', { counts: { ...betCounts } });
     require('../services/tickerService').sendSeed(socket);
+    socket.on('request_ticker_seed', () => require('../services/tickerService').sendSeed(socket));
 
     // ── Auth ──────────────────────────────────────────────────────────
     socket.on('authenticate', async ({ token }) => {

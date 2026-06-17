@@ -35,6 +35,8 @@ export default function MatchTicker() {
 
     socket.on('ticker_seed', onSeed);
     socket.on('ticker_item', onItem);
+    // Re-request the seed every time the component mounts (handles SPA navigation)
+    socket.emit('request_ticker_seed');
     return () => {
       socket.off('ticker_seed', onSeed);
       socket.off('ticker_item', onItem);
