@@ -62,49 +62,27 @@ async function resolveAffiliates(supabase, p1Id, p2Id) {
 // prizePool = entry_fee * 2
 //
 // Fee rules (all come out of the 5% total fee, 0.5% always reserved for rakeback):
-//   No codes:                  admin = 4.5%
-//   1 affiliate (0.5%):        admin = 4.0%
-//   1 creator (1%):            admin = 3.5%
-//   2 affiliates (0.5% each):  admin = 3.5%
-//   1 creator + 1 affiliate:   admin = 3.0%
-//   2 creators (1% each):      admin = 2.5%
+//   No codes:       codes = 0%,   admin = 4.5%
+//   1 code:         code  = 1%,   admin = 3.5%
+//   2 codes:        each  = 0.5%, admin = 3.5%
+// Total code payout is always capped at 1%, split evenly among active code holders.
 async function payAffiliatesCoins(supabase, owner1, owner2, prizePool) {
   const pool = parseFloat(prizePool);
-  if ((!owner1 && !owner2) || pool <= 0) {
+  const uniqueOwners = [...new Set([owner1, owner2].filter(Boolean))];
+  if (uniqueOwners.length === 0 || pool <= 0) {
     return { platformFee: PLATFORM_FEE_NO_AFF }; // 4.5%
   }
 
-  const ownerIds = [...new Set([owner1, owner2].filter(Boolean))];
-  const { data: ownerProfiles } = await supabase
-    .from('profiles').select('id, is_creator_code').in('id', ownerIds);
-  const creatorMap = {};
-  for (const p of (ownerProfiles || [])) creatorMap[p.id] = !!p.is_creator_code;
-
-  // Pay each code owner their own rate independently
-  let totalCodePct = 0;
-  const payments = [];
-
-  if (owner1) {
-    const pct = creatorMap[owner1] ? CREATOR_FEE_PERCENT : AFFILIATE_FEE_PERCENT;
-    totalCodePct += pct;
-    payments.push({ owner_id: owner1, amount: parseFloat((pool * pct).toFixed(4)) });
-  }
-  if (owner2 && owner2 !== owner1) {
-    const pct = creatorMap[owner2] ? CREATOR_FEE_PERCENT : AFFILIATE_FEE_PERCENT;
-    totalCodePct += pct;
-    payments.push({ owner_id: owner2, amount: parseFloat((pool * pct).toFixed(4)) });
-  }
-
+  // Always 1% total to codes, split evenly
+  const perOwner = parseFloat((pool * CREATOR_FEE_PERCENT / uniqueOwners.length).toFixed(4));
   await Promise.all(
-    payments.map(({ owner_id, amount }) =>
-      supabase.rpc('credit_affiliate_c', { owner_id, amount })
+    uniqueOwners.map(owner_id =>
+      supabase.rpc('credit_affiliate_c', { owner_id, amount: perOwner })
         .catch(e => console.error('[affiliate] credit failed:', e.message))
     )
   );
 
-  // Admin gets 5% minus rakeback (0.5%) minus all code payouts
-  const platformFee = parseFloat((0.05 - RAKEBACK_PERCENT - totalCodePct).toFixed(4));
-  return { platformFee: Math.max(0, platformFee) };
+  return { platformFee: PLATFORM_FEE_WITH_CREATOR }; // 3.5% — same whether 1 or 2 codes
 }
 
 async function payAffiliatesDiamonds() {
