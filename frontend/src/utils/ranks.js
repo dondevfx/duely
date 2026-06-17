@@ -4,8 +4,7 @@ const RANKS = [
   { name: 'Gold',     min: 1300, max: 1499, icon: '🥇', color: '#ffd700', glow: 'rgba(255,215,0,0.4)'   },
   { name: 'Platinum', min: 1500, max: 1699, icon: '💠', color: '#00e5ff', glow: 'rgba(0,229,255,0.4)'   },
   { name: 'Diamond',  min: 1700, max: 1899, icon: '✦',  color: '#b388ff', glow: 'rgba(179,136,255,0.4)' },
-  { name: 'Master',   min: 1900, max: 2099, icon: '🌟', color: '#ff6d00', glow: 'rgba(255,109,0,0.4)'   },
-  { name: 'Champion', min: 2100, max: Infinity, icon: '👑', color: '#ff1744', glow: 'rgba(255,23,68,0.5)' },
+  { name: 'Champion', min: 1900, max: Infinity, icon: '👑', color: '#ff1744', glow: 'rgba(255,23,68,0.5)' },
 ];
 
 export function getRank(elo = 1000) {
