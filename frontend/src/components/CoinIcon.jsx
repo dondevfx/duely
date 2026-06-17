@@ -13,9 +13,7 @@ export default function CoinIcon({ size = '1em' }) {
         border: '1px solid rgba(160,100,0,0.4)',
         boxShadow: 'inset 0 1.5px 0 rgba(255,255,255,0.5), inset 0 -1px 0 rgba(0,0,0,0.25), 0 1px 3px rgba(0,0,0,0.25)',
         flexShrink: 0,
-        verticalAlign: 'middle',
-        position: 'relative',
-        top: '-0.05em',
+        verticalAlign: '-0.1em',
       }}
     />
   );
