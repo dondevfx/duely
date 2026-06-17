@@ -52,7 +52,7 @@ function TurnTimerBar({ seconds, total = 60 }) {
   );
 }
 
-function TileButton({ letter, selected, onClick, onDragStart, onDragEnd, dragging, onTouchStart, onDragOver, onDrop, isDropTarget }) {
+function TileButton({ letter, selected, onClick, onDragStart, onDragEnd, dragging, onTouchStart, onDragOver, onDrop, isDropTarget, handIdx }) {
   const val = LETTER_VALUES[letter] ?? 0;
   const isBlank = letter === '?';
   return (
@@ -64,6 +64,7 @@ function TileButton({ letter, selected, onClick, onDragStart, onDragEnd, draggin
       onDrop={onDrop}
       onClick={onClick}
       onTouchStart={onTouchStart}
+      data-hand-idx={handIdx}
       className="relative flex-shrink-0 flex items-center justify-center select-none transition-all"
       style={{
         width: CELL_SIZE - 8, height: CELL_SIZE - 8,
@@ -338,6 +339,22 @@ export default function ScrabbleGame() {
       e.preventDefault();
       const t = e.touches[0];
       setTouchDragPos({ x: t.clientX, y: t.clientY });
+      // Highlight hand drop target while dragging over hand tray
+      const el = document.elementFromPoint(t.clientX, t.clientY);
+      let tgt = el;
+      let foundHand = false;
+      for (let i = 0; i < 8; i++) {
+        if (!tgt) break;
+        const hi = tgt.dataset?.handIdx;
+        if (hi !== undefined) {
+          const targetIdx = parseInt(hi);
+          if (targetIdx !== touchDragIdxRef.current) setHandDragOverIdx(targetIdx);
+          foundHand = true;
+          break;
+        }
+        tgt = tgt.parentElement;
+      }
+      if (!foundHand) setHandDragOverIdx(null);
     }
     function onTouchEnd(e) {
       if (touchDragIdxRef.current === null) return;
@@ -345,22 +362,40 @@ export default function ScrabbleGame() {
       touchDragIdxRef.current = null;
       setDraggingIdx(null);
       setTouchDragPos(null);
+      setHandDragOverIdx(null);
 
       // Find the element under the final touch point
       const t = e.changedTouches[0];
-      // Temporarily hide the ghost so it doesn't block elementFromPoint
       const el = document.elementFromPoint(t.clientX, t.clientY);
       if (!el) return;
 
-      // Walk up the DOM to find a board cell with data-row/data-col
+      // Walk up DOM — check for board cell (data-row/col) or hand tile (data-hand-idx)
       let target = el;
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < 8; i++) {
         if (!target) break;
         const row = target.dataset?.row;
         const col = target.dataset?.col;
         if (row !== undefined && col !== undefined) {
-          // Simulate a drop on this cell
           handleCellDropByTouch(parseInt(row), parseInt(col), idx);
+          return;
+        }
+        const hi = target.dataset?.handIdx;
+        if (hi !== undefined) {
+          const targetIdx = parseInt(hi);
+          if (targetIdx !== idx) {
+            // Swap tiles in hand
+            setMyHand(prev => {
+              const next = [...prev];
+              [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+              return next;
+            });
+            if (handBeforeRef.current) {
+              const hb = [...handBeforeRef.current];
+              [hb[idx], hb[targetIdx]] = [hb[targetIdx], hb[idx]];
+              handBeforeRef.current = hb;
+            }
+          }
+          setSelectedHandIdx(null);
           return;
         }
         target = target.parentElement;
@@ -1029,6 +1064,7 @@ export default function ScrabbleGame() {
                     onTouchStart={(e) => handleTileTouchStart(i, e)}
                     onDragOver={(e) => handleHandTileDragOver(i, e)}
                     onDrop={(e) => handleHandTileDrop(i, e)}
+                    handIdx={i}
                   />
                 ))}
                 {myHand.length === 0 && <span className="text-muted text-sm py-3">No tiles</span>}
