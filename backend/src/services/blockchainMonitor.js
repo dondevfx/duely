@@ -317,13 +317,21 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
   // Idempotency check — did we already process this tx?
   const { data: dup } = await supabase
     .from('transactions')
-    .select('id')
+    .select('id, status')
     .eq('tx_hash', txHash)
     .maybeSingle();
-  if (dup) { _seenTxs.add(txHash); return; } // already in DB — cache and skip silently
+  if (dup) {
+    // pending_retry / failed = swap previously failed but SOL still in wallet — retry
+    if (dup.status !== 'pending_retry' && dup.status !== 'failed') {
+      _seenTxs.add(txHash);
+      return;
+    }
+    // Fall through to retry the swap
+  }
 
   // ── Gas reserve check (before any logging so dust txs produce no output) ──────
-  const gasReserveMap = { btc: 0.00002, eth: 0.0004, bnb: 0.0005, sol: 0.0001, ltc: 0.001, trx: 5, doge: 1 };
+  // SOL reserve covers: ATA creation rent (~0.00204 SOL) + tx fees (~0.000005 SOL)
+  const gasReserveMap = { btc: 0.00002, eth: 0.0004, bnb: 0.0005, sol: 0.003, ltc: 0.001, trx: 5, doge: 1 };
   const gasRes    = (coin !== 'usdc') ? (gasReserveMap[coin] || 0) : 0;
   const netAmount = Math.max(0, amount - gasRes);
   if (coin !== 'usdc' && netAmount <= 0) { _seenTxs.add(txHash); return; } // dust — silent
@@ -365,11 +373,11 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     if (!usdcAddress) { console.error('[monitor] USDC_SPL_ADDRESS not set'); return; }
     const { privKey } = getAddress(userId, coin);
 
-    // Record tx first to prevent reprocessing on next poll
-    await supabase.from('transactions').insert({
+    // Record tx first to prevent reprocessing on next poll (upsert handles retries)
+    await supabase.from('transactions').upsert({
       user_id: userId, type: 'deposit', amount_c: 0,
       crypto_amount: amount, crypto_symbol: 'SOL', tx_hash: txHash, status: 'converting',
-    });
+    }, { onConflict: 'tx_hash' }).then().catch(() => {});
 
     // Swap SOL → USDC (awaited so we get the real output amount)
     let usdcReceived = 0;
@@ -388,8 +396,17 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
         usdcReceived = netUsd;
       } catch (e2) {
         console.error(`[monitor] fallback failed:`, e2.message);
-        await supabase.from('transactions').update({ status: 'failed' }).eq('tx_hash', txHash);
-        return;
+        // Mark pending_retry — SOL still in deposit wallet, will retry next poll
+        await supabase.from('transactions')
+          .update({ status: 'pending_retry' })
+          .eq('tx_hash', txHash)
+          .then().catch(() => {});
+        // Also upsert in case the initial insert above was the first attempt
+        await supabase.from('transactions').upsert({
+          user_id: userId, type: 'deposit', amount_c: 0,
+          crypto_amount: amount, crypto_symbol: 'SOL', tx_hash: txHash, status: 'pending_retry',
+        }, { onConflict: 'tx_hash' }).then().catch(() => {});
+        return; // do NOT add to _seenTxs — allow retry next poll
       }
     }
 
