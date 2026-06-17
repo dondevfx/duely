@@ -21,8 +21,8 @@ const DEPOSIT_MAX_SINGLE   = 50_000;      // $50k hard cap per deposit
 // SOL/USDC go direct (Jupiter / SPL send) — no ChangeNow minimum
 // Everything else goes through ChangeNow — keep $5 to cover their minimums
 const WITHDRAW_MINS = {
-  sol:     2,
-  usdc:    2,
+  sol:     5,
+  usdc:    5,
   default: 10,  // BTC, ETH, BNB, LTC, TRX, DOGE — ChangeNow minimum
 };
 const MIN_WITHDRAWAL = 10;   // fallback

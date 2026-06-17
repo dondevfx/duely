@@ -32,7 +32,7 @@ const WITHDRAW_COINS = [
   { id: 'trx',  label: 'TRX',  network: 'TRON'     },
 ];
 
-const WITHDRAW_MINS = { sol: 2, usdc: 2, default: 10 };
+const WITHDRAW_MINS = { sol: 5, usdc: 5, default: 10 };
 const getWithdrawMin = (coinId) => WITHDRAW_MINS[coinId] ?? WITHDRAW_MINS.default;
 
 function fmt(n) {
