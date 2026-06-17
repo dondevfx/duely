@@ -18,10 +18,13 @@ function feeKey(item) {
   return `${item.fee}-${item.diamonds ? 'd' : 'c'}`;
 }
 
-function makeFakeItem(lastFeeKey = null) {
-  // Try up to 10 times to avoid the same bet size as the previous fake
+function makeFakeItem(lastFeeKey = null, lastTwoGames = []) {
+  // Try up to 10 times to avoid same bet size back-to-back and same game 3 in a row
+  const blockedGame = lastTwoGames.length === 2 && lastTwoGames[0] === lastTwoGames[1]
+    ? lastTwoGames[0] : null;
   for (let attempt = 0; attempt < 10; attempt++) {
     const game     = GAME_LIST[Math.floor(Math.random() * GAME_LIST.length)];
+    if (blockedGame && game.name === blockedGame) continue;
     const diamonds = Math.random() < 0.4;
     const pool     = diamonds ? DIAMOND_POOL : COIN_POOL;
     const fee      = pool[Math.floor(Math.random() * pool.length)];
@@ -66,7 +69,9 @@ function buildInitialItems() {
   const result = [];
   for (let i = 0; i < MAX; i++) {
     const last = result[result.length - 1];
-    result.push(makeFakeItem(last ? feeKey(last) : null));
+    const prev = result[result.length - 2];
+    const lastGames = [last?.game.name, prev?.game.name].filter(Boolean);
+    result.push(makeFakeItem(last ? feeKey(last) : null, lastGames));
   }
   return result;
 }
@@ -78,6 +83,7 @@ export default function MatchTicker() {
   const itemsRef            = useRef(items);
   const lastRealShownAt     = useRef(0);   // timestamp of last real match shown
   const lastFakeKeyRef      = useRef(null); // fee key of last fake shown
+  const lastTwoGamesRef     = useRef([]);   // last 2 fake game names shown
 
   useEffect(() => { itemsRef.current = items; }, [items]);
 
@@ -116,8 +122,9 @@ export default function MatchTicker() {
           lastRealShownAt.current = now;
         } else {
           // Fake — avoid same bet size as last fake
-          next = makeFakeItem(lastFakeKeyRef.current);
+          next = makeFakeItem(lastFakeKeyRef.current, lastTwoGamesRef.current);
           lastFakeKeyRef.current = feeKey(next);
+          lastTwoGamesRef.current = [next.game.name, ...(lastTwoGamesRef.current)].slice(0, 2);
         }
 
         setItems(prev => [next, ...prev].slice(0, MAX));
