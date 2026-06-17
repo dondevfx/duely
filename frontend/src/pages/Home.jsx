@@ -185,7 +185,7 @@ export default function Home() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary">•</span>
-                  <span className="inline-flex items-center gap-1">Bet <CoinIcon size="1em" /> Coins or 💎 Diamonds on any game</span>
+                  <span className="inline-flex items-center gap-1">Bet <CoinIcon size="1em" /></span> Coins or 💎 Diamonds on any game
                 </li>
               </ul>
               <Link
