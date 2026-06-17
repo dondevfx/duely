@@ -23,7 +23,7 @@ async function updateStreaks(supabase, winnerId, loserId) {
       // Also check if this is the winner's first ever win (for "first win" message)
       const { data: pf } = await supabase
         .from('profiles').select('wins').eq('id', winnerId).single();
-      const isFirstWin = (pf?.wins ?? 1) <= 1;
+      const isFirstWin = (pf?.wins ?? 0) === 1;
       return { winnerStreak: newStreak ?? 1, isFirstWin };
     }
 
@@ -43,7 +43,7 @@ async function updateStreaks(supabase, winnerId, loserId) {
 
     const newStreakFallback = (winnerProfile.current_streak ?? 0) + 1;
     const newBest           = Math.max(newStreakFallback, winnerProfile.best_streak ?? 0);
-    const isFirstWin        = (winnerProfile.wins ?? 0) === 0;
+    const isFirstWin        = (winnerProfile.wins ?? 0) === 1;
 
     const { error: updateError } = await supabase
       .from('profiles')

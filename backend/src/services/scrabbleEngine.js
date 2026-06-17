@@ -479,8 +479,9 @@ async function _endGame(io, supabase, roomId, reason) {
     if (!loser.isBot) {
       supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId).catch(() => {});
     }
-    if (!winner.isBot) await updateHighscore(supabase, winner.userId, 'wordVS', winnerScore).catch(() => {});
-    if (!loser.isBot)  await updateHighscore(supabase, loser.userId,  'wordVS', loserScore).catch(() => {});
+    for (const [p, score] of [[winner, winnerScore], [loser, loserScore]]) {
+      if (!p.isBot) await updateHighscore(supabase, p.userId, 'wordVS', score).catch(() => {});
+    }
     if (!winner.isBot && !loser.isBot) {
       await supabase.from('matches').insert({
         player1_id: p1.userId, player2_id: p2.userId, winner_id: winner.userId,

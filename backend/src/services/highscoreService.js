@@ -7,13 +7,13 @@ async function updateHighscore(supabase, userId, gameType, score) {
       .eq('user_id', userId)
       .eq('game_type', gameType)
       .single();
-    if (!existing || score > existing.score) {
-      await supabase.from('game_highscores').upsert(
-        { user_id: userId, game_type: gameType, score, updated_at: new Date().toISOString() },
-        { onConflict: 'user_id,game_type' }
-      );
+    if (!existing) {
+      await supabase.from('game_highscores').insert({ user_id: userId, game_type: gameType, score });
+    } else if (score > existing.score) {
+      await supabase.from('game_highscores').update({ score, updated_at: new Date().toISOString() })
+        .eq('user_id', userId).eq('game_type', gameType);
     }
-  } catch (e) { /* silent — table may not exist */ }
+  } catch (e) { console.error('[highscoreService] updateHighscore error:', e.message); }
 }
 
 module.exports = { updateHighscore };
