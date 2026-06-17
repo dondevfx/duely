@@ -52,7 +52,7 @@ function TurnTimerBar({ seconds, total = 60 }) {
   );
 }
 
-function TileButton({ letter, selected, onClick, onDragStart, onDragEnd, dragging, onTouchStart }) {
+function TileButton({ letter, selected, onClick, onDragStart, onDragEnd, dragging, onTouchStart, onDragOver, onDrop, isDropTarget }) {
   const val = LETTER_VALUES[letter] ?? 0;
   const isBlank = letter === '?';
   return (
@@ -60,6 +60,8 @@ function TileButton({ letter, selected, onClick, onDragStart, onDragEnd, draggin
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
       onClick={onClick}
       onTouchStart={onTouchStart}
       className="relative flex-shrink-0 flex items-center justify-center select-none transition-all"
@@ -67,15 +69,17 @@ function TileButton({ letter, selected, onClick, onDragStart, onDragEnd, draggin
         width: CELL_SIZE - 8, height: CELL_SIZE - 8,
         borderRadius: 8,
         background: isBlank ? '#7c6a44' : '#e8d5a8',
-        border: selected ? '2.5px solid #1E90FF' : '2px solid #b8985a',
-        boxShadow: selected
-          ? '0 0 16px rgba(30,144,255,0.8), 0 3px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.3)'
-          : '0 3px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -2px 0 rgba(0,0,0,0.2)',
+        border: isDropTarget ? '2.5px dashed #22c55e' : selected ? '2.5px solid #1E90FF' : '2px solid #b8985a',
+        boxShadow: isDropTarget
+          ? '0 0 14px rgba(34,197,94,0.7), 0 3px 6px rgba(0,0,0,0.5)'
+          : selected
+            ? '0 0 16px rgba(30,144,255,0.8), 0 3px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.3)'
+            : '0 3px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -2px 0 rgba(0,0,0,0.2)',
         color: isBlank ? '#f5e6c8' : '#2c1a00',
         fontSize: 26,
         fontWeight: 900,
         opacity: dragging ? 0.35 : 1,
-        transform: selected ? 'translateY(-3px)' : 'none',
+        transform: isDropTarget ? 'translateY(-2px) scale(1.05)' : selected ? 'translateY(-3px)' : 'none',
       }}
     >
       {isBlank ? '?' : letter}
@@ -238,12 +242,19 @@ export default function ScrabbleGame() {
   const [touchDragPos, setTouchDragPos]   = useState(null); // { x, y } for ghost
   const touchDragIdxRef = useRef(null);  // which tile is being touch-dragged
 
+  // Hand reorder drag state
+  const [handDragOverIdx, setHandDragOverIdx] = useState(null);
+
+  // Blank tile drag — stores hand index when blank is dragged to board
+  const blankDragIdxRef = useRef(null);
+
   // Exchange mode
   const [exchangeMode, setExchangeMode] = useState(false);
   const [exchangeSel, setExchangeSel]   = useState(new Set());
 
   const roomIdRef    = useRef(null);
   const profileRef   = useRef(profile);
+  const opponentRef  = useRef(null);
   const phaseRef     = useRef(location.state?.autoQueue ? 'queue' : 'lobby');
   function setPhase(p) { phaseRef.current = p; _setPhase(p); }
   const gameOverRef  = useRef(false); // true once result/forfeit received — blocks stale game events
@@ -255,9 +266,10 @@ export default function ScrabbleGame() {
   const inActiveMatchRef = useRef(false);
   const refreshProfileRef = useRef(refreshProfile);
 
-  useEffect(() => { profileRef.current = profile; }, [profile]);
-  useEffect(() => { roomIdRef.current  = roomId;  }, [roomId]);
-  useEffect(() => { socketRef.current  = socket;  }, [socket]);
+  useEffect(() => { profileRef.current  = profile;  }, [profile]);
+  useEffect(() => { opponentRef.current = opponent; }, [opponent]);
+  useEffect(() => { roomIdRef.current   = roomId;   }, [roomId]);
+  useEffect(() => { socketRef.current   = socket;   }, [socket]);
   useEffect(() => { refreshProfileRef.current = refreshProfile; }, [refreshProfile]);
 
   // Forfeit on unmount and on page refresh/close; also refresh balance so leaver sees updated balance
@@ -439,6 +451,15 @@ export default function ScrabbleGame() {
       setMyTurn(nextTurn === socket.id);
       setLastWords([]); setLastScore(null);
       setTurnSeconds(0);
+      setSubmitting(false);
+      // Return any tiles the player had placed in pending back to their hand
+      setPending(prev => {
+        if (Object.keys(prev).length > 0) {
+          setMyHand(handBeforeRef.current || []);
+        }
+        return {};
+      });
+      setSelectedHandIdx(null);
     });
 
     socket.on('scrabble_exchanged', ({ nextTurn, bagCount: bc }) => {
@@ -512,8 +533,8 @@ export default function ScrabbleGame() {
       setResult({
         winnerId: data.winnerId || myId,
         loserId: data.loserId,
-        winnerUsername: isWin ? profileRef.current?.username : opponent?.username,
-        loserUsername: isWin ? opponent?.username : profileRef.current?.username,
+        winnerUsername: isWin ? profileRef.current?.username : opponentRef.current?.username,
+        loserUsername: isWin ? opponentRef.current?.username : profileRef.current?.username,
         disconnected: true,
         balanceChange: payout != null ? { winnerPayout: isWin ? payout : 0 } : undefined,
         entryFee:     data.entryFee,
@@ -543,7 +564,7 @@ export default function ScrabbleGame() {
       socket.off('private_room_error');
       socket.off('opponent_disconnected');
     };
-  }, [socket, opponent]);
+  }, [socket]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Actions ────────────────────────────────────────────────────────────────
   function joinQueue() {
@@ -613,16 +634,18 @@ export default function ScrabbleGame() {
     const tile = myHand[selectedHandIdx];
     if (!tile) return;
     if (tile === '?') { setBlankPick({ row, col }); return; }
-    placeTile(row, col, tile, tile, false);
+    placeTile(row, col, tile, tile, false, selectedHandIdx);
   }
 
-  function placeTile(row, col, letter, displayLetter, isBlank) {
+  // handIdx is always required — callers must pass the exact index to remove.
+  // This avoids stale-closure bugs with selectedHandIdx during drag-drop.
+  function placeTile(row, col, letter, displayLetter, isBlank, handIdx) {
     // Save hand snapshot before first placement
     if (Object.keys(pending).length === 0) {
       handBeforeRef.current = [...myHand];
     }
     const key = `${row},${col}`;
-    const newHand = myHand.filter((_, i) => i !== selectedHandIdx);
+    const newHand = myHand.filter((_, i) => i !== handIdx);
     setMyHand(newHand);
     setPending(prev => ({ ...prev, [key]: { letter, displayLetter, isBlank } }));
     setSelectedHandIdx(null);
@@ -681,7 +704,9 @@ export default function ScrabbleGame() {
 
   function onBlankPick(letter) {
     if (!blankPick) return;
-    placeTile(blankPick.row, blankPick.col, letter, letter, true);
+    const handIdx = blankDragIdxRef.current !== null ? blankDragIdxRef.current : selectedHandIdx;
+    blankDragIdxRef.current = null;
+    placeTile(blankPick.row, blankPick.col, letter, letter, true, handIdx);
     setBlankPick(null);
   }
 
@@ -693,6 +718,38 @@ export default function ScrabbleGame() {
 
   function handleTileDragEnd() {
     setDraggingIdx(null);
+    setHandDragOverIdx(null);
+  }
+
+  // Hand-tile reorder: drag one tile over another in the tray to swap positions
+  function handleHandTileDragOver(targetIdx, e) {
+    if (draggingIdx === null || draggingIdx === targetIdx) return;
+    e.preventDefault();
+    e.stopPropagation(); // prevent board cell dragOver from also triggering
+    setHandDragOverIdx(targetIdx);
+  }
+
+  function handleHandTileDrop(targetIdx, e) {
+    e.preventDefault();
+    e.stopPropagation();
+    setHandDragOverIdx(null);
+    if (draggingIdx === null || draggingIdx === targetIdx) return;
+    setMyHand(prev => {
+      const next = [...prev];
+      [next[draggingIdx], next[targetIdx]] = [next[targetIdx], next[draggingIdx]];
+      return next;
+    });
+    // Update handBeforeRef to match the new order so recall restores correct tiles
+    handBeforeRef.current = (() => {
+      const next = [...(handBeforeRef.current || [])];
+      // Only swap if both indices are within the snapshot
+      if (next[draggingIdx] !== undefined && next[targetIdx] !== undefined) {
+        [next[draggingIdx], next[targetIdx]] = [next[targetIdx], next[draggingIdx]];
+      }
+      return next;
+    })();
+    setDraggingIdx(null);
+    setSelectedHandIdx(null);
   }
 
   function handleCellDrop(row, col) {
@@ -704,11 +761,12 @@ export default function ScrabbleGame() {
     const tile = myHand[idx];
     if (!tile) return;
     setDraggingIdx(null);
-    setSelectedHandIdx(idx);
+    setHandDragOverIdx(null);
     if (tile === '?') {
+      blankDragIdxRef.current = idx;
       setBlankPick({ row, col });
     } else {
-      placeTile(row, col, tile, tile, false);
+      placeTile(row, col, tile, tile, false, idx);
     }
   }
 
@@ -719,11 +777,11 @@ export default function ScrabbleGame() {
     if (pending[key] || board[row][col]) return;
     const tile = myHand[idx];
     if (!tile) return;
-    setSelectedHandIdx(idx);
     if (tile === '?') {
+      blankDragIdxRef.current = idx;
       setBlankPick({ row, col });
     } else {
-      placeTile(row, col, tile, tile, false);
+      placeTile(row, col, tile, tile, false, idx);
     }
   }
 
@@ -964,10 +1022,13 @@ export default function ScrabbleGame() {
                     letter={letter}
                     selected={exchangeMode ? exchangeSel.has(i) : selectedHandIdx === i}
                     dragging={draggingIdx === i}
+                    isDropTarget={!exchangeMode && draggingIdx !== null && draggingIdx !== i && handDragOverIdx === i}
                     onClick={() => handleHandClick(i)}
                     onDragStart={() => handleTileDragStart(i)}
                     onDragEnd={handleTileDragEnd}
                     onTouchStart={(e) => handleTileTouchStart(i, e)}
+                    onDragOver={(e) => handleHandTileDragOver(i, e)}
+                    onDrop={(e) => handleHandTileDrop(i, e)}
                   />
                 ))}
                 {myHand.length === 0 && <span className="text-muted text-sm py-3">No tiles</span>}

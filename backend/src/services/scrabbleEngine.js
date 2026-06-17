@@ -259,7 +259,7 @@ function validatePlacement(room, placements, socketId) {
 // ── Play word ─────────────────────────────────────────────────────────────────
 function handleScrabblePlay(io, supabase, roomId, socketId, placements) {
   const room = getScrabbleRoom(roomId);
-  if (!room || room.state !== 'active') return;
+  if (!room || room.state !== 'active') { _err(io, socketId, 'Game not active'); return; }
 
   const v = validatePlacement(room, placements, socketId);
   if (!v.ok) { _err(io, socketId, v.error); return; }
@@ -561,57 +561,63 @@ async function scheduleBotMove(io, supabase, roomId) {
   const delay = 1500 + Math.floor(Math.random() * 1500);
   await new Promise(r => setTimeout(r, delay));
 
-  const fresh = getScrabbleRoom(roomId);
-  if (!fresh || fresh.state !== 'active') return;
-  if (fresh.players[fresh.turnIndex].socketId !== bot.socketId) return;
+  try {
+    const fresh = getScrabbleRoom(roomId);
+    if (!fresh || fresh.state !== 'active') return;
+    if (fresh.players[fresh.turnIndex].socketId !== bot.socketId) return;
 
-  const hand = fresh.hands[bot.socketId] || [];
-  const { board, firstWord, bag } = fresh;
+    const hand = fresh.hands[bot.socketId] || [];
+    const { board, bag } = fresh;
 
-  const { loadWords } = require('./wordValidator');
-  const allWords = loadWords();
+    const { loadWords } = require('./wordValidator');
+    const allWords = loadWords();
 
-  // Collect formable words (cap at 800 for perf)
-  const candidates = [];
-  for (const w of allWords) {
-    if (w.length >= 2 && w.length <= 6 && _canFormWord(w, hand)) {
-      candidates.push(w.toUpperCase());
-      if (candidates.length >= 800) break;
+    // Collect formable words (cap at 800 for perf)
+    const candidates = [];
+    for (const w of allWords) {
+      if (w.length >= 2 && w.length <= 6 && _canFormWord(w, hand)) {
+        candidates.push(w.toUpperCase());
+        if (candidates.length >= 800) break;
+      }
     }
-  }
 
-  let bestScore = -1, bestPlacements = null;
+    let bestScore = -1, bestPlacements = null;
 
-  for (const word of candidates) {
-    for (const dir of ['H', 'V']) {
-      const maxR = dir === 'V' ? SIZE - word.length : SIZE;
-      const maxC = dir === 'H' ? SIZE - word.length : SIZE;
-      for (let r = 0; r < maxR; r++) {
-        for (let c = 0; c < maxC; c++) {
-          const placements = _botPlacements(word, r, c, dir, board, hand);
-          if (!placements || placements.length === 0) continue;
-          const v = validatePlacement(fresh, placements, bot.socketId);
-          if (!v.ok) continue;
-          const formed = findWords(board, placements);
-          if (!formed) continue;
-          let valid = true;
-          for (const { word: w } of formed) { if (!isValidWord(w)) { valid = false; break; } }
-          if (!valid) continue;
-          const { score } = scoreWords(formed, fresh.usedPremiums);
-          if (score > bestScore) { bestScore = score; bestPlacements = placements; }
+    for (const word of candidates) {
+      for (const dir of ['H', 'V']) {
+        const maxR = dir === 'V' ? SIZE - word.length : SIZE;
+        const maxC = dir === 'H' ? SIZE - word.length : SIZE;
+        for (let r = 0; r < maxR; r++) {
+          for (let c = 0; c < maxC; c++) {
+            const placements = _botPlacements(word, r, c, dir, board, hand);
+            if (!placements || placements.length === 0) continue;
+            const v = validatePlacement(fresh, placements, bot.socketId);
+            if (!v.ok) continue;
+            const formed = findWords(board, placements);
+            if (!formed) continue;
+            let valid = true;
+            for (const { word: w } of formed) { if (!isValidWord(w)) { valid = false; break; } }
+            if (!valid) continue;
+            const { score } = scoreWords(formed, fresh.usedPremiums);
+            if (score > bestScore) { bestScore = score; bestPlacements = placements; }
+          }
         }
       }
     }
-  }
 
-  if (bestPlacements) {
-    handleScrabblePlay(io, supabase, roomId, bot.socketId, bestPlacements);
-  } else if (bag.length >= 2 && hand.length > 0) {
-    // Exchange the least-valuable tile
-    const sorted = [...hand].sort((a, b) => (LETTER_VALUES[a] || 0) - (LETTER_VALUES[b] || 0));
-    handleScrabbleExchange(io, supabase, roomId, bot.socketId, [sorted[0]]);
-  } else {
-    handleScrabbleSkip(io, supabase, roomId, bot.socketId);
+    if (bestPlacements) {
+      handleScrabblePlay(io, supabase, roomId, bot.socketId, bestPlacements);
+    } else if (bag.length >= 2 && hand.length > 0) {
+      // Exchange the least-valuable tile
+      const sorted = [...hand].sort((a, b) => (LETTER_VALUES[a] || 0) - (LETTER_VALUES[b] || 0));
+      handleScrabbleExchange(io, supabase, roomId, bot.socketId, [sorted[0]]);
+    } else {
+      handleScrabbleSkip(io, supabase, roomId, bot.socketId);
+    }
+  } catch (e) {
+    console.error('[scrabble bot] move error:', e.message);
+    // Fallback: force a skip so the game is never permanently frozen by a bot error
+    try { handleScrabbleSkip(io, supabase, roomId, bot.socketId); } catch {}
   }
 }
 
