@@ -297,13 +297,20 @@ module.exports = function leaderboardRoutes(supabase) {
 
   // Game-specific highscore leaderboard
   // Score-based games use game_highscores; all others use wins from matches table
-  const SCORE_GAMES = ['blockBlast', 'tetris', 'snake', 'galaga', 'asteroids', 'piano', 'twoFortyEight', 'clickRace'];
+  const SCORE_GAMES = new Set(['blockBlast', 'tetris', 'snake', 'galaga', 'asteroids', 'piano', 'twoFortyEight', 'clickRace', 'wordVS']);
+
+  // Frontend game-type IDs → DB game_type values (highscores table uses different keys than matches)
+  const GAME_TYPE_MAP = {
+    scrabble: 'wordVS',    // frontend sends 'scrabble', highscores stored as 'wordVS'
+    coinFlip: 'coin_flip', // frontend sends 'coinFlip', matches stored as 'coin_flip'
+  };
 
   router.get('/game/:gameType', async (req, res) => {
-    const { gameType } = req.params;
+    const { gameType: rawGameType } = req.params;
+    const gameType = GAME_TYPE_MAP[rawGameType] || rawGameType;
     const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
 
-    if (SCORE_GAMES.includes(gameType)) {
+    if (SCORE_GAMES.has(gameType)) {
       // ── Score leaderboard from game_highscores ──
       const { data, error } = await supabase
         .from('game_highscores')

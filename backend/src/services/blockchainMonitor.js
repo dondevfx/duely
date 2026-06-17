@@ -20,9 +20,9 @@ const { createDepositSwap } = require('./simpleSwapService');
 const { swapSolToUsdc }     = require('./jupiterService');
 
 const POLL_INTERVAL_MS      = 45_000;
-const OUR_FEE               = 0.005; // 0.5% platform fee on all deposits
-// USDC: show $2 min in UI, process anything >= $1.50 (buffer for slight underpayment)
-const USDC_MIN_USD          = 1.50;
+const OUR_FEE               = 0.001; // 0.1% platform fee on all deposits
+// USDC: show $5 min in UI, process anything >= $4.00 (buffer for slight underpayment / fees)
+const USDC_MIN_USD          = 4.00;
 // Non-SOL (BTC/ETH/etc): show $10 min in UI
 //   < $7  → hard reject (too small, not worth ChangeNow fees)
 //   $7–$9.99 → forward to ChangeNow, platform keeps USDC (buffer for slight underpayment)
@@ -344,7 +344,7 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
   const { creditCoins, recordDeposit } = require('./walletService');
   const usdcAddress = process.env.USDC_SPL_ADDRESS;
 
-  // ── USDC: credit directly, no swap needed — apply 0.5% fee ──────────────────
+  // ── USDC: credit directly, no swap needed — apply 0.1% fee ──────────────────
   if (coin === 'usdc') {
     if (amount < USDC_MIN_USD) {
       console.warn(`[monitor] USDC $${amount.toFixed(2)} below $${USDC_MIN_USD} minimum — skipping ${txHash}`);
@@ -358,17 +358,17 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
       user_id: userId, type: 'deposit', amount_c: credited,
       crypto_amount: amount, crypto_symbol: 'USDC', tx_hash: txHash, status: 'confirmed',
     });
-    console.log(`[monitor] USDC deposit — received $${amount}, credited $${credited} (0.5% fee) to user ${userId}`);
+    console.log(`[monitor] USDC deposit — received $${amount}, credited $${credited} (0.1% fee) to user ${userId}`);
     _seenTxs.add(txHash);
     return;
   }
 
   // netAmount already computed above (amount - gasRes)
 
-  // ── SOL: swap via Jupiter, credit exact USDC received minus 0.5% ─────────────
+  // ── SOL: swap via Jupiter, credit exact USDC received minus 0.1% ─────────────
   if (coin === 'sol') {
     const netUsd     = netAmount * priceUsd;
-    const creditUser = netUsd >= 1.50;   // under $1.50 → platform keeps, no user credit
+    const creditUser = netUsd >= 4.00;   // under $4.00 → platform keeps, no user credit
 
     if (!usdcAddress) { console.error('[monitor] USDC_SPL_ADDRESS not set'); return; }
     const { privKey } = getAddress(userId, coin);
@@ -417,7 +417,7 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     if (creditUser && credited > 0) {
       await creditCoins(supabase, userId, credited);
       await recordDeposit(supabase, userId, credited, 'crypto');
-      console.log(`[monitor] ✓ SOL credited $${credited} to user ${userId} ($${usdcReceived} USDC received, 0.5% fee)`);
+      console.log(`[monitor] ✓ SOL credited $${credited} to user ${userId} ($${usdcReceived} USDC received, 0.1% fee)`);
     } else {
       console.log(`[monitor] SOL $${netUsd.toFixed(2)} below $1.50 — swapped ${usdcReceived} USDC, no user credit`);
     }
@@ -432,7 +432,7 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
   // ── Non-SOL, non-USDC: forward to ChangeNow, swapPoller credits exact USDC received ─
   // < $7        → hard reject (not worth ChangeNow fees)
   // $7 – $9.99  → forward to ChangeNow, platform keeps USDC (buffer for slight underpayment)
-  // $10+        → forward to ChangeNow, credit user exact USDC received − 0.5% fee
+  // $10+        → forward to ChangeNow, credit user exact USDC received − 0.1% fee
   if (estimatedUsd < NON_SOL_HARD_MIN) {
     console.warn(`[monitor] non-SOL $${estimatedUsd.toFixed(2)} below $${NON_SOL_HARD_MIN} hard min — skipping ${txHash}`);
     _seenTxs.add(txHash);

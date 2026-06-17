@@ -177,7 +177,7 @@ export default function Home() {
               <ul className="text-sm text-muted space-y-2">
                 <li className="flex items-start gap-2">
                   <span className="text-primary">•</span>
-                  1 C Coin = $1 USD
+                  1 <CoinIcon size="0.85em" /> = $1 USD
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-accent">•</span>

@@ -10,8 +10,8 @@ import CoinIcon from '../components/CoinIcon';
 
 // ── Supported deposit coins ───────────────────────────────────────────
 const COINS = [
-  { id: 'sol',  label: 'SOL',  network: 'Solana',   minUsd: 2  },
-  { id: 'usdc', label: 'USDC', network: 'Solana',   minUsd: 2  },
+  { id: 'sol',  label: 'SOL',  network: 'Solana',   minUsd: 5  },
+  { id: 'usdc', label: 'USDC', network: 'Solana',   minUsd: 5  },
   { id: 'btc',  label: 'BTC',  network: 'Bitcoin',  minUsd: 10 },
   { id: 'eth',  label: 'ETH',  network: 'Ethereum', minUsd: 10 },
   { id: 'bnb',  label: 'BNB',  network: 'BSC',      minUsd: 10 },
@@ -229,7 +229,7 @@ export default function Wallet() {
     <div className="min-h-screen bg-bg pt-16" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}>
       <div className="max-w-2xl mx-auto px-4 py-12">
         <h1 className="text-4xl font-black text-white mb-2">Wallet</h1>
-        <p className="text-muted mb-8">Manage your Coins — 1 Coin = $1 USD</p>
+        <p className="text-muted mb-8">Manage your Coins — 1 <CoinIcon size="0.85em" /> = $1 USD</p>
 
         {/* ── Balance card ────────────────────────────────────────────── */}
         <div className="bg-gradient-to-br from-primary/20 to-accent/10 border border-primary/30 rounded-2xl p-6 mb-6">

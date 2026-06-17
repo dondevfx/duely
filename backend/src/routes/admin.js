@@ -30,11 +30,12 @@ module.exports = function adminRoutes(supabase) {
       supabase.from('matches').select('id', { count: 'exact', head: true }).gte('played_at', todayStart.toISOString()),
       supabase.from('profiles').select('id', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString()),
       supabase.from('profiles').select('c_coins, diamonds, fee_balance').eq('id', process.env.ADMIN_USER_ID).single(),
-      supabase.from('matches').select('entry_fee_c, prize_pool_c'),
+      supabase.from('matches').select('prize_pool_c'),
       supabase.from('transactions').select('id', { count: 'exact', head: true }).eq('type', 'withdrawal').eq('status', 'pending'),
     ]);
 
-    const totalWagered = (matchData || []).reduce((s, m) => s + (Number(m.entry_fee_c) || 0), 0);
+    // Sum prize_pool_c (both players' fees combined) so total_wagered matches what admin fee is calculated against
+    const totalWagered = (matchData || []).reduce((s, m) => s + (Number(m.prize_pool_c) || 0), 0);
 
     res.json({
       total_users:        totalUsers   ?? 0,
