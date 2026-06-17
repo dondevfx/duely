@@ -1,5 +1,6 @@
 const { unlockUser } = require('./lockService');
 const { resolveAffiliates, payAffiliatesCoins, payAffiliatesDiamonds } = require('./affiliateService');
+const { creditRakeback } = require('./rakebackService');
 const PLATFORM_FEE_PERCENT = 0.05;
 
 const MAX_SINGLE_AMOUNT   = 10000;  // $10,000 hard cap per transaction
@@ -85,6 +86,11 @@ async function settleMatch(supabase, winnerId, loserId, entryFee) {
       await supabase.rpc('credit_fee_balance', { user_id: adminId, amount: adminFeeAmount })
         .then(({ error: e }) => { if (e) console.error('[admin-fee] credit_fee_balance failed:', e.message); })
         .catch(err => console.error('[admin-fee] credit_fee_balance threw:', err.message));
+    }
+
+    // Credit rakeback from the 5% fee pool (0.25% per player)
+    if (parseFloat(entryFee) > 0) {
+      await creditRakeback(supabase, winnerId, loserId, prizePool, 'coins').catch(() => {});
     }
 
     const payout = parseFloat((prizePool * 0.95).toFixed(4));

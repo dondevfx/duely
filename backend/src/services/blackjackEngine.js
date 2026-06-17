@@ -1,7 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
-const { creditRakeback } = require('./rakebackService');
 const gameEvents = require('./gameEvents');
 
 const SUITS = ['♠', '♥', '♦', '♣'];
@@ -408,9 +407,6 @@ async function _resolveGame(io, supabase, roomId) {
         entry_fee_diamonds: room.currency === 'diamonds' ? room.entryFee : 0,
       });
     } catch (e) { console.error('[blackjackEngine] matches insert:', e.message); }
-    if (room.entryFee > 0) {
-      await creditRakeback(supabase, winner.isBot ? null : winner.userId, loser.isBot ? null : loser.userId, room.entryFee * 2, room.currency);
-    }
   }
 
   // Build hand result info (include split hands)

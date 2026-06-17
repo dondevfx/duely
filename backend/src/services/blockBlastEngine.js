@@ -6,7 +6,6 @@ const MAX_SCORE = 15_000_000;
 // Max points a single move can legitimately award:
 // scoreForClear(16 lines, 5 cells, chain=3) ≈ 77k — use 150k to give headroom for combos
 const MAX_DELTA_PER_PING = 150_000;
-const { creditRakeback } = require('./rakebackService');
 const gameEvents = require('./gameEvents');
 
 const blockBlastRooms = new Map();
@@ -201,7 +200,6 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
       if (room.entryFee > 0) {
         try {
           balanceChange = await settleBotMatch(supabase, player.userId, room.entryFee, room.currency || 'coins', humanWon);
-          await creditRakeback(supabase, player.userId, null, room.entryFee * 2, room.currency || 'coins');
         } catch (e) { console.error('[blockBlastEngine] solo settle:', e.message); }
       }
       if (supabase) {
@@ -331,14 +329,6 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
       });
     } catch (e) { console.error('[blockBlastEngine] matches insert:', e.message); }
   }
-  // Credit rakeback for both players (skip bots — filter(Boolean) handles null)
-  if (supabase && room.entryFee > 0) {
-    const prizePool = room.entryFee * 2;
-    const p1Id = winner.isBot ? null : winner.userId;
-    const p2Id = loser.isBot  ? null : loser.userId;
-    await creditRakeback(supabase, p1Id, p2Id, prizePool, room.currency || 'coins');
-  }
-
   io.emit('active_game_ended', { id: roomId });
   gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId) });
   io.to(roomId).emit('block_blast_result', {

@@ -1,7 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
-const { creditRakeback } = require('./rakebackService');
 const gameEvents = require('./gameEvents');
 
 // Queues: headsQueue / tailsQueue keyed by `${entryFee}:${currency}`
@@ -136,11 +135,6 @@ async function resolveCoinFlip(io, supabase, roomId) {
         entry_fee_diamonds: room.currency === 'diamonds' ? room.entryFee : 0,
       });
     } catch (e) { console.error('[coinFlipEngine] matches insert:', e.message); }
-    if (room.entryFee > 0) {
-      const p1Id = winner.isBot ? null : winner.userId;
-      const p2Id = loser.isBot ? null : loser.userId;
-      await creditRakeback(supabase, p1Id, p2Id, room.entryFee * 2, room.currency);
-    }
   }
 
   io.emit('active_game_ended', { id: roomId });
