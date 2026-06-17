@@ -227,6 +227,7 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
       gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId) });
       io.to(roomId).emit('block_blast_result', {
         isSolo:      true,
+        winnerId:    humanWon ? player.userId : null,
         playerId:    player.userId,
         playerScore: verifiedScore,
         botScore,

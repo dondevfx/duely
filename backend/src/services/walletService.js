@@ -140,10 +140,16 @@ async function settleMatchDiamonds(supabase, winnerId, loserId, entryFee) {
     const winnerPayout = fee * 2; // No fee on diamonds — full 2x payout
 
     // Deduct winner first — if they lack funds the loser is never charged.
-    // Then deduct loser, then credit winner full 2x.
     await deductDiamonds(supabase, winnerId, fee);
-    await deductDiamonds(supabase, loserId, fee);
-    // Protect against credit failure — refund both if credit fails
+    // Deduct loser — if they lack funds, refund winner before throwing.
+    try {
+      await deductDiamonds(supabase, loserId, fee);
+    } catch (loserErr) {
+      console.error('[settleMatchDiamonds] loser deduct failed — refunding winner:', loserErr.message);
+      await creditDiamonds(supabase, winnerId, fee).catch(() => {});
+      throw loserErr;
+    }
+    // Credit winner full 2x — refund both if credit fails.
     try {
       await creditDiamonds(supabase, winnerId, winnerPayout);
     } catch (creditErr) {
@@ -256,26 +262,15 @@ async function forfeitSettleDiamonds(supabase, winnerId, loserId, entryFee) {
     if (fee <= 0) return { winnerPayout: 0 };
     const winnerPayout = fee * 2;
 
-    // ── Deduct from loser ──────────────────────────────────────────────
+    // ── Deduct from winner first — if they lack funds, loser is never charged ──
+    const { error: deductWinnerErr } = await supabase.rpc('deduct_diamonds', { user_id: winnerId, amount: fee });
+    if (deductWinnerErr) throw deductWinnerErr;
+
+    // ── Deduct from loser — if they lack funds, refund winner ──────────────────
     const { error: deductLoserErr } = await supabase.rpc('deduct_diamonds', { user_id: loserId, amount: fee });
     if (deductLoserErr) {
-      const { data: loserRow, error: fetchErr } = await supabase
-        .from('profiles').select('diamonds').eq('id', loserId).single();
-      if (fetchErr) throw fetchErr;
-      const newLoserBal = Math.max(0, (loserRow?.diamonds || 0) - fee);
-      const { error: updErr } = await supabase.from('profiles').update({ diamonds: newLoserBal }).eq('id', loserId);
-      if (updErr) throw updErr;
-    }
-
-    // ── Deduct from winner ─────────────────────────────────────────────
-    const { error: deductWinnerErr } = await supabase.rpc('deduct_diamonds', { user_id: winnerId, amount: fee });
-    if (deductWinnerErr) {
-      const { data: winnerRow, error: fetchErr } = await supabase
-        .from('profiles').select('diamonds').eq('id', winnerId).single();
-      if (fetchErr) throw fetchErr;
-      const newWinnerBal = Math.max(0, (winnerRow?.diamonds || 0) - fee);
-      const { error: updErr } = await supabase.from('profiles').update({ diamonds: newWinnerBal }).eq('id', winnerId);
-      if (updErr) throw updErr;
+      await supabase.rpc('credit_diamonds', { user_id: winnerId, amount: fee }).catch(() => {});
+      throw deductLoserErr;
     }
 
     // ── Credit winner full 2x ──────────────────────────────────────────
@@ -382,7 +377,6 @@ async function settleDrawMatch(supabase, p1Id, p2Id, entryFee) {
   await supabase.rpc('credit_coins', { user_id: p2Id, amount: refund });
 
   // Rakeback — 0.5% of prize pool split across instant/daily/weekly buckets
-  const { creditRakeback } = require('./rakebackService');
   await creditRakeback(supabase, p1Id, p2Id, prizePool, 'coins').catch(() => {});
 
   // Pay affiliates / creator codes + admin fee (same as a normal match)
