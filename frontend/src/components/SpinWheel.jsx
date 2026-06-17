@@ -124,6 +124,7 @@ export default function SpinWheel({ locked = false }) {
     setErr('');
     try {
       const { prize } = await api.post('/bonus/spin', {});
+      refreshProfile(); // fetch correct balance immediately so GameLobby enables the play button
       updateProfile({ diamonds: Math.max(0, (profile?.diamonds ?? 0) + prize) });
       const idx    = prizeToSeg(prize);
       const center = idx * STEP + STEP / 2;

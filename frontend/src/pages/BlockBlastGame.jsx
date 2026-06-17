@@ -289,7 +289,7 @@ export default function BlockBlastGame() {
   useEffect(() => {
     if (!socket) return;
 
-    socket.on('block_blast_match_found', ({ roomId: rid, opponent: opp, vsBot, entryFee: fee }) => {
+    socket.on('block_blast_match_found', ({ roomId: rid, opponent: opp, vsBot, entryFee: fee, currency: cur }) => {
       eloBeforeRef.current = profileRef.current?.elo ?? null;
       gameOverRef.current = false; // reset for new match
       roomIdRef.current = rid;
@@ -300,7 +300,14 @@ export default function BlockBlastGame() {
       isSoloRef.current = !!vsBot;
       setPhase('countdown');
       setCountdown(3);
-      if ((fee ?? 0) > 0) refreshProfile(); // fee already deducted — show updated balance immediately
+      if ((fee ?? 0) > 0) {
+        const isDiamonds = (cur ?? 'coins') === 'diamonds';
+        updateProfile(isDiamonds
+          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) - fee) }
+          : { c_coins: Math.max(0, (profileRef.current?.c_coins ?? 0) - fee) }
+        );
+        refreshProfile();
+      }
     });
 
     socket.on('match_cancelled', ({ message }) => {

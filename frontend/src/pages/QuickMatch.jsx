@@ -149,9 +149,9 @@ export default function QuickMatch() {
           />
 
           {entryFee > 0 && (
-            <div className="flex items-center justify-between mt-3 px-1">
-              <span className="text-sm text-muted">Win payout</span>
-              <span className="text-success font-bold text-sm">+{payout}</span>
+            <div className="text-center mt-4">
+              <div className="text-xs text-muted mb-1">Win payout</div>
+              <div className="text-3xl font-black text-success">+{payout}</div>
             </div>
           )}
           {insufficient && (

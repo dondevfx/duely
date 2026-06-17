@@ -286,13 +286,20 @@ export default function BlackjackGame() {
       setStatusMsg('Waiting for opponent…');
     });
 
-    socket.on('bj_match_found', ({ roomId: rid, opponent, entryFee: fee }) => {
+    socket.on('bj_match_found', ({ roomId: rid, opponent, entryFee: fee, currency: cur }) => {
       roomIdRef.current = rid;
       pendingStartRef.current = null;
       setRoomId(rid);
       setOpponentUsername(opponent.username);
       setCountdown(3); // triggers countdown → game starts when countdown hits 0
-      if ((fee ?? 0) > 0) refreshProfile(); // fee already deducted — show updated balance immediately
+      if ((fee ?? 0) > 0) {
+        const isDiamonds = (cur ?? 'coins') === 'diamonds';
+        updateProfile(isDiamonds
+          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) - fee) }
+          : { c_coins: Math.max(0, (profileRef.current?.c_coins ?? 0) - fee) }
+        );
+        refreshProfile();
+      }
     });
 
     socket.on('match_cancelled', ({ message }) => {

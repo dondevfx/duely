@@ -375,12 +375,19 @@ export default function ScrabbleGame() {
   useEffect(() => {
     if (!socket) return;
 
-    socket.on('scrabble_match_found', ({ roomId: rid, opponent: opp, entryFee: fee }) => {
+    socket.on('scrabble_match_found', ({ roomId: rid, opponent: opp, entryFee: fee, currency: cur }) => {
       eloBeforeRef.current = profileRef.current?.elo ?? null;
       inActiveMatchRef.current = true; // mark active from match_found so forfeit fires during countdown too
       gameOverRef.current = false; // reset for new match
       setRoomId(rid); setOpponent(opp); setPhase('countdown'); setCountdown(3);
-      if ((fee ?? 0) > 0) refreshProfile(); // fee already deducted — show updated balance immediately
+      if ((fee ?? 0) > 0) {
+        const isDiamonds = (cur ?? 'coins') === 'diamonds';
+        updateProfile(isDiamonds
+          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) - fee) }
+          : { c_coins: Math.max(0, (profileRef.current?.c_coins ?? 0) - fee) }
+        );
+        refreshProfile();
+      }
     });
 
     socket.on('match_cancelled', ({ message }) => {

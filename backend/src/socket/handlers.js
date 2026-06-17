@@ -962,8 +962,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         }
         const s1 = io.sockets.sockets.get(p1.socketId);
         const s2 = io.sockets.sockets.get(p2.socketId);
-        if (s1) { s1.join(roomId); s1.emit('block_blast_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee }); }
-        if (s2) { s2.join(roomId); s2.emit('block_blast_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee }); }
+        if (s1) { s1.join(roomId); s1.emit('block_blast_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency }); }
+        if (s2) { s2.join(roomId); s2.emit('block_blast_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency }); }
         io.emit('queue_entry_removed', { id: p1.socketId });
         io.emit('queue_entry_removed', { id: p2.socketId });
         if (!p1.isBot && !p2.isBot) {
@@ -1810,8 +1810,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         }
         const s1 = io.sockets.sockets.get(p1.socketId);
         const s2 = io.sockets.sockets.get(p2.socketId);
-        if (s1) { s1.join(roomId); s1.emit('scrabble_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee }); }
-        if (s2) { s2.join(roomId); s2.emit('scrabble_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee }); }
+        if (s1) { s1.join(roomId); s1.emit('scrabble_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency }); }
+        if (s2) { s2.join(roomId); s2.emit('scrabble_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency }); }
         io.emit('queue_entry_removed', { id: p1.socketId });
         io.emit('queue_entry_removed', { id: p2.socketId });
         // Brief countdown then start — check room still alive after each tick
@@ -1952,8 +1952,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         }
         const s1 = io.sockets.sockets.get(match.p1.socketId);
         const s2 = io.sockets.sockets.get(match.p2.socketId);
-        if (s1) { s1.join(match.roomId); s1.emit('coin_flip_match_found', { roomId: match.roomId, opponent: { userId: match.p2.userId, username: match.p2.username, elo: match.p2.elo }, side: match.p1.side, entryFee }); }
-        if (s2) { s2.join(match.roomId); s2.emit('coin_flip_match_found', { roomId: match.roomId, opponent: { userId: match.p1.userId, username: match.p1.username, elo: match.p1.elo }, side: match.p2.side, entryFee }); }
+        if (s1) { s1.join(match.roomId); s1.emit('coin_flip_match_found', { roomId: match.roomId, opponent: { userId: match.p2.userId, username: match.p2.username, elo: match.p2.elo }, side: match.p1.side, entryFee, currency: match.p1.currency }); }
+        if (s2) { s2.join(match.roomId); s2.emit('coin_flip_match_found', { roomId: match.roomId, opponent: { userId: match.p1.userId, username: match.p1.username, elo: match.p1.elo }, side: match.p2.side, entryFee, currency: match.p2.currency }); }
         // 3s countdown + 3s spin = 6s before resolving
         setTimeout(() => resolveCoinFlip(io, supabase, match.roomId), 6000);
       } else {
@@ -2060,8 +2060,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         }
         const s1 = io.sockets.sockets.get(match.p1.socketId);
         const s2 = io.sockets.sockets.get(match.p2.socketId);
-        if (s1) { s1.join(match.roomId); s1.emit('bj_match_found', { roomId: match.roomId, opponent: { userId: match.p2.userId, username: match.p2.username, elo: match.p2.elo }, entryFee }); }
-        if (s2) { s2.join(match.roomId); s2.emit('bj_match_found', { roomId: match.roomId, opponent: { userId: match.p1.userId, username: match.p1.username, elo: match.p1.elo }, entryFee }); }
+        if (s1) { s1.join(match.roomId); s1.emit('bj_match_found', { roomId: match.roomId, opponent: { userId: match.p2.userId, username: match.p2.username, elo: match.p2.elo }, entryFee, currency: match.p1.currency }); }
+        if (s2) { s2.join(match.roomId); s2.emit('bj_match_found', { roomId: match.roomId, opponent: { userId: match.p1.userId, username: match.p1.username, elo: match.p1.elo }, entryFee, currency: match.p2.currency }); }
         startBlackjackGame(io, supabase, match.roomId);
       } else {
         socket.emit('bj_queue_joined');
@@ -2343,7 +2343,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       try {
         await settleBotMatch(supabase, leaver.userId, fee, currency, false);
       } catch (e) { console.error('bot forfeit settle error:', e.message); }
-      supabase.from('profiles').update({ current_streak: 0 }).eq('id', leaver.userId).catch(() => {});
+      supabase.from('profiles').update({ current_streak: 0 }).eq('id', leaver.userId).then().catch(() => {});
     } else if (fee > 0 && !stayer.isBot) {
       const stayerSocket = io.sockets.sockets.get(stayer.socketId);
 
@@ -2380,7 +2380,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           }
 
           // ── Streak: leaver loses streak, stayer gains ─────────────────
-          supabase.from('profiles').update({ current_streak: 0 }).eq('id', leaver.userId).catch(() => {});
+          supabase.from('profiles').update({ current_streak: 0 }).eq('id', leaver.userId).then().catch(() => {});
           const { updateStreaks } = require('../services/eloService');
           updateStreaks(supabase, stayer.userId, null).catch(() => {});
 
@@ -2712,8 +2712,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       case 'scrabble': {
         ({ roomId } = createDirectScrabbleRoom(p1, p2));
         s1.join(roomId); s2.join(roomId);
-        s1.emit('scrabble_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee });
-        s2.emit('scrabble_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee });
+        s1.emit('scrabble_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency });
+        s2.emit('scrabble_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency });
         io.to(roomId).emit('scrabble_countdown', { count: 3 });
         setTimeout(() => io.to(roomId).emit('scrabble_countdown', { count: 2 }), 1000);
         setTimeout(() => io.to(roomId).emit('scrabble_countdown', { count: 1 }), 2000);
@@ -2725,16 +2725,16 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         roomId = result.roomId;
         const p2cf = result.p2;
         s1.join(roomId); s2.join(roomId);
-        s1.emit('coin_flip_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, side: p1.side, entryFee: p1.entryFee });
-        s2.emit('coin_flip_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, side: p2cf.side, entryFee: p2.entryFee });
+        s1.emit('coin_flip_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, side: p1.side, entryFee: p1.entryFee, currency: p1.currency });
+        s2.emit('coin_flip_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, side: p2cf.side, entryFee: p2.entryFee, currency: p2.currency });
         setTimeout(() => resolveCoinFlip(io, supabase, roomId), 6000);
         break;
       }
       case 'blackjack': {
         ({ roomId } = createDirectBlackjackRoom(p1, p2));
         s1.join(roomId); s2.join(roomId);
-        s1.emit('bj_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee });
-        s2.emit('bj_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee });
+        s1.emit('bj_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency });
+        s2.emit('bj_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency });
         startBlackjackGame(io, supabase, roomId);
         break;
       }

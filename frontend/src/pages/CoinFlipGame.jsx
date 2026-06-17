@@ -146,8 +146,10 @@ export default function CoinFlipGame() {
   const socketRef        = useRef(socket);
   const inActiveMatchRef = useRef(false);
   const refreshProfileRef = useRef(refreshProfile);
+  const profileRef        = useRef(profile);
   useEffect(() => { socketRef.current = socket; }, [socket]);
   useEffect(() => { refreshProfileRef.current = refreshProfile; }, [refreshProfile]);
+  useEffect(() => { profileRef.current = profile; }, [profile]);
   // Forfeit on unmount and on page refresh/close; also refresh balance so leaver sees updated balance
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -286,16 +288,22 @@ export default function CoinFlipGame() {
       setStatusMsg(`Waiting for someone to pick ${s === 'heads' ? 'Tails' : 'Heads'}…`);
     });
 
-    socket.on('coin_flip_match_found', ({ opponent, entryFee: fee }) => {
+    socket.on('coin_flip_match_found', ({ opponent, entryFee: fee, currency: cur }) => {
       inActiveMatchRef.current = true;
       setFlipResult(null);
       setResultLanded(false);
       rotRef.current = 0;
       setStatusMsg(`vs ${opponent.username}`);
-      // 3-second countdown before coin starts spinning
       setCountdown(3);
       setPhase('countdown');
-      if ((fee ?? 0) > 0) refreshProfile(); // fee already deducted — show updated balance immediately
+      if ((fee ?? 0) > 0) {
+        const isDiamonds = (cur ?? 'coins') === 'diamonds';
+        updateProfile(isDiamonds
+          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) - fee) }
+          : { c_coins: Math.max(0, (profileRef.current?.c_coins ?? 0) - fee) }
+        );
+        refreshProfile();
+      }
       const t1 = setTimeout(() => setCountdown(2), 1000);
       const t2 = setTimeout(() => setCountdown(1), 2000);
       const t3 = setTimeout(() => { setCountdown(0); setPhase('flipping'); }, 3000);
@@ -314,24 +322,23 @@ export default function CoinFlipGame() {
       setFlipResult(data.result);
       landCoin(data.result);
 
-      // Optimistic balance update — backend has already settled by the time this event fires
-      const myId = profile?.id;
-      const isWin = data.winnerId === myId;
-      const payout = data.balanceChange?.winnerPayout;
-      if (payout != null && isWin) {
-        const isDiamonds = data.currency === 'diamonds';
-        updateProfile(isDiamonds
-          ? { diamonds: Math.max(0, (profile?.diamonds ?? 0) + payout) }
-          : { c_coins: Math.max(0, (profile?.c_coins ?? 0) + payout) }
-        );
-      }
-
       // After transition completes show label for 2s, then result screen
       setTimeout(() => setResultLanded(true), 4200);
       setTimeout(() => {
-        setResultData(pendingResultRef.current);
+        const res = pendingResultRef.current;
+        const myId = profileRef.current?.id;
+        const isWin = res.winnerId === myId;
+        const payout = res.balanceChange?.winnerPayout;
+        if (payout != null && isWin) {
+          const isDiamonds = res.currency === 'diamonds';
+          updateProfile(isDiamonds
+            ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + payout) }
+            : { c_coins: Math.max(0, (profileRef.current?.c_coins ?? 0) + payout) }
+          );
+        }
+        setResultData(res);
         setPhase('result');
-        refreshProfile(); // server-confirm balance
+        refreshProfile();
       }, 6200);
     });
 
