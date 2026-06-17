@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 let WORDS = null;
+let usingFallback = false;
 
 function loadWords() {
   if (WORDS) return WORDS;
@@ -24,9 +25,8 @@ function loadWords() {
   return WORDS;
 }
 
-let usingFallback = false;
-
 function isValidWord(word) {
+  if (usingFallback) return word.length >= 2;
   const words = loadWords();
   return words.has(word.toLowerCase());
 }

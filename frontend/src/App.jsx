@@ -52,7 +52,9 @@ import SaveLoginPrompt from './components/SaveLoginPrompt';
 
 function ProtectedRoute({ children }) {
   const { session, loading, mfaPending } = useAuth();
-  if (loading) return (
+  // If loading and no session yet, we may be resolving a saved-login token — wait.
+  // If session is already set (seeded from storage), render immediately without spinner.
+  if (loading && !session) return (
     <div className="flex-1 flex items-center justify-center">
       <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
     </div>
