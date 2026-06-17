@@ -289,7 +289,7 @@ export default function BlockBlastGame() {
   useEffect(() => {
     if (!socket) return;
 
-    socket.on('block_blast_match_found', ({ roomId: rid, opponent: opp, vsBot }) => {
+    socket.on('block_blast_match_found', ({ roomId: rid, opponent: opp, vsBot, entryFee: fee }) => {
       eloBeforeRef.current = profileRef.current?.elo ?? null;
       gameOverRef.current = false; // reset for new match
       roomIdRef.current = rid;
@@ -300,6 +300,12 @@ export default function BlockBlastGame() {
       isSoloRef.current = !!vsBot;
       setPhase('countdown');
       setCountdown(3);
+      if ((fee ?? 0) > 0) refreshProfile(); // fee already deducted — show updated balance immediately
+    });
+
+    socket.on('match_cancelled', ({ message }) => {
+      setPhase('lobby');
+      setStatusMsg(message || 'Match cancelled. Please try again.');
     });
 
     socket.on('block_blast_countdown', ({ count }) => setCountdown(count));
@@ -320,12 +326,11 @@ export default function BlockBlastGame() {
       const myId = profileRef.current?.id;
       const isWin = res.winnerId === myId;
       const payout = res.balanceChange?.winnerPayout ?? res.winnerPayout;
-      const fee = res.entryFee ?? 0;
-      if (payout != null) {
+      if (payout != null && isWin) {
         const isDiamonds = res.currency === 'diamonds';
         updateProfile(isDiamonds
-          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + (isWin ? payout - fee : -fee)) }
-          : { c_coins: Math.max(0, (profileRef.current?.c_coins ?? 0) + (isWin ? payout - fee : -fee)) }
+          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + payout) }
+          : { c_coins: Math.max(0, (profileRef.current?.c_coins ?? 0) + payout) }
         );
       }
       refreshProfile();
@@ -360,11 +365,11 @@ export default function BlockBlastGame() {
       const myId = profileRef.current?.id;
       const isWin = data.winnerId === myId;
       const payout = data.winnerPayout ?? null;
-      if (payout != null) {
+      if (payout != null && isWin) {
         const isDiamonds = data.currency === 'diamonds';
         updateProfile(isDiamonds
-          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + (isWin ? payout - (data.entryFee ?? 0) : -(data.entryFee ?? 0))) }
-          : { c_coins: Math.max(0, (profileRef.current?.c_coins ?? 0) + (isWin ? payout - (data.entryFee ?? 0) : -(data.entryFee ?? 0))) }
+          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + payout) }
+          : { c_coins: Math.max(0, (profileRef.current?.c_coins ?? 0) + payout) }
         );
       }
       // Use server-provided ELO values to compute accurate delta (avoids stale eloBeforeRef)
@@ -395,6 +400,7 @@ export default function BlockBlastGame() {
       socket.emit('leave_game');
       socket.emit('leave_all_queues');
       socket.off('block_blast_match_found');
+      socket.off('match_cancelled');
       socket.off('block_blast_countdown');
       socket.off('block_blast_start');
       socket.off('block_blast_result');

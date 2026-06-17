@@ -375,11 +375,17 @@ export default function ScrabbleGame() {
   useEffect(() => {
     if (!socket) return;
 
-    socket.on('scrabble_match_found', ({ roomId: rid, opponent: opp }) => {
+    socket.on('scrabble_match_found', ({ roomId: rid, opponent: opp, entryFee: fee }) => {
       eloBeforeRef.current = profileRef.current?.elo ?? null;
       inActiveMatchRef.current = true; // mark active from match_found so forfeit fires during countdown too
       gameOverRef.current = false; // reset for new match
       setRoomId(rid); setOpponent(opp); setPhase('countdown'); setCountdown(3);
+      if ((fee ?? 0) > 0) refreshProfile(); // fee already deducted — show updated balance immediately
+    });
+
+    socket.on('match_cancelled', ({ message }) => {
+      setPhase('lobby');
+      setStatusMsg(message || 'Match cancelled. Please try again.');
     });
 
     socket.on('scrabble_countdown', ({ count }) => setCountdown(count));
@@ -463,12 +469,11 @@ export default function ScrabbleGame() {
       const myId = profileRef.current?.id;
       const isWin = res.winnerId === myId;
       const payout = res.balanceChange?.winnerPayout ?? res.winnerPayout;
-      const fee = res.entryFee ?? 0;
       const isDiamonds = res.currency === 'diamonds';
-      if (payout != null) {
+      if (payout != null && isWin) {
         updateProfile(isDiamonds
-          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + (isWin ? payout - fee : -fee)) }
-          : { c_coins:  Math.max(0, (profileRef.current?.c_coins  ?? 0) + (isWin ? payout - fee : -fee)) }
+          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + payout) }
+          : { c_coins:  Math.max(0, (profileRef.current?.c_coins  ?? 0) + payout) }
         );
       }
       setResult(res); setPhase('result'); refreshProfile();
@@ -492,8 +497,8 @@ export default function ScrabbleGame() {
       const isDiamonds = data.currency === 'diamonds';
       if (payout != null && isWin) {
         updateProfile(isDiamonds
-          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + payout - (data.entryFee ?? 0)) }
-          : { c_coins:  Math.max(0, (profileRef.current?.c_coins  ?? 0) + payout - (data.entryFee ?? 0)) }
+          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + payout) }
+          : { c_coins:  Math.max(0, (profileRef.current?.c_coins  ?? 0) + payout) }
         );
       }
       if (data.newWinnerElo != null) eloBeforeRef.current = isWin ? data.newWinnerElo - 25 : data.newLoserElo + 25;
@@ -516,6 +521,7 @@ export default function ScrabbleGame() {
       socket.emit('leave_game');
       socket.emit('leave_all_queues');
       socket.off('scrabble_match_found');
+      socket.off('match_cancelled');
       socket.off('scrabble_countdown');
       socket.off('scrabble_start');
       socket.off('scrabble_your_hand');

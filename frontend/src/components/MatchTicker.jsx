@@ -83,7 +83,6 @@ export default function MatchTicker() {
   const itemsRef            = useRef(items);
   const lastRealShownAt     = useRef(0);   // timestamp of last real match shown
   const lastFakeKeyRef      = useRef(null); // fee key of last fake shown
-  const lastTwoGamesRef     = useRef([]);   // last 2 fake game names shown
 
   useEffect(() => { itemsRef.current = items; }, [items]);
 
@@ -114,17 +113,24 @@ export default function MatchTicker() {
         const now  = Date.now();
         const canShowReal = pool.length > 0 && (now - lastRealShownAt.current) >= MIN_REAL_INTERVAL;
 
+        // Derive last 2 game names from current items (covers both real and fake)
+        const cur = itemsRef.current;
+        const lastTwoGames = cur.slice(0, 2).map(it => it.game.name);
+        const blockedGame = lastTwoGames.length === 2 && lastTwoGames[0] === lastTwoGames[1]
+          ? lastTwoGames[0] : null;
+
         let next;
         if (canShowReal && Math.random() < 0.70) {
-          // Pick a random real match
-          const pick = pool[Math.floor(Math.random() * pool.length)];
+          // Pick a real match, filtering out any that would make 3 in a row
+          const validPool = blockedGame ? pool.filter(p => p.game.name !== blockedGame) : pool;
+          const source = validPool.length > 0 ? validPool : pool;
+          const pick = source[Math.floor(Math.random() * source.length)];
           next = { ...pick, id: `real-${Date.now()}-${Math.random()}` };
           lastRealShownAt.current = now;
         } else {
-          // Fake — avoid same bet size as last fake
-          next = makeFakeItem(lastFakeKeyRef.current, lastTwoGamesRef.current);
+          // Fake — avoid same bet size as last fake and same game 3 in a row
+          next = makeFakeItem(lastFakeKeyRef.current, lastTwoGames);
           lastFakeKeyRef.current = feeKey(next);
-          lastTwoGamesRef.current = [next.game.name, ...(lastTwoGamesRef.current)].slice(0, 2);
         }
 
         setItems(prev => [next, ...prev].slice(0, MAX));

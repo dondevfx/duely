@@ -286,12 +286,18 @@ export default function BlackjackGame() {
       setStatusMsg('Waiting for opponent…');
     });
 
-    socket.on('bj_match_found', ({ roomId: rid, opponent }) => {
+    socket.on('bj_match_found', ({ roomId: rid, opponent, entryFee: fee }) => {
       roomIdRef.current = rid;
       pendingStartRef.current = null;
       setRoomId(rid);
       setOpponentUsername(opponent.username);
       setCountdown(3); // triggers countdown → game starts when countdown hits 0
+      if ((fee ?? 0) > 0) refreshProfile(); // fee already deducted — show updated balance immediately
+    });
+
+    socket.on('match_cancelled', ({ message }) => {
+      setPhase('lobby');
+      setStatusMsg(message || 'Match cancelled. Please try again.');
     });
 
     socket.on('bj_start', ({ hand, handScore, opponentHand, opponentHandSize: oppSz, timeLimit }) => {
@@ -375,12 +381,11 @@ export default function BlackjackGame() {
       const myId = profileRef.current?.id;
       const isWin = data.winnerId === myId;
       const payout = data.balanceChange?.winnerPayout ?? data.winnerPayout;
-      const fee = data.entryFee ?? 0;
-      if (payout != null) {
+      if (payout != null && isWin) {
         const isDiamonds = data.currency === 'diamonds';
         updateProfile(isDiamonds
-          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + (isWin ? payout - fee : -fee)) }
-          : { c_coins: Math.max(0, (profileRef.current?.c_coins ?? 0) + (isWin ? payout - fee : -fee)) }
+          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + payout) }
+          : { c_coins: Math.max(0, (profileRef.current?.c_coins ?? 0) + payout) }
         );
       }
       refreshProfile();
@@ -400,11 +405,11 @@ export default function BlackjackGame() {
       const myId = profileRef.current?.id;
       const isWin = data.winnerId === myId;
       const payout = data.winnerPayout ?? null;
-      if (payout != null) {
+      if (payout != null && isWin) {
         const isDiamonds = data.currency === 'diamonds';
         updateProfile(isDiamonds
-          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + (isWin ? payout - (data.entryFee ?? 0) : -(data.entryFee ?? 0))) }
-          : { c_coins: Math.max(0, (profileRef.current?.c_coins ?? 0) + (isWin ? payout - (data.entryFee ?? 0) : -(data.entryFee ?? 0))) }
+          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + payout) }
+          : { c_coins: Math.max(0, (profileRef.current?.c_coins ?? 0) + payout) }
         );
       }
       // Use server-provided ELO values to compute accurate delta (avoids stale eloBeforeRef)
@@ -441,7 +446,7 @@ export default function BlackjackGame() {
     return () => {
       socket.emit('leave_game');
       socket.emit('leave_all_queues');
-      socket.off('bj_queue_joined'); socket.off('bj_match_found');
+      socket.off('bj_queue_joined'); socket.off('bj_match_found'); socket.off('match_cancelled');
       socket.off('bj_start'); socket.off('bj_card'); socket.off('bj_opp_card');
       socket.off('bj_bust'); socket.off('bj_stood');
       socket.off('bj_split'); socket.off('bj_split_hand2'); socket.off('bj_opp_split');

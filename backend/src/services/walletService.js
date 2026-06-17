@@ -60,47 +60,63 @@ async function deductCoins(supabase, userId, amount) {
   if (error) throw error;
 }
 
-// Atomic match settlement — single SQL transaction.
-// Checks balances, deducts both players, credits winner, takes 5% fee.
-// Returns { prizePool, fee, winnerPayout }
+// Deduct match entry fee from both players at match start, BEFORE notifying clients.
+// Fees are taken atomically: if p2 deduction fails, p1 is refunded and an error is thrown.
+// Callers must handle the error: delete room, unlock both, emit match_cancelled.
+async function deductMatchFees(supabase, p1Id, p2Id, entryFee, currency) {
+  const isDiamonds = currency === 'diamonds';
+  const fee = isDiamonds ? Math.floor(entryFee) : parseFloat(entryFee);
+  if (!fee || fee <= 0) return;
+  if (isDiamonds) {
+    await deductDiamonds(supabase, p1Id, fee);
+    try {
+      await deductDiamonds(supabase, p2Id, fee);
+    } catch (e) {
+      await creditDiamonds(supabase, p1Id, fee).catch(() => {});
+      throw e;
+    }
+  } else {
+    const { error: e1 } = await supabase.rpc('deduct_coins', { user_id: p1Id, amount: fee });
+    if (e1) throw new Error(e1.message || 'Insufficient balance');
+    const { error: e2 } = await supabase.rpc('deduct_coins', { user_id: p2Id, amount: fee });
+    if (e2) {
+      await supabase.rpc('credit_coins', { user_id: p1Id, amount: fee }).catch(() => {});
+      throw new Error(e2.message || 'Opponent has insufficient balance');
+    }
+  }
+}
+
+// Coin match settlement — fees already deducted at match start, just credit winner 95% of pot.
+// Returns { winnerPayout }
 async function settleMatch(supabase, winnerId, loserId, entryFee) {
   const adminId = process.env.ADMIN_USER_ID;
   try {
-    const { data, error } = await supabase.rpc('settle_match_coins', {
-      p_winner_id: winnerId,
-      p_loser_id:  loserId,
-      p_entry_fee: parseFloat(entryFee),
-    });
-    if (error) throw error;
+    const fee = parseFloat(entryFee);
+    if (fee <= 0) return { winnerPayout: 0 };
+    const prizePool = parseFloat((fee * 2).toFixed(4));
+    const payout    = parseFloat((prizePool * 0.95).toFixed(4));
 
-    const prizePool = parseFloat(entryFee) * 2;
+    // Fees already deducted at match start — just credit winner
+    const { error: creditErr } = await supabase.rpc('credit_coins', { user_id: winnerId, amount: payout });
+    if (creditErr) throw creditErr;
 
-    if (adminId && parseFloat(entryFee) > 0) {
-      // Resolve affiliates and split fee
+    if (adminId) {
       const { owner1, owner2 } = await resolveAffiliates(supabase, winnerId, loserId)
         .catch(() => ({ owner1: null, owner2: null }));
       const { platformFee } = await payAffiliatesCoins(supabase, owner1, owner2, prizePool)
-        .catch(() => ({ platformFee: 0.045 })); // fallback: 4.5% (5% − 0.5% rakeback)
+        .catch(() => ({ platformFee: 0.045 }));
       const adminFeeAmount = parseFloat((prizePool * platformFee).toFixed(4));
-      // Accumulate into fee_balance (not c_coins) — admin collects manually via dashboard
       await supabase.rpc('credit_fee_balance', { user_id: adminId, amount: adminFeeAmount })
         .then(({ error: e }) => { if (e) console.error('[admin-fee] credit_fee_balance failed:', e.message); })
         .catch(err => console.error('[admin-fee] credit_fee_balance threw:', err.message));
     }
 
-    // Credit rakeback from the 5% fee pool (0.25% per player)
-    if (parseFloat(entryFee) > 0) {
-      await creditRakeback(supabase, winnerId, loserId, prizePool, 'coins').catch(() => {});
-    }
+    await creditRakeback(supabase, winnerId, loserId, prizePool, 'coins').catch(() => {});
 
-    const payout = parseFloat((prizePool * 0.95).toFixed(4));
-    if (parseFloat(entryFee) > 0) {
-      const fee = parseFloat(entryFee);
-      supabase.from('transactions').insert([
-        { user_id: winnerId, type: 'match_win',  amount_c: payout, status: 'confirmed' },
-        { user_id: loserId,  type: 'match_loss', amount_c: fee,    status: 'confirmed' },
-      ]).then().catch(e => console.error('[tx] coin match insert failed:', e.message));
-    }
+    supabase.from('transactions').insert([
+      { user_id: winnerId, type: 'match_win',  amount_c: payout, status: 'confirmed' },
+      { user_id: loserId,  type: 'match_loss', amount_c: fee,    status: 'confirmed' },
+    ]).then().catch(e => console.error('[tx] coin match insert failed:', e.message));
 
     return { winnerPayout: payout };
   } finally {
@@ -134,41 +150,24 @@ async function deductDiamonds(supabase, userId, amount) {
   if (error) throw error;
 }
 
+// Diamond match settlement — fees already deducted at match start, just credit winner 2x.
 async function settleMatchDiamonds(supabase, winnerId, loserId, entryFee) {
   try {
     const fee = Math.floor(entryFee);
-    const winnerPayout = fee * 2; // No fee on diamonds — full 2x payout
+    if (fee <= 0) return { winnerPayout: 0 };
+    const winnerPayout = fee * 2;
 
-    // Deduct winner first — if they lack funds the loser is never charged.
-    await deductDiamonds(supabase, winnerId, fee);
-    // Deduct loser — if they lack funds, refund winner before throwing.
-    try {
-      await deductDiamonds(supabase, loserId, fee);
-    } catch (loserErr) {
-      console.error('[settleMatchDiamonds] loser deduct failed — refunding winner:', loserErr.message);
-      await creditDiamonds(supabase, winnerId, fee).catch(() => {});
-      throw loserErr;
-    }
-    // Credit winner full 2x — refund both if credit fails.
-    try {
-      await creditDiamonds(supabase, winnerId, winnerPayout);
-    } catch (creditErr) {
-      console.error('[settleMatchDiamonds] credit failed — refunding both players:', creditErr.message);
-      await creditDiamonds(supabase, winnerId, fee).catch(() => {});
-      await creditDiamonds(supabase, loserId, fee).catch(() => {});
-      throw creditErr;
-    }
+    // Fees already deducted at match start — just credit winner
+    await creditDiamonds(supabase, winnerId, winnerPayout);
 
-    if (winnerPayout > 0) {
-      await resolveAffiliates(supabase, winnerId, loserId)
-        .then(({ owner1, owner2 }) => payAffiliatesDiamonds(supabase, owner1, owner2, winnerPayout))
-        .catch(() => {});
+    await resolveAffiliates(supabase, winnerId, loserId)
+      .then(({ owner1, owner2 }) => payAffiliatesDiamonds(supabase, owner1, owner2, winnerPayout))
+      .catch(() => {});
 
-      supabase.from('transactions').insert([
-        { user_id: winnerId, type: 'match_win',  amount_c: 0, crypto_amount: winnerPayout, crypto_symbol: 'diamonds', status: 'confirmed' },
-        { user_id: loserId,  type: 'match_loss', amount_c: 0, crypto_amount: fee, crypto_symbol: 'diamonds', status: 'confirmed' },
-      ]).then().catch(e => console.error('[tx] diamond match insert failed:', e.message));
-    }
+    supabase.from('transactions').insert([
+      { user_id: winnerId, type: 'match_win',  amount_c: 0, crypto_amount: winnerPayout, crypto_symbol: 'diamonds', status: 'confirmed' },
+      { user_id: loserId,  type: 'match_loss', amount_c: 0, crypto_amount: fee, crypto_symbol: 'diamonds', status: 'confirmed' },
+    ]).then().catch(e => console.error('[tx] diamond match insert failed:', e.message));
 
     return { winnerPayout };
   } finally {
@@ -254,35 +253,16 @@ async function getWithdrawable(supabase, userId) {
   return { crypto: bal, fiat: bal };
 }
 
-// Forfeit settlement for diamonds — same as a normal match: both players pay, winner gets full 2x.
-// No platform fee on diamonds. Deducts fee from both, credits winner fee*2.
+// Forfeit settlement for diamonds — fees already deducted at match start, just credit winner 2x.
 async function forfeitSettleDiamonds(supabase, winnerId, loserId, entryFee) {
   try {
     const fee = Math.floor(entryFee);
     if (fee <= 0) return { winnerPayout: 0 };
     const winnerPayout = fee * 2;
 
-    // ── Deduct from winner first — if they lack funds, loser is never charged ──
-    const { error: deductWinnerErr } = await supabase.rpc('deduct_diamonds', { user_id: winnerId, amount: fee });
-    if (deductWinnerErr) throw deductWinnerErr;
-
-    // ── Deduct from loser — if they lack funds, refund winner ──────────────────
-    const { error: deductLoserErr } = await supabase.rpc('deduct_diamonds', { user_id: loserId, amount: fee });
-    if (deductLoserErr) {
-      await supabase.rpc('credit_diamonds', { user_id: winnerId, amount: fee }).catch(() => {});
-      throw deductLoserErr;
-    }
-
-    // ── Credit winner full 2x ──────────────────────────────────────────
+    // Fees already deducted at match start — just credit winner
     const { error: creditErr } = await supabase.rpc('credit_diamonds', { user_id: winnerId, amount: winnerPayout });
-    if (creditErr) {
-      const { data: winnerRow2, error: fetchErr2 } = await supabase
-        .from('profiles').select('diamonds').eq('id', winnerId).single();
-      if (fetchErr2) throw fetchErr2;
-      const newBal2 = (winnerRow2?.diamonds || 0) + winnerPayout;
-      const { error: updErr2 } = await supabase.from('profiles').update({ diamonds: newBal2 }).eq('id', winnerId);
-      if (updErr2) throw updErr2;
-    }
+    if (creditErr) throw creditErr;
 
     supabase.from('transactions').insert([
       { user_id: winnerId, type: 'match_win',  amount_c: 0, crypto_amount: winnerPayout, crypto_symbol: 'diamonds', status: 'confirmed' },
@@ -296,8 +276,7 @@ async function forfeitSettleDiamonds(supabase, winnerId, loserId, entryFee) {
   }
 }
 
-// Forfeit settlement for coins — same as a normal match: both players pay, winner gets 95% of pot.
-// Deducts fee from both players, credits winner fee*2*0.95, distributes 5% (affiliates, rakeback, admin).
+// Forfeit settlement for coins — fees already deducted at match start, just credit winner 95% of pot.
 async function forfeitSettleCoins(supabase, winnerId, loserId, entryFee, adminId) {
   try {
     const fee = parseFloat(entryFee);
@@ -305,40 +284,10 @@ async function forfeitSettleCoins(supabase, winnerId, loserId, entryFee, adminId
     const prizePool    = parseFloat((fee * 2).toFixed(4));
     const winnerPayout = parseFloat((prizePool * 0.95).toFixed(4));
 
-    // ── Deduct from loser ──────────────────────────────────────────────
-    const { error: deductLoserErr } = await supabase.rpc('deduct_coins', { user_id: loserId, amount: fee });
-    if (deductLoserErr) {
-      const { data: loserRow, error: fetchErr } = await supabase
-        .from('profiles').select('c_coins').eq('id', loserId).single();
-      if (fetchErr) throw fetchErr;
-      const newBal = parseFloat(Math.max(0, (loserRow?.c_coins || 0) - fee).toFixed(4));
-      const { error: updErr } = await supabase.from('profiles').update({ c_coins: newBal }).eq('id', loserId);
-      if (updErr) throw updErr;
-    }
-
-    // ── Deduct from winner ─────────────────────────────────────────────
-    const { error: deductWinnerErr } = await supabase.rpc('deduct_coins', { user_id: winnerId, amount: fee });
-    if (deductWinnerErr) {
-      const { data: winnerRow, error: fetchErr } = await supabase
-        .from('profiles').select('c_coins').eq('id', winnerId).single();
-      if (fetchErr) throw fetchErr;
-      const newBal = parseFloat(Math.max(0, (winnerRow?.c_coins || 0) - fee).toFixed(4));
-      const { error: updErr } = await supabase.from('profiles').update({ c_coins: newBal }).eq('id', winnerId);
-      if (updErr) throw updErr;
-    }
-
-    // ── Credit winner 95% of pot ───────────────────────────────────────
+    // Fees already deducted at match start — just credit winner
     const { error: creditErr } = await supabase.rpc('credit_coins', { user_id: winnerId, amount: winnerPayout });
-    if (creditErr) {
-      const { data: winnerRow2, error: fetchErr2 } = await supabase
-        .from('profiles').select('c_coins').eq('id', winnerId).single();
-      if (fetchErr2) throw fetchErr2;
-      const newBal2 = parseFloat(((winnerRow2?.c_coins || 0) + winnerPayout).toFixed(4));
-      const { error: updErr2 } = await supabase.from('profiles').update({ c_coins: newBal2 }).eq('id', winnerId);
-      if (updErr2) throw updErr2;
-    }
+    if (creditErr) throw creditErr;
 
-    // ── Distribute 5% fee (affiliates + admin) ─────────────────────────
     if (adminId) {
       const { owner1, owner2 } = await resolveAffiliates(supabase, winnerId, loserId)
         .catch(() => ({ owner1: null, owner2: null }));
@@ -361,8 +310,7 @@ async function forfeitSettleCoins(supabase, winnerId, loserId, entryFee, adminId
   }
 }
 
-// Draw settlement (coins) — 5% platform fee applies; each player gets 95% of their entry fee back.
-// Fee is split: affiliates/codes + rakeback + admin, identical to a normal match.
+// Draw settlement (coins) — fees already deducted at match start; credit back 95% to both.
 async function settleDrawMatch(supabase, p1Id, p2Id, entryFee) {
   const fee = parseFloat(entryFee);
   if (fee <= 0) return { winnerPayout: 0, fee: 0 };
@@ -370,9 +318,7 @@ async function settleDrawMatch(supabase, p1Id, p2Id, entryFee) {
   const refund    = parseFloat((fee * 0.95).toFixed(4));
   const adminId   = process.env.ADMIN_USER_ID;
 
-  // Deduct entry fee from both, credit back 95%
-  await supabase.rpc('deduct_coins', { user_id: p1Id, amount: fee });
-  await supabase.rpc('deduct_coins', { user_id: p2Id, amount: fee });
+  // Fees already deducted at match start — credit back 95% to both
   await supabase.rpc('credit_coins', { user_id: p1Id, amount: refund });
   await supabase.rpc('credit_coins', { user_id: p2Id, amount: refund });
 
@@ -399,16 +345,17 @@ async function settleDrawMatch(supabase, p1Id, p2Id, entryFee) {
   ]).then().catch(() => {});
 
   const totalPlatformFee = parseFloat((prizePool * platformFeePercent).toFixed(4));
+  unlockUser(p1Id);
+  unlockUser(p2Id);
   return { winnerPayout: refund, fee: totalPlatformFee };
 }
 
-// Draw settlement (diamonds) — no platform fee; full refund to both players.
+// Draw settlement (diamonds) — fees already deducted at match start; full refund to both.
 async function settleDrawMatchDiamonds(supabase, p1Id, p2Id, entryFee) {
   const fee = Math.floor(parseFloat(entryFee));
   if (fee <= 0) return { winnerPayout: 0, fee: 0 };
 
-  await supabase.rpc('deduct_diamonds', { user_id: p1Id, amount: fee });
-  await supabase.rpc('deduct_diamonds', { user_id: p2Id, amount: fee });
+  // Fees already deducted at match start — credit back full fee to both
   await supabase.rpc('credit_diamonds', { user_id: p1Id, amount: fee });
   await supabase.rpc('credit_diamonds', { user_id: p2Id, amount: fee });
 
@@ -417,6 +364,8 @@ async function settleDrawMatchDiamonds(supabase, p1Id, p2Id, entryFee) {
     { user_id: p2Id, type: 'match_draw', amount_c: 0, crypto_amount: fee, crypto_symbol: 'diamonds', status: 'confirmed' },
   ]).then().catch(() => {});
 
+  unlockUser(p1Id);
+  unlockUser(p2Id);
   return { winnerPayout: fee, fee: 0 };
 }
 
@@ -431,6 +380,7 @@ module.exports = {
   getBalance,
   creditCoins,
   deductCoins,
+  deductMatchFees,
   settleMatch,
   getDiamondBalance,
   creditDiamonds,

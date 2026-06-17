@@ -114,7 +114,7 @@ const { checkSocketClickRate, cleanupSocket } = require('../middleware/rateLimit
 const { createBotPlayer } = require('../services/botService');
 const {
   settleMatch, settleMatchDiamonds, forfeitSettleDiamonds, forfeitSettleCoins,
-  deductCoins, deductDiamonds,
+  deductCoins, deductDiamonds, deductMatchFees,
   settleBotMatch,
 } = require('../services/walletService');
 const { lockUser, unlockUser, isLocked } = require('../services/lockService');
@@ -936,6 +936,30 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (match) {
         const { roomId, p1, p2 } = match;
         userQueues.delete(p1.userId); userQueues.delete(p2.userId);
+        // Deduct fees from both players BEFORE notifying clients — no exploit window
+        if (entryFee > 0) {
+          try {
+            await deductMatchFees(supabase, p1.userId, p2.userId, entryFee, currency);
+            const room = getBlockBlastRoom(roomId);
+            if (room) room.feesDeducted = true;
+          } catch (e) {
+            console.error('[block-blast] fee deduction failed:', e.message);
+            deleteBlockBlastRoom(roomId);
+            unlockUser(p1.userId); unlockUser(p2.userId);
+            decrementCount('block-blast', p1.socketId);
+            decrementCount('block-blast', p2.socketId);
+            io.emit('queue_entry_removed', { id: p1.socketId });
+            io.emit('queue_entry_removed', { id: p2.socketId });
+            const s1e = io.sockets.sockets.get(p1.socketId);
+            const s2e = io.sockets.sockets.get(p2.socketId);
+            if (s1e) s1e.emit('match_cancelled', { message: 'Your balance changed. Please rejoin the queue.' });
+            if (s2e) s2e.emit('match_cancelled', { message: 'Your balance changed. Please rejoin the queue.' });
+            return;
+          }
+        } else {
+          const room = getBlockBlastRoom(roomId);
+          if (room) room.feesDeducted = true;
+        }
         const s1 = io.sockets.sockets.get(p1.socketId);
         const s2 = io.sockets.sockets.get(p2.socketId);
         if (s1) { s1.join(roomId); s1.emit('block_blast_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee }); }
@@ -1002,6 +1026,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         const bot = createBotPlayer(entryFee, 'block_blast');
         bot.entryFee = entryFee;
         const { roomId } = createDirectBlockBlastRoom(player, bot);
+        if (entryFee > 0) { const r = getBlockBlastRoom(roomId); if (r) r.feesDeducted = true; }
         socket.join(roomId);
         if (socket._pendingForfeitGame === 'block_blast') {
           socket._pendingForfeitGame = null;
@@ -1759,6 +1784,30 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (match) {
         const { roomId, p1, p2 } = match;
         userQueues.delete(p1.userId); userQueues.delete(p2.userId);
+        // Deduct fees BEFORE notifying clients
+        if (entryFee > 0) {
+          try {
+            await deductMatchFees(supabase, p1.userId, p2.userId, entryFee, currency);
+            const room = getScrabbleRoom(roomId);
+            if (room) room.feesDeducted = true;
+          } catch (e) {
+            console.error('[scrabble] fee deduction failed:', e.message);
+            deleteScrabbleRoom(roomId);
+            unlockUser(p1.userId); unlockUser(p2.userId);
+            decrementCount('scrabble', p1.socketId);
+            decrementCount('scrabble', p2.socketId);
+            io.emit('queue_entry_removed', { id: p1.socketId });
+            io.emit('queue_entry_removed', { id: p2.socketId });
+            const s1e = io.sockets.sockets.get(p1.socketId);
+            const s2e = io.sockets.sockets.get(p2.socketId);
+            if (s1e) s1e.emit('match_cancelled', { message: 'Your balance changed. Please rejoin the queue.' });
+            if (s2e) s2e.emit('match_cancelled', { message: 'Your balance changed. Please rejoin the queue.' });
+            return;
+          }
+        } else {
+          const room = getScrabbleRoom(roomId);
+          if (room) room.feesDeducted = true;
+        }
         const s1 = io.sockets.sockets.get(p1.socketId);
         const s2 = io.sockets.sockets.get(p2.socketId);
         if (s1) { s1.join(roomId); s1.emit('scrabble_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee }); }
@@ -1817,6 +1866,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         const botSocketId = 'bot_scrabble_' + uuid();
         const bot = { socketId: botSocketId, userId: botSocketId, username: 'Duely Bot', elo: 1000, entryFee, currency, isBot: true };
         const { roomId } = createDirectScrabbleRoom(player, bot);
+        if (entryFee > 0) { const r = getScrabbleRoom(roomId); if (r) r.feesDeducted = true; }
         socket.join(roomId);
         if (socket._pendingForfeitGame === 'scrabble') {
           socket._pendingForfeitGame = null;
@@ -1876,6 +1926,30 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       const match = addToCoinFlipQueue(player);
       if (match) {
         userQueues.delete(match.p1.userId); userQueues.delete(match.p2.userId);
+        // Deduct fees BEFORE notifying clients
+        if (entryFee > 0) {
+          try {
+            await deductMatchFees(supabase, match.p1.userId, match.p2.userId, entryFee, currency);
+            const room = getCoinFlipRoom(match.roomId);
+            if (room) room.feesDeducted = true;
+          } catch (e) {
+            console.error('[coin-flip] fee deduction failed:', e.message);
+            deleteCoinFlipRoom(match.roomId);
+            unlockUser(match.p1.userId); unlockUser(match.p2.userId);
+            decrementCount('coin-flip', match.p1.socketId);
+            decrementCount('coin-flip', match.p2.socketId);
+            io.emit('queue_entry_removed', { id: match.p1.socketId });
+            io.emit('queue_entry_removed', { id: match.p2.socketId });
+            const s1e = io.sockets.sockets.get(match.p1.socketId);
+            const s2e = io.sockets.sockets.get(match.p2.socketId);
+            if (s1e) s1e.emit('match_cancelled', { message: 'Your balance changed. Please rejoin the queue.' });
+            if (s2e) s2e.emit('match_cancelled', { message: 'Your balance changed. Please rejoin the queue.' });
+            return;
+          }
+        } else {
+          const room = getCoinFlipRoom(match.roomId);
+          if (room) room.feesDeducted = true;
+        }
         const s1 = io.sockets.sockets.get(match.p1.socketId);
         const s2 = io.sockets.sockets.get(match.p2.socketId);
         if (s1) { s1.join(match.roomId); s1.emit('coin_flip_match_found', { roomId: match.roomId, opponent: { userId: match.p2.userId, username: match.p2.username, elo: match.p2.elo }, side: match.p1.side, entryFee }); }
@@ -1917,6 +1991,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         // This means getCoinFlipRoomBySocket finds it on disconnect → _handleForfeit
         // fires → fee is settled and room cleaned up properly.
         const { roomId } = createDirectCoinFlipRoom(player, bot);
+        if (entryFee > 0) { const r = getCoinFlipRoom(roomId); if (r) r.feesDeducted = true; }
         socket.join(roomId);
         if (socket._pendingForfeitGame === 'coin_flip') {
           socket._pendingForfeitGame = null;
@@ -1959,6 +2034,30 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       const match = addToBlackjackQueue(player);
       if (match) {
         userQueues.delete(match.p1.userId); userQueues.delete(match.p2.userId);
+        // Deduct fees BEFORE notifying clients
+        if (entryFee > 0) {
+          try {
+            await deductMatchFees(supabase, match.p1.userId, match.p2.userId, entryFee, currency);
+            const room = getBlackjackRoom(match.roomId);
+            if (room) room.feesDeducted = true;
+          } catch (e) {
+            console.error('[blackjack] fee deduction failed:', e.message);
+            deleteBlackjackRoom(match.roomId);
+            unlockUser(match.p1.userId); unlockUser(match.p2.userId);
+            decrementCount('blackjack', match.p1.socketId);
+            decrementCount('blackjack', match.p2.socketId);
+            io.emit('queue_entry_removed', { id: match.p1.socketId });
+            io.emit('queue_entry_removed', { id: match.p2.socketId });
+            const s1e = io.sockets.sockets.get(match.p1.socketId);
+            const s2e = io.sockets.sockets.get(match.p2.socketId);
+            if (s1e) s1e.emit('match_cancelled', { message: 'Your balance changed. Please rejoin the queue.' });
+            if (s2e) s2e.emit('match_cancelled', { message: 'Your balance changed. Please rejoin the queue.' });
+            return;
+          }
+        } else {
+          const room = getBlackjackRoom(match.roomId);
+          if (room) room.feesDeducted = true;
+        }
         const s1 = io.sockets.sockets.get(match.p1.socketId);
         const s2 = io.sockets.sockets.get(match.p2.socketId);
         if (s1) { s1.join(match.roomId); s1.emit('bj_match_found', { roomId: match.roomId, opponent: { userId: match.p2.userId, username: match.p2.username, elo: match.p2.elo }, entryFee }); }
@@ -2074,6 +2173,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
         const bot = { socketId: null, userId: 'bot_bj_' + uuidv4(), username: 'Duely Bot', elo: 1000, entryFee, currency, isBot: true };
         const { roomId } = createDirectBlackjackRoom(player, bot);
+        if (entryFee > 0) { const r = getBlackjackRoom(roomId); if (r) r.feesDeducted = true; }
         socket.join(roomId);
         if (socket._pendingForfeitGame === 'blackjack') {
           socket._pendingForfeitGame = null;
@@ -2229,6 +2329,16 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
     const fee      = room.entryFee || 0;
     const currency = room.currency || 'coins';
+
+    if (fee > 0 && !room.feesDeducted) {
+      // Match was found but fees were never charged (player disconnected before deduction completed)
+      // Just clean up — no money was taken from either player
+      unlockUser(leaver.userId);
+      if (!stayer.isBot) unlockUser(stayer.userId);
+      io.emit('active_game_ended', { id: roomId });
+      deleteFn(roomId);
+      return;
+    }
 
     if (fee > 0 && stayer.isBot) {
       // Human forfeited a paid bot game — loses bet and streak

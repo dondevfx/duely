@@ -286,7 +286,7 @@ export default function CoinFlipGame() {
       setStatusMsg(`Waiting for someone to pick ${s === 'heads' ? 'Tails' : 'Heads'}…`);
     });
 
-    socket.on('coin_flip_match_found', ({ opponent }) => {
+    socket.on('coin_flip_match_found', ({ opponent, entryFee: fee }) => {
       inActiveMatchRef.current = true;
       setFlipResult(null);
       setResultLanded(false);
@@ -295,10 +295,16 @@ export default function CoinFlipGame() {
       // 3-second countdown before coin starts spinning
       setCountdown(3);
       setPhase('countdown');
+      if ((fee ?? 0) > 0) refreshProfile(); // fee already deducted — show updated balance immediately
       const t1 = setTimeout(() => setCountdown(2), 1000);
       const t2 = setTimeout(() => setCountdown(1), 2000);
       const t3 = setTimeout(() => { setCountdown(0); setPhase('flipping'); }, 3000);
       return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+    });
+
+    socket.on('match_cancelled', ({ message }) => {
+      setPhase('lobby');
+      setStatusMsg(message || 'Match cancelled. Please try again.');
     });
 
     socket.on('coin_flip_result', (data) => {
@@ -312,12 +318,11 @@ export default function CoinFlipGame() {
       const myId = profile?.id;
       const isWin = data.winnerId === myId;
       const payout = data.balanceChange?.winnerPayout;
-      const fee = data.entryFee ?? 0;
-      if (payout != null) {
+      if (payout != null && isWin) {
         const isDiamonds = data.currency === 'diamonds';
         updateProfile(isDiamonds
-          ? { diamonds: Math.max(0, (profile?.diamonds ?? 0) + (isWin ? payout - fee : -fee)) }
-          : { c_coins: Math.max(0, (profile?.c_coins ?? 0) + (isWin ? payout - fee : -fee)) }
+          ? { diamonds: Math.max(0, (profile?.diamonds ?? 0) + payout) }
+          : { c_coins: Math.max(0, (profile?.c_coins ?? 0) + payout) }
         );
       }
 
@@ -336,11 +341,11 @@ export default function CoinFlipGame() {
       const myId = profile?.id;
       const isWin = data.winnerId === myId;
       const payout = data.winnerPayout ?? null;
-      if (payout != null) {
+      if (payout != null && isWin) {
         const isDiamonds = data.currency === 'diamonds';
         updateProfile(isDiamonds
-          ? { diamonds: Math.max(0, (profile?.diamonds ?? 0) + (isWin ? payout - (data.entryFee ?? 0) : -(data.entryFee ?? 0))) }
-          : { c_coins: Math.max(0, (profile?.c_coins ?? 0) + (isWin ? payout - (data.entryFee ?? 0) : -(data.entryFee ?? 0))) }
+          ? { diamonds: Math.max(0, (profile?.diamonds ?? 0) + payout) }
+          : { c_coins: Math.max(0, (profile?.c_coins ?? 0) + payout) }
         );
       }
       // Use server-provided ELO values to compute accurate delta (avoids stale eloBeforeRef)
@@ -372,6 +377,7 @@ export default function CoinFlipGame() {
       socket.emit('leave_all_queues');
       socket.off('coin_flip_queue_joined');
       socket.off('coin_flip_match_found');
+      socket.off('match_cancelled');
       socket.off('coin_flip_result');
       socket.off('opponent_disconnected');
       socket.off('private_room_created');
