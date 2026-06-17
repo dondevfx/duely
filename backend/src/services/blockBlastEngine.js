@@ -338,6 +338,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
     newWinnerElo, newLoserElo, balanceChange,
     winnerScore, loserScore,
     currency: room.currency || 'coins',
+    entryFee: room.entryFee || 0,
     winnerStreak: winnerStreak ?? 0,
     isFirstWin: isFirstWin ?? false,
   });

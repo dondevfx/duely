@@ -508,6 +508,7 @@ async function _endGame(io, supabase, roomId, reason) {
     balanceChange,
     reason,
     currency,
+    entryFee: fee || 0,
   });
 
   io.emit('active_game_ended', { id: roomId });

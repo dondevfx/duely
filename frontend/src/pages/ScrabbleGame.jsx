@@ -467,8 +467,8 @@ export default function ScrabbleGame() {
       const isDiamonds = res.currency === 'diamonds';
       if (payout != null) {
         updateProfile(isDiamonds
-          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + (isWin ? payout : -fee)) }
-          : { c_coins:  Math.max(0, (profileRef.current?.c_coins  ?? 0) + (isWin ? payout : -fee)) }
+          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + (isWin ? payout - fee : -fee)) }
+          : { c_coins:  Math.max(0, (profileRef.current?.c_coins  ?? 0) + (isWin ? payout - fee : -fee)) }
         );
       }
       setResult(res); setPhase('result'); refreshProfile();
@@ -492,8 +492,8 @@ export default function ScrabbleGame() {
       const isDiamonds = data.currency === 'diamonds';
       if (payout != null && isWin) {
         updateProfile(isDiamonds
-          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + payout) }
-          : { c_coins:  Math.max(0, (profileRef.current?.c_coins  ?? 0) + payout) }
+          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + payout - (data.entryFee ?? 0)) }
+          : { c_coins:  Math.max(0, (profileRef.current?.c_coins  ?? 0) + payout - (data.entryFee ?? 0)) }
         );
       }
       if (data.newWinnerElo != null) eloBeforeRef.current = isWin ? data.newWinnerElo - 25 : data.newLoserElo + 25;

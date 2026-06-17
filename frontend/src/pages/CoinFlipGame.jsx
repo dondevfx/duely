@@ -316,8 +316,8 @@ export default function CoinFlipGame() {
       if (payout != null) {
         const isDiamonds = data.currency === 'diamonds';
         updateProfile(isDiamonds
-          ? { diamonds: Math.max(0, (profile?.diamonds ?? 0) + (isWin ? payout : -fee)) }
-          : { c_coins: Math.max(0, (profile?.c_coins ?? 0) + (isWin ? payout : -fee)) }
+          ? { diamonds: Math.max(0, (profile?.diamonds ?? 0) + (isWin ? payout - fee : -fee)) }
+          : { c_coins: Math.max(0, (profile?.c_coins ?? 0) + (isWin ? payout - fee : -fee)) }
         );
       }
 
@@ -339,8 +339,8 @@ export default function CoinFlipGame() {
       if (payout != null) {
         const isDiamonds = data.currency === 'diamonds';
         updateProfile(isDiamonds
-          ? { diamonds: Math.max(0, (profile?.diamonds ?? 0) + (isWin ? payout : -(data.entryFee ?? 0))) }
-          : { c_coins: Math.max(0, (profile?.c_coins ?? 0) + (isWin ? payout : -(data.entryFee ?? 0))) }
+          ? { diamonds: Math.max(0, (profile?.diamonds ?? 0) + (isWin ? payout - (data.entryFee ?? 0) : -(data.entryFee ?? 0))) }
+          : { c_coins: Math.max(0, (profile?.c_coins ?? 0) + (isWin ? payout - (data.entryFee ?? 0) : -(data.entryFee ?? 0))) }
         );
       }
       // Use server-provided ELO values to compute accurate delta (avoids stale eloBeforeRef)
