@@ -56,8 +56,8 @@ export default function Admin() {
   const [eloLoading, setEloLoading]         = useState(false);
   const [setEloUsername, setSetEloUsername] = useState('');
   const [setEloValue, setSetEloValue]       = useState('');
-  const [setEloMsg, setSetEloMsg]           = useState('');
-  const [setEloLoading, setSetEloLoading]   = useState(false);
+  const [playerEloMsg, setPlayerEloMsg]       = useState('');
+  const [playerEloLoading, setPlayerEloLoading] = useState(false);
   const [creatorUsername, setCreatorUsername] = useState('');
   const [creatorCode, setCreatorCode]         = useState('');
   const [creatorLoading, setCreatorLoading]   = useState(false);
@@ -166,18 +166,18 @@ export default function Admin() {
 
   async function handleSetPlayerElo(e) {
     e.preventDefault();
-    if (setEloLoading || !setEloUsername.trim() || setEloValue === '') return;
-    setSetEloLoading(true);
-    setSetEloMsg('');
+    if (playerEloLoading || !setEloUsername.trim() || setEloValue === '') return;
+    setPlayerEloLoading(true);
+    setPlayerEloMsg('');
     try {
       const d = await api.post('/admin/set-player-elo', { username: setEloUsername.trim(), elo: parseInt(setEloValue, 10) });
-      setSetEloMsg(`✓ ${d.username}: ${d.oldElo} → ${d.newElo} ELO`);
+      setPlayerEloMsg(`✓ ${d.username}: ${d.oldElo} → ${d.newElo} ELO`);
       setSetEloUsername('');
       setSetEloValue('');
     } catch (e) {
-      setSetEloMsg(`Error: ${e.message}`);
+      setPlayerEloMsg(`Error: ${e.message}`);
     } finally {
-      setSetEloLoading(false);
+      setPlayerEloLoading(false);
     }
   }
 
@@ -401,9 +401,9 @@ export default function Admin() {
                   />
                   <button
                     type="submit"
-                    disabled={setEloLoading || !setEloUsername.trim() || setEloValue === ''}
+                    disabled={playerEloLoading || !setEloUsername.trim() || setEloValue === ''}
                     className="w-full py-2 rounded-xl text-sm font-bold transition-all"
-                    style={setEloLoading || !setEloUsername.trim() || setEloValue === '' ? {
+                    style={playerEloLoading || !setEloUsername.trim() || setEloValue === '' ? {
                       background: '#0f172a', color: '#334155', border: '1px solid #1e293b', cursor: 'not-allowed',
                     } : {
                       background: 'linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%)',
@@ -411,10 +411,10 @@ export default function Admin() {
                       boxShadow: '0 0 12px rgba(30,144,255,0.2)',
                     }}
                   >
-                    {setEloLoading ? 'Applying…' : 'Apply ELO'}
+                    {playerEloLoading ? 'Applying…' : 'Apply ELO'}
                   </button>
                 </form>
-                {setEloMsg && <div className="text-xs text-center" style={{ color: setEloMsg.startsWith('Error') ? '#ef4444' : '#22c55e' }}>{setEloMsg}</div>}
+                {playerEloMsg && <div className="text-xs text-center" style={{ color: playerEloMsg.startsWith('Error') ? '#ef4444' : '#22c55e' }}>{playerEloMsg}</div>}
               </div>
 
               {/* Remove Coins */}
