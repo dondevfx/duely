@@ -87,16 +87,16 @@ async function settleMatch(supabase, winnerId, loserId, entryFee) {
         .catch(err => console.error('[admin-fee] credit_fee_balance threw:', err.message));
     }
 
+    const payout = parseFloat((prizePool * 0.95).toFixed(4));
     if (parseFloat(entryFee) > 0) {
-      const payout = parseFloat((prizePool * 0.95).toFixed(4));
-      const fee    = parseFloat(entryFee);
+      const fee = parseFloat(entryFee);
       supabase.from('transactions').insert([
         { user_id: winnerId, type: 'match_win',  amount_c: payout, status: 'confirmed' },
         { user_id: loserId,  type: 'match_loss', amount_c: fee,    status: 'confirmed' },
       ]).then().catch(e => console.error('[tx] coin match insert failed:', e.message));
     }
 
-    return data;
+    return { winnerPayout: payout };
   } finally {
     unlockUser(winnerId);
     unlockUser(loserId);
