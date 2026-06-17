@@ -54,6 +54,10 @@ export default function Admin() {
   const [removeCoinsMsg, setRemoveCoinsMsg]   = useState('');
   const [eloMsg, setEloMsg]                 = useState('');
   const [eloLoading, setEloLoading]         = useState(false);
+  const [setEloUsername, setSetEloUsername] = useState('');
+  const [setEloValue, setSetEloValue]       = useState('');
+  const [setEloMsg, setSetEloMsg]           = useState('');
+  const [setEloLoading, setSetEloLoading]   = useState(false);
   const [creatorUsername, setCreatorUsername] = useState('');
   const [creatorCode, setCreatorCode]         = useState('');
   const [creatorLoading, setCreatorLoading]   = useState(false);
@@ -157,6 +161,23 @@ export default function Admin() {
       setEloMsg(`Error: ${e.message}`);
     } finally {
       setEloLoading(false);
+    }
+  }
+
+  async function handleSetPlayerElo(e) {
+    e.preventDefault();
+    if (setEloLoading || !setEloUsername.trim() || setEloValue === '') return;
+    setSetEloLoading(true);
+    setSetEloMsg('');
+    try {
+      const d = await api.post('/admin/set-player-elo', { username: setEloUsername.trim(), elo: parseInt(setEloValue, 10) });
+      setSetEloMsg(`✓ ${d.username}: ${d.oldElo} → ${d.newElo} ELO`);
+      setSetEloUsername('');
+      setSetEloValue('');
+    } catch (e) {
+      setSetEloMsg(`Error: ${e.message}`);
+    } finally {
+      setSetEloLoading(false);
     }
   }
 
@@ -357,6 +378,43 @@ export default function Admin() {
                   </button>
                 </div>
                 {eloMsg && <div className="text-xs text-center" style={{ color: eloMsg.startsWith('Error') ? '#ef4444' : '#22c55e' }}>{eloMsg}</div>}
+              </div>
+
+              {/* Set Player ELO */}
+              <div className="bg-surface border border-border rounded-2xl p-5 flex flex-col gap-3">
+                <div className="font-bold text-white text-sm">Set Player ELO</div>
+                <div className="text-xs text-muted">Look up a player by username and set their ELO to an exact value.</div>
+                <form onSubmit={handleSetPlayerElo} className="flex flex-col gap-2">
+                  <input
+                    value={setEloUsername}
+                    onChange={e => setSetEloUsername(e.target.value)}
+                    placeholder="Username"
+                    className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-primary"
+                  />
+                  <input
+                    type="number"
+                    value={setEloValue}
+                    onChange={e => setSetEloValue(e.target.value)}
+                    placeholder="New ELO (e.g. 1200)"
+                    min="0"
+                    className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-primary"
+                  />
+                  <button
+                    type="submit"
+                    disabled={setEloLoading || !setEloUsername.trim() || setEloValue === ''}
+                    className="w-full py-2 rounded-xl text-sm font-bold transition-all"
+                    style={setEloLoading || !setEloUsername.trim() || setEloValue === '' ? {
+                      background: '#0f172a', color: '#334155', border: '1px solid #1e293b', cursor: 'not-allowed',
+                    } : {
+                      background: 'linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%)',
+                      color: '#fff', border: '1px solid rgba(30,144,255,0.4)',
+                      boxShadow: '0 0 12px rgba(30,144,255,0.2)',
+                    }}
+                  >
+                    {setEloLoading ? 'Applying…' : 'Apply ELO'}
+                  </button>
+                </form>
+                {setEloMsg && <div className="text-xs text-center" style={{ color: setEloMsg.startsWith('Error') ? '#ef4444' : '#22c55e' }}>{setEloMsg}</div>}
               </div>
 
               {/* Remove Coins */}

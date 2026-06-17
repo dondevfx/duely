@@ -155,6 +155,30 @@ module.exports = function adminRoutes(supabase) {
     return res.json({ elo: newElo, delta });
   });
 
+  // ── Set a player's ELO by username ──────────────────────────────────
+  router.post('/set-player-elo', requireAuth, requireAdmin, async (req, res) => {
+    const { username, elo } = req.body;
+    if (!username || typeof username !== 'string') return res.status(400).json({ error: 'username required' });
+    const newElo = parseInt(elo, 10);
+    if (isNaN(newElo) || newElo < 0) return res.status(400).json({ error: 'elo must be a non-negative number' });
+
+    const { data: player, error: lookupErr } = await supabase
+      .from('profiles')
+      .select('id, username, elo')
+      .ilike('username', username.trim())
+      .single();
+
+    if (lookupErr || !player) return res.status(404).json({ error: `No player found with username "${username}"` });
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ elo: newElo })
+      .eq('id', player.id);
+
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ username: player.username, oldElo: player.elo, newElo });
+  });
+
   // ── Remove admin's own coin balance ──────────────────────────────────
   router.post('/remove-coins', requireAuth, requireAdmin, async (req, res) => {
     const { error } = await supabase

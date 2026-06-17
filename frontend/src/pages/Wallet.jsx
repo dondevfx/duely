@@ -234,9 +234,9 @@ export default function Wallet() {
         {/* ── Balance card ────────────────────────────────────────────── */}
         <div className="bg-gradient-to-br from-primary/20 to-accent/10 border border-primary/30 rounded-2xl p-6 mb-6">
           <div className="text-sm text-muted mb-1">Coin Balance</div>
-          <div className="text-5xl font-black text-white font-mono mb-1">
+          <div className="text-5xl font-black text-white font-mono mb-1 inline-flex items-center gap-2">
             {fmt(profile?.c_coins)}
-            <span className="text-2xl text-primary ml-2"><CoinIcon size="1.25rem" /></span>
+            <CoinIcon size="1em" />
           </div>
           <div className="text-sm text-muted">≈ ${fmt(profile?.c_coins)} USD</div>
         </div>
