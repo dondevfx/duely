@@ -226,10 +226,10 @@ function validatePlacement(room, placements, socketId) {
     }
   }
 
-  // First word: must cover at least one tile in the middle area (rows 1–4, cols 1–4)
+  // First word: must cover the center star tile (2,2)
   if (room.firstWord) {
-    const coversMiddle = placements.some(p => p.row >= 1 && p.row <= 4 && p.col >= 1 && p.col <= 4);
-    if (!coversMiddle) return { ok: false, error: 'First word must be placed in the middle area of the board' };
+    const coversMiddle = placements.some(p => p.row === 2 && p.col === 2);
+    if (!coversMiddle) return { ok: false, error: 'First word must cover the center ★ tile' };
   } else {
     // Must connect to existing tiles
     let connected = false;
@@ -582,6 +582,9 @@ async function scheduleBotMove(io, supabase, roomId) {
     }
 
     let bestScore = -1, bestPlacements = null;
+    const isFirstWord = fresh.firstWord;
+    // Center tile of the 6×6 board — first word must pass through it
+    const CENTER_R = 2, CENTER_C = 2;
 
     for (const word of candidates) {
       for (const dir of ['H', 'V']) {
@@ -589,6 +592,11 @@ async function scheduleBotMove(io, supabase, roomId) {
         const maxC = dir === 'H' ? SIZE - word.length : SIZE;
         for (let r = 0; r < maxR; r++) {
           for (let c = 0; c < maxC; c++) {
+            // On first word, only try positions where the word covers (2,2)
+            if (isFirstWord) {
+              if (dir === 'H' && (r !== CENTER_R || c > CENTER_C || c + word.length - 1 < CENTER_C)) continue;
+              if (dir === 'V' && (c !== CENTER_C || r > CENTER_R || r + word.length - 1 < CENTER_R)) continue;
+            }
             const placements = _botPlacements(word, r, c, dir, board, hand);
             if (!placements || placements.length === 0) continue;
             const v = validatePlacement(fresh, placements, bot.socketId);
