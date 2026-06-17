@@ -197,13 +197,10 @@ export default function GameLobby({
         >
           {/* Track background */}
           <div className="absolute left-0 right-0 h-2 rounded-full bg-border overflow-hidden">
-            <div
-              ref={sliderFillRef}
-              className="h-full rounded-full bg-primary"
-              style={{ width: `${fees.length > 1 ? (fees.indexOf(entryFee) / (fees.length - 1)) * 100 : 0}%`, transition: 'none' }}
-            />
+            {/* width is controlled exclusively via sliderFillRef — never set here so React re-renders don't override drag position */}
+            <div ref={sliderFillRef} className="h-full rounded-full bg-primary" style={{ width: '0%' }} />
           </div>
-          {/* Tick marks */}
+          {/* Tick marks — static, React-controlled fine */}
           {fees.map((_, i) => {
             const tickPct = fees.length > 1 ? (i / (fees.length - 1)) * 100 : 0;
             return (
@@ -214,15 +211,11 @@ export default function GameLobby({
               />
             );
           })}
-          {/* Thumb */}
+          {/* Thumb — left is controlled exclusively via sliderThumbRef */}
           <div
             ref={sliderThumbRef}
             className="absolute w-6 h-6 rounded-full bg-white border-2 border-primary -translate-x-1/2 pointer-events-none"
-            style={{
-              left: `${fees.length > 1 ? (fees.indexOf(entryFee) / (fees.length - 1)) * 100 : 0}%`,
-              boxShadow: '0 2px 12px rgba(30,144,255,0.6)',
-              transition: 'none',
-            }}
+            style={{ left: '0%', boxShadow: '0 2px 12px rgba(30,144,255,0.6)' }}
           />
         </div>
 
