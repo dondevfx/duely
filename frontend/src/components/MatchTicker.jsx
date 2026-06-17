@@ -19,9 +19,8 @@ function feeKey(item) {
 }
 
 function makeFakeItem(lastFeeKey = null, lastTwoGames = []) {
-  // Try up to 10 times to avoid same bet size back-to-back and same game 3 in a row
-  const blockedGame = lastTwoGames.length === 2 && lastTwoGames[0] === lastTwoGames[1]
-    ? lastTwoGames[0] : null;
+  // Try up to 10 times to avoid same bet size back-to-back and same game 2 in a row
+  const blockedGame = lastTwoGames.length >= 1 ? lastTwoGames[0] : null;
   for (let attempt = 0; attempt < 10; attempt++) {
     const game     = GAME_LIST[Math.floor(Math.random() * GAME_LIST.length)];
     if (blockedGame && game.name === blockedGame) continue;
@@ -95,9 +94,19 @@ export default function MatchTicker() {
       if (real.length > 0) {
         setItems(prev => {
           const seeded = [...prev];
-          real.slice(0, MAX).forEach((r, i) => {
-            seeded[i * 2] = { ...r, id: `real-seed-${i}` };
-          });
+          let lastGame = null;
+          let seedIdx = 0;
+          for (let i = 0; i < seeded.length && seedIdx < real.length; i += 2) {
+            const r = real[seedIdx];
+            if (r.game.name !== lastGame) {
+              seeded[i] = { ...r, id: `real-seed-${seedIdx}` };
+              lastGame = r.game.name;
+              seedIdx++;
+            } else {
+              seedIdx++;
+              i -= 2; // retry this slot with next real match
+            }
+          }
           return seeded.slice(0, MAX);
         });
       }
@@ -113,11 +122,10 @@ export default function MatchTicker() {
         const now  = Date.now();
         const canShowReal = pool.length > 0 && (now - lastRealShownAt.current) >= MIN_REAL_INTERVAL;
 
-        // Derive last 2 game names from current items (covers both real and fake)
+        // Block the most-recently-shown game to prevent any back-to-back repeats
         const cur = itemsRef.current;
         const lastTwoGames = cur.slice(0, 2).map(it => it.game.name);
-        const blockedGame = lastTwoGames.length === 2 && lastTwoGames[0] === lastTwoGames[1]
-          ? lastTwoGames[0] : null;
+        const blockedGame = lastTwoGames[0] ?? null;
 
         let next;
         if (canShowReal && Math.random() < 0.70) {
