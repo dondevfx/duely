@@ -632,7 +632,7 @@ export default function CoinFlipGame() {
                 {!session ? '🔒 Login to Play' : `Find Opponent (${side === 'heads' ? '🔵 Heads' : '⚪ Tails'})`}
               </GlowButton>
               {isDiamonds && (
-                <GlowButton onClick={() => playVsBot(false)} variant="outline" size="lg" className="w-full text-lg py-4" disabled={session && (!authenticated || insufficient)}>
+                <GlowButton onClick={() => playVsBot(false)} variant="ghost" size="lg" className="w-full text-lg py-4 border border-border hover:border-accent" disabled={session && (!authenticated || insufficient)}>
                   {!session ? '🔒 Login to Play' : `🤖 Bet vs Bot — ${fmtFee(entryFee)} 💎`}
                 </GlowButton>
               )}
