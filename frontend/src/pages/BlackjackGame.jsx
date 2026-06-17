@@ -953,13 +953,7 @@ export default function BlackjackGame() {
               <button onClick={() => switchCurrency('diamonds')} className={`px-4 py-2 rounded text-sm font-bold transition-all ${isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}>💎 Diamonds</button>
             </div>
           </div>
-          <BetSlider fees={fees} entryFee={entryFee} setEntryFee={setEntryFee} currLabel={currLabel} />
-          {entryFee > 0 && (
-            <div className="mt-4 text-center">
-              <div className="text-xs text-muted uppercase tracking-widest mb-1 font-semibold">Win Payout</div>
-              <div className="text-3xl font-black text-success" style={{ textShadow: '0 0 16px rgba(34,197,94,0.4)' }}>+{payout}</div>
-            </div>
-          )}
+          <BetSlider fees={fees} entryFee={entryFee} setEntryFee={setEntryFee} currLabel={currLabel} isDiamonds={isDiamonds} />
           {(playerCounts?.blackjack ?? 0) > 0 && (
             <div className="flex items-center gap-1.5 mt-3">
               <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 6px #4ade80' }} />

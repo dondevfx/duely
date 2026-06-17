@@ -109,14 +109,7 @@ export default function RandomGame() {
             </div>
           </div>
 
-          <BetSlider fees={fees} entryFee={entryFee} setEntryFee={setEntryFee} currLabel={currLabel} />
-
-          {entryFee > 0 && (
-            <div className="flex items-center justify-between mt-3 px-1">
-              <span className="text-sm text-muted">Payout if you win</span>
-              <span className="text-success font-bold text-sm">+{payout}</span>
-            </div>
-          )}
+          <BetSlider fees={fees} entryFee={entryFee} setEntryFee={setEntryFee} currLabel={currLabel} isDiamonds={isDiamonds} />
 
           {insufficient && (
             <p className="text-danger text-sm mt-2 text-center font-semibold">Insufficient balance.</p>

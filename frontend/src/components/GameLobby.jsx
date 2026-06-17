@@ -14,17 +14,22 @@ function fmtFee(fee) {
   return `${fee}`;
 }
 
+function calcPayout(fee, isDiamonds) {
+  if (isDiamonds) return (fee * 2).toLocaleString();
+  const p = fee * 2 * 0.95;
+  return p % 1 === 0 ? p.toLocaleString() : p.toFixed(2);
+}
+
 // Updates slider visuals directly on DOM nodes — no React re-render needed
-function applySliderDOM(rawIdx, fees, thumb, fill, display) {
+function applySliderDOM(rawIdx, fees, isDiamonds, thumb, fill, display, payout) {
   const maxIdx = fees.length - 1;
   const clampedRaw = Math.max(0, Math.min(maxIdx, rawIdx));
   const pct = maxIdx > 0 ? (clampedRaw / maxIdx) * 100 : 0;
-  if (thumb) thumb.style.left = `${pct}%`;
-  if (fill)  fill.style.width = `${pct}%`;
-  if (display) {
-    const snapped = Math.round(clampedRaw);
-    display.textContent = fmtFee(fees[snapped] ?? fees[0]);
-  }
+  const fee = fees[Math.round(clampedRaw)] ?? fees[0];
+  if (thumb)   thumb.style.left    = `${pct}%`;
+  if (fill)    fill.style.width    = `${pct}%`;
+  if (display) display.textContent = fmtFee(fee);
+  if (payout)  payout.textContent  = fee > 0 ? `+${calcPayout(fee, isDiamonds)}` : '';
 }
 
 export default function GameLobby({
@@ -54,7 +59,8 @@ export default function GameLobby({
   const sliderThumbRef = useRef(null);
   const sliderFillRef  = useRef(null);
   const feeDisplayRef  = useRef(null);
-  const dragRef        = useRef({ active: false, fees: [], setEntryFee: null });
+  const payoutDisplayRef = useRef(null);
+  const dragRef        = useRef({ active: false, fees: [], setEntryFee: null, isDiamonds: false });
 
   const { betCounts } = useSocket() || {};
   const { session } = useAuth();
@@ -90,14 +96,15 @@ export default function GameLobby({
   }
 
   // Keep dragRef in sync so native event handlers always see current values
-  dragRef.current.fees = fees;
+  dragRef.current.fees       = fees;
   dragRef.current.setEntryFee = setEntryFee;
+  dragRef.current.isDiamonds  = isDiamonds;
 
   // Sync slider DOM position when entryFee changes externally (currency switch, mount)
   useEffect(() => {
     const idx = Math.max(0, fees.indexOf(entryFee));
-    applySliderDOM(idx, fees, sliderThumbRef.current, sliderFillRef.current, feeDisplayRef.current);
-  }, [fees, entryFee]); // eslint-disable-line react-hooks/exhaustive-deps
+    applySliderDOM(idx, fees, isDiamonds, sliderThumbRef.current, sliderFillRef.current, feeDisplayRef.current, payoutDisplayRef.current);
+  }, [fees, entryFee, isDiamonds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Attach native pointer events once — no React re-renders during drag
   useEffect(() => {
@@ -110,26 +117,28 @@ export default function GameLobby({
       return pct * (dragRef.current.fees.length - 1);
     }
 
+    function apply(raw) {
+      applySliderDOM(raw, dragRef.current.fees, dragRef.current.isDiamonds,
+        sliderThumbRef.current, sliderFillRef.current, feeDisplayRef.current, payoutDisplayRef.current);
+    }
+
     function onDown(e) {
       dragRef.current.active = true;
       track.setPointerCapture(e.pointerId);
-      const raw = rawFromX(e.clientX);
-      applySliderDOM(raw, dragRef.current.fees, sliderThumbRef.current, sliderFillRef.current, feeDisplayRef.current);
+      apply(rawFromX(e.clientX));
       e.preventDefault();
     }
 
     function onMove(e) {
       if (!dragRef.current.active) return;
-      const raw = rawFromX(e.clientX);
-      applySliderDOM(raw, dragRef.current.fees, sliderThumbRef.current, sliderFillRef.current, feeDisplayRef.current);
+      apply(rawFromX(e.clientX));
     }
 
     function onUp(e) {
       if (!dragRef.current.active) return;
       dragRef.current.active = false;
-      const raw = rawFromX(e.clientX);
-      const snapped = Math.round(Math.max(0, Math.min(dragRef.current.fees.length - 1, raw)));
-      applySliderDOM(snapped, dragRef.current.fees, sliderThumbRef.current, sliderFillRef.current, feeDisplayRef.current);
+      const snapped = Math.round(Math.max(0, Math.min(dragRef.current.fees.length - 1, rawFromX(e.clientX))));
+      apply(snapped);
       dragRef.current.setEntryFee(dragRef.current.fees[snapped]);
     }
 
@@ -219,12 +228,13 @@ export default function GameLobby({
           />
         </div>
 
-        {/* Payout — centered below slider, big and prominent */}
+        {/* Payout — updates live during drag via payoutDisplayRef */}
         {entryFee > 0 && (
           <div className="mt-4 text-center">
             <div className="text-xs text-muted uppercase tracking-widest mb-1 font-semibold">Win Payout</div>
-            <div className="text-3xl font-black text-success" style={{ textShadow: '0 0 16px rgba(34,197,94,0.4)' }}>
-              +{payout}
+            <div className="text-3xl font-black text-success inline-flex items-center gap-1" style={{ textShadow: '0 0 16px rgba(34,197,94,0.4)' }}>
+              <span ref={payoutDisplayRef}>{`+${calcPayout(entryFee, isDiamonds)}`}</span>
+              {' '}{currLabel}
             </div>
           </div>
         )}

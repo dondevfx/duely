@@ -134,14 +134,7 @@ export default function QuickMatch() {
             </div>
           </div>
 
-          <BetSlider fees={fees} entryFee={entryFee} setEntryFee={setEntryFee} currLabel={currLabel} />
-
-          {entryFee > 0 && (
-            <div className="text-center mt-4">
-              <div className="text-xs text-muted mb-1">Win payout</div>
-              <div className="text-3xl font-black text-success">+{payout}</div>
-            </div>
-          )}
+          <BetSlider fees={fees} entryFee={entryFee} setEntryFee={setEntryFee} currLabel={currLabel} isDiamonds={isDiamonds} />
           {insufficient && (
             <p className="text-danger text-sm mt-2 text-center font-semibold">Insufficient balance.</p>
           )}
