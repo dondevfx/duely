@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useCallback } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GlowButton from './GlowButton';
 import { useSocket } from '../context/SocketContext';
@@ -12,6 +12,19 @@ function fmtFee(fee) {
   if (fee < 1)         return `${fee}`;
   if (fee >= 1000)     return `${(fee / 1000).toLocaleString()}k`;
   return `${fee}`;
+}
+
+// Updates slider visuals directly on DOM nodes — no React re-render needed
+function applySliderDOM(rawIdx, fees, thumb, fill, display) {
+  const maxIdx = fees.length - 1;
+  const clampedRaw = Math.max(0, Math.min(maxIdx, rawIdx));
+  const pct = maxIdx > 0 ? (clampedRaw / maxIdx) * 100 : 0;
+  if (thumb) thumb.style.left = `${pct}%`;
+  if (fill)  fill.style.width = `${pct}%`;
+  if (display) {
+    const snapped = Math.round(clampedRaw);
+    display.textContent = fmtFee(fees[snapped] ?? fees[0]);
+  }
 }
 
 export default function GameLobby({
@@ -37,10 +50,11 @@ export default function GameLobby({
 }) {
   const [privateMode, setPrivateMode] = useState(null); // null | 'create' | 'join'
   const [joinCode, setJoinCode]       = useState('');
-  // Raw float position (0..fees.length-1) — smooth during drag, snaps on release
-  const [rawIdx, setRawIdx] = useState(0);
   const sliderTrackRef = useRef(null);
-  const isDraggingRef  = useRef(false);
+  const sliderThumbRef = useRef(null);
+  const sliderFillRef  = useRef(null);
+  const feeDisplayRef  = useRef(null);
+  const dragRef        = useRef({ active: false, fees: [], setEntryFee: null });
 
   const { betCounts } = useSocket() || {};
   const { session } = useAuth();
@@ -75,45 +89,61 @@ export default function GameLobby({
     setEntryFee(newFees[0]);
   }
 
-  // Sync rawIdx when fees array or entryFee changes externally
+  // Keep dragRef in sync so native event handlers always see current values
+  dragRef.current.fees = fees;
+  dragRef.current.setEntryFee = setEntryFee;
+
+  // Sync slider DOM position when entryFee changes externally (currency switch, mount)
   useEffect(() => {
     const idx = Math.max(0, fees.indexOf(entryFee));
-    setRawIdx(idx);
+    applySliderDOM(idx, fees, sliderThumbRef.current, sliderFillRef.current, feeDisplayRef.current);
   }, [fees, entryFee]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const getRawFromPointer = useCallback((clientX) => {
+  // Attach native pointer events once — no React re-renders during drag
+  useEffect(() => {
     const track = sliderTrackRef.current;
-    if (!track) return 0;
-    const rect = track.getBoundingClientRect();
-    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    return pct * (fees.length - 1);
-  }, [fees.length]);
+    if (!track) return;
 
-  const commitSnap = useCallback((raw) => {
-    const snapped = Math.round(raw);
-    setRawIdx(snapped);
-    setEntryFee(fees[snapped]);
-  }, [fees, setEntryFee]);
+    function rawFromX(clientX) {
+      const rect = track.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      return pct * (dragRef.current.fees.length - 1);
+    }
 
-  function onPointerDown(e) {
-    e.currentTarget.setPointerCapture(e.pointerId);
-    isDraggingRef.current = true;
-    const raw = getRawFromPointer(e.clientX);
-    setRawIdx(raw);
-  }
+    function onDown(e) {
+      dragRef.current.active = true;
+      track.setPointerCapture(e.pointerId);
+      const raw = rawFromX(e.clientX);
+      applySliderDOM(raw, dragRef.current.fees, sliderThumbRef.current, sliderFillRef.current, feeDisplayRef.current);
+      e.preventDefault();
+    }
 
-  function onPointerMove(e) {
-    if (!isDraggingRef.current) return;
-    const raw = getRawFromPointer(e.clientX);
-    setRawIdx(raw);
-  }
+    function onMove(e) {
+      if (!dragRef.current.active) return;
+      const raw = rawFromX(e.clientX);
+      applySliderDOM(raw, dragRef.current.fees, sliderThumbRef.current, sliderFillRef.current, feeDisplayRef.current);
+    }
 
-  function onPointerUp(e) {
-    if (!isDraggingRef.current) return;
-    isDraggingRef.current = false;
-    const raw = getRawFromPointer(e.clientX);
-    commitSnap(raw);
-  }
+    function onUp(e) {
+      if (!dragRef.current.active) return;
+      dragRef.current.active = false;
+      const raw = rawFromX(e.clientX);
+      const snapped = Math.round(Math.max(0, Math.min(dragRef.current.fees.length - 1, raw)));
+      applySliderDOM(snapped, dragRef.current.fees, sliderThumbRef.current, sliderFillRef.current, feeDisplayRef.current);
+      dragRef.current.setEntryFee(dragRef.current.fees[snapped]);
+    }
+
+    track.addEventListener('pointerdown', onDown);
+    track.addEventListener('pointermove', onMove);
+    track.addEventListener('pointerup', onUp);
+    track.addEventListener('pointercancel', onUp);
+    return () => {
+      track.removeEventListener('pointerdown', onDown);
+      track.removeEventListener('pointermove', onMove);
+      track.removeEventListener('pointerup', onUp);
+      track.removeEventListener('pointercancel', onUp);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const payoutAmt = isDiamonds
     ? (entryFee * 2).toLocaleString()
@@ -150,57 +180,51 @@ export default function GameLobby({
         </div>
 
         {/* Bet amount display */}
-        {(() => {
-          const previewFee = fees[Math.round(rawIdx)];
-          return (
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm text-muted">Min: {fmtFee(fees[0])} {currLabel}</span>
-              <span className="text-2xl font-black text-white">
-                {fmtFee(previewFee)} <span className="text-primary">{currLabel}</span>
-              </span>
-              <span className="text-sm text-muted">Max: {fmtFee(fees[fees.length - 1])} {currLabel}</span>
-            </div>
-          );
-        })()}
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-sm text-muted">Min: {fmtFee(fees[0])} {currLabel}</span>
+          <span className="text-2xl font-black text-white">
+            <span ref={feeDisplayRef}>{fmtFee(entryFee)}</span>{' '}
+            <span className="text-primary">{currLabel}</span>
+          </span>
+          <span className="text-sm text-muted">Max: {fmtFee(fees[fees.length - 1])} {currLabel}</span>
+        </div>
 
-        {/* Custom smooth slider */}
-        {(() => {
-          const pct = fees.length > 1 ? (rawIdx / (fees.length - 1)) * 100 : 0;
-          return (
+        {/* Custom smooth slider — DOM-driven during drag, zero React re-renders per frame */}
+        <div
+          ref={sliderTrackRef}
+          className="relative w-full h-12 flex items-center cursor-grab active:cursor-grabbing select-none touch-none"
+          style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+        >
+          {/* Track background */}
+          <div className="absolute left-0 right-0 h-2 rounded-full bg-border overflow-hidden">
             <div
-              ref={sliderTrackRef}
-              className="relative w-full h-10 flex items-center cursor-pointer select-none touch-none"
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerUp}
-            >
-              {/* Track background */}
-              <div className="absolute left-0 right-0 h-2 rounded-full bg-border overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-primary transition-none"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              {/* Tick marks for each fee */}
-              {fees.map((_, i) => {
-                const tickPct = fees.length > 1 ? (i / (fees.length - 1)) * 100 : 0;
-                return (
-                  <div
-                    key={i}
-                    className="absolute w-1 h-1 rounded-full bg-white opacity-40 -translate-x-1/2"
-                    style={{ left: `${tickPct}%` }}
-                  />
-                );
-              })}
-              {/* Thumb */}
+              ref={sliderFillRef}
+              className="h-full rounded-full bg-primary"
+              style={{ width: `${fees.length > 1 ? (fees.indexOf(entryFee) / (fees.length - 1)) * 100 : 0}%`, transition: 'none' }}
+            />
+          </div>
+          {/* Tick marks */}
+          {fees.map((_, i) => {
+            const tickPct = fees.length > 1 ? (i / (fees.length - 1)) * 100 : 0;
+            return (
               <div
-                className="absolute w-5 h-5 rounded-full bg-white shadow-lg border-2 border-primary -translate-x-1/2 transition-none"
-                style={{ left: `${pct}%`, boxShadow: '0 2px 8px rgba(30,144,255,0.5)' }}
+                key={i}
+                className="absolute w-1.5 h-1.5 rounded-full bg-white opacity-50 -translate-x-1/2 pointer-events-none"
+                style={{ left: `${tickPct}%` }}
               />
-            </div>
-          );
-        })()}
+            );
+          })}
+          {/* Thumb */}
+          <div
+            ref={sliderThumbRef}
+            className="absolute w-6 h-6 rounded-full bg-white border-2 border-primary -translate-x-1/2 pointer-events-none"
+            style={{
+              left: `${fees.length > 1 ? (fees.indexOf(entryFee) / (fees.length - 1)) * 100 : 0}%`,
+              boxShadow: '0 2px 12px rgba(30,144,255,0.6)',
+              transition: 'none',
+            }}
+          />
+        </div>
 
         {/* Payout — centered below slider, big and prominent */}
         {entryFee > 0 && (
