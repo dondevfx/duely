@@ -246,7 +246,7 @@ export default function Navbar() {
                               <span className="text-sm font-semibold text-white">Instant</span>
                             </div>
                             <span className="font-mono text-sm font-black text-white whitespace-nowrap flex items-center gap-1">
-                              {(rakebackData.instant ?? 0).toFixed(2)} <CoinIcon size="0.9em" />
+                              {Math.floor(rakebackData.instant ?? 0)} <CoinIcon size="0.9em" />
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
@@ -275,7 +275,7 @@ export default function Navbar() {
                               <span className="text-sm font-semibold text-white">Daily</span>
                             </div>
                             <span className="font-mono text-sm font-black text-white whitespace-nowrap flex items-center gap-1">
-                              {(rakebackData.daily ?? 0).toFixed(2)} <CoinIcon size="0.9em" />
+                              {Math.floor(rakebackData.daily ?? 0)} <CoinIcon size="0.9em" />
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
@@ -304,7 +304,7 @@ export default function Navbar() {
                               <span className="text-sm font-semibold text-white">Weekly</span>
                             </div>
                             <span className="font-mono text-sm font-black text-white whitespace-nowrap flex items-center gap-1">
-                              {(rakebackData.weekly ?? 0).toFixed(2)} <CoinIcon size="0.9em" />
+                              {Math.floor(rakebackData.weekly ?? 0)} <CoinIcon size="0.9em" />
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
@@ -417,7 +417,7 @@ export default function Navbar() {
                                 <span className="text-base">{icon}</span>
                                 <span className="text-sm font-semibold text-white">{label}</span>
                               </div>
-                              <span className="font-mono text-sm font-black text-white flex items-center gap-1">{amount.toFixed(2)} <CoinIcon size="0.9em" /></span>
+                              <span className="font-mono text-sm font-black text-white flex items-center gap-1">{Math.floor(amount)} <CoinIcon size="0.9em" /></span>
                             </div>
                             <div className="flex items-center gap-2">
                               {!claimable && countdown > 0 && (

@@ -24,18 +24,26 @@ module.exports = function adminRoutes(supabase) {
       { data: adminProfile },
       { data: matchData },
       { count: pendingWithdrawals },
+      { data: feeClaimData },
     ] = await Promise.all([
       supabase.from('profiles').select('id', { count: 'exact', head: true }),
       supabase.from('matches').select('id', { count: 'exact', head: true }),
       supabase.from('matches').select('id', { count: 'exact', head: true }).gte('played_at', todayStart.toISOString()),
       supabase.from('profiles').select('id', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString()),
       supabase.from('profiles').select('c_coins, diamonds, fee_balance').eq('id', process.env.ADMIN_USER_ID).single(),
-      supabase.from('matches').select('prize_pool_c'),
+      supabase.from('matches').select('prize_pool_c, entry_fee_c'),
       supabase.from('transactions').select('id', { count: 'exact', head: true }).eq('type', 'withdrawal').eq('status', 'pending'),
+      supabase.from('transactions').select('amount_c').eq('type', 'fee_collection').eq('user_id', process.env.ADMIN_USER_ID),
     ]);
 
-    // Sum prize_pool_c (both players' fees combined) so total_wagered matches what admin fee is calculated against
-    const totalWagered = (matchData || []).reduce((s, m) => s + (Number(m.prize_pool_c) || 0), 0);
+    // Sum prize_pool_c — fallback to entry_fee_c * 2 if prize_pool_c not set
+    const totalWagered = (matchData || []).reduce((s, m) => {
+      const pp = Number(m.prize_pool_c) || 0;
+      const ef = Number(m.entry_fee_c) || 0;
+      return s + (pp > 0 ? pp : ef * 2);
+    }, 0);
+
+    const totalFeesClaimed = (feeClaimData || []).reduce((s, t) => s + (Number(t.amount_c) || 0), 0);
 
     res.json({
       total_users:        totalUsers   ?? 0,
@@ -45,7 +53,8 @@ module.exports = function adminRoutes(supabase) {
       fees_coins:         parseFloat((adminProfile?.c_coins ?? 0).toFixed(2)),
       fees_diamonds:      adminProfile?.diamonds ?? 0,
       fee_balance:        parseFloat((adminProfile?.fee_balance ?? 0).toFixed(4)),
-      total_wagered:      parseFloat(totalWagered.toFixed(2)),
+      total_wagered:       parseFloat(totalWagered.toFixed(2)),
+      total_fees_claimed:  parseFloat(totalFeesClaimed.toFixed(4)),
       pending_withdrawals: pendingWithdrawals ?? 0,
     });
   });

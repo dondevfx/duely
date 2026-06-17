@@ -37,18 +37,18 @@ module.exports = function rakebackRoutes(supabase) {
       // Instant claimable: balance > 0 AND (no prior claim OR 5 minutes have passed)
       const instantAt = p?.rakeback_instant_at ? new Date(p.rakeback_instant_at) : null;
       const INSTANT_COOLDOWN = 5 * 60 * 1000;
-      const instantClaimable = instant > 0 && (instantAt === null || (now - instantAt) >= INSTANT_COOLDOWN);
+      const instantClaimable = Math.floor(instant) >= 1 && (instantAt === null || (now - instantAt) >= INSTANT_COOLDOWN);
       const instantNextAt = !instantClaimable && instantAt ? new Date(instantAt.getTime() + INSTANT_COOLDOWN).toISOString() : null;
 
       // Daily claimable: daily_at is null OR more than 24h ago, AND balance > 0
       const dailyAt = p?.rakeback_daily_at ? new Date(p.rakeback_daily_at) : null;
-      const dailyClaimable = daily > 0 && (dailyAt === null || (now - dailyAt) >= 24 * 60 * 60 * 1000);
+      const dailyClaimable = Math.floor(daily) >= 1 && (dailyAt === null || (now - dailyAt) >= 24 * 60 * 60 * 1000);
       const dailyNextAt = !dailyClaimable && dailyAt ? new Date(dailyAt.getTime() + 24 * 60 * 60 * 1000).toISOString() : null;
 
       // Weekly claimable: weekly_at is null OR before the most recent Monday midnight UTC, AND balance > 0
       const weeklyAt = p?.rakeback_weekly_at ? new Date(p.rakeback_weekly_at) : null;
       const lastMonday = lastMondayUTC(now);
-      const weeklyClaimable = weekly > 0 && (weeklyAt === null || weeklyAt < lastMonday);
+      const weeklyClaimable = Math.floor(weekly) >= 1 && (weeklyAt === null || weeklyAt < lastMonday);
 
       function nextMondayUTC(from) {
         const d = new Date(from);

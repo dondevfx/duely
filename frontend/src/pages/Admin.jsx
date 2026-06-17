@@ -237,10 +237,11 @@ export default function Admin() {
               <StatCard label="Pending Withdrawals" value={stats?.pending_withdrawals ?? 0}            color={stats?.pending_withdrawals > 0 ? 'text-warning' : 'text-muted'} />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-              <StatCard label="Uncollected Fees"  value={`${fmt(stats?.fee_balance)} 🪙`}              sub="click Collect to claim" color={stats?.fee_balance > 0 ? 'text-warning' : 'text-muted'} />
-              <StatCard label="Wallet Balance"    value={`${fmt(stats?.fees_coins)} 🪙`}               sub={`${(stats?.fees_diamonds ?? 0).toLocaleString()} 💎`} color="text-success" />
-              <StatCard label="Total Wagered"     value={`${fmt(stats?.total_wagered)} 🪙`}            color="text-white" />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+              <StatCard label="Uncollected Fees"   value={`${fmt(stats?.fee_balance)} 🪙`}             sub="click Collect to claim" color={stats?.fee_balance > 0 ? 'text-warning' : 'text-muted'} />
+              <StatCard label="Wallet Balance"     value={`${fmt(stats?.fees_coins)} 🪙`}              sub={`${(stats?.fees_diamonds ?? 0).toLocaleString()} 💎`} color="text-success" />
+              <StatCard label="Total Fees Claimed" value={`${fmt(stats?.total_fees_claimed)} 🪙`}      sub="all time" color="text-accent" />
+              <StatCard label="Total Wagered"      value={`${fmt(stats?.total_wagered)} 🪙`}           sub="prize pool across all matches" color="text-white" />
             </div>
 
             {/* ── Coin Supply ──────────────────────────────────────────── */}
