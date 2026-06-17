@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
+import BetSlider from '../components/BetSlider';
 import ResultScreen from '../components/ResultScreen';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
@@ -583,14 +584,7 @@ export default function CoinFlipGame() {
                   <button onClick={() => switchCurrency('diamonds')} className={`px-4 py-2 rounded text-sm font-bold transition-all ${isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}>💎 Diamonds</button>
                 </div>
               </div>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-muted">Min: {fmtFee(fees[0])} {currLabel}</span>
-                <span className="text-2xl font-black text-white">{fmtFee(entryFee)} <span className="text-primary">{currLabel}</span></span>
-                <span className="text-sm text-muted">Max: {fmtFee(fees[fees.length - 1])} {currLabel}</span>
-              </div>
-              <input type="range" min={0} max={fees.length - 1} step={1} value={sliderIdx}
-                onChange={e => setEntryFee(fees[parseInt(e.target.value)])}
-                className="w-full cursor-pointer h-2 rounded-full" style={{ accentColor: '#1E90FF' }} />
+              <BetSlider fees={fees} entryFee={entryFee} setEntryFee={setEntryFee} currLabel={currLabel} />
               {entryFee > 0 && (
                 <div className="mt-4 text-center">
                   <div className="text-xs text-muted uppercase tracking-widest mb-1 font-semibold">Win Payout</div>

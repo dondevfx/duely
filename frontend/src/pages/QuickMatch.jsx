@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../utils/supabase';
 import { useSocket } from '../context/SocketContext';
 import { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
+import BetSlider from '../components/BetSlider';
 import { useCurrency } from '../context/CurrencyContext';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
@@ -133,20 +134,7 @@ export default function QuickMatch() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm text-muted">Min: {fmtFee(fees[0])} {currLabel}</span>
-            <span className="text-2xl font-black text-white">
-              {fmtFee(entryFee)} <span className="text-primary">{currLabel}</span>
-            </span>
-            <span className="text-sm text-muted">Max: {fmtFee(fees[fees.length - 1])} {currLabel}</span>
-          </div>
-
-          <input
-            type="range" min={0} max={fees.length - 1} step={1} value={sliderIdx}
-            onChange={handleSlider}
-            className="w-full cursor-pointer h-2 rounded-full"
-            style={{ accentColor: '#1E90FF' }}
-          />
+          <BetSlider fees={fees} entryFee={entryFee} setEntryFee={setEntryFee} currLabel={currLabel} />
 
           {entryFee > 0 && (
             <div className="text-center mt-4">
