@@ -151,6 +151,24 @@ export default function ResultScreen({
                 <span className="text-warning font-bold">Opponent disconnected</span>
               </div>
             )}
+            {disconnected && isWinner && entryFee > 0 && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-muted">Prize pool</span>
+                  <span className="text-white font-bold">
+                    {currency === 'diamonds'
+                      ? `${(entryFee * 2).toLocaleString()} 💎`
+                      : <span className="inline-flex items-center gap-1">{fmt(entryFee * 2)} <CoinIcon size="0.85em" /></span>}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted">Platform fee</span>
+                  <span className="font-bold" style={{ color: '#f97316' }}>
+                    {currency === 'diamonds' ? '0%' : '5%'}
+                  </span>
+                </div>
+              </>
+            )}
             {extraRows.map(r => (
               <div key={r.label} className="flex justify-between">
                 <span className="text-muted">{r.label}</span>

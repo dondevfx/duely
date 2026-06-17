@@ -345,14 +345,14 @@ export default function CoinFlipGame() {
     socket.on('opponent_disconnected', (data = {}) => {
       if (!inActiveMatchRef.current) return; // stale event — ignore
       inActiveMatchRef.current = false;
-      const myId = profile?.id;
+      const myId = profileRef.current?.id;
       const isWin = data.winnerId === myId;
       const payout = data.winnerPayout ?? null;
       if (payout != null && isWin) {
         const isDiamonds = data.currency === 'diamonds';
         updateProfile(isDiamonds
-          ? { diamonds: Math.max(0, (profile?.diamonds ?? 0) + payout) }
-          : { c_coins: Math.max(0, (profile?.c_coins ?? 0) + payout) }
+          ? { diamonds: Math.max(0, (profileRef.current?.diamonds ?? 0) + payout) }
+          : { c_coins: Math.max(0, (profileRef.current?.c_coins ?? 0) + payout) }
         );
       }
       // Use server-provided ELO values to compute accurate delta (avoids stale eloBeforeRef)
@@ -360,8 +360,8 @@ export default function CoinFlipGame() {
       setResultData({
         winnerId:       data.winnerId,
         loserId:        data.loserId,
-        winnerUsername: isWin ? profile?.username : data.winnerUsername,
-        loserUsername:  isWin ? data.loserUsername : profile?.username,
+        winnerUsername: isWin ? profileRef.current?.username : data.winnerUsername,
+        loserUsername:  isWin ? data.loserUsername : profileRef.current?.username,
         disconnected:   true,
         balanceChange:  payout != null ? { winnerPayout: isWin ? payout : 0 } : undefined,
         entryFee:       data.entryFee,

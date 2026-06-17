@@ -2330,9 +2330,13 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
     if (fee > 0 && !room.feesDeducted) {
       // Match was found but fees were never charged (player disconnected before deduction completed)
-      // Just clean up — no money was taken from either player
+      // No money was taken — notify stayer so they aren't stuck on the countdown screen
       unlockUser(leaver.userId);
       if (!stayer.isBot) unlockUser(stayer.userId);
+      const stayerSock = io.sockets.sockets.get(stayer.socketId);
+      if (stayerSock && !stayer.isBot) {
+        stayerSock.emit('match_cancelled', { message: 'Your opponent disconnected before the match started.' });
+      }
       io.emit('active_game_ended', { id: roomId });
       deleteFn(roomId);
       return;
