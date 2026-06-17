@@ -628,21 +628,18 @@ export default function CoinFlipGame() {
             </div>
 
             <div className="flex flex-col gap-3">
-              {!isDiamonds && (
-                <GlowButton onClick={joinQueue} variant="primary" size="lg" className="w-full text-lg py-4" disabled={session && (!authenticated || insufficient)}>
-                  {!session ? '🔒 Login to Play' : `Find Opponent (${side === 'heads' ? '🔵 Heads' : '⚪ Tails'})`}
-                </GlowButton>
-              )}
+              <GlowButton onClick={joinQueue} variant="primary" size="lg" className="w-full text-lg py-4" disabled={session && (!authenticated || insufficient)}>
+                {!session ? '🔒 Login to Play' : `Find Opponent (${side === 'heads' ? '🔵 Heads' : '⚪ Tails'})`}
+              </GlowButton>
               {isDiamonds && (
-                <GlowButton onClick={() => playVsBot(false)} variant="primary" size="lg" className="w-full text-lg py-4" disabled={session && (!authenticated || insufficient)}>
+                <GlowButton onClick={() => playVsBot(false)} variant="secondary" size="lg" className="w-full text-lg py-4" disabled={session && (!authenticated || insufficient)}>
                   {!session ? '🔒 Login to Play' : `🤖 Bet vs Bot — ${fmtFee(entryFee)} 💎`}
                 </GlowButton>
               )}
               <GlowButton onClick={() => playVsBot(true)} variant="ghost" size="lg" className="w-full text-lg py-4 border border-border hover:border-accent" disabled={session && !authenticated}>
                 {!session ? '🔒 Login to Play' : '🎮 Play Free vs Bot'}
               </GlowButton>
-              {!isDiamonds && (
-                <>
+              <>
                   <div className="grid grid-cols-2 gap-3">
                     <button onClick={() => setPrivateMode(privateMode === 'create' ? null : 'create')}
                       className={`py-4 rounded-xl text-base font-semibold border transition-all ${privateMode === 'create' ? 'border-primary text-primary bg-primary/10' : 'border-border text-muted hover:border-primary hover:text-white bg-surface'}`}>
@@ -676,8 +673,6 @@ export default function CoinFlipGame() {
                     </div>
                   )}
                 </>
-              )}
-              {isDiamonds && <p className="text-center text-xs text-muted">Diamond Coin Flip is vs bot only</p>}
             </div>
           </>
         )}

@@ -9,7 +9,7 @@ const GAME_META = {
 };
 const GAME_LIST    = Object.values(GAME_META);
 const COIN_POOL    = [1, 5, 10];
-const DIAMOND_POOL = [100, 250, 500, 50000];
+const DIAMOND_POOL = [500, 5000, 50000];
 
 // Seed: 14 initial items sent to each new connection so the ticker
 // isn't empty when a user first loads the page.

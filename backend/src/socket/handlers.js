@@ -900,7 +900,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
     // ── Allowed entry fees for active games ──────────────────────────────────
     const VALID_COIN_FEES    = new Set([0, 1, 5, 10]);
-    const VALID_DIAMOND_FEES = new Set([0, 50, 100, 250, 500, 1000, 50000]);
+    const VALID_DIAMOND_FEES = new Set([0, 50, 100, 250, 500, 1000, 5000, 50000]);
     function isValidFee(fee, cur) {
       return cur === 'diamonds' ? VALID_DIAMOND_FEES.has(Number(fee)) : VALID_COIN_FEES.has(Number(fee));
     }
@@ -1913,12 +1913,12 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
       if (!['heads', 'tails'].includes(side)) return socket.emit('error', { message: 'Pick heads or tails' });
       if (!isValidFee(entryFee, currency)) return socket.emit('error', { message: 'Invalid entry fee' });
-      // Coin flip only allows PvP for coins; diamonds = bot only
-      if (currency === 'diamonds') return socket.emit('error', { message: 'Diamond Coin Flip is vs bot only' });
       if (userQueues.has(authenticatedUser.userId))
         return socket.emit('error', { message: 'Already in a queue' });
       const { data: profile } = await supabase.from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
-      if (entryFee > 0 && profile.c_coins < entryFee)
+      if (entryFee > 0 && currency === 'diamonds' && profile.diamonds < entryFee)
+        return socket.emit('error', { message: 'Insufficient Diamonds' });
+      if (entryFee > 0 && currency !== 'diamonds' && profile.c_coins < entryFee)
         return socket.emit('error', { message: 'Insufficient C Coins' });
       if (entryFee > 0) lockUser(authenticatedUser.userId);
       const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, side };

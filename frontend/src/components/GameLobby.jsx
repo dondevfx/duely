@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import CoinIcon from './CoinIcon';
 
 export const COIN_FEES    = [1, 5, 10];
-export const DIAMOND_FEES = [100, 250, 500, 50000];
+export const DIAMOND_FEES = [500, 5000, 50000];
 
 function fmtFee(fee) {
   if (fee < 1)         return `${fee}`;
