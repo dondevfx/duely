@@ -113,6 +113,7 @@ function _makeRoom(roomId, p1, p2) {
     scores: { [p1.socketId]: 0, [p2.socketId]: 0 },
     turnIndex: 0,
     passCount: 0,
+    skipStreaks: { [p1.socketId]: 0, [p2.socketId]: 0 },
     usedPremiums: new Set(),
     turnTimer: null,
     rematches: {},
@@ -285,6 +286,7 @@ function handleScrabblePlay(io, supabase, roomId, socketId, placements) {
   }
   room.firstWord = false;
   room.passCount = 0;
+  if (room.skipStreaks) room.skipStreaks[socketId] = 0;
 
   // Update hand
   const hand = [...room.hands[socketId]];
@@ -334,8 +336,12 @@ function handleScrabbleSkip(io, supabase, roomId, socketId) {
   if (!room || room.state !== 'active') return;
   if (room.players[room.turnIndex].socketId !== socketId) return;
   room.passCount++;
+  if (room.skipStreaks) room.skipStreaks[socketId] = (room.skipStreaks[socketId] ?? 0) + 1;
   _clearTimer(room);
-  if (room.passCount >= 4) { _endGame(io, supabase, roomId, 'consecutive_passes'); return; }
+  // End if one player skips 3 turns in a row, or 6 total passes combined
+  if ((room.skipStreaks?.[socketId] ?? 0) >= 3 || room.passCount >= 6) {
+    _endGame(io, supabase, roomId, 'consecutive_passes'); return;
+  }
   room.turnIndex = 1 - room.turnIndex;
   io.to(roomId).emit('scrabble_skipped', { socketId, passCount: room.passCount, nextTurn: room.players[room.turnIndex].socketId });
   _startTimer(io, supabase, roomId);
@@ -354,6 +360,7 @@ function handleScrabbleExchange(io, supabase, roomId, socketId, letters) {
   const drawn = room.bag.splice(0, letters.length);
   room.hands[socketId] = [...hand, ...drawn];
   room.passCount++;
+  if (room.skipStreaks) room.skipStreaks[socketId] = 0; // exchange = active turn, reset streak
   _clearTimer(room);
   room.turnIndex = 1 - room.turnIndex;
 
