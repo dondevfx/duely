@@ -1,6 +1,7 @@
 const { getRoom } = require('./matchmaking');
 const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
+const { creditRakeback } = require('./rakebackService');
 const { scheduleBotClick } = require('./botService');
 
 const ROUNDS_TO_WIN = 2;
@@ -113,6 +114,12 @@ async function resolveRound(io, supabase, roomId, winner) {
         await applyEloUpdate(supabase, loser.userId, newLoserElo);
         await supabase.rpc('increment_loss', { uid: loser.userId });
       } catch (e) { console.error('[gameEngine] RPC failed:', e.message); }
+    }
+
+    if (supabase && room.entryFee > 0) {
+      const p1Id = winner.isBot ? null : winner.userId;
+      const p2Id = loser.isBot ? null : loser.userId;
+      await creditRakeback(supabase, p1Id, p2Id, room.entryFee * 2, room.currency || 'coins');
     }
 
     if (supabase && !winner.isBot && !loser.isBot) {
