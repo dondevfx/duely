@@ -1,54 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import CoinIcon from './CoinIcon';
-import { api } from '../utils/api';
+import { useSocket } from '../context/SocketContext';
 
-const GAME_META = {
-  block_blast: { icon: '🟦', name: 'Block Burst' },
-  scrabble:    { icon: '🔤', name: 'Word VS'     },
-  coin_flip:   { icon: '🟡', name: 'Coin Flip'   },
-  blackjack:   { icon: '🃏', name: 'Blackjack'   },
-};
-
-const GAME_LIST = Object.values(GAME_META);
-const COIN_POOL    = [1, 5, 10];
-const DIAMOND_POOL = [100, 250, 500, 50000];
-
-// Just the fee amount (not game) — used for fake repeat check
-function feeKey(item) {
-  return `${item.fee}-${item.diamonds ? 'd' : 'c'}`;
-}
-
-function makeFakeItem(lastFeeKey = null, lastTwoGames = []) {
-  // Try up to 10 times to avoid same bet size back-to-back and same game 2 in a row
-  const blockedGame = lastTwoGames.length >= 1 ? lastTwoGames[0] : null;
-  for (let attempt = 0; attempt < 10; attempt++) {
-    const game     = GAME_LIST[Math.floor(Math.random() * GAME_LIST.length)];
-    if (blockedGame && game.name === blockedGame) continue;
-    const diamonds = Math.random() < 0.4;
-    const pool     = diamonds ? DIAMOND_POOL : COIN_POOL;
-    const fee      = pool[Math.floor(Math.random() * pool.length)];
-    const key      = `${fee}-${diamonds ? 'd' : 'c'}`;
-    if (key !== lastFeeKey) {
-      const payout = diamonds ? fee * 2 : parseFloat((fee * 2 * 0.95).toFixed(2));
-      return { id: `fake-${Date.now()}-${Math.random()}`, game, payout, fee, diamonds, fake: true };
-    }
-  }
-  // Fallback — just pick anything
-  const game     = GAME_LIST[Math.floor(Math.random() * GAME_LIST.length)];
-  const diamonds = Math.random() < 0.4;
-  const pool     = diamonds ? DIAMOND_POOL : COIN_POOL;
-  const fee      = pool[Math.floor(Math.random() * pool.length)];
-  const payout   = diamonds ? fee * 2 : parseFloat((fee * 2 * 0.95).toFixed(2));
-  return { id: `fake-${Date.now()}-${Math.random()}`, game, payout, fee, diamonds, fake: true };
-}
-
-function makeRealItem(match) {
-  const game     = GAME_META[match.game_type] || GAME_META.block_blast;
-  const diamonds = (match.entry_fee_diamonds ?? 0) > 0;
-  const fee      = diamonds ? (match.entry_fee_diamonds ?? 0) : (match.entry_fee_c ?? 0);
-  const payout   = diamonds ? fee * 2 : parseFloat((fee * 2 * 0.95).toFixed(2));
-  return { id: `real-${match.id}`, game, payout, fee, diamonds, fake: false };
-}
+const MAX = 14;
 
 function fmtPayout(payout, diamonds) {
   if (diamonds) {
@@ -61,99 +15,37 @@ function fmtPayout(payout, diamonds) {
   return <span className="inline-flex items-center gap-0.5">{amt} <CoinIcon size="0.85em" /></span>;
 }
 
-const MAX = 14;
-const MIN_REAL_INTERVAL = 500; // max 2 real matches per second
-
-function buildInitialItems() {
-  const result = [];
-  for (let i = 0; i < MAX; i++) {
-    const last = result[result.length - 1];
-    const prev = result[result.length - 2];
-    const lastGames = [last?.game.name, prev?.game.name].filter(Boolean);
-    result.push(makeFakeItem(last ? feeKey(last) : null, lastGames));
-  }
-  return result;
-}
-
 export default function MatchTicker() {
-  const [items, setItems]   = useState(buildInitialItems);
-  const timerRef            = useRef(null);
-  const realPool            = useRef([]);
-  const itemsRef            = useRef(items);
-  const lastRealShownAt     = useRef(0);   // timestamp of last real match shown
-  const lastFakeKeyRef      = useRef(null); // fee key of last fake shown
-
-  useEffect(() => { itemsRef.current = items; }, [items]);
-
-  // Fetch recent real matches once on mount
-  useEffect(() => {
-    api.get('/match/recent').then(matches => {
-      if (!Array.isArray(matches)) return;
-      const real = matches.map(makeRealItem).filter(m => m.payout > 0);
-      realPool.current = real;
-      if (real.length > 0) {
-        setItems(prev => {
-          const seeded = [...prev];
-          let lastGame = null;
-          let seedIdx = 0;
-          for (let i = 0; i < seeded.length && seedIdx < real.length; i += 2) {
-            const r = real[seedIdx];
-            if (r.game.name !== lastGame) {
-              seeded[i] = { ...r, id: `real-seed-${seedIdx}` };
-              lastGame = r.game.name;
-              seedIdx++;
-            } else {
-              seedIdx++;
-              i -= 2; // retry this slot with next real match
-            }
-          }
-          return seeded.slice(0, MAX);
-        });
-      }
-    }).catch(() => {});
-  }, []);
+  const { socket } = useSocket();
+  const [items, setItems] = useState([]);
+  // Track latest item id to drive the pop-in animation on the newest card only
+  const latestIdRef = useRef(null);
 
   useEffect(() => {
-    function scheduleNext() {
-      // Fake items: 2–5 second interval
-      const delay = 2000 + Math.random() * 3000;
-      timerRef.current = setTimeout(() => {
-        const pool = realPool.current;
-        const now  = Date.now();
-        const canShowReal = pool.length > 0 && (now - lastRealShownAt.current) >= MIN_REAL_INTERVAL;
+    if (!socket) return;
 
-        // Block the most-recently-shown game to prevent any back-to-back repeats
-        const cur = itemsRef.current;
-        const lastTwoGames = cur.slice(0, 2).map(it => it.game.name);
-        const blockedGame = lastTwoGames[0] ?? null;
-
-        let next;
-        if (canShowReal && Math.random() < 0.70) {
-          // Pick a real match, filtering out any that would make 3 in a row
-          const validPool = blockedGame ? pool.filter(p => p.game.name !== blockedGame) : pool;
-          const source = validPool.length > 0 ? validPool : pool;
-          const pick = source[Math.floor(Math.random() * source.length)];
-          next = { ...pick, id: `real-${Date.now()}-${Math.random()}` };
-          lastRealShownAt.current = now;
-        } else {
-          // Fake — avoid same bet size as last fake and same game 3 in a row
-          next = makeFakeItem(lastFakeKeyRef.current, lastTwoGames);
-          lastFakeKeyRef.current = feeKey(next);
-        }
-
-        setItems(prev => [next, ...prev].slice(0, MAX));
-        scheduleNext();
-      }, delay);
+    function onSeed(seed) {
+      setItems(seed.slice(0, MAX));
     }
-    scheduleNext();
-    return () => clearTimeout(timerRef.current);
-  }, []);
+
+    function onItem(item) {
+      latestIdRef.current = item.id;
+      setItems(prev => [item, ...prev].slice(0, MAX));
+    }
+
+    socket.on('ticker_seed', onSeed);
+    socket.on('ticker_item', onItem);
+    return () => {
+      socket.off('ticker_seed', onSeed);
+      socket.off('ticker_item', onItem);
+    };
+  }, [socket]);
 
   const card = (item, i) => (
     <div
       key={item.id}
       className={`flex flex-col items-center justify-center gap-1.5 py-3 px-1 bg-surface border rounded-xl overflow-hidden shrink-0${
-        i === 0 ? ' animate-pop-in' : ''
+        i === 0 && item.id === latestIdRef.current ? ' animate-pop-in' : ''
       }`}
       style={{ height: 90, width: 80 }}
     >
@@ -166,6 +58,8 @@ export default function MatchTicker() {
       </span>
     </div>
   );
+
+  if (items.length === 0) return null;
 
   return (
     <>

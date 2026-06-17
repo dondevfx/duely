@@ -19,6 +19,7 @@ const { apiLimiter, authLimiter } = require('./middleware/rateLimit');
 const registerSocketHandlers = require('./socket/handlers');
 const swapPoller        = require('./services/swapPoller');
 const blockchainMonitor = require('./services/blockchainMonitor');
+const tickerService     = require('./services/tickerService');
 
 const app = express();
 const server = http.createServer(app);
@@ -89,6 +90,7 @@ app.use((err, _req, res, _next) => {
 // Start background services
 swapPoller.init(supabase);
 blockchainMonitor.init(supabase);
+tickerService.init(io, supabase);
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
