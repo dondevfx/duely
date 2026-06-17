@@ -84,6 +84,25 @@ export function clearSavedSession() {
   localStorage.removeItem(SAVE_SESSION_KEY);
 }
 
+// ── Profile cache ──────────────────────────────────────────────────────────
+// Stores the last-known profile in localStorage so the UI can render
+// immediately on cold-start while /auth/me is still in flight.
+const PROFILE_CACHE_KEY = 'duely_profile_cache';
+
+export function storeProfileCache(profile) {
+  try {
+    if (profile) localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile));
+    else localStorage.removeItem(PROFILE_CACHE_KEY);
+  } catch {}
+}
+
+export function readProfileCache() {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
 export function loadSavedTokens() {
   try {
     if (!localStorage.getItem(SAVE_LOGIN_KEY)) return null;

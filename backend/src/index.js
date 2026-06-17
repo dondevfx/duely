@@ -72,6 +72,7 @@ app.use('/api/affiliate', affiliateRoutes(supabase));
 app.use('/api/rakeback', rakebackRoutes(supabase));
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+app.get('/ping',   (_req, res) => res.send('pong'));
 
 registerSocketHandlers(io, supabase);
 

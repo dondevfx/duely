@@ -9,6 +9,8 @@ import {
   doTokenRefresh,
   getCurrentSession,
   SAVE_LOGIN_KEY,
+  storeProfileCache,
+  readProfileCache,
 } from '../utils/supabase';
 import { api } from '../utils/api';
 
@@ -22,7 +24,10 @@ export function AuthProvider({ children }) {
   // Seed session synchronously from storage so the UI never flashes "logged out"
   // on refresh — profile still loads async, but session is known immediately.
   const [session, setSession]             = useState(() => readSessionFromStorage());
-  const [profile, setProfile]             = useState(null);
+  // Seed profile from localStorage cache so the navbar/balance renders instantly
+  // on cold-start while /auth/me is still in flight. Overwritten with fresh data
+  // as soon as the API responds.
+  const [profile, setProfile]             = useState(() => readSessionFromStorage() ? readProfileCache() : null);
   const [loading, setLoading]             = useState(true);
   const [mfaPending, setMfaPending]       = useState(false);
   const [mfaFactorId, setMfaFactorId]     = useState(null);
@@ -99,6 +104,7 @@ export function AuthProvider({ children }) {
       try {
         const data = await api.get('/auth/me');
         setProfile(data);
+        storeProfileCache(data);
         return data;
       } catch (e) {
         // Don't retry on 429 — back off and let the safety-net handle it
@@ -318,6 +324,7 @@ export function AuthProvider({ children }) {
     }
     _applySession(null);
     setProfile(null);
+    storeProfileCache(null);
     clearSavedSession();
     _pendingMfaCreds.current = null;
     setMfaPending(false);
