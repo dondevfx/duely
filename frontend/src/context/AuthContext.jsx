@@ -19,7 +19,9 @@ const PENDING_USERNAME_KEY = 'rd_pending_username';
 const REFRESH_MARGIN_MS = 90 * 1000;
 
 export function AuthProvider({ children }) {
-  const [session, setSession]             = useState(null);
+  // Seed session synchronously from storage so the UI never flashes "logged out"
+  // on refresh — profile still loads async, but session is known immediately.
+  const [session, setSession]             = useState(() => readSessionFromStorage());
   const [profile, setProfile]             = useState(null);
   const [loading, setLoading]             = useState(true);
   const [mfaPending, setMfaPending]       = useState(false);
