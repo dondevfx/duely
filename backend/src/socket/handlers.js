@@ -129,13 +129,6 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
   const inMatchOrQueue = (uid) => userQueues.has(uid) || isLocked(uid);
   const chatBanned = new Set(); // userId → banned from chat
 
-  // ── Mobile-reconnect grace period ────────────────────────────────────
-  // When a socket disconnects from an active game, we wait FORFEIT_GRACE_MS before forfeiting.
-  // If the same user authenticates on a new socket within that window, we restore them to their room.
-  const FORFEIT_GRACE_MS = 20_000;
-  // Map: userId → { timer, jobs: [() => forfeitFn] }
-  const disconnectTimers = new Map();
-
   // ── Live player count tracking ────────────────────────────────
   // socketGameMap is the single source of truth.
   // playerCounts is NEVER mutated directly — it is always recomputed from socketGameMap.
@@ -228,58 +221,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         socket._authenticatedUserId = user.id;
         socket.emit('authenticated', { userId: user.id, username: profile.username });
 
-        // ── Mobile reconnect: cancel pending forfeit if same user reconnects in time ──
-        const pending = disconnectTimers.get(user.id);
-        if (pending) {
-          clearTimeout(pending.timer);
-          disconnectTimers.delete(user.id);
-          // Restore user to their active rooms with the new socket ID
-          for (const job of pending.jobs) {
-            job.cancelled = true;
-            job.restoreFn(socket);
-          }
-        }
       } catch { socket.emit('error', { message: 'Authentication error' }); }
     });
-
-    // ── Rejoin game after mobile reconnect ───────────────────────────────
-    // The restore() in disconnectTimers already re-joined the socket to the room.
-    // This handler just confirms success so the frontend knows which game to show.
-    socket.on('rejoin_game', ({ roomId }) => {
-      if (!authenticatedUser) return;
-      // If we restored this socket to a room during authenticate, it's already in the room.
-      // Check by searching players for this socket ID across game engines.
-      const socketBasedLookups = [
-        [getRoomBySocket,             'reaction'],
-        [getTypeRoomBySocket,         'type'],
-        [getMemoryRoomBySocket,       'memory'],
-        [getAimRoomBySocket,          'aim'],
-        [getC4RoomBySocket,           'connectFour'],
-        [getDartRoomBySocket,         'darts'],
-        [getAsteroidRoomBySocket,     'asteroids'],
-        [getPianoRoomBySocket,        'piano'],
-        [getClickRoomBySocket,        'clickRace'],
-        [getTTTRoomBySocket,          'tictactoe'],
-        [getTetrisRoomBySocket,       'tetris'],
-        [getChessRoomBySocket,        'chess'],
-        [getStarshipRoomBySocket,     'starship'],
-        [getBlockBlastRoomBySocket,   'blockBlast'],
-        [getCrossroadRoomBySocket,    'crossroad'],
-        [getScrabbleRoomBySocket,     'scrabble'],
-        [getCoinFlipRoomBySocket,     'coin_flip'],
-        [getBlackjackRoomBySocket,    'blackjack'],
-      ];
-      for (const [getFn, gameType] of socketBasedLookups) {
-        const found = getFn(socket.id);
-        if (found) {
-          socket.emit('rejoin_success', { roomId: found.roomId, gameType });
-          return;
-        }
-      }
-      // Not found in any active room — tell frontend to go to lobby
-      socket.emit('rejoin_failed', { roomId });
-    });
-
 
     // ── Global lobby chat ─────────────────────────────────────────────
     socket.on('chat_message', ({ message }) => {
@@ -2347,70 +2290,12 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         [getBlackjackRoomBySocket,  deleteBlackjackRoom,  'blackjack'],
       ];
 
-      const pendingJobs = []; // jobs that may be cancelled on fast reconnect
-
       for (const [getFn, delFn, gameType] of roomLookups) {
         const found = getFn(socket.id);
         if (!found) continue;
         const { room, roomId } = found;
-
         if (room.state === 'finished') { delFn(roomId); continue; }
-
-        const leaver = room.players?.find(p => p.socketId === socket.id);
-        // Bots or no-leaver: forfeit immediately (no reconnect grace for bots)
-        if (!leaver || leaver.isBot) {
-          await _handleForfeit(io, supabase, found, socket.id, delFn, gameType);
-          continue;
-        }
-
-        // Human player disconnected — give them FORFEIT_GRACE_MS to reconnect
-        const leaverSocketId = socket.id;
-        const opponent = room.players.find(p => p.socketId !== socket.id && !p.isBot);
-        const opponentSock = opponent ? io.sockets.sockets.get(opponent.socketId) : null;
-
-        // Notify opponent they are reconnecting
-        if (opponentSock) {
-          opponentSock.emit('opponent_reconnecting', { countdown: Math.ceil(FORFEIT_GRACE_MS / 1000) });
-        }
-
-        const forfeitFn = async () => {
-          // Re-look up room in case it finished during the grace period
-          const stillFound = getFn(leaverSocketId) || { room, roomId };
-          if (!stillFound.room || stillFound.room.state === 'finished') { delFn(roomId); return; }
-          await _handleForfeit(io, supabase, stillFound, leaverSocketId, delFn, gameType);
-        };
-
-        const restoreFn = (newSocket) => {
-          // Update the player's socket ID so game logic finds them correctly
-          leaver.socketId = newSocket.id;
-          newSocket._authenticatedUserId = leaver.userId;
-          newSocket.join(roomId);
-          // Notify opponent
-          const oppSock = opponent ? io.sockets.sockets.get(opponent.socketId) : null;
-          if (oppSock) oppSock.emit('opponent_reconnected');
-          // Emit a rejoined event with room/gameType so the frontend can restore the game
-          newSocket.emit('rejoin_success', { roomId, gameType });
-          console.log(`[reconnect] ${leaver.userId} rejoined room ${roomId} (${gameType})`);
-        };
-
-        pendingJobs.push({ forfeitFn, restoreFn });
-      }
-
-      if (pendingJobs.length > 0 && authenticatedUser) {
-        // Cancel any existing pending timer for this user (duplicate disconnect)
-        const existing = disconnectTimers.get(authenticatedUser.userId);
-        if (existing) { clearTimeout(existing.timer); }
-
-        const timer = setTimeout(async () => {
-          disconnectTimers.delete(authenticatedUser.userId);
-          for (const job of pendingJobs) {
-            if (!job.cancelled) await job.forfeitFn();
-          }
-        }, FORFEIT_GRACE_MS);
-
-        disconnectTimers.set(authenticatedUser.userId, { timer, jobs: pendingJobs });
-      } else {
-        // No active rooms or no authenticated user — nothing deferred
+        await _handleForfeit(io, supabase, found, socket.id, delFn, gameType);
       }
     });
   });
