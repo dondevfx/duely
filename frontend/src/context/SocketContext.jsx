@@ -45,8 +45,12 @@ export function SocketProvider({ children }) {
       const raw = localStorage.getItem(ACTIVE_ROOM_KEY);
       if (!raw) return;
       const { roomId, gameType, ts } = JSON.parse(raw);
-      // Only attempt rejoin if stored within 33 seconds (30s window + buffer)
-      if (Date.now() - ts > 33000) { localStorage.removeItem(ACTIVE_ROOM_KEY); return; }
+      // Only attempt rejoin within the grace window (25s = 20s server grace + 5s buffer)
+      if (Date.now() - ts > 25000) {
+        setRejoinResult({ success: false, roomId, gameType });
+        localStorage.removeItem(ACTIVE_ROOM_KEY);
+        return;
+      }
       socket.emit('rejoin_game', { roomId });
       // If no rejoin_success within 5s, treat as forfeited
       reconnectTimerRef.current = setTimeout(() => {
@@ -140,6 +144,15 @@ export function SocketProvider({ children }) {
       localStorage.removeItem(ACTIVE_ROOM_KEY);
     });
 
+    socket.on('rejoin_failed', () => {
+      clearTimeout(reconnectTimerRef.current);
+      const raw = localStorage.getItem(ACTIVE_ROOM_KEY);
+      let gameType = null;
+      try { gameType = JSON.parse(raw)?.gameType; } catch {}
+      setRejoinResult({ success: false, roomId: null, gameType });
+      localStorage.removeItem(ACTIVE_ROOM_KEY);
+    });
+
     socket.on('player_counts', ({ counts }) => setPlayerCounts(counts));
     socket.on('bet_counts', ({ counts }) => setBetCounts(counts));
 
@@ -166,6 +179,23 @@ export function SocketProvider({ children }) {
       setActiveGames(prev => prev.map(g => g.id === id ? { ...g, score1, score2 } : g));
     });
 
+    // When the page becomes visible again (e.g. mobile switching back to browser),
+    // try to rejoin any active game that may have been affected by the background disconnect.
+    function handleVisibilityChange() {
+      if (document.visibilityState !== 'visible') return;
+      const raw = localStorage.getItem(ACTIVE_ROOM_KEY);
+      if (!raw) return;
+      if (socket.connected) {
+        // Still connected — emit rejoin in case the room was affected
+        try {
+          const { roomId } = JSON.parse(raw);
+          socket.emit('rejoin_game', { roomId });
+        } catch {}
+      }
+      // If not connected, the reconnect flow (connect → authenticated → tryRejoin) handles it
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     // Re-authenticate whenever the session changes: after init() sets the session,
     // after a token refresh, or after the user signs in.
     // This covers the race where the socket connects before init() has set _currentSession.
@@ -175,7 +205,11 @@ export function SocketProvider({ children }) {
       }
     });
 
-    return () => { socket.disconnect(); unsubSessionChange(); };
+    return () => {
+      socket.disconnect();
+      unsubSessionChange();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
 

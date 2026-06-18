@@ -47,7 +47,6 @@ import SpectateView from './pages/SpectateView';
 import ForfeitToast from './components/ForfeitToast';
 import ReconnectOverlay from './components/ReconnectOverlay';
 import AgeToSModal, { useTosAccepted } from './components/AgeToSModal';
-import GeoWarningModal from './components/GeoWarningModal';
 import SaveLoginPrompt from './components/SaveLoginPrompt';
 
 function ProtectedRoute({ children }) {
@@ -126,7 +125,6 @@ function Shell() {
           <Route path="*"                   element={<Navigate to="/" replace />} />
         </Routes>
       </main>
-      <GeoWarningModal />
       <ForfeitToast />
       <ReconnectOverlay />
       {tosPending && <AgeToSModal onAccept={() => setTosAccepted(true)} />}

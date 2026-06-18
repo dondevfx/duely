@@ -41,10 +41,14 @@ export default function ReconnectOverlay() {
     }
   }, [rejoinResult]);
 
-  // Refresh balance on forfeit loss
+  // On failed rejoin: refresh balance and navigate home so the game doesn't stay in a broken state
   useEffect(() => {
-    if (rejoinResult && !rejoinResult.success) refreshProfile();
-  }, [rejoinResult]);
+    if (rejoinResult && !rejoinResult.success) {
+      refreshProfile();
+      clearRejoinResult();
+      navigate('/');
+    }
+  }, [rejoinResult]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!opponentReconnecting && !rejoinResult && !showSuccess) return null;
 
@@ -70,14 +74,10 @@ export default function ReconnectOverlay() {
           <div className="text-white font-black text-xl mb-1">Opponent Disconnected</div>
           <div className="text-muted text-sm mb-4">Waiting for them to reconnect…</div>
           <div className="text-yellow-400 font-black text-5xl">{countdown}</div>
-          <div className="text-muted text-xs mt-2">They have 10s to return</div>
+          <div className="text-muted text-xs mt-2">They have 20s to return</div>
         </div>
       </div>
     );
-  }
-
-  if (rejoinResult && !rejoinResult.success) {
-    clearRejoinResult();
   }
 
   return null;
