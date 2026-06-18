@@ -644,6 +644,7 @@ export default function BlackjackGame() {
         background: gameBg,
         display: 'flex', flexDirection: 'column',
         opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}>
         <style>{CARD_DEAL_CSS}</style>
 
@@ -724,7 +725,7 @@ export default function BlackjackGame() {
         <div style={{
           flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center',
-          padding: '10px 12px 12px',
+          padding: '10px 12px 24px',
           overflowY: 'auto',
         }}>
           <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>

@@ -839,7 +839,7 @@ export default function BlockBlastGame() {
 
       {/* ── GAME ── */}
       {phase === 'active' && (
-        <div className="flex flex-col items-center gap-4 animate-fade-in w-full" style={{ paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}>
+        <div className="flex flex-col items-center gap-4 animate-fade-in w-full" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 24px)' }}>
           <style>{`
             @keyframes powerUpPulse {
               0%, 100% { transform: scale(1); filter: brightness(1); }
