@@ -21,7 +21,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { SocketProvider } from './context/SocketContext';
+import { SocketProvider, useSocket } from './context/SocketContext';
 import { WalletProvider } from './context/WalletContext';
 import { CurrencyProvider } from './context/CurrencyContext';
 import Navbar from './components/Navbar';
@@ -135,6 +135,18 @@ function Shell() {
   );
 }
 
+function TipRefresher() {
+  const { socket } = useSocket();
+  const { refreshProfile } = useAuth();
+  useEffect(() => {
+    if (!socket) return;
+    const handler = () => refreshProfile();
+    socket.on('tip_received', handler);
+    return () => socket.off('tip_received', handler);
+  }, [socket, refreshProfile]);
+  return null;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -142,6 +154,7 @@ export default function App() {
         <SocketProvider>
           <WalletProvider>
             <CurrencyProvider>
+              <TipRefresher />
               <Shell />
             </CurrencyProvider>
           </WalletProvider>

@@ -59,7 +59,7 @@ async function getLastWithdrawal(supabase, userId) {
   return data?.[0]?.created_at || null;
 }
 
-module.exports = function walletRoutes(supabase) {
+module.exports = function walletRoutes(supabase, io) {
   const router = Router();
 
   // ── Withdrawable amounts per source ──────────────────────────────────
@@ -324,6 +324,15 @@ module.exports = function walletRoutes(supabase) {
           { user_id: req.user.id,   type: 'tip_sent',     amount_c: tipAmount, status: 'confirmed' },
           { user_id: recipient.id,  type: 'tip_received', amount_c: tipAmount, status: 'confirmed' },
         ]).then().catch(e => console.error('[tx] coin tip insert failed:', e.message));
+      }
+      // Notify recipient in real time if they're connected
+      if (io) {
+        for (const [, sock] of io.sockets.sockets) {
+          if (sock._authenticatedUserId === recipient.id) {
+            sock.emit('tip_received', { amount: tipAmount, currency, from: req.user.username || 'Someone' });
+            break;
+          }
+        }
       }
       res.json({ success: true, recipient: recipient.username, amount: tipAmount, currency });
     } catch (err) {

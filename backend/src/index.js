@@ -63,7 +63,7 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
   res.json({ ...data, is_admin: req.user.id === process.env.ADMIN_USER_ID });
 });
 app.use('/api/auth', authLimiter, authRoutes(supabase));
-app.use('/api/wallet', walletRoutes(supabase));
+app.use('/api/wallet', walletRoutes(supabase, io));
 app.use('/api/leaderboard', leaderboardRoutes(supabase));
 app.use('/api/match', matchRoutes(supabase));
 app.use('/api/bonus', bonusRoutes(supabase));

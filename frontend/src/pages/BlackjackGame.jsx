@@ -703,7 +703,7 @@ export default function BlackjackGame() {
               )}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'nowrap', overflowX: 'auto', maxWidth: '100%', paddingBottom: 4, justifyContent: 'center' }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', maxWidth: '100%', paddingBottom: 4, justifyContent: 'center' }}>
             {oppReveal
               ? oppReveal.hand.map((c, i) => (
                   <FlipCard key={i} card={c} flipped={flippingOpp} flipDelay={i * 0.18} />
@@ -749,47 +749,58 @@ export default function BlackjackGame() {
               />
             </div>
           </div>
-          {/* Split hand display — hand1 (completed/pending) shown above active hand */}
+          {/* Split hand display — both hands side by side with smaller cards */}
           {splitData && (
             <div style={{ marginBottom: 14, width: '100%', maxWidth: 480 }}>
-              {/* Hand 1 (completed when on hand 2) or pending hand 2 label */}
-              {splitData.activeHand === 2 ? (
-                <div style={{ marginBottom: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
-                    Hand 1 — Completed
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {/* Hand 1 */}
+                <div style={{
+                  borderRadius: 12,
+                  border: splitData.activeHand === 1 ? '2px solid #22c55e' : '1.5px solid rgba(255,255,255,0.1)',
+                  padding: '8px 6px',
+                  background: splitData.activeHand === 1 ? 'rgba(34,197,94,0.07)' : 'rgba(255,255,255,0.03)',
+                  opacity: splitData.activeHand === 2 ? 0.65 : 1,
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: splitData.activeHand === 1 ? '#22c55e' : textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, textAlign: 'center' }}>
+                    Hand 1{splitData.activeHand === 1 ? ' — Active' : ' — Done'}
                   </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', opacity: 0.55 }}>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
                     {splitData.hand1.map((c, i) => (
-                      <div key={i} style={{ transform: 'scale(0.72)', transformOrigin: 'top center', marginBottom: -30 }}>
+                      <div key={i} style={{ transform: 'scale(0.68)', transformOrigin: 'top center', marginBottom: -Math.round(CARD_H * 0.3) }}>
                         <CardFace card={c} />
                       </div>
                     ))}
                   </div>
-                  <div style={{ textAlign: 'center', marginTop: 6, fontSize: 12, color: textMuted, fontWeight: 700 }}>
-                    {splitData.score1 > 21 ? `Bust (${splitData.score1})` : splitData.score1}
-                  </div>
+                  {splitData.score1 != null && (
+                    <div style={{ textAlign: 'center', marginTop: Math.round(CARD_H * 0.3) + 6, fontSize: 12, color: splitData.score1 > 21 ? '#f87171' : textPrimary, fontWeight: 700 }}>
+                      {splitData.score1 > 21 ? `Bust (${splitData.score1})` : splitData.score1}
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div style={{ marginBottom: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
-                    Hand 2 — Waiting
+                {/* Hand 2 */}
+                <div style={{
+                  borderRadius: 12,
+                  border: splitData.activeHand === 2 ? '2px solid #22c55e' : '1.5px solid rgba(255,255,255,0.1)',
+                  padding: '8px 6px',
+                  background: splitData.activeHand === 2 ? 'rgba(34,197,94,0.07)' : 'rgba(255,255,255,0.03)',
+                  opacity: splitData.activeHand === 1 ? 0.65 : 1,
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: splitData.activeHand === 2 ? '#22c55e' : textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, textAlign: 'center' }}>
+                    Hand 2{splitData.activeHand === 2 ? ' — Active' : ' — Waiting'}
                   </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', opacity: 0.45 }}>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
                     {splitData.hand2.map((c, i) => (
-                      <div key={i} style={{ transform: 'scale(0.72)', transformOrigin: 'top center', marginBottom: -30 }}>
+                      <div key={i} style={{ transform: 'scale(0.68)', transformOrigin: 'top center', marginBottom: -Math.round(CARD_H * 0.3) }}>
                         <CardFace card={c} />
                       </div>
                     ))}
                   </div>
                 </div>
-              )}
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: 1, textAlign: 'center', marginBottom: 4, marginTop: 10 }}>
-                Hand {splitData.activeHand} — Active
               </div>
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'nowrap', overflowX: 'auto', maxWidth: '100%', paddingBottom: 4, justifyContent: 'center', marginBottom: 16 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', maxWidth: '100%', paddingBottom: 4, justifyContent: 'center', marginBottom: 16 }}>
             {(rd ? (myReveal?.hand ?? myHand) : myHand).map((c, i) => (
               <Card
                 key={`${dealRevision}-${i}`}

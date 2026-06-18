@@ -307,6 +307,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
     ? { newWinnerElo: winner.elo, newLoserElo: loser.elo }
     : calculateNewRatings(winner.elo, loser.elo);
 
+  // Settle wallet immediately so payout is accurate in the result
   let balanceChange = null;
   if (supabase && room.entryFee > 0) {
     try {
@@ -322,35 +323,8 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
       }
     } catch (e) { console.error('BlockBlast settle:', e.message); }
   }
-  let winnerStreak = 0;
-  let isFirstWin = false;
-  if (supabase && !isFree && !winner.isBot) {
-    try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
-    try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
-    try {
-      // Human won: increment their streak
-      ({ winnerStreak, isFirstWin } = await updateStreaks(supabase, winner.userId, null));
-    } catch { /* streak columns may not exist yet */ }
-  }
-  // Always reset human loser's streak — any game, free or paid, vs bot or human
-  if (supabase && !loser.isBot) {
-    try { await supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId); } catch {}
-  }
-  if (supabase && !isFree && !loser.isBot) {
-    try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
-    try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
-  }
-  if (supabase) {
-    if (!winner.isBot) await updateHighscore(supabase, winner.userId, 'blockBlast', winnerScore);
-    if (!loser.isBot)  await updateHighscore(supabase, loser.userId,  'blockBlast', loserScore);
-    try {
-      await supabase.from('matches').insert({
-        player1_id: winner.isBot ? null : winner.userId, player2_id: loser.isBot ? null : loser.userId,
-        winner_id: winner.isBot ? null : winner.userId, game_type: 'blockBlast',
-        entry_fee_c: (room.currency || 'coins') === 'coins' ? (room.entryFee || 0) : 0, entry_fee_diamonds: (room.currency || 'coins') === 'diamonds' ? (room.entryFee || 0) : 0,
-      });
-    } catch (e) { console.error('[blockBlastEngine] matches insert:', e.message); }
-  }
+
+  // Emit result immediately after wallet settles — don't wait for ELO/stats DB writes
   io.emit('active_game_ended', { id: roomId });
   gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId) });
   io.to(roomId).emit('block_blast_result', {
@@ -361,9 +335,38 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
     winnerScore, loserScore,
     currency: room.currency || 'coins',
     entryFee: room.entryFee || 0,
-    winnerStreak: winnerStreak ?? 0,
-    isFirstWin: isFirstWin ?? false,
+    winnerStreak: 0,
+    isFirstWin: false,
   });
+
+  // Fire-and-forget: ELO, streaks, highscores, match record
+  Promise.resolve().then(async () => {
+    let winnerStreak = 0, isFirstWin = false;
+    if (supabase && !isFree && !winner.isBot) {
+      try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
+      try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
+      try { ({ winnerStreak, isFirstWin } = await updateStreaks(supabase, winner.userId, null)); } catch {}
+    }
+    if (supabase && !loser.isBot) {
+      try { await supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId); } catch {}
+    }
+    if (supabase && !isFree && !loser.isBot) {
+      try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
+      try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
+    }
+    if (supabase) {
+      if (!winner.isBot) await updateHighscore(supabase, winner.userId, 'blockBlast', winnerScore);
+      if (!loser.isBot)  await updateHighscore(supabase, loser.userId,  'blockBlast', loserScore);
+      try {
+        await supabase.from('matches').insert({
+          player1_id: winner.isBot ? null : winner.userId, player2_id: loser.isBot ? null : loser.userId,
+          winner_id: winner.isBot ? null : winner.userId, game_type: 'blockBlast',
+          entry_fee_c: (room.currency || 'coins') === 'coins' ? (room.entryFee || 0) : 0, entry_fee_diamonds: (room.currency || 'coins') === 'diamonds' ? (room.entryFee || 0) : 0,
+        });
+      } catch (e) { console.error('[blockBlastEngine] matches insert:', e.message); }
+    }
+    // If we got streak/isFirstWin, no way to re-emit — backend-only data. Clients refresh profile after result.
+  }).catch(e => console.error('[blockBlastEngine] post-result DB:', e.message));
 }
 
 module.exports = {

@@ -868,14 +868,10 @@ export default function BlockBlastGame() {
 
             {/* Opponent score */}
             <div className="text-center min-w-[72px]">
-              {isSolo ? (
-                <div className="text-xl font-black font-mono text-muted">—</div>
-              ) : (
-                <div className={`text-xl font-black font-mono ${oppScore > score ? 'text-danger' : oppScore < score ? 'text-success' : 'text-accent'}`}>
-                  {oppScore.toLocaleString()}
-                </div>
-              )}
-              <div className="text-[10px] text-muted">{opponent?.username ?? 'Opponent'}</div>
+              <div className={`text-xl font-black font-mono ${oppScore > score ? 'text-danger' : oppScore < score ? 'text-success' : 'text-accent'}`}>
+                {oppScore.toLocaleString()}
+              </div>
+              <div className="text-[10px] text-muted">{isSolo ? 'Duely Bot' : (opponent?.username ?? 'Opponent')}</div>
             </div>
           </div>
 

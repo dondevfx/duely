@@ -190,7 +190,7 @@ export default function ResultScreen({
                 <span className="font-bold" style={{ color: '#64748b' }}>Unranked</span>
               )}
             </div>
-            {balanceChange && (
+            {(balanceChange || (isDraw && entryFee > 0) || (!isDraw && entryFee > 0)) && (
               <div className="border-t border-surfaceLight/40 pt-3 mt-1 text-center">
                 <div className="text-xs text-muted mb-1 uppercase tracking-widest font-semibold">
                   {isDraw ? 'Your Split' : isWinner ? 'Payout' : 'Entry Lost'}
@@ -201,12 +201,12 @@ export default function ResultScreen({
                 >
                   {isDraw ? (
                     currency === 'diamonds'
-                      ? `+${Math.round(balanceChange.winnerPayout).toLocaleString()} 💎`
-                      : <span className="inline-flex items-center gap-1">+{fmt(balanceChange.winnerPayout)} <CoinIcon size="0.8em" /></span>
+                      ? `+${Math.round(balanceChange?.winnerPayout ?? entryFee).toLocaleString()} 💎`
+                      : <span className="inline-flex items-center gap-1">+{fmt(balanceChange?.winnerPayout ?? entryFee)} <CoinIcon size="0.8em" /></span>
                   ) : isWinner ? (
                     currency === 'diamonds'
-                      ? `+${Math.round(balanceChange.winnerPayout).toLocaleString()} 💎`
-                      : <span className="inline-flex items-center gap-1">+{fmt(balanceChange.winnerPayout)} <CoinIcon size="0.8em" /></span>
+                      ? `+${Math.round(balanceChange?.winnerPayout ?? 0).toLocaleString()} 💎`
+                      : <span className="inline-flex items-center gap-1">+{fmt(balanceChange?.winnerPayout ?? 0)} <CoinIcon size="0.8em" /></span>
                   ) : (
                     currency === 'diamonds'
                       ? `-${entryFee} 💎`

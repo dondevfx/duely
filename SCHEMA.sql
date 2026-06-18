@@ -648,9 +648,13 @@ CREATE POLICY "matches_select" ON matches FOR SELECT USING (true);
 DROP POLICY IF EXISTS "transactions_select" ON transactions;
 CREATE POLICY "transactions_select" ON transactions FOR SELECT USING (auth.uid() = user_id);
 
--- game_highscores: public read
+-- game_highscores: public read, authenticated insert/update (backend uses service_role which bypasses RLS)
 DROP POLICY IF EXISTS "highscores_select" ON game_highscores;
 CREATE POLICY "highscores_select" ON game_highscores FOR SELECT USING (true);
+DROP POLICY IF EXISTS "highscores_insert" ON game_highscores;
+CREATE POLICY "highscores_insert" ON game_highscores FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "highscores_update" ON game_highscores;
+CREATE POLICY "highscores_update" ON game_highscores FOR UPDATE USING (true);
 
 -- deposit_addresses: owner-only read
 DROP POLICY IF EXISTS "deposit_addresses_select" ON deposit_addresses;
