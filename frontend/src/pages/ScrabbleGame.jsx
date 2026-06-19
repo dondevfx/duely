@@ -233,6 +233,7 @@ export default function ScrabbleGame() {
 
   // Game state
   const [board, setBoard]         = useState(() => Array.from({length:BOARD_SIZE},()=>Array(BOARD_SIZE).fill(null)));
+  const boardRef = useRef(board); // kept in sync below — lets stale-closure touch handlers read the live board
   const [myHand, setMyHand]       = useState([]);
   const [scores, setScores]       = useState({});
   const [myTurn, setMyTurn]       = useState(false);
@@ -286,6 +287,7 @@ export default function ScrabbleGame() {
   useEffect(() => { profileRef.current  = profile;  }, [profile]);
   useEffect(() => { opponentRef.current = opponent; }, [opponent]);
   useEffect(() => { roomIdRef.current   = roomId;   }, [roomId]);
+  useEffect(() => { boardRef.current    = board;    }, [board]);
   useEffect(() => { socketRef.current   = socket;   }, [socket]);
   useEffect(() => { refreshProfileRef.current = refreshProfile; }, [refreshProfile]);
 
@@ -399,7 +401,7 @@ export default function ScrabbleGame() {
         const col = target.dataset?.col;
         if (row !== undefined && col !== undefined) {
           if (boardKey !== null) {
-            movePendingTile(boardKey, `${row},${col}`);
+            movePendingTile(boardKey, `${row},${col}`, parseInt(row), parseInt(col));
           } else if (idx !== null) {
             handleCellDropByTouch(parseInt(row), parseInt(col), idx);
           }
@@ -861,7 +863,7 @@ export default function ScrabbleGame() {
     if (pending[key] || board[row][col]) return;
     // Moving an already-placed (pending) tile to a different cell
     if (draggingBoardKey) {
-      movePendingTile(draggingBoardKey, key);
+      movePendingTile(draggingBoardKey, key, row, col);
       setDraggingBoardKey(null);
       return;
     }
@@ -894,15 +896,19 @@ export default function ScrabbleGame() {
     }
   }
 
-  // Move a pending (not-yet-submitted) tile already on the board to a new cell
-  function movePendingTile(srcKey, destKey) {
-    if (!myTurn || phase !== 'game' || submitting) return;
+  // Move a pending (not-yet-submitted) tile already on the board to a new cell.
+  // Reads/writes pending only via the functional setState form — this is
+  // called from a touch listener whose closure is bound once in a useEffect
+  // (deps don't include `pending`), so reading the outer `pending` variable
+  // directly would see a stale, often-empty snapshot from before any tiles
+  // were placed this turn.
+  function movePendingTile(srcKey, destKey, destRow, destCol) {
     if (srcKey === destKey) return;
-    const [dr, dc] = destKey.split(',').map(Number);
-    if (pending[destKey] || board[dr]?.[dc]) return;
-    const srcTile = pending[srcKey];
-    if (!srcTile) return;
+    if (boardRef.current?.[destRow]?.[destCol]) return; // destination already has a permanent letter
     setPending(prev => {
+      if (prev[destKey]) return prev; // destination already has a pending tile
+      const srcTile = prev[srcKey];
+      if (!srcTile) return prev;
       const next = { ...prev };
       delete next[srcKey];
       next[destKey] = srcTile;
@@ -974,6 +980,27 @@ export default function ScrabbleGame() {
           opacity: 0.9,
         }}>
           {myHand[draggingIdx] === '?' ? '?' : myHand[draggingIdx]}
+        </div>
+      )}
+
+      {/* Touch drag ghost — tile being moved from one board cell to another */}
+      {touchDragPos && draggingBoardKey !== null && pending[draggingBoardKey] && (
+        <div style={{
+          position: 'fixed',
+          left: touchDragPos.x - (CELL_SIZE - 8) / 2,
+          top: touchDragPos.y - (CELL_SIZE - 8) / 2,
+          zIndex: 9999,
+          pointerEvents: 'none',
+          width: CELL_SIZE - 8, height: CELL_SIZE - 8,
+          borderRadius: 8,
+          background: '#e8d5a8',
+          border: '2.5px solid #1E90FF',
+          boxShadow: '0 0 16px rgba(30,144,255,0.8)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 22, fontWeight: 900, color: '#2c1a00',
+          opacity: 0.9,
+        }}>
+          {pending[draggingBoardKey].displayLetter || pending[draggingBoardKey].letter}
         </div>
       )}
 
@@ -1128,6 +1155,7 @@ export default function ScrabbleGame() {
               borderRadius: 12,
               border: '3px solid #4a3018',
               boxShadow: '0 4px 24px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08)',
+              touchAction: 'none',
             }}
           >
             {Array.from({length:BOARD_SIZE},(_,r) =>
