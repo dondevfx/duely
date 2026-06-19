@@ -10,9 +10,8 @@ const SIZE = 6;
 
 // Hard backstop so a match can never run forever — bag/board rarely empty
 // in practice, so without this, games vs. a bot (which rarely passes) can
-// drag on indefinitely. 24 total turns ≈ 12 each, enough to fill most of a
-// 6×6 board under normal play.
-const MAX_TURNS = 24;
+// drag on indefinitely. 16 total turns = 8 each.
+const MAX_TURNS = 16;
 
 // Premium squares — key = "row,col"
 // ★ = center (Double Word on first cover)
@@ -321,6 +320,8 @@ function handleScrabblePlay(io, supabase, roomId, socketId, placements) {
     scores: room.scores,
     bagCount: room.bag.length,
     nextTurn: room.players[room.turnIndex].socketId,
+    turnCount: room.turnCount,
+    maxTurns: MAX_TURNS,
   });
   const ps = io.sockets.sockets.get(socketId);
   if (ps) ps.emit('scrabble_new_tiles', { hand: newHand });
@@ -358,7 +359,7 @@ function handleScrabbleSkip(io, supabase, roomId, socketId) {
   if (room.turnCount >= MAX_TURNS) {
     _endGame(io, supabase, roomId, 'turn_limit'); return;
   }
-  io.to(roomId).emit('scrabble_skipped', { socketId, passCount: room.passCount, nextTurn: room.players[room.turnIndex].socketId });
+  io.to(roomId).emit('scrabble_skipped', { socketId, passCount: room.passCount, nextTurn: room.players[room.turnIndex].socketId, turnCount: room.turnCount, maxTurns: MAX_TURNS });
   _startTimer(io, supabase, roomId);
 }
 
@@ -388,6 +389,7 @@ function handleScrabbleExchange(io, supabase, roomId, socketId, letters) {
   io.to(roomId).emit('scrabble_exchanged', {
     socketId, count: letters.length, bagCount: room.bag.length,
     nextTurn: room.players[room.turnIndex].socketId,
+    turnCount: room.turnCount, maxTurns: MAX_TURNS,
   });
   _startTimer(io, supabase, roomId);
 }
@@ -405,6 +407,8 @@ function startScrabbleGame(io, supabase, roomId) {
     scores: room.scores,
     bagCount: room.bag.length,
     firstTurnSocketId: p1.socketId,
+    turnCount: room.turnCount,
+    maxTurns: MAX_TURNS,
     players: [
       { socketId: p1.socketId, userId: p1.userId, username: p1.username },
       { socketId: p2.socketId, userId: p2.userId, username: p2.username },
@@ -662,5 +666,5 @@ module.exports = {
   createDirectScrabbleRoom,
   startScrabbleGame, scheduleBotMove,
   handleScrabblePlay, handleScrabbleSkip, handleScrabbleExchange,
-  PREMIUM, LETTER_VALUES, SIZE,
+  PREMIUM, LETTER_VALUES, SIZE, MAX_TURNS,
 };

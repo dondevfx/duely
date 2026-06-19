@@ -227,6 +227,8 @@ export default function ScrabbleGame() {
   const [scores, setScores]       = useState({});
   const [myTurn, setMyTurn]       = useState(false);
   const [bagCount, setBagCount]   = useState(0);
+  const [turnCount, setTurnCount] = useState(0);
+  const [maxTurns, setMaxTurns]   = useState(16);
   const [turnSeconds, setTurnSeconds] = useState(0);
   const [lastWords, setLastWords] = useState([]);
   const [lastScore, setLastScore] = useState(null);
@@ -444,11 +446,12 @@ export default function ScrabbleGame() {
 
     socket.on('scrabble_countdown', ({ count }) => setCountdown(count));
 
-    socket.on('scrabble_start', ({ board: b, scores: sc, bagCount: bc, firstTurnSocketId }) => {
+    socket.on('scrabble_start', ({ board: b, scores: sc, bagCount: bc, firstTurnSocketId, turnCount: tc, maxTurns: mt }) => {
       if (gameOverRef.current) return; // opponent already left — don't overwrite result screen
       inActiveMatchRef.current = true;
       setBoard(b.map(r => r.map(c => c)));
       setScores(sc); setBagCount(bc);
+      setTurnCount(tc ?? 0); if (mt) setMaxTurns(mt);
       setMyTurn(firstTurnSocketId === socket.id);
       setPhase('game');
       setStatusMsg('');  // clear any queue/lobby messages
@@ -464,10 +467,11 @@ export default function ScrabbleGame() {
       handBeforeRef.current = hand;
     });
 
-    socket.on('scrabble_word_played', ({ board: b, scores: sc, bagCount: bc, nextTurn, words, score }) => {
+    socket.on('scrabble_word_played', ({ board: b, scores: sc, bagCount: bc, nextTurn, words, score, turnCount: tc }) => {
       if (gameOverRef.current) return;
       setBoard(b.map(r => r.map(c => c)));
       setScores(sc); setBagCount(bc);
+      if (tc != null) setTurnCount(tc);
       setMyTurn(nextTurn === socket.id);
       setLastWords(words || []); setLastScore(score);
       setPending({}); setSelectedHandIdx(null);
@@ -481,8 +485,9 @@ export default function ScrabbleGame() {
       handBeforeRef.current = hand;
     });
 
-    socket.on('scrabble_skipped', ({ nextTurn }) => {
+    socket.on('scrabble_skipped', ({ nextTurn, turnCount: tc }) => {
       if (gameOverRef.current) return;
+      if (tc != null) setTurnCount(tc);
       setMyTurn(nextTurn === socket.id);
       setLastWords([]); setLastScore(null);
       setTurnSeconds(0);
@@ -497,10 +502,11 @@ export default function ScrabbleGame() {
       setSelectedHandIdx(null);
     });
 
-    socket.on('scrabble_exchanged', ({ nextTurn, bagCount: bc }) => {
+    socket.on('scrabble_exchanged', ({ nextTurn, bagCount: bc, turnCount: tc }) => {
       if (gameOverRef.current) return;
       setMyTurn(nextTurn === socket.id);
       setBagCount(bc);
+      if (tc != null) setTurnCount(tc);
       setExchangeMode(false); setExchangeSel(new Set());
       setTurnSeconds(0);
     });
@@ -981,6 +987,7 @@ export default function ScrabbleGame() {
                   : "Opponent's Turn"}
               </div>
               <div className="text-xs text-muted mt-1">{bagCount} in bag</div>
+              <div className="text-xs text-muted mt-0.5">Turn {Math.min(turnCount + 1, maxTurns)}/{maxTurns}</div>
             </div>
 
             <div className="text-center">
