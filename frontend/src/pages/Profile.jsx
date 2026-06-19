@@ -14,35 +14,15 @@ import { ProfilePopup } from '../components/ChatSidebar';
 const GAME_INFO = {
   scrabble:      { emoji: '🔤', name: 'Word VS' },
   blockBlast:    { emoji: '🟦', name: 'Block Burst' },
-  uno:           { emoji: '🃏', name: 'Card Rush' },
-  twoFortyEight: { emoji: '🔢', name: '2048' },
-  galaga:        { emoji: '👾', name: 'Space Wars' },
-  tetris:        { emoji: '🟩', name: 'Block Fall' },
-  chess:         { emoji: '♟️', name: 'Chess' },
-  rps:           { emoji: '✂️', name: 'Rock Paper Scissors' },
-  connectFour:   { emoji: '🔴', name: 'Drop Zone' },
-  checkers:      { emoji: '🔵', name: 'Checkers' },
-  piano:         { emoji: '🎹', name: 'Tile Tap' },
-  type:          { emoji: '⌨️', name: 'Type Race' },
-  snake:         { emoji: '🐍', name: 'Snake' },
-  asteroids:     { emoji: '☄️', name: 'Asteroids' },
   blackjack:     { emoji: '🃏', name: 'Blackjack' },
-  clickRace:     { emoji: '🖱️', name: 'Click Race' },
   coin_flip:     { emoji: '🟡', name: 'Coin Flip' },
-  reaction:      { emoji: '⚡', name: 'Reaction' },
-  tictactoe:     { emoji: '⭕', name: 'Tic Tac Toe' },
 };
 
 const HIGHSCORE_LABELS = {
-  blockBlast:    'Score',
-  tetris:        'Score',
-  snake:         'Apples',
-  galaga:        'Score',
-  piano:         'Tiles',
-  twoFortyEight: 'Score',
+  blockBlast: 'Score',
 };
 
-const SOLO_GAME_TYPES = new Set(['tetris', 'galaga', 'snake', 'piano', 'blockBlast', 'twoFortyEight']);
+const SOLO_GAME_TYPES = new Set(['blockBlast']);
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
