@@ -214,7 +214,7 @@ module.exports = function adminRoutes(supabase) {
           type:     'fee_collection',
           amount_c: amount,
           status:   'confirmed',
-        }).catch(() => {});
+        }).then().catch(() => {});
       }
 
       // Return fresh balances

@@ -80,7 +80,7 @@ async function deductMatchFees(supabase, p1Id, p2Id, entryFee, currency) {
     if (e1) throw new Error(e1.message || 'Insufficient balance');
     const { error: e2 } = await supabase.rpc('deduct_coins', { user_id: p2Id, amount: fee });
     if (e2) {
-      await supabase.rpc('credit_coins', { user_id: p1Id, amount: fee }).catch(() => {});
+      await supabase.rpc('credit_coins', { user_id: p1Id, amount: fee }).then().catch(() => {});
       throw new Error(e2.message || 'Opponent has insufficient balance');
     }
   }
@@ -336,7 +336,7 @@ async function settleDrawMatch(supabase, p1Id, p2Id, entryFee) {
       platformFeePercent = platformFee;
     } catch {}
     const adminAmount = parseFloat((prizePool * platformFeePercent).toFixed(4));
-    await supabase.rpc('credit_fee_balance', { user_id: adminId, amount: adminAmount }).catch(() => {});
+    await supabase.rpc('credit_fee_balance', { user_id: adminId, amount: adminAmount }).then().catch(() => {});
   }
 
   supabase.from('transactions').insert([

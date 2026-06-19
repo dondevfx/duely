@@ -153,7 +153,7 @@ module.exports = function bonusRoutes(supabase) {
       if (!credited) {
         // Reset cooldown so user can try again
         await supabase.from('profiles')
-          .update({ last_spin_claimed: null }).eq('id', req.user.id).catch(() => {});
+          .update({ last_spin_claimed: null }).eq('id', req.user.id).then().catch(() => {});
         return res.status(500).json({ error: 'Could not credit diamonds. Please try again.' });
       }
 

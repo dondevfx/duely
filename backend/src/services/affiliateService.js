@@ -79,7 +79,7 @@ async function payAffiliatesCoins(supabase, owner1, owner2, prizePool) {
     await Promise.all(
       uniqueOwners.map(owner_id =>
         supabase.rpc('credit_affiliate_c', { owner_id, amount: perOwner })
-          .catch(e => console.error('[affiliate] credit failed:', e.message))
+          .then().catch(e => console.error('[affiliate] credit failed:', e.message))
       )
     );
     return { platformFee: PLATFORM_FEE_WITH_CREATOR }; // 3.5%
@@ -93,7 +93,7 @@ async function payAffiliatesCoins(supabase, owner1, owner2, prizePool) {
   const pct = isCreator ? CREATOR_FEE_PERCENT : AFFILIATE_FEE_PERCENT;
   const amount = parseFloat((pool * pct).toFixed(4));
   await supabase.rpc('credit_affiliate_c', { owner_id: singleOwner, amount })
-    .catch(e => console.error('[affiliate] credit failed:', e.message));
+    .then().catch(e => console.error('[affiliate] credit failed:', e.message));
   return { platformFee: isCreator ? PLATFORM_FEE_WITH_CREATOR : PLATFORM_FEE_WITH_AFF }; // 3.5% or 4.0%
 }
 

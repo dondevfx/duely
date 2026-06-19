@@ -207,7 +207,7 @@ async function handlePianoDeath(io, supabase, roomId, socketId, tilesHit) {
   }
   // Always reset human loser's streak — any game, free or paid, vs bot or human
   if (supabase && !actualLoser.isBot) {
-    supabase.from('profiles').update({ current_streak: 0 }).eq('id', actualLoser.userId).catch(() => {});
+    supabase.from('profiles').update({ current_streak: 0 }).eq('id', actualLoser.userId).then().catch(() => {});
   }
   if (supabase && !actualLoser.isBot) {
     try {

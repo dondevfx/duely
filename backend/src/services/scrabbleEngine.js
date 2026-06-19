@@ -505,17 +505,17 @@ async function _endGame(io, supabase, roomId, reason) {
       if (!isFree) {
         if (!winner.isBot) {
           await applyEloUpdate(supabase, winner.userId, newWinnerElo).catch(() => {});
-          await supabase.rpc('increment_win', { uid: winner.userId }).catch(() => {});
+          await supabase.rpc('increment_win', { uid: winner.userId }).then().catch(() => {});
           try { await updateStreaks(supabase, winner.userId, null); } catch {}
         }
         if (!loser.isBot) {
           await applyEloUpdate(supabase, loser.userId, newLoserElo).catch(() => {});
-          await supabase.rpc('increment_loss', { uid: loser.userId }).catch(() => {});
+          await supabase.rpc('increment_loss', { uid: loser.userId }).then().catch(() => {});
         }
       }
       // Always reset human loser's streak — any game, free or paid, vs bot or human
       if (!loser.isBot) {
-        supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId).catch(() => {});
+        supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId).then().catch(() => {});
       }
       for (const [p, score] of [[winner, winnerScore], [loser, loserScore]]) {
         if (!p.isBot) await updateHighscore(supabase, p.userId, 'wordVS', score).catch(() => {});
@@ -529,7 +529,7 @@ async function _endGame(io, supabase, roomId, reason) {
           prize_pool_c:        currency === 'coins'    ? fee * 2 : 0,
           prize_pool_diamonds: currency === 'diamonds' ? fee * 2 : 0,
           platform_fee_c:      currency === 'coins'    ? parseFloat((fee * 2 * 0.05).toFixed(4)) : 0,
-        }).catch(() => {});
+        }).then().catch(() => {});
       }
     }
   } catch (e) {

@@ -107,7 +107,7 @@ async function resolveRound(io, supabase, roomId, winner) {
     }
     // Always reset human loser's streak — any game, free or paid, vs bot or human
     if (supabase && !loser.isBot) {
-      supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId).catch(() => {});
+      supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId).then().catch(() => {});
     }
     if (supabase && !loser.isBot) {
       try {

@@ -127,7 +127,7 @@ module.exports = function rewardsRoutes(supabase) {
 
       // Helper: reset cooldown so user can retry if credit fails
       async function resetCooldown() {
-        await supabase.from('profiles').update({ [col]: null }).eq('id', req.user.id).catch(() => {});
+        await supabase.from('profiles').update({ [col]: null }).eq('id', req.user.id).then().catch(() => {});
       }
 
       // Try RPC first (atomic increment)

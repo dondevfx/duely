@@ -464,7 +464,7 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     user_id: userId, type: 'deposit_raw', amount_c: 0,
     crypto_amount: amount, crypto_symbol: coin.toUpperCase(),
     tx_hash: txHash, status: 'forwarded',
-  }).catch(() => {});
+  }).then().catch(() => {});
 
   try {
     const sendTx = await sendCrypto({ coin, privKey, toAddress: swap.depositAddress, amount: netAmount });
