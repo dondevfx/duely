@@ -1,5 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
-const { isValidWord } = require('./wordValidator');
+const { isValidWord, loadWords } = require('./wordValidator');
 const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
 const { updateHighscore } = require('./highscoreService');
@@ -102,10 +102,37 @@ function createDirectScrabbleRoom(p1, p2) {
   return { roomId };
 }
 
+// True if at least one dictionary word (2–7 letters) can be formed from `hand`.
+function _handHasPlayableWord(hand) {
+  const words = loadWords();
+  for (const w of words) {
+    if (w.length < 2 || w.length > 7) continue;
+    if (_canFormWord(w, hand)) return true;
+  }
+  return false;
+}
+
+// Draws 7 tiles from `bag` (mutating it in place), reshuffling and redrawing
+// if the dealt hand can't form any word at all — nobody should have to play
+// through a starting hand with zero legal opening moves.
+function _dealPlayableHand(bag) {
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const hand = bag.splice(0, 7);
+    if (_handHasPlayableWord(hand)) return hand;
+    // Unplayable — return the tiles, reshuffle, try again
+    bag.push(...hand);
+    const reshuffled = shuffle(bag);
+    bag.length = 0;
+    bag.push(...reshuffled);
+  }
+  // Pathological bad luck — just deal whatever's left rather than loop forever
+  return bag.splice(0, 7);
+}
+
 function _makeRoom(roomId, p1, p2) {
   const bag = shuffle(BAG_TEMPLATE);
-  const hand1 = bag.splice(0, 7);
-  const hand2 = bag.splice(0, 7);
+  const hand1 = _dealPlayableHand(bag);
+  const hand2 = _dealPlayableHand(bag);
   return {
     roomId,
     players: [p1, p2],
@@ -611,7 +638,6 @@ async function scheduleBotMove(io, supabase, roomId) {
     const hand = fresh.hands[bot.socketId] || [];
     const { board, bag } = fresh;
 
-    const { loadWords } = require('./wordValidator');
     const allWords = loadWords();
 
     // Collect formable words (cap at 800 for perf)

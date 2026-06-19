@@ -441,7 +441,11 @@ export default function ScrabbleGame() {
       document.removeEventListener('touchmove', onTouchMove);
       document.removeEventListener('touchend', onTouchEnd);
     };
-  }, [myTurn, phase, submitting, exchangeMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  // pending/board/myHand are included so the touch listeners always see fresh
+  // state — without them, placing/moving several tiles in a row (without
+  // myTurn/phase changing) left these closures reading a stale snapshot from
+  // before those tiles were placed, causing stray/duplicate tiles in hand.
+  }, [myTurn, phase, submitting, exchangeMode, pending, board, myHand]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Turn timer countdown
   useEffect(() => {
@@ -758,10 +762,17 @@ export default function ScrabbleGame() {
 
   function removePending(row, col) {
     const key = `${row},${col}`;
-    const tile = pending[key];
-    if (!tile) return;
-    setMyHand(prev => [...prev, tile.isBlank ? '?' : tile.letter]);
-    setPending(prev => { const n = { ...prev }; delete n[key]; return n; });
+    let removedTile = null;
+    setPending(prev => {
+      if (!prev[key]) return prev;
+      removedTile = prev[key];
+      const n = { ...prev };
+      delete n[key];
+      return n;
+    });
+    if (removedTile) {
+      setMyHand(prev => [...prev, removedTile.isBlank ? '?' : removedTile.letter]);
+    }
   }
 
   function recallAll() {

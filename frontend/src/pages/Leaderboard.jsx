@@ -91,11 +91,16 @@ export default function Leaderboard() {
   const current = data[activeTab];
   const allPlayers = current?.players ?? [];
   // Hide players with no activity: for ELO, require at least 1 win; for others, require value > 0
-  const players = allPlayers.filter(p => {
-    if (tab?.id === 'elo') return (p.wins ?? 0) > 0;
-    if (tab?.id === 'streak') return (p.current_streak ?? 0) > 0;
-    return (p[tab?.valueKey ?? ''] ?? 0) > 0;
-  });
+  // Re-number rank sequentially after filtering — the backend's `rank` field reflects
+  // position in the unfiltered list, so displaying it as-is leaves gaps wherever a
+  // hidden (inactive) player sat between two visible ones.
+  const players = allPlayers
+    .filter(p => {
+      if (tab?.id === 'elo') return (p.wins ?? 0) > 0;
+      if (tab?.id === 'streak') return (p.current_streak ?? 0) > 0;
+      return (p[tab?.valueKey ?? ''] ?? 0) > 0;
+    })
+    .map((p, i) => ({ ...p, rank: i + 1 }));
   const userRank = current?.userRank ?? null;
   const myEntry = players.find(p => p.id === profile?.id);
 
