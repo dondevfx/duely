@@ -133,6 +133,8 @@ async function resolveCoinFlip(io, supabase, roomId) {
         game_type: 'coin_flip',
         entry_fee_c: room.currency === 'coins' ? room.entryFee : 0,
         entry_fee_diamonds: room.currency === 'diamonds' ? room.entryFee : 0,
+        prize_pool_c: room.currency === 'coins' ? (room.entryFee || 0) * 2 : 0,
+        prize_pool_diamonds: room.currency === 'diamonds' ? (room.entryFee || 0) * 2 : 0,
       });
     } catch (e) { console.error('[coinFlipEngine] matches insert:', e.message); }
   }

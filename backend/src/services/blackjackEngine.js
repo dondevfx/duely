@@ -405,6 +405,8 @@ async function _resolveGame(io, supabase, roomId) {
         game_type: 'blackjack',
         entry_fee_c: room.currency === 'coins' ? room.entryFee : 0,
         entry_fee_diamonds: room.currency === 'diamonds' ? room.entryFee : 0,
+        prize_pool_c: room.currency === 'coins' ? (room.entryFee || 0) * 2 : 0,
+        prize_pool_diamonds: room.currency === 'diamonds' ? (room.entryFee || 0) * 2 : 0,
       });
     } catch (e) { console.error('[blackjackEngine] matches insert:', e.message); }
   }

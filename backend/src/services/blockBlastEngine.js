@@ -240,6 +240,8 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
           await supabase.from('matches').insert({
             player1_id: player.userId, player2_id: null, winner_id: humanWon ? player.userId : null,
             game_type: 'blockBlast', entry_fee_c: (room.currency || 'coins') === 'coins' ? (room.entryFee || 0) : 0, entry_fee_diamonds: (room.currency || 'coins') === 'diamonds' ? (room.entryFee || 0) : 0,
+            prize_pool_c: (room.currency || 'coins') === 'coins' ? (room.entryFee || 0) * 2 : 0,
+            prize_pool_diamonds: (room.currency || 'coins') === 'diamonds' ? (room.entryFee || 0) * 2 : 0,
           });
         } catch (e) { console.error('[blockBlastEngine] matches insert:', e.message); }
         await updateHighscore(supabase, player.userId, 'blockBlast', verifiedScore);
@@ -362,6 +364,8 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
           player1_id: winner.isBot ? null : winner.userId, player2_id: loser.isBot ? null : loser.userId,
           winner_id: winner.isBot ? null : winner.userId, game_type: 'blockBlast',
           entry_fee_c: (room.currency || 'coins') === 'coins' ? (room.entryFee || 0) : 0, entry_fee_diamonds: (room.currency || 'coins') === 'diamonds' ? (room.entryFee || 0) : 0,
+          prize_pool_c: (room.currency || 'coins') === 'coins' ? (room.entryFee || 0) * 2 : 0,
+          prize_pool_diamonds: (room.currency || 'coins') === 'diamonds' ? (room.entryFee || 0) * 2 : 0,
         });
       } catch (e) { console.error('[blockBlastEngine] matches insert:', e.message); }
     }
