@@ -226,6 +226,11 @@ export default function ScrabbleGame() {
   const [result, setResult]       = useState(null);
   const [statusMsg, setStatusMsg] = useState('');
 
+  // Tracks how the most recent match was started so "Play Again" can
+  // re-enter the same mode (pvp queue vs bot) instead of going to lobby.
+  const lastModeRef     = useRef(null); // 'pvp' | 'bot' | 'bot_free'
+  const lastSettingsRef = useRef({ entryFee: 0, currency: 'coins' });
+
   // Game state
   const [board, setBoard]         = useState(() => Array.from({length:BOARD_SIZE},()=>Array(BOARD_SIZE).fill(null)));
   const [myHand, setMyHand]       = useState([]);
@@ -635,12 +640,16 @@ export default function ScrabbleGame() {
   // ── Actions ────────────────────────────────────────────────────────────────
   function joinQueue() {
     if (!authenticated) { doAuth(); return; }
+    lastModeRef.current = 'pvp';
+    lastSettingsRef.current = { entryFee, currency: betCurrency };
     socket.emit('join_scrabble_queue', { entryFee, currency: betCurrency });
     setPhase('queue'); setStatusMsg('Finding an opponent…');
   }
 
   function playVsBot() {
     if (!authenticated) { doAuth(); return; }
+    lastModeRef.current = 'bot';
+    lastSettingsRef.current = { entryFee, currency: betCurrency };
     socket.emit('play_scrabble_vs_bot', { entryFee, currency: betCurrency });
     setPhase('queue'); setStatusMsg('Starting bot match…');
   }
@@ -662,6 +671,8 @@ export default function ScrabbleGame() {
 
   function playVsBotFree() {
     if (!authenticated) { doAuth(); return; }
+    lastModeRef.current = 'bot_free';
+    lastSettingsRef.current = { entryFee: 0, currency: 'coins' };
     socket.emit('play_scrabble_vs_bot', { entryFee: 0, currency: 'coins' });
     setPhase('queue'); setStatusMsg('Starting bot match…');
   }
@@ -678,6 +689,32 @@ export default function ScrabbleGame() {
     setSelectedHandIdx(null); setLastWords([]); setLastScore(null);
     setExchangeMode(false); setExchangeSel(new Set());
     setMySkips(0); setSubmitting(false); setTurnSeconds(0);
+  }
+
+  // "Play Again" — re-enter the same mode the player just finished (queue
+  // for pvp, instant rematch vs bot) instead of dropping back to the betting
+  // screen.
+  function playAgain() {
+    setResult(null); setOpponent(null); setRoomId(null);
+    setBoard(Array.from({length:BOARD_SIZE},()=>Array(BOARD_SIZE).fill(null)));
+    setMyHand([]); setScores({}); setMyTurn(false); setPending({});
+    setSelectedHandIdx(null); setLastWords([]); setLastScore(null);
+    setExchangeMode(false); setExchangeSel(new Set());
+    setMySkips(0); setSubmitting(false); setTurnSeconds(0);
+
+    const mode = lastModeRef.current;
+    const s = lastSettingsRef.current;
+    if (mode === 'pvp') {
+      if (!authenticated) { doAuth(); return; }
+      socket.emit('join_scrabble_queue', { entryFee: s.entryFee, currency: s.currency });
+      setPhase('queue'); setStatusMsg('Finding an opponent…');
+    } else if (mode === 'bot' || mode === 'bot_free') {
+      if (!authenticated) { doAuth(); return; }
+      socket.emit('play_scrabble_vs_bot', { entryFee: s.entryFee, currency: s.currency });
+      setPhase('queue'); setStatusMsg('Starting bot match…');
+    } else {
+      setPhase('lobby');
+    }
   }
 
   // ── Placement ─────────────────────────────────────────────────────────────
@@ -965,7 +1002,7 @@ export default function ScrabbleGame() {
                   result.reason === 'turn_limit' ? 'Turn limit reached' : 'Game over' }] : []),
             ]}
             onRematch={null}
-            onPlayAgain={backToLobby}
+            onPlayAgain={playAgain}
             onBackToLobby={backToLobby}
           />
         </div>

@@ -721,7 +721,7 @@ export default function BlockBlastGame() {
               label: 'Score',
               value: `${(isWinner ? (result.winnerScore ?? 0) : (result.loserScore ?? 0)).toLocaleString()} — ${(isWinner ? (result.loserScore ?? 0) : (result.winnerScore ?? 0)).toLocaleString()}`,
             }]}
-            onPlayAgain={backToLobby}
+            onPlayAgain={joinQueue}
             onBackToLobby={backToLobby}
           />
         </div>
