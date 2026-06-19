@@ -468,61 +468,72 @@ async function _endGame(io, supabase, roomId, reason) {
   const [winner, loser] = s1 >= s2 ? [p1, p2] : [p2, p1];
   const winnerScore = room.scores[winner.socketId] || 0;
   const loserScore  = room.scores[loser.socketId]  || 0;
-
   const fee = room.entryFee || 0;
   const currency = room.currency || 'coins';
-  const isFree = fee === 0;
-  const { newWinnerElo, newLoserElo } = isFree
-    ? { newWinnerElo: winner.elo || 1000, newLoserElo: loser.elo || 1000 }
-    : calculateNewRatings(winner.elo || 1000, loser.elo || 1000);
   let balanceChange = null;
+  let newWinnerElo = winner.elo || 1000;
+  let newLoserElo  = loser.elo  || 1000;
 
-  if (fee > 0 && supabase) {
-    try {
-      const hasBot = winner.isBot || loser.isBot;
-      if (hasBot) {
-        const humanId = winner.isBot ? loser.userId : winner.userId;
-        const humanWon = !winner.isBot;
-        balanceChange = await settleBotMatch(supabase, humanId, fee, currency, humanWon);
-      } else {
-        balanceChange = currency === 'diamonds'
-          ? await settleMatchDiamonds(supabase, winner.userId, loser.userId, fee)
-          : await settleMatch(supabase, winner.userId, loser.userId, fee);
-      }
-    } catch (e) { console.error('[scrabble] settle error:', e.message); }
-  }
-
-  if (supabase) {
+  // Settlement/stat updates can fail (network, DB) — never let that stop the
+  // result from reaching the clients. The room is already marked finished
+  // above, so a thrown error here must not leave players staring at a dead
+  // game with no resolution.
+  try {
+    const isFree = fee === 0;
     if (!isFree) {
-      if (!winner.isBot) {
-        await applyEloUpdate(supabase, winner.userId, newWinnerElo);
-        await supabase.rpc('increment_win', { uid: winner.userId }).catch(() => {});
-        // Human won: increment their streak
-        try { await updateStreaks(supabase, winner.userId, null); } catch {}
+      const ratings = calculateNewRatings(winner.elo || 1000, loser.elo || 1000);
+      newWinnerElo = ratings.newWinnerElo;
+      newLoserElo  = ratings.newLoserElo;
+    }
+
+    if (fee > 0 && supabase) {
+      try {
+        const hasBot = winner.isBot || loser.isBot;
+        if (hasBot) {
+          const humanId = winner.isBot ? loser.userId : winner.userId;
+          const humanWon = !winner.isBot;
+          balanceChange = await settleBotMatch(supabase, humanId, fee, currency, humanWon);
+        } else {
+          balanceChange = currency === 'diamonds'
+            ? await settleMatchDiamonds(supabase, winner.userId, loser.userId, fee)
+            : await settleMatch(supabase, winner.userId, loser.userId, fee);
+        }
+      } catch (e) { console.error('[scrabble] settle error:', e.message); }
+    }
+
+    if (supabase) {
+      if (!isFree) {
+        if (!winner.isBot) {
+          await applyEloUpdate(supabase, winner.userId, newWinnerElo).catch(() => {});
+          await supabase.rpc('increment_win', { uid: winner.userId }).catch(() => {});
+          try { await updateStreaks(supabase, winner.userId, null); } catch {}
+        }
+        if (!loser.isBot) {
+          await applyEloUpdate(supabase, loser.userId, newLoserElo).catch(() => {});
+          await supabase.rpc('increment_loss', { uid: loser.userId }).catch(() => {});
+        }
       }
+      // Always reset human loser's streak — any game, free or paid, vs bot or human
       if (!loser.isBot) {
-        await applyEloUpdate(supabase, loser.userId, newLoserElo);
-        await supabase.rpc('increment_loss', { uid: loser.userId }).catch(() => {});
+        supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId).catch(() => {});
+      }
+      for (const [p, score] of [[winner, winnerScore], [loser, loserScore]]) {
+        if (!p.isBot) await updateHighscore(supabase, p.userId, 'wordVS', score).catch(() => {});
+      }
+      if (!winner.isBot && !loser.isBot) {
+        await supabase.from('matches').insert({
+          player1_id: p1.userId, player2_id: p2.userId, winner_id: winner.userId,
+          game_type: 'scrabble',
+          entry_fee_c:         currency === 'coins'    ? fee : 0,
+          entry_fee_diamonds:  currency === 'diamonds' ? fee : 0,
+          prize_pool_c:        currency === 'coins'    ? fee * 2 : 0,
+          prize_pool_diamonds: currency === 'diamonds' ? fee * 2 : 0,
+          platform_fee_c:      currency === 'coins'    ? parseFloat((fee * 2 * 0.05).toFixed(4)) : 0,
+        }).catch(() => {});
       }
     }
-    // Always reset human loser's streak — any game, free or paid, vs bot or human
-    if (!loser.isBot) {
-      supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId).catch(() => {});
-    }
-    for (const [p, score] of [[winner, winnerScore], [loser, loserScore]]) {
-      if (!p.isBot) await updateHighscore(supabase, p.userId, 'wordVS', score).catch(() => {});
-    }
-    if (!winner.isBot && !loser.isBot) {
-      await supabase.from('matches').insert({
-        player1_id: p1.userId, player2_id: p2.userId, winner_id: winner.userId,
-        game_type: 'scrabble',
-        entry_fee_c:         currency === 'coins'    ? fee : 0,
-        entry_fee_diamonds:  currency === 'diamonds' ? fee : 0,
-        prize_pool_c:        currency === 'coins'    ? fee * 2 : 0,
-        prize_pool_diamonds: currency === 'diamonds' ? fee * 2 : 0,
-        platform_fee_c:      currency === 'coins'    ? parseFloat((fee * 2 * 0.05).toFixed(4)) : 0,
-      }).catch(() => {});
-    }
+  } catch (e) {
+    console.error('[scrabble] _endGame settlement error (continuing to emit result):', e.message);
   }
 
   gameEvents.emit('game_ended', { socketIds: [p1.socketId, p2.socketId] });
@@ -644,6 +655,7 @@ async function scheduleBotMove(io, supabase, roomId) {
       }
     }
 
+    const turnCountBefore = fresh.turnCount;
     if (bestPlacements) {
       handleScrabblePlay(io, supabase, roomId, bot.socketId, bestPlacements);
     } else if (bag.length >= 2 && hand.length > 0) {
@@ -651,6 +663,17 @@ async function scheduleBotMove(io, supabase, roomId) {
       const sorted = [...hand].sort((a, b) => (LETTER_VALUES[a] || 0) - (LETTER_VALUES[b] || 0));
       handleScrabbleExchange(io, supabase, roomId, bot.socketId, [sorted[0]]);
     } else {
+      handleScrabbleSkip(io, supabase, roomId, bot.socketId);
+    }
+
+    // Safety net: if the chosen action silently failed validation (e.g. a
+    // discrepancy between the search pass and the real play call) the turn
+    // never advances and the room would hang forever waiting on the bot.
+    // Detect that and force a skip so the game always keeps moving.
+    const after = getScrabbleRoom(roomId);
+    if (after && after.state === 'active' &&
+        after.turnCount === turnCountBefore &&
+        after.players[after.turnIndex]?.socketId === bot.socketId) {
       handleScrabbleSkip(io, supabase, roomId, bot.socketId);
     }
   } catch (e) {

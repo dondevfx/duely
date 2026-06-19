@@ -106,7 +106,7 @@ const CELL_SIZE = typeof window !== 'undefined'
     : Math.min(72, Math.floor((Math.min(window.innerWidth, 520) - 32) / 6))
   : 60;
 
-function BoardCell({ row, col, cell, pending, myTurn, onClick, onRemove, onDragOver, onDrop }) {
+function BoardCell({ row, col, cell, pending, myTurn, onClick, onRemove, onDragOver, onDrop, onDragStart, onDragEnd, onTouchStart, isDragSource }) {
   const prem      = PREMIUM[`${row},${col}`];
   const premStyle = prem ? PREMIUM_COLORS[prem] : null;
   const hasPending = pending != null;
@@ -132,6 +132,10 @@ function BoardCell({ row, col, cell, pending, myTurn, onClick, onRemove, onDragO
       onClick={onClick}
       onDragOver={onDragOver}
       onDrop={onDrop}
+      draggable={hasPending}
+      onDragStart={hasPending ? onDragStart : undefined}
+      onDragEnd={hasPending ? onDragEnd : undefined}
+      onTouchStart={hasPending ? onTouchStart : undefined}
       data-row={row}
       data-col={col}
       style={{
@@ -146,7 +150,8 @@ function BoardCell({ row, col, cell, pending, myTurn, onClick, onRemove, onDragO
             : premStyle
               ? `0 0 6px ${premStyle.border}55`
               : 'inset 0 1px 0 rgba(255,255,255,0.03)',
-        cursor: hasPending ? 'pointer' : cell ? 'default' : myTurn ? 'pointer' : 'default',
+        cursor: hasPending ? 'grab' : cell ? 'default' : myTurn ? 'pointer' : 'default',
+        opacity: isDragSource ? 0.35 : 1,
         position: 'relative',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         flexShrink: 0,
@@ -245,6 +250,10 @@ export default function ScrabbleGame() {
   const [touchDragPos, setTouchDragPos]   = useState(null); // { x, y } for ghost
   const touchDragIdxRef = useRef(null);  // which tile is being touch-dragged
 
+  // Dragging a tile already placed on the board (repositioning before submit)
+  const [draggingBoardKey, setDraggingBoardKey] = useState(null); // "row,col" of pending tile being dragged
+  const touchDragBoardKeyRef = useRef(null);
+
   // Hand reorder drag state
   const [handDragOverIdx, setHandDragOverIdx] = useState(null);
 
@@ -326,8 +335,11 @@ export default function ScrabbleGame() {
 
 
   // Touch drag-and-drop for tile placement (mobile iOS/Android)
+  // Note: reordering tiles within your own hand is allowed even when it's
+  // not your turn — only placing a tile onto the board requires myTurn,
+  // and that's enforced separately in handleCellDropByTouch.
   function handleTileTouchStart(idx, e) {
-    if (!myTurn || phase !== 'game' || submitting || exchangeMode) return;
+    if (phase !== 'game' || submitting || exchangeMode) return;
     e.preventDefault();
     touchDragIdxRef.current = idx;
     setDraggingIdx(idx);
@@ -337,7 +349,7 @@ export default function ScrabbleGame() {
 
   useEffect(() => {
     function onTouchMove(e) {
-      if (touchDragIdxRef.current === null) return;
+      if (touchDragIdxRef.current === null && touchDragBoardKeyRef.current === null) return;
       e.preventDefault();
       const t = e.touches[0];
       setTouchDragPos({ x: t.clientX, y: t.clientY });
@@ -359,10 +371,13 @@ export default function ScrabbleGame() {
       if (!foundHand) setHandDragOverIdx(null);
     }
     function onTouchEnd(e) {
-      if (touchDragIdxRef.current === null) return;
+      if (touchDragIdxRef.current === null && touchDragBoardKeyRef.current === null) return;
       const idx = touchDragIdxRef.current;
+      const boardKey = touchDragBoardKeyRef.current;
       touchDragIdxRef.current = null;
+      touchDragBoardKeyRef.current = null;
       setDraggingIdx(null);
+      setDraggingBoardKey(null);
       setTouchDragPos(null);
       setHandDragOverIdx(null);
 
@@ -378,11 +393,21 @@ export default function ScrabbleGame() {
         const row = target.dataset?.row;
         const col = target.dataset?.col;
         if (row !== undefined && col !== undefined) {
-          handleCellDropByTouch(parseInt(row), parseInt(col), idx);
+          if (boardKey !== null) {
+            movePendingTile(boardKey, `${row},${col}`);
+          } else if (idx !== null) {
+            handleCellDropByTouch(parseInt(row), parseInt(col), idx);
+          }
           return;
         }
         const hi = target.dataset?.handIdx;
         if (hi !== undefined) {
+          if (boardKey !== null) {
+            // Dragged a placed tile back onto the rack — return it to hand
+            const [r, c] = boardKey.split(',').map(Number);
+            removePending(r, c);
+            return;
+          }
           const targetIdx = parseInt(hi);
           if (targetIdx !== idx) {
             // Swap tiles in hand
@@ -797,6 +822,12 @@ export default function ScrabbleGame() {
     if (!myTurn || phase !== 'game' || submitting) return;
     const key = `${row},${col}`;
     if (pending[key] || board[row][col]) return;
+    // Moving an already-placed (pending) tile to a different cell
+    if (draggingBoardKey) {
+      movePendingTile(draggingBoardKey, key);
+      setDraggingBoardKey(null);
+      return;
+    }
     const idx = draggingIdx ?? selectedHandIdx;
     if (idx === null) return;
     const tile = myHand[idx];
@@ -824,6 +855,45 @@ export default function ScrabbleGame() {
     } else {
       placeTile(row, col, tile, tile, false, idx);
     }
+  }
+
+  // Move a pending (not-yet-submitted) tile already on the board to a new cell
+  function movePendingTile(srcKey, destKey) {
+    if (!myTurn || phase !== 'game' || submitting) return;
+    if (srcKey === destKey) return;
+    const [dr, dc] = destKey.split(',').map(Number);
+    if (pending[destKey] || board[dr]?.[dc]) return;
+    const srcTile = pending[srcKey];
+    if (!srcTile) return;
+    setPending(prev => {
+      const next = { ...prev };
+      delete next[srcKey];
+      next[destKey] = srcTile;
+      return next;
+    });
+  }
+
+  function handleBoardTileDragStart(row, col, e) {
+    const key = `${row},${col}`;
+    if (!pending[key]) { e?.preventDefault?.(); return; }
+    setDraggingBoardKey(key);
+  }
+
+  function handleBoardTileDragEnd() {
+    setDraggingBoardKey(null);
+  }
+
+  // Touch drag start for a tile already placed on the board (mobile)
+  function handleBoardTileTouchStart(row, col, e) {
+    if (phase !== 'game' || submitting) return;
+    const key = `${row},${col}`;
+    if (!pending[key]) return;
+    e.preventDefault();
+    e.stopPropagation();
+    touchDragBoardKeyRef.current = key;
+    setDraggingBoardKey(key);
+    const t = e.touches[0];
+    setTouchDragPos({ x: t.clientX, y: t.clientY });
   }
 
   // Scores
@@ -1037,6 +1107,10 @@ export default function ScrabbleGame() {
                     onRemove={() => removePending(r, c)}
                     onDragOver={e => { if (myTurn && !board[r]?.[c] && !pending[key]) e.preventDefault(); }}
                     onDrop={e => { e.preventDefault(); handleCellDrop(r, c); }}
+                    onDragStart={e => handleBoardTileDragStart(r, c, e)}
+                    onDragEnd={handleBoardTileDragEnd}
+                    onTouchStart={e => handleBoardTileTouchStart(r, c, e)}
+                    isDragSource={draggingBoardKey === key}
                   />
                 );
               })
