@@ -589,7 +589,7 @@ export default function BlackjackGame() {
     const oppId = Object.keys(resultData.hands || {}).find(id => id !== profile?.id);
     const oppResult = oppId ? resultData.hands[oppId] : null;
     return (
-      <div className="min-h-[calc(100vh-56px)] bg-bg flex items-center justify-center px-4">
+      <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-4">
         <ResultScreen
           isWinner={isWinner}
           isDraw={resultData.isDraw}
@@ -640,7 +640,10 @@ export default function BlackjackGame() {
 
     return (
       <div style={{
-        minHeight: 'calc(100vh - 56px)',
+        // dvh (not vh) so the layout shrinks when mobile Safari's bottom
+        // toolbar is showing, instead of being sized for the toolbar-hidden
+        // viewport and having the HIT/STAND buttons clipped underneath it.
+        minHeight: 'calc(100dvh - 56px)',
         background: gameBg,
         display: 'flex', flexDirection: 'column',
         opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease',
@@ -904,7 +907,7 @@ export default function BlackjackGame() {
     // Show countdown when active (PvP after match_found, or bot immediately)
     if (countdown > 0) {
       return (
-        <div className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-4">
+        <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
           <div className="text-center animate-fade-in">
             <div className="text-8xl font-black text-primary mb-4" style={{ textShadow: '0 0 40px #1E90FF' }}>
               {countdown}
@@ -916,7 +919,7 @@ export default function BlackjackGame() {
       );
     }
     return (
-      <div className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-4">
+      <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
         <div className="text-center animate-fade-in">
           <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-6" />
           <h2 className="text-2xl font-bold text-white mb-6">Searching...</h2>
@@ -929,7 +932,7 @@ export default function BlackjackGame() {
   // ── Private waiting ──
   if (phase === 'private_waiting') {
     return (
-      <div className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-4">
+      <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
         <div className="w-full max-w-md text-center animate-fade-in">
           <div className="text-5xl mb-4">🔒</div>
           <h2 className="text-2xl font-black text-white mb-2">Private Room</h2>
@@ -948,7 +951,7 @@ export default function BlackjackGame() {
 
   // ── Lobby ──
   return (
-    <div className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-4"
+    <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4"
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}>
       <div className="w-full max-w-md animate-slide-up">
 
