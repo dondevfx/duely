@@ -8,6 +8,12 @@ const gameEvents = require('./gameEvents');
 // ── Board constants ─────────────────────────────────────────────────────────
 const SIZE = 6;
 
+// Hard backstop so a match can never run forever — bag/board rarely empty
+// in practice, so without this, games vs. a bot (which rarely passes) can
+// drag on indefinitely. 24 total turns ≈ 12 each, enough to fill most of a
+// 6×6 board under normal play.
+const MAX_TURNS = 24;
+
 // Premium squares — key = "row,col"
 // ★ = center (Double Word on first cover)
 const PREMIUM = {
@@ -112,6 +118,7 @@ function _makeRoom(roomId, p1, p2) {
     hands: { [p1.socketId]: hand1, [p2.socketId]: hand2 },
     scores: { [p1.socketId]: 0, [p2.socketId]: 0 },
     turnIndex: 0,
+    turnCount: 0,
     passCount: 0,
     skipStreaks: { [p1.socketId]: 0, [p2.socketId]: 0 },
     usedPremiums: new Set(),
@@ -301,6 +308,7 @@ function handleScrabblePlay(io, supabase, roomId, socketId, placements) {
 
   _clearTimer(room);
   room.turnIndex = 1 - room.turnIndex;
+  room.turnCount = (room.turnCount || 0) + 1;
 
   // Broadcast
   io.to(roomId).emit('scrabble_word_played', {
@@ -327,6 +335,9 @@ function handleScrabblePlay(io, supabase, roomId, socketId, placements) {
   if (boardFull) {
     _endGame(io, supabase, roomId, 'board_full'); return;
   }
+  if (room.turnCount >= MAX_TURNS) {
+    _endGame(io, supabase, roomId, 'turn_limit'); return;
+  }
   _startTimer(io, supabase, roomId);
 }
 
@@ -343,6 +354,10 @@ function handleScrabbleSkip(io, supabase, roomId, socketId) {
     _endGame(io, supabase, roomId, 'consecutive_passes'); return;
   }
   room.turnIndex = 1 - room.turnIndex;
+  room.turnCount = (room.turnCount || 0) + 1;
+  if (room.turnCount >= MAX_TURNS) {
+    _endGame(io, supabase, roomId, 'turn_limit'); return;
+  }
   io.to(roomId).emit('scrabble_skipped', { socketId, passCount: room.passCount, nextTurn: room.players[room.turnIndex].socketId });
   _startTimer(io, supabase, roomId);
 }
@@ -363,9 +378,13 @@ function handleScrabbleExchange(io, supabase, roomId, socketId, letters) {
   if (room.skipStreaks) room.skipStreaks[socketId] = 0; // exchange = active turn, reset streak
   _clearTimer(room);
   room.turnIndex = 1 - room.turnIndex;
+  room.turnCount = (room.turnCount || 0) + 1;
 
   const ps = io.sockets.sockets.get(socketId);
   if (ps) ps.emit('scrabble_new_tiles', { hand: room.hands[socketId] });
+  if (room.turnCount >= MAX_TURNS) {
+    _endGame(io, supabase, roomId, 'turn_limit'); return;
+  }
   io.to(roomId).emit('scrabble_exchanged', {
     socketId, count: letters.length, bagCount: room.bag.length,
     nextTurn: room.players[room.turnIndex].socketId,

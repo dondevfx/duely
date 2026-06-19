@@ -885,7 +885,8 @@ export default function ScrabbleGame() {
               ...(!result.disconnected ? [{ label: 'Reason', value:
                   result.reason === 'consecutive_passes' ? 'Both passed' :
                   result.reason === 'tiles_out' ? 'All tiles placed' :
-                  result.reason === 'board_full' ? 'Board filled' : 'Game over' }] : []),
+                  result.reason === 'board_full' ? 'Board filled' :
+                  result.reason === 'turn_limit' ? 'Turn limit reached' : 'Game over' }] : []),
             ]}
             onRematch={null}
             onPlayAgain={backToLobby}
