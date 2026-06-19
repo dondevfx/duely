@@ -49,6 +49,29 @@ const GAMES = [
   },
 ];
 
+function DailySpinWidget({ profile }) {
+  return profile ? (
+    <SpinWheel />
+  ) : (
+    <div className="relative rounded-2xl overflow-hidden">
+      <div className="pointer-events-none opacity-50 select-none">
+        <SpinWheel />
+      </div>
+      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] rounded-2xl gap-3">
+        <div className="text-3xl">🎡</div>
+        <p className="text-white font-black text-lg">Daily Spin</p>
+        <p className="text-muted text-sm text-center px-4">Win up to 50,000 💎 every day</p>
+        <Link
+          to="/login"
+          className="px-6 py-2.5 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl transition-all text-sm"
+        >
+          Login to Spin
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const { profile } = useAuth();
   const { playerCounts } = useSocket();
@@ -91,28 +114,10 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Daily spin — always visible; login overlay for guests */}
-            <div className="w-full max-w-sm lg:w-96 shrink-0">
-              {profile ? (
-                <SpinWheel />
-              ) : (
-                <div className="relative rounded-2xl overflow-hidden">
-                  <div className="pointer-events-none opacity-50 select-none">
-                    <SpinWheel />
-                  </div>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] rounded-2xl gap-3">
-                    <div className="text-3xl">🎡</div>
-                    <p className="text-white font-black text-lg">Daily Spin</p>
-                    <p className="text-muted text-sm text-center px-4">Win up to 50,000 💎 every day</p>
-                    <Link
-                      to="/login"
-                      className="px-6 py-2.5 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl transition-all text-sm"
-                    >
-                      Login to Spin
-                    </Link>
-                  </div>
-                </div>
-              )}
+            {/* Daily spin — desktop only here; on mobile it's shown after the Blackjack
+                game card further down the page instead (see Game cards section) */}
+            <div className="hidden lg:block w-full max-w-sm lg:w-96 shrink-0">
+              <DailySpinWidget profile={profile} />
             </div>
           </div>
         </div>
@@ -153,6 +158,11 @@ export default function Home() {
               {GAMES.map(game => (
                 <GameCard key={game.title} {...game} liveCount={playerCounts?.[game.countKey] ?? 0} />
               ))}
+            </div>
+
+            {/* Daily spin — mobile/tablet only; desktop shows it in the hero instead */}
+            <div className="lg:hidden mt-5 max-w-sm mx-auto sm:mx-0 sm:max-w-none">
+              <DailySpinWidget profile={profile} />
             </div>
           </div>
 
