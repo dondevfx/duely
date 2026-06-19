@@ -129,6 +129,13 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
   const inMatchOrQueue = (uid) => userQueues.has(uid) || isLocked(uid);
   const chatBanned = new Set(); // userId → banned from chat
 
+  // ── Short disconnect buffer to survive mobile browser backgrounding ───
+  // Delays forfeit by DISCONNECT_GRACE_MS so the socket has time to
+  // auto-reconnect. If reconnected, we silently update the player's socketId
+  // in the room so game events keep flowing — no rejoin UI, no extra events.
+  const DISCONNECT_GRACE_MS = 8_000;
+  const disconnectTimers = new Map(); // userId → { timer, jobs: [{ forfeitFn, updateSocketFn, cancelled }] }
+
   // ── Live player count tracking ────────────────────────────────
   // socketGameMap is the single source of truth.
   // playerCounts is NEVER mutated directly — it is always recomputed from socketGameMap.
@@ -221,6 +228,16 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         socket._authenticatedUserId = user.id;
         socket.emit('authenticated', { userId: user.id, username: profile.username });
 
+        // If this user has a pending disconnect timer, cancel it and silently
+        // restore their socket ID in any active rooms so game events keep flowing.
+        const pending = disconnectTimers.get(user.id);
+        if (pending) {
+          clearTimeout(pending.timer);
+          disconnectTimers.delete(user.id);
+          for (const job of pending.jobs) {
+            if (!job.cancelled) job.updateSocketFn(socket);
+          }
+        }
       } catch { socket.emit('error', { message: 'Authentication error' }); }
     });
 
@@ -2290,12 +2307,45 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         [getBlackjackRoomBySocket,  deleteBlackjackRoom,  'blackjack'],
       ];
 
+      const pendingJobs = [];
+
       for (const [getFn, delFn, gameType] of roomLookups) {
         const found = getFn(socket.id);
         if (!found) continue;
         const { room, roomId } = found;
         if (room.state === 'finished') { delFn(roomId); continue; }
-        await _handleForfeit(io, supabase, found, socket.id, delFn, gameType);
+
+        const leaver = room.players?.find(p => p.socketId === socket.id);
+        // Bots or solo rooms: forfeit immediately, no grace period needed
+        if (!leaver || leaver.isBot) {
+          await _handleForfeit(io, supabase, found, socket.id, delFn, gameType);
+          continue;
+        }
+
+        const leaverSocketId = socket.id;
+        const forfeitFn = async () => {
+          const stillFound = getFn(leaverSocketId) || { room, roomId };
+          if (!stillFound.room || stillFound.room.state === 'finished') { delFn(roomId); return; }
+          await _handleForfeit(io, supabase, stillFound, leaverSocketId, delFn, gameType);
+        };
+        const updateSocketFn = (newSocket) => {
+          leaver.socketId = newSocket.id;
+          newSocket._authenticatedUserId = leaver.userId;
+          newSocket.join(roomId);
+        };
+        pendingJobs.push({ forfeitFn, updateSocketFn, cancelled: false });
+      }
+
+      if (pendingJobs.length > 0 && authenticatedUser) {
+        const existing = disconnectTimers.get(authenticatedUser.userId);
+        if (existing) clearTimeout(existing.timer);
+        const timer = setTimeout(async () => {
+          disconnectTimers.delete(authenticatedUser.userId);
+          for (const job of pendingJobs) {
+            if (!job.cancelled) await job.forfeitFn();
+          }
+        }, DISCONNECT_GRACE_MS);
+        disconnectTimers.set(authenticatedUser.userId, { timer, jobs: pendingJobs });
       }
     });
   });
