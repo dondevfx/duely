@@ -2720,10 +2720,29 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
   }
 
   // ── Private room pairing dispatcher ───────────────────────────
-  function _pairPrivatePlayers(gameType, p1, p2, io, supabase) {
+  async function _pairPrivatePlayers(gameType, p1, p2, io, supabase) {
     const s1 = io.sockets.sockets.get(p1.socketId);
     const s2 = io.sockets.sockets.get(p2.socketId);
     if (!s1 || !s2) return;
+
+    // Entry fees were only ever *checked* (not deducted) when the room was
+    // created/joined — without this, neither player's balance ever actually
+    // moved, yet settleMatch/settleBotMatch still credit the winner the full
+    // prize pool assuming deduction already happened. Deduct now, before any
+    // room is created, mirroring the queue-match pairing flow exactly.
+    const entryFee = p1.entryFee || 0;
+    const currency = p1.currency || 'coins';
+    if (entryFee > 0) {
+      try {
+        await deductMatchFees(supabase, p1.userId, p2.userId, entryFee, currency);
+      } catch (e) {
+        console.error('[private match] fee deduction failed:', e.message);
+        unlockUser(p1.userId); unlockUser(p2.userId);
+        s1.emit('match_cancelled', { message: 'Your balance changed. Please try again.' });
+        s2.emit('match_cancelled', { message: 'Your balance changed. Please try again.' });
+        return;
+      }
+    }
 
     function emit2(event, extra1 = {}, extra2 = {}) {
       s1.join(roomId); s2.join(roomId);
@@ -2733,7 +2752,11 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
     let roomId;
     switch (gameType) {
-      case 'blockBlast': { ({ roomId } = createDirectBlockBlastRoom(p1, p2)); emit2('block_blast_match_found');     startBlockBlastCountdown(io, supabase, roomId); break; }
+      case 'blockBlast': {
+        ({ roomId } = createDirectBlockBlastRoom(p1, p2));
+        if (entryFee > 0) { const r = getBlockBlastRoom(roomId); if (r) r.feesDeducted = true; }
+        emit2('block_blast_match_found'); startBlockBlastCountdown(io, supabase, roomId); break;
+      }
       case 'starship':   { ({ roomId } = createDirectStarshipRoom(p1, p2));   emit2('starship_match_found');        startStarshipCountdown(io, supabase, roomId); break; }
       case 'asteroids':  { ({ roomId } = createDirectAsteroidRoom(p1, p2));   emit2('asteroid_match_found');        startAsteroidCountdown(io, supabase, roomId); break; }
       case 'type':       { ({ roomId } = createDirectTypeRoom(p1, p2));       emit2('type_match_found');            startTypeCountdown(io, roomId); break; }
@@ -2757,6 +2780,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       case 'connectfour':  { ({ roomId } = createDirectC4Room(p1, p2)); emit2('c4_match_found');        startC4Countdown(io, supabase, roomId); break; }
       case 'scrabble': {
         ({ roomId } = createDirectScrabbleRoom(p1, p2));
+        if (entryFee > 0) { const r = getScrabbleRoom(roomId); if (r) r.feesDeducted = true; }
         s1.join(roomId); s2.join(roomId);
         s1.emit('scrabble_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency });
         s2.emit('scrabble_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency });
@@ -2770,6 +2794,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         const result = createDirectCoinFlipRoom(p1, p2);
         roomId = result.roomId;
         const p2cf = result.p2;
+        if (entryFee > 0) { const r = getCoinFlipRoom(roomId); if (r) r.feesDeducted = true; }
         s1.join(roomId); s2.join(roomId);
         s1.emit('coin_flip_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, side: p1.side, entryFee: p1.entryFee, currency: p1.currency });
         s2.emit('coin_flip_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, side: p2cf.side, entryFee: p2.entryFee, currency: p2.currency });
@@ -2778,6 +2803,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       }
       case 'blackjack': {
         ({ roomId } = createDirectBlackjackRoom(p1, p2));
+        if (entryFee > 0) { const r = getBlackjackRoom(roomId); if (r) r.feesDeducted = true; }
         s1.join(roomId); s2.join(roomId);
         s1.emit('bj_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency });
         s2.emit('bj_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency });
