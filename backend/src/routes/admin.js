@@ -15,25 +15,43 @@ module.exports = function adminRoutes(supabase) {
   router.get('/stats', requireAuth, requireAdmin, async (req, res) => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
+    const sevenDaysAgo  = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
     const [
       { count: totalUsers },
       { count: totalMatches },
       { count: matchesToday },
       { count: newUsersToday },
+      { count: newUsers7d },
+      { count: newUsers30d },
+      { count: matches7d },
+      { count: matches30d },
       { data: adminProfile },
       { data: matchData },
       { count: pendingWithdrawals },
       { data: feeClaimData },
+      { data: gameTypeRows },
+      { data: activeRows24h },
+      { data: activeRows7d },
+      { data: diamondRows },
     ] = await Promise.all([
       supabase.from('profiles').select('id', { count: 'exact', head: true }),
       supabase.from('matches').select('id', { count: 'exact', head: true }),
       supabase.from('matches').select('id', { count: 'exact', head: true }).gte('played_at', todayStart.toISOString()),
       supabase.from('profiles').select('id', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString()),
+      supabase.from('profiles').select('id', { count: 'exact', head: true }).gte('created_at', sevenDaysAgo.toISOString()),
+      supabase.from('profiles').select('id', { count: 'exact', head: true }).gte('created_at', thirtyDaysAgo.toISOString()),
+      supabase.from('matches').select('id', { count: 'exact', head: true }).gte('played_at', sevenDaysAgo.toISOString()),
+      supabase.from('matches').select('id', { count: 'exact', head: true }).gte('played_at', thirtyDaysAgo.toISOString()),
       supabase.from('profiles').select('c_coins, diamonds, fee_balance').eq('id', process.env.ADMIN_USER_ID).single(),
       supabase.from('matches').select('prize_pool_c, entry_fee_c'),
       supabase.from('transactions').select('id', { count: 'exact', head: true }).eq('type', 'withdrawal').eq('status', 'pending'),
       supabase.from('transactions').select('amount_c').eq('type', 'fee_collection').eq('user_id', process.env.ADMIN_USER_ID),
+      supabase.from('matches').select('game_type'),
+      supabase.from('matches').select('player1_id, player2_id').gte('played_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
+      supabase.from('matches').select('player1_id, player2_id').gte('played_at', sevenDaysAgo.toISOString()),
+      supabase.from('profiles').select('diamonds'),
     ]);
 
     // Sum prize_pool_c — fallback to entry_fee_c * 2 if prize_pool_c not set
@@ -45,11 +63,37 @@ module.exports = function adminRoutes(supabase) {
 
     const totalFeesClaimed = (feeClaimData || []).reduce((s, t) => s + (Number(t.amount_c) || 0), 0);
 
+    const matchesByGame = {};
+    for (const row of (gameTypeRows || [])) {
+      const gt = row.game_type || 'unknown';
+      matchesByGame[gt] = (matchesByGame[gt] || 0) + 1;
+    }
+
+    function distinctPlayerCount(rows) {
+      const ids = new Set();
+      for (const r of (rows || [])) {
+        if (r.player1_id) ids.add(r.player1_id);
+        if (r.player2_id) ids.add(r.player2_id);
+      }
+      ids.delete(process.env.ADMIN_USER_ID);
+      return ids.size;
+    }
+
+    const totalDiamonds = (diamondRows || []).reduce((s, p) => s + (Number(p.diamonds) || 0), 0);
+
     res.json({
       total_users:        totalUsers   ?? 0,
       total_matches:      totalMatches ?? 0,
       matches_today:      matchesToday ?? 0,
       new_users_today:    newUsersToday ?? 0,
+      new_users_7d:       newUsers7d ?? 0,
+      new_users_30d:      newUsers30d ?? 0,
+      matches_7d:         matches7d ?? 0,
+      matches_30d:        matches30d ?? 0,
+      active_users_24h:   distinctPlayerCount(activeRows24h),
+      active_users_7d:    distinctPlayerCount(activeRows7d),
+      matches_by_game:    matchesByGame,
+      total_diamonds_circulating: totalDiamonds,
       fees_coins:         parseFloat((adminProfile?.c_coins ?? 0).toFixed(2)),
       fees_diamonds:      adminProfile?.diamonds ?? 0,
       fee_balance:        parseFloat((adminProfile?.fee_balance ?? 0).toFixed(4)),

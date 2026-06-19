@@ -13,6 +13,13 @@ function fmtDate(ts) {
   return new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+const GAME_LABELS = [
+  { key: 'blockBlast', label: 'Block Burst' },
+  { key: 'scrabble',   label: 'Word VS' },
+  { key: 'coin_flip',  label: 'Coin Flip' },
+  { key: 'blackjack',  label: 'Blackjack' },
+];
+
 const TYPE_LABELS = {
   deposit:       { label: 'Deposit',      color: 'text-success' },
   withdrawal:    { label: 'Withdrawal',   color: 'text-danger' },
@@ -237,11 +244,36 @@ export default function Admin() {
               <StatCard label="Pending Withdrawals" value={stats?.pending_withdrawals ?? 0}            color={stats?.pending_withdrawals > 0 ? 'text-warning' : 'text-muted'} />
             </div>
 
+            {/* New accounts & activity */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+              <StatCard label="New Users (7d)"   value={stats?.new_users_7d?.toLocaleString() ?? '—'}  sub={`${stats?.new_users_30d ?? 0} in last 30d`} color="text-accent" />
+              <StatCard label="Matches (7d)"     value={stats?.matches_7d?.toLocaleString() ?? '—'}    sub={`${stats?.matches_30d ?? 0} in last 30d`} color="text-primary" />
+              <StatCard label="Active Players (24h)" value={stats?.active_users_24h?.toLocaleString() ?? '—'} sub="played at least 1 match" color="text-success" />
+              <StatCard label="Active Players (7d)"  value={stats?.active_users_7d?.toLocaleString() ?? '—'}  sub="played at least 1 match" color="text-white" />
+            </div>
+
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
               <StatCard label="Uncollected Fees"   value={`${fmt(stats?.fee_balance)} 🪙`}             sub="click Collect to claim" color={stats?.fee_balance > 0 ? 'text-warning' : 'text-muted'} />
               <StatCard label="Wallet Balance"     value={`${fmt(stats?.fees_coins)} 🪙`}              sub={`${(stats?.fees_diamonds ?? 0).toLocaleString()} 💎`} color="text-success" />
               <StatCard label="Total Fees Claimed" value={`${fmt(stats?.total_fees_claimed)} 🪙`}      sub="all time" color="text-accent" />
               <StatCard label="Total Wagered"      value={`${fmt(stats?.total_wagered)} 🪙`}           sub="prize pool across all matches" color="text-white" />
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+              <StatCard label="Diamonds in Circulation" value={(stats?.total_diamonds_circulating ?? 0).toLocaleString()} sub="sum of all player balances" color="text-accent" />
+            </div>
+
+            {/* Matches by game */}
+            <div className="bg-surface border border-border rounded-2xl p-5 mb-8">
+              <h2 className="text-white font-bold text-lg mb-4">Matches by Game</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {GAME_LABELS.map(({ key, label }) => (
+                  <div key={key} className="bg-bg border border-border rounded-xl p-4 text-center">
+                    <div className="text-2xl font-black text-white">{(stats?.matches_by_game?.[key] ?? 0).toLocaleString()}</div>
+                    <div className="text-xs text-muted mt-1">{label}</div>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* ── Coin Supply ──────────────────────────────────────────── */}
