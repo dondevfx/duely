@@ -175,28 +175,28 @@ module.exports = function authRoutes(supabase) {
 
     if (!prof) return res.status(404).json({ error: 'Not found' });
 
+    // Plot one point per transaction (not bucketed by day) so individual
+    // wins/losses within the same day show as real ups/downs instead of
+    // being netted into a single flat daily step.
     const DEBITS = new Set(['withdrawal', 'match_loss']);
-    const dailyNet = {};
-    let totalChange = 0;
-    for (const tx of (txs || [])) {
-      const day = tx.created_at.slice(0, 10);
-      const amt = parseFloat(tx.amount_c) || 0;
-      const signed = DEBITS.has(tx.type) ? -amt : amt;
-      dailyNet[day] = (dailyNet[day] || 0) + signed;
-      totalChange += signed;
-    }
-
-    // Return cumulative net gain/loss starting at 0 — not absolute balance
     let running = 0;
-    const points = [];
-    for (let i = 0; i <= DAYS; i++) {
-      const d = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
-      const day = d.toISOString().slice(0, 10);
-      if (i > 0) running += (dailyNet[day] || 0);
-      points.push({ date: day, balance: parseFloat(running.toFixed(2)) });
+    const points = [{ date: startDate.toISOString(), balance: 0 }];
+    for (const tx of (txs || [])) {
+      const amt = parseFloat(tx.amount_c) || 0;
+      if (amt === 0) continue; // diamond-only entries don't move the coin balance
+      const signed = DEBITS.has(tx.type) ? -amt : amt;
+      running += signed;
+      points.push({ date: tx.created_at, balance: parseFloat(running.toFixed(2)) });
     }
 
-    res.json(points);
+    // Cap payload size for very active accounts — keep the starting point
+    // plus the most recent MAX_POINTS transactions.
+    const MAX_POINTS = 800;
+    const trimmed = points.length > MAX_POINTS
+      ? [points[0], ...points.slice(points.length - (MAX_POINTS - 1))]
+      : points;
+
+    res.json(trimmed);
   });
 
   // Personal best highscores for profile page

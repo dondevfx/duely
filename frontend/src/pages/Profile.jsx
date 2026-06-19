@@ -25,6 +25,12 @@ const GAME_INFO = {
   piano:         { emoji: '🎹', name: 'Tile Tap' },
   type:          { emoji: '⌨️', name: 'Type Race' },
   snake:         { emoji: '🐍', name: 'Snake' },
+  asteroids:     { emoji: '☄️', name: 'Asteroids' },
+  blackjack:     { emoji: '🃏', name: 'Blackjack' },
+  clickRace:     { emoji: '🖱️', name: 'Click Race' },
+  coin_flip:     { emoji: '🟡', name: 'Coin Flip' },
+  reaction:      { emoji: '⚡', name: 'Reaction' },
+  tictactoe:     { emoji: '⭕', name: 'Tic Tac Toe' },
 };
 
 const HIGHSCORE_LABELS = {
@@ -761,7 +767,14 @@ function fmtAxis(v) {
 }
 
 function fmtXDate(dateStr) {
-  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  // Plain YYYY-MM-DD (legacy) vs full ISO timestamp (one point per transaction)
+  const d = dateStr.length === 10 ? new Date(dateStr + 'T12:00:00') : new Date(dateStr);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function fmtXDateTime(dateStr) {
+  const d = dateStr.length === 10 ? new Date(dateStr + 'T12:00:00') : new Date(dateStr);
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 function ProfileLineChart({ data }) {
@@ -868,7 +881,7 @@ function ProfileLineChart({ data }) {
           zIndex: 10,
           boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
         }}>
-          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>{fmtXDate(tooltip.date)}</div>
+          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>{fmtXDateTime(tooltip.date)}</div>
           <div style={{ fontSize: 14, fontWeight: 700, color: tooltip.balance >= 0 ? '#22c55e' : '#ef4444' }}>
             {tooltip.balance >= 0 ? '+' : ''}{tooltip.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} coins
           </div>
