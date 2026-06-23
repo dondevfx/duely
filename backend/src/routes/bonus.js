@@ -78,14 +78,31 @@ module.exports = function bonusRoutes(supabase) {
   });
 
   router.post('/diamond-claim', requireAuth, async (req, res) => {
-    const { data, error } = await supabase.rpc('claim_diamond_bonus', {
-      p_user_id: req.user.id,
-      p_amount:  DIAMOND_BONUS,
-    });
-    if (error) {
-      const alreadyClaimed = error.message?.includes('already_claimed');
-      return res.status(alreadyClaimed ? 400 : 500).json({ error: alreadyClaimed ? 'Already claimed' : error.message });
+    const { data: prof, error: readErr } = await supabase
+      .from('profiles').select('last_diamond_bonus').eq('id', req.user.id).single();
+    if (readErr) return res.status(404).json({ error: 'Profile not found' });
+
+    const prevStamp = prof.last_diamond_bonus;
+    const last = prevStamp ? new Date(prevStamp).getTime() : 0;
+    if (Date.now() - last < DIAMOND_COOLDOWN_MS) {
+      return res.status(400).json({ error: 'Already claimed' });
     }
+
+    // Stamp with Node's own clock (not the DB's) before crediting, so the
+    // cooldown anchor and the countdown displayed to the client are always
+    // measured against the same clock — a few seconds of drift between the
+    // app server and Postgres was otherwise showing up as "5m 5s remaining".
+    const { error: stampErr } = await supabase
+      .from('profiles').update({ last_diamond_bonus: new Date().toISOString() }).eq('id', req.user.id);
+    if (stampErr) return res.status(500).json({ error: stampErr.message });
+
+    const { error: credErr } = await supabase.rpc('credit_diamonds', { user_id: req.user.id, amount: DIAMOND_BONUS });
+    if (credErr) {
+      // Roll the stamp back so the user isn't penalized for our failure
+      await supabase.from('profiles').update({ last_diamond_bonus: prevStamp }).eq('id', req.user.id).then().catch(() => {});
+      return res.status(500).json({ error: credErr.message });
+    }
+
     supabase.from('transactions').insert({
       user_id: req.user.id, type: 'diamond_bonus', amount_c: 0,
       crypto_amount: DIAMOND_BONUS, crypto_symbol: 'diamonds', status: 'confirmed',
