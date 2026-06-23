@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
 import { supabase } from '../utils/supabase';
 import GlowButton from '../components/GlowButton';
-import DailyBonus from '../components/DailyBonus';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
 
@@ -242,9 +241,6 @@ export default function Wallet() {
           </div>
           <div className="text-sm text-muted">≈ ${fmt(profile?.c_coins)} USD</div>
         </div>
-
-        {/* ── Daily bonus ──────────────────────────────────────────────── */}
-        {profile && <div className="mb-6"><DailyBonus /></div>}
 
         {/* ── Deposit ──────────────────────────────────────────────────── */}
         <div className="bg-surface border border-surfaceLight rounded-2xl p-6 mb-6">

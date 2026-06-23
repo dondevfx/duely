@@ -5,7 +5,7 @@ const COIN_BONUS       = 1;
 const COIN_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 const DIAMOND_BONUS       = 250;
-const DIAMOND_COOLDOWN_MS = 30 * 60 * 1000;
+const DIAMOND_COOLDOWN_MS = 5 * 60 * 1000;
 
 const SPIN_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const SPIN_PRIZES = [
@@ -61,7 +61,7 @@ module.exports = function bonusRoutes(supabase) {
     res.json({ success: true, credited: COIN_BONUS, new_balance: updated?.c_coins });
   });
 
-  // ── Diamond 30-min bonus ───────────────────────────────────────────
+  // ── Diamond 5-min bonus ───────────────────────────────────────────
   router.get('/diamond-status', requireAuth, async (req, res) => {
     const { data, error } = await supabase
       .from('profiles').select('last_diamond_bonus, diamonds').eq('id', req.user.id).single();

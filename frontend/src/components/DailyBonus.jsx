@@ -63,7 +63,7 @@ export default function DailyBonus() {
       <div className="text-2xl">💎</div>
       <div className="text-center">
         <div className="font-bold text-white">Diamond Bonus</div>
-        <div className="text-sm text-muted">Claim 250 Diamonds every 30 minutes</div>
+        <div className="text-sm text-muted">Claim 250 Diamonds every 5 minutes</div>
       </div>
 
       {status.canClaim ? (

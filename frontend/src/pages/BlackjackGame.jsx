@@ -30,8 +30,12 @@ function calcScore(hand) {
   return score;
 }
 
-// Responsive card size — bigger on desktop, compact on mobile
-const CARD_W = typeof window !== 'undefined' ? Math.min(90, Math.floor((window.innerWidth - 48) / 4)) : 90;
+// Responsive card size — bigger on desktop, noticeably smaller on mobile so
+// the hand + HIT/STAND buttons all fit on screen without scrolling.
+const IS_MOBILE_SCREEN = typeof window !== 'undefined' && window.innerWidth < 768;
+const CARD_W = typeof window !== 'undefined'
+  ? Math.round(Math.min(90, Math.floor((window.innerWidth - 48) / 4)) * (IS_MOBILE_SCREEN ? 0.68 : 1))
+  : 90;
 const CARD_H = Math.round(CARD_W * 1.44);
 
 const CARD_DEAL_CSS = `
@@ -39,18 +43,28 @@ const CARD_DEAL_CSS = `
   from { opacity: 0; transform: translateY(-60px) scale(0.7) rotate(-8deg); }
   to   { opacity: 1; transform: translateY(0)    scale(1)   rotate(0deg);  }
 }
+.bj-action-btn {
+  padding: 15px 0;
+  border-radius: 12px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  transition: all 0.15s ease;
+}
 .bj-hit-btn:not(:disabled):hover {
-  box-shadow: 0 0 0 2px rgba(30,144,255,0.6), 0 6px 24px rgba(30,144,255,0.55) !important;
-  filter: brightness(1.12);
+  background: rgba(30,144,255,0.16) !important;
+  border-color: rgba(30,144,255,0.55) !important;
 }
 .bj-stand-btn:not(:disabled):hover {
-  border-color: rgba(255,255,255,0.7) !important;
-  box-shadow: 0 0 0 2px rgba(255,255,255,0.25), 0 4px 20px rgba(255,255,255,0.18) !important;
-  color: #fff !important;
+  border-color: rgba(255,255,255,0.4) !important;
+  background: rgba(255,255,255,0.06) !important;
 }
 .bj-split-btn:not(:disabled):hover {
   box-shadow: 0 0 0 2px rgba(245,158,11,0.6), 0 6px 24px rgba(245,158,11,0.5) !important;
   filter: brightness(1.12);
+}
+@media (max-width: 767px) {
+  .bj-action-btn { padding: 11px 0; font-size: 14px; border-radius: 10px; }
 }
 `;
 
@@ -824,37 +838,33 @@ export default function BlackjackGame() {
             <div style={{ width: '100%', maxWidth: 360, display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <button
-                  className="bj-hit-btn"
+                  className="bj-action-btn bj-hit-btn"
                   onClick={hit}
                   disabled={stood || bust}
                   style={{
-                    padding: '16px 0', borderRadius: 14, border: 'none',
                     cursor: stood || bust ? 'not-allowed' : 'pointer',
                     background: stood || bust
-                      ? (isLight ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.07)')
-                      : 'linear-gradient(135deg, #1E90FF 0%, #0055bb 100%)',
-                    color: stood || bust ? (isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.25)') : '#fff',
-                    fontSize: 18, fontWeight: 900, letterSpacing: 1,
-                    boxShadow: stood || bust ? 'none' : '0 4px 16px rgba(30,144,255,0.35)',
-                    transition: 'all 0.15s',
+                      ? (isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)')
+                      : 'rgba(30,144,255,0.10)',
+                    border: stood || bust
+                      ? `1.5px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.07)'}`
+                      : '1.5px solid rgba(30,144,255,0.45)',
+                    color: stood || bust ? (isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.25)') : '#4DA3FF',
                   }}
                 >
                   HIT
                 </button>
                 <button
-                  className="bj-stand-btn"
+                  className="bj-action-btn bj-stand-btn"
                   onClick={stand}
                   disabled={stood || bust}
                   style={{
-                    padding: '16px 0', borderRadius: 14,
                     cursor: stood || bust ? 'not-allowed' : 'pointer',
                     background: 'transparent',
                     border: stood || bust
-                      ? `2px solid ${isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.07)'}`
-                      : `2px solid ${isLight ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.25)'}`,
+                      ? `1.5px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.07)'}`
+                      : `1.5px solid ${isLight ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.2)'}`,
                     color: stood || bust ? (isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.25)') : textPrimary,
-                    fontSize: 18, fontWeight: 900, letterSpacing: 1,
-                    transition: 'all 0.15s',
                   }}
                 >
                   STAND
@@ -863,16 +873,14 @@ export default function BlackjackGame() {
               {/* SPLIT button — only shown when eligible */}
               {canSplit && (
                 <button
-                  className="bj-split-btn"
+                  className="bj-action-btn bj-split-btn"
                   onClick={split}
                   style={{
-                    padding: '13px 0', borderRadius: 14, border: 'none',
+                    border: 'none',
                     cursor: 'pointer',
                     background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
                     color: '#fff',
-                    fontSize: 16, fontWeight: 900, letterSpacing: 1,
                     boxShadow: '0 4px 16px rgba(245,158,11,0.35)',
-                    transition: 'all 0.15s',
                   }}
                 >
                   ✂️ SPLIT

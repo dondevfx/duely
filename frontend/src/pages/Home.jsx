@@ -173,7 +173,7 @@ export default function Home() {
               <div className="bg-surface border border-surfaceLight rounded-2xl p-5 text-center">
                 <div className="text-2xl mb-2">💎</div>
                 <div className="font-bold text-white mb-1">Diamond Bonus</div>
-                <div className="text-sm text-muted mb-3">Claim 250 Diamonds every 30 minutes — free!</div>
+                <div className="text-sm text-muted mb-3">Claim 250 Diamonds every 5 minutes — free!</div>
                 <Link
                   to="/login"
                   className="block w-full py-2.5 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl transition-all text-sm"
@@ -191,7 +191,7 @@ export default function Home() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-accent">•</span>
-                  💎 Diamonds are free — claim 250 every 30 min
+                  💎 Diamonds are free — claim 250 every 5 min
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary">•</span>

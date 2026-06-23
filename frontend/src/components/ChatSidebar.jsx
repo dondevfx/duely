@@ -15,7 +15,7 @@ const BOT_LINES = [
   "💎 Don't forget your daily spin — up to 50,000 diamonds free every day!",
   "🔥 Win streak badges are earned, not given. Keep that fire alive 🔥",
   "🌟 Nothing like a 1v1 grind to prove who the real GOAT is",
-  "💎 Claim 250 free diamonds every 30 minutes — don't sleep on it",
+  "💎 Claim 250 free diamonds every 5 minutes — don't sleep on it",
   "💸 Tip your friends some coins when they're having a rough run",
   "⚔️ The 1v1 grind never stops. Win or learn — no other options.",
   "🌙 Late night gaming hits completely different. Who's still up?",
