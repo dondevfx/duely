@@ -60,8 +60,8 @@ const CARD_DEAL_CSS = `
   background: rgba(255,255,255,0.06) !important;
 }
 .bj-split-btn:not(:disabled):hover {
-  box-shadow: 0 0 0 2px rgba(245,158,11,0.6), 0 6px 24px rgba(245,158,11,0.5) !important;
-  filter: brightness(1.12);
+  border-color: rgba(255,255,255,0.4) !important;
+  background: rgba(255,255,255,0.06) !important;
 }
 @media (max-width: 767px) {
   .bj-action-btn { padding: 11px 0; font-size: 14px; border-radius: 10px; }
@@ -876,14 +876,13 @@ export default function BlackjackGame() {
                   className="bj-action-btn bj-split-btn"
                   onClick={split}
                   style={{
-                    border: 'none',
                     cursor: 'pointer',
-                    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                    background: 'transparent',
+                    border: `1.5px solid ${isLight ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.2)'}`,
                     color: '#fff',
-                    boxShadow: '0 4px 16px rgba(245,158,11,0.35)',
                   }}
                 >
-                  ✂️ SPLIT
+                  SPLIT
                 </button>
               )}
             </div>
