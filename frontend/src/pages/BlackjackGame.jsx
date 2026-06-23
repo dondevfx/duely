@@ -34,8 +34,8 @@ function calcScore(hand) {
 // the hand + HIT/STAND buttons all fit on screen without scrolling.
 const IS_MOBILE_SCREEN = typeof window !== 'undefined' && window.innerWidth < 768;
 const CARD_W = typeof window !== 'undefined'
-  ? Math.round(Math.min(90, Math.floor((window.innerWidth - 48) / 4)) * (IS_MOBILE_SCREEN ? 0.68 : 1))
-  : 90;
+  ? Math.round(Math.min(98, Math.floor((window.innerWidth - 48) / 4)) * (IS_MOBILE_SCREEN ? 0.74 : 1))
+  : 98;
 const CARD_H = Math.round(CARD_W * 1.44);
 
 const CARD_DEAL_CSS = `
@@ -44,9 +44,9 @@ const CARD_DEAL_CSS = `
   to   { opacity: 1; transform: translateY(0)    scale(1)   rotate(0deg);  }
 }
 .bj-action-btn {
-  padding: 15px 0;
+  padding: 17px 0;
   border-radius: 12px;
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 800;
   letter-spacing: 0.5px;
   transition: all 0.15s ease;
@@ -64,7 +64,7 @@ const CARD_DEAL_CSS = `
   background: rgba(255,255,255,0.06) !important;
 }
 @media (max-width: 767px) {
-  .bj-action-btn { padding: 11px 0; font-size: 14px; border-radius: 10px; }
+  .bj-action-btn { padding: 12px 0; font-size: 15px; border-radius: 10px; }
 }
 `;
 
