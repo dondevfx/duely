@@ -65,7 +65,10 @@ export default function MatchTicker() {
 
   return (
     <>
-      <div className="lg:hidden flex gap-2 pb-1" style={{ overflowX: 'hidden', overflowY: 'hidden', touchAction: 'pan-y' }}>
+      <div
+        className="lg:hidden flex gap-2 pb-1 overflow-x-auto overflow-y-hidden"
+        style={{ touchAction: 'pan-x', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
+      >
         {items.map((item, i) => card(item, i))}
       </div>
       <div className="hidden lg:grid gap-2" style={{ gridTemplateColumns: `repeat(${MAX}, 1fr)` }}>
