@@ -55,7 +55,7 @@ export default function MatchTicker() {
   const card = (item, i) => (
     <div
       key={item.id}
-      className={`flex flex-col items-center justify-center gap-0.5 sm:gap-1 lg:gap-1.5 py-1.5 sm:py-2 lg:py-3 px-0.5 bg-surface border rounded-md sm:rounded-lg lg:rounded-xl overflow-hidden min-w-0${
+      className={`flex flex-col items-center justify-center gap-1 sm:gap-1 lg:gap-1.5 py-2.5 sm:py-2 lg:py-3 px-0.5 bg-surface border rounded-md sm:rounded-lg lg:rounded-xl overflow-hidden min-w-0${
         i === 0 && item.id === latestIdRef.current ? ' animate-pop-in' : ''
       }`}
     >
@@ -75,7 +75,7 @@ export default function MatchTicker() {
   const cols = isMobile ? MOBILE_MAX : MAX;
 
   return (
-    <div className="grid gap-1 sm:gap-1.5 lg:gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+    <div className="grid gap-1.5 sm:gap-1.5 lg:gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
       {visible.map((item, i) => card(item, i))}
     </div>
   );
