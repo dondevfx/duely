@@ -3,6 +3,7 @@ import CoinIcon from './CoinIcon';
 import { useSocket } from '../context/SocketContext';
 
 const MAX = 14;
+const MOBILE_MAX = 5;
 
 function fmtPayout(payout, diamonds) {
   if (diamonds) {
@@ -20,6 +21,14 @@ export default function MatchTicker() {
   const [items, setItems] = useState([]);
   // Track latest item id to drive the pop-in animation on the newest card only
   const latestIdRef = useRef(null);
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 639px)').matches);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)');
+    const onChange = e => setIsMobile(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
 
   useEffect(() => {
     if (!socket) return;
@@ -62,9 +71,12 @@ export default function MatchTicker() {
 
   if (items.length === 0) return null;
 
+  const visible = isMobile ? items.slice(0, MOBILE_MAX) : items;
+  const cols = isMobile ? MOBILE_MAX : MAX;
+
   return (
-    <div className="grid gap-1 sm:gap-1.5 lg:gap-2" style={{ gridTemplateColumns: `repeat(${MAX}, minmax(0, 1fr))` }}>
-      {items.map((item, i) => card(item, i))}
+    <div className="grid gap-1 sm:gap-1.5 lg:gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+      {visible.map((item, i) => card(item, i))}
     </div>
   );
 }
