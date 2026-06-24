@@ -46,16 +46,15 @@ export default function MatchTicker() {
   const card = (item, i) => (
     <div
       key={item.id}
-      className={`flex flex-col items-center justify-center gap-1.5 py-3 px-1 bg-surface border rounded-xl overflow-hidden shrink-0${
+      className={`flex flex-col items-center justify-center gap-0.5 sm:gap-1 lg:gap-1.5 py-1.5 sm:py-2 lg:py-3 px-0.5 bg-surface border rounded-md sm:rounded-lg lg:rounded-xl overflow-hidden min-w-0${
         i === 0 && item.id === latestIdRef.current ? ' animate-pop-in' : ''
       }`}
-      style={{ height: 90, width: 80 }}
     >
-      <span className="text-3xl leading-none shrink-0">{item.game.icon}</span>
-      <span className="text-[9px] text-muted font-medium leading-none w-full text-center truncate px-1">
+      <span className="text-base sm:text-xl lg:text-3xl leading-none shrink-0">{item.game.icon}</span>
+      <span className="text-[6px] sm:text-[8px] lg:text-[9px] text-muted font-medium leading-none w-full text-center truncate px-0.5">
         {item.game.name}
       </span>
-      <span className="text-[10px] font-bold text-success leading-none truncate w-full text-center px-1">
+      <span className="text-[7px] sm:text-[9px] lg:text-[10px] font-bold text-success leading-none truncate w-full text-center px-0.5">
         {fmtPayout(item.payout, item.diamonds)}
       </span>
     </div>
@@ -64,16 +63,8 @@ export default function MatchTicker() {
   if (items.length === 0) return null;
 
   return (
-    <>
-      <div
-        className="lg:hidden flex gap-2 pb-1 overflow-x-auto overflow-y-hidden"
-        style={{ touchAction: 'pan-x', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
-      >
-        {items.map((item, i) => card(item, i))}
-      </div>
-      <div className="hidden lg:grid gap-2" style={{ gridTemplateColumns: `repeat(${MAX}, 1fr)` }}>
-        {items.map((item, i) => card(item, i))}
-      </div>
-    </>
+    <div className="grid gap-1 sm:gap-1.5 lg:gap-2" style={{ gridTemplateColumns: `repeat(${MAX}, minmax(0, 1fr))` }}>
+      {items.map((item, i) => card(item, i))}
+    </div>
   );
 }
