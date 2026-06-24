@@ -401,7 +401,17 @@ export default function ScrabbleGame() {
         const col = target.dataset?.col;
         if (row !== undefined && col !== undefined) {
           if (boardKey !== null) {
-            movePendingTile(boardKey, `${row},${col}`, parseInt(row), parseInt(col));
+            // Touch ended on the same cell it started on — this was a tap,
+            // not a drag, so treat it like a desktop click: return the tile
+            // to hand. movePendingTile no-ops on a same-cell move, so without
+            // this branch a tap on a placed tile silently did nothing (no
+            // synthetic click follows, since touchAction:'none' plus the
+            // preventDefault in handleBoardTileTouchStart suppress it).
+            if (boardKey === `${row},${col}`) {
+              removePending(parseInt(row), parseInt(col));
+            } else {
+              movePendingTile(boardKey, `${row},${col}`, parseInt(row), parseInt(col));
+            }
           } else if (idx !== null) {
             handleCellDropByTouch(parseInt(row), parseInt(col), idx);
           }
@@ -762,17 +772,23 @@ export default function ScrabbleGame() {
 
   function removePending(row, col) {
     const key = `${row},${col}`;
-    let removedTile = null;
+    // Read the tile from the closured `pending` state directly rather than
+    // from inside the setPending updater. Relying on the updater callback
+    // running synchronously only works when this is the first state update
+    // scheduled in the current tick — on the touch path (onTouchEnd), several
+    // other setState calls (setDraggingIdx/setDraggingBoardKey/etc.) already
+    // ran first, so React queues the updater instead of invoking it eagerly,
+    // and the "read the removed tile back out" trick silently fails: the tile
+    // gets removed from pending but never makes it into myHand.
+    const tile = pending[key];
+    if (!tile) return;
     setPending(prev => {
       if (!prev[key]) return prev;
-      removedTile = prev[key];
       const n = { ...prev };
       delete n[key];
       return n;
     });
-    if (removedTile) {
-      setMyHand(prev => [...prev, removedTile.isBlank ? '?' : removedTile.letter]);
-    }
+    setMyHand(prev => [...prev, tile.isBlank ? '?' : tile.letter]);
   }
 
   function recallAll() {
