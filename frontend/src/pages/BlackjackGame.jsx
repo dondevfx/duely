@@ -625,7 +625,6 @@ export default function BlackjackGame() {
             myResult?.splitHand && { label: 'Your Hand 1', value: myResult.splitScore > 21 ? `Bust (${myResult.splitScore})` : myResult.splitScore },
             oppResult && { label: oppResult.splitHand ? 'Opp Hand 2 (Active)' : 'Opponent Hand', value: oppResult.score > 21 ? `Bust (${oppResult.score})` : oppResult.score },
             oppResult?.splitHand && { label: 'Opp Hand 1', value: oppResult.splitScore > 21 ? `Bust (${oppResult.splitScore})` : oppResult.splitScore },
-            resultData.dealerScore != null && { label: 'Dealer', value: resultData.dealerScore > 21 ? `Bust (${resultData.dealerScore})` : resultData.dealerScore },
           ].filter(Boolean)}
           onPlayAgain={playAgain}
           onBackToLobby={() => { _resetGame(); setPhase('lobby'); }}
