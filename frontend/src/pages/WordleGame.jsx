@@ -666,14 +666,6 @@ export default function WordleGame() {
       style={{ touchAction: 'manipulation' }}>
       <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
 
-      {/* ── Top bar: just quit ── */}
-      <div className="flex items-center justify-end px-4 h-9 border-b border-surfaceLight shrink-0">
-        <button onClick={() => { socket?.emit('player_forfeit'); navigate('/'); }}
-          className="text-xs text-muted hover:text-white transition-colors">
-          Quit
-        </button>
-      </div>
-
       {/* ── Error toast ── */}
       {errorMsg && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-5 py-2 rounded-xl font-bold text-sm text-white pointer-events-none"

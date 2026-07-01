@@ -289,7 +289,7 @@ export default function GameLobby({
             variant="ghost"
             size="lg"
             className="w-full text-lg py-4 border border-border hover:border-accent"
-            disabled={session && (!authenticated || insufficient)}
+            disabled={session && insufficient}
           >
             {session ? `🤖 Bet vs Bot — ${fmtFee(entryFee)} 💎` : '🔒 Login to Play'}
           </GlowButton>
@@ -304,7 +304,7 @@ export default function GameLobby({
               variant="ghost"
               size="lg"
               className="w-full text-lg py-4 border border-border hover:border-border"
-              disabled={session && !authenticated}
+              disabled={false}
             >
               {session ? label : '🔒 Login to Play'}
             </GlowButton>
