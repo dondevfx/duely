@@ -242,22 +242,17 @@ export default function Navbar() {
                               {Math.floor(rakebackData.instant ?? 0)} <CoinIcon size="0.9em" />
                             </span>
                           </div>
-                          <div className="flex items-center gap-2">
-                            {!(rakebackData.instantClaimable ?? false) && rakebackCountdowns.instant > 0 && (
-                              <span className="text-[10px] text-muted font-mono flex-1">{fmtRakebackTimer(rakebackCountdowns.instant)}</span>
-                            )}
-                            <button
-                              onClick={() => handleRakebackClaim('instant')}
-                              disabled={!(rakebackData.instantClaimable ?? false)}
-                              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
-                                (rakebackData.instantClaimable ?? false)
-                                  ? 'bg-primary text-white hover:bg-blue-500'
-                                  : 'bg-surfaceLight text-muted cursor-not-allowed opacity-60'
-                              }`}
-                            >
-                              Claim
-                            </button>
-                          </div>
+                          <button
+                            onClick={() => handleRakebackClaim('instant')}
+                            disabled={!(rakebackData.instantClaimable ?? false)}
+                            className={`w-full py-2 rounded-lg text-xs font-bold transition-all ${
+                              (rakebackData.instantClaimable ?? false)
+                                ? 'bg-primary text-white hover:bg-blue-500'
+                                : 'bg-surfaceLight text-muted cursor-not-allowed opacity-60'
+                            }`}
+                          >
+                            {!(rakebackData.instantClaimable ?? false) && rakebackCountdowns.instant > 0 ? fmtRakebackTimer(rakebackCountdowns.instant) : 'Claim'}
+                          </button>
                         </div>
 
                         {/* Daily row */}
@@ -271,22 +266,17 @@ export default function Navbar() {
                               {Math.floor(rakebackData.daily ?? 0)} <CoinIcon size="0.9em" />
                             </span>
                           </div>
-                          <div className="flex items-center gap-2">
-                            {!rakebackData.dailyClaimable && rakebackCountdowns.daily > 0 && (
-                              <span className="text-[10px] text-muted font-mono flex-1">{fmtRakebackTimer(rakebackCountdowns.daily)}</span>
-                            )}
-                            <button
-                              onClick={() => handleRakebackClaim('daily')}
-                              disabled={!rakebackData.dailyClaimable}
-                              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
-                                rakebackData.dailyClaimable
-                                  ? 'bg-primary text-white hover:bg-blue-500'
-                                  : 'bg-surfaceLight text-muted cursor-not-allowed opacity-60'
-                              }`}
-                            >
-                              Claim
-                            </button>
-                          </div>
+                          <button
+                            onClick={() => handleRakebackClaim('daily')}
+                            disabled={!rakebackData.dailyClaimable}
+                            className={`w-full py-2 rounded-lg text-xs font-bold transition-all ${
+                              rakebackData.dailyClaimable
+                                ? 'bg-primary text-white hover:bg-blue-500'
+                                : 'bg-surfaceLight text-muted cursor-not-allowed opacity-60'
+                            }`}
+                          >
+                            {!rakebackData.dailyClaimable && rakebackCountdowns.daily > 0 ? fmtRakebackTimer(rakebackCountdowns.daily) : 'Claim'}
+                          </button>
                         </div>
 
                         {/* Weekly row */}
@@ -300,22 +290,17 @@ export default function Navbar() {
                               {Math.floor(rakebackData.weekly ?? 0)} <CoinIcon size="0.9em" />
                             </span>
                           </div>
-                          <div className="flex items-center gap-2">
-                            {!rakebackData.weeklyClaimable && rakebackCountdowns.weekly > 0 && (
-                              <span className="text-[10px] text-muted font-mono flex-1">{fmtRakebackTimer(rakebackCountdowns.weekly)}</span>
-                            )}
-                            <button
-                              onClick={() => handleRakebackClaim('weekly')}
-                              disabled={!rakebackData.weeklyClaimable}
-                              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
-                                rakebackData.weeklyClaimable
-                                  ? 'bg-primary text-white hover:bg-blue-500'
-                                  : 'bg-surfaceLight text-muted cursor-not-allowed opacity-60'
-                              }`}
-                            >
-                              Claim
-                            </button>
-                          </div>
+                          <button
+                            onClick={() => handleRakebackClaim('weekly')}
+                            disabled={!rakebackData.weeklyClaimable}
+                            className={`w-full py-2 rounded-lg text-xs font-bold transition-all ${
+                              rakebackData.weeklyClaimable
+                                ? 'bg-primary text-white hover:bg-blue-500'
+                                : 'bg-surfaceLight text-muted cursor-not-allowed opacity-60'
+                            }`}
+                          >
+                            {!rakebackData.weeklyClaimable && rakebackCountdowns.weekly > 0 ? fmtRakebackTimer(rakebackCountdowns.weekly) : 'Claim'}
+                          </button>
                         </div>
                       </div>
                     )}
@@ -418,18 +403,13 @@ export default function Navbar() {
                               </div>
                               <span className="font-mono text-sm font-black text-white flex items-center gap-1">{Math.floor(amount)} <CoinIcon size="0.9em" /></span>
                             </div>
-                            <div className="flex items-center gap-2">
-                              {!claimable && countdown > 0 && (
-                                <span className="text-[10px] text-muted font-mono flex-1">{fmtRakebackTimer(countdown)}</span>
-                              )}
-                              <button
-                                onClick={() => handleRakebackClaim(key)}
-                                disabled={!claimable}
-                                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${claimable ? 'bg-primary text-white hover:bg-blue-500' : 'bg-surfaceLight text-muted cursor-not-allowed opacity-60'}`}
-                              >
-                                Claim
-                              </button>
-                            </div>
+                            <button
+                              onClick={() => handleRakebackClaim(key)}
+                              disabled={!claimable}
+                              className={`w-full py-2 rounded-lg text-xs font-bold transition-all ${claimable ? 'bg-primary text-white hover:bg-blue-500' : 'bg-surfaceLight text-muted cursor-not-allowed opacity-60'}`}
+                            >
+                              {!claimable && countdown > 0 ? fmtRakebackTimer(countdown) : 'Claim'}
+                            </button>
                           </div>
                         ))}
                       </div>
