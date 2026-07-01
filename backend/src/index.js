@@ -60,7 +60,8 @@ const _supabaseRef = supabase;
 app.get('/api/auth/me', requireAuth, async (req, res) => {
   const { data, error } = await _supabaseRef.from('profiles').select('*').eq('id', req.user.id).single();
   if (error) return res.status(404).json({ error: 'Profile not found' });
-  res.json({ ...data, is_admin: req.user.id === process.env.ADMIN_USER_ID });
+  const { isDemo } = require('./services/demoAccounts');
+  res.json({ ...data, is_admin: req.user.id === process.env.ADMIN_USER_ID, is_demo: isDemo(req.user.id) });
 });
 app.use('/api/auth', authLimiter, authRoutes(supabase));
 app.use('/api/wallet', walletRoutes(supabase, io));

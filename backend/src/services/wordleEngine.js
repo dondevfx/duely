@@ -1,7 +1,7 @@
 const { v4: uuidv4 } = require('uuid');
 const { isValidWord } = require('./wordValidator');
 const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
-const { settleMatch, settleMatchDiamonds } = require('./walletService');
+const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
 const { updateHighscore } = require('./highscoreService');
 const gameEvents = require('./gameEvents');
 
@@ -175,7 +175,8 @@ function addToWordleQueue(player) {
   const idx = queue.findIndex(p =>
     p.socketId  !== player.socketId &&
     p.entryFee  === player.entryFee &&
-    p.currency  === player.currency
+    p.currency  === player.currency &&
+    !!p.isDemo  === !!player.isDemo
   );
   if (idx !== -1) {
     const opp    = queue.splice(idx, 1)[0];
@@ -317,6 +318,8 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
   const currency = room.currency || 'coins';
   const winner   = winnerPlayer;
   const loser    = loserPlayer;
+  const hasBot   = p1.isBot || p2.isBot;
+  const human    = hasBot ? room.players.find(p => !p.isBot) : null;
 
   // ── Financial + stat settlement ──────────────────────────────────────────
   let newWinnerElo  = winner?.elo || 1000;
@@ -336,9 +339,14 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
 
     if (fee > 0 && supabase && winner && loser) {
       try {
-        balanceChange = currency === 'diamonds'
-          ? await settleMatchDiamonds(supabase, winner.userId, loser.userId, fee)
-          : await settleMatch(supabase, winner.userId, loser.userId, fee);
+        if (hasBot && human) {
+          const humanWon = winner && !winner.isBot;
+          balanceChange = await settleBotMatch(supabase, human.userId, fee, currency, humanWon);
+        } else {
+          balanceChange = currency === 'diamonds'
+            ? await settleMatchDiamonds(supabase, winner.userId, loser.userId, fee)
+            : await settleMatch(supabase, winner.userId, loser.userId, fee);
+        }
       } catch (e) { console.error('[wordle] settle error:', e.message); }
     }
 

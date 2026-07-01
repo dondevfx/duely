@@ -112,6 +112,7 @@ const {
 } = require('../services/blackjackEngine');
 const { checkSocketClickRate, cleanupSocket } = require('../middleware/rateLimit');
 const { createBotPlayer } = require('../services/botService');
+const { isDemo: isDemoAccount } = require('../services/demoAccounts');
 const {
   settleMatch, settleMatchDiamonds, forfeitSettleDiamonds, forfeitSettleCoins,
   deductCoins, deductDiamonds, deductMatchFees, creditDiamonds,
@@ -225,7 +226,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         const { data: profile } = await supabase
           .from('profiles').select('id,username,elo,c_coins,profile_color,current_streak').eq('id', user.id).single();
         if (!profile) { socket.emit('error', { message: 'Profile not found' }); return; }
-        authenticatedUser = { userId: user.id, ...profile };
+        authenticatedUser = { userId: user.id, ...profile, isDemo: isDemoAccount(user.id) };
         socket._authenticatedUserId = user.id;
         socket.emit('authenticated', { userId: user.id, username: profile.username });
 
@@ -711,7 +712,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return socket.emit('error', { message: 'Insufficient C Coins' });
         lockUser(authenticatedUser.userId);
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
       userQueues.add(authenticatedUser.userId);
       const match = addToDartQueue(player);
       if (match) { userQueues.delete(match.p1.userId); userQueues.delete(match.p2.userId); _startDartMatch(io, supabase, match); }
@@ -735,7 +736,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return socket.emit('error', { message: e.message || 'Insufficient balance' });
         }
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
       const bot = createBotPlayer(entryFee, 'dart');
       if (!bot) return socket.emit('error', { message: 'Bots are disabled' });
       bot.entryFee = entryFee;
@@ -781,7 +782,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return socket.emit('error', { message: 'Insufficient C Coins' });
         lockUser(authenticatedUser.userId);
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
       userQueues.add(authenticatedUser.userId);
       const match = addToAsteroidQueue(player);
       if (match) { userQueues.delete(match.p1.userId); userQueues.delete(match.p2.userId); _startAsteroidMatch(io, supabase, match); }
@@ -805,7 +806,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return socket.emit('error', { message: e.message || 'Insufficient balance' });
         }
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
       const bot = createBotPlayer(entryFee, 'asteroids');
       if (!bot) return socket.emit('error', { message: 'Bots are disabled' });
       bot.entryFee = entryFee;
@@ -858,7 +859,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return socket.emit('error', { message: 'Insufficient C Coins' });
         lockUser(authenticatedUser.userId);
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
       userQueues.add(authenticatedUser.userId);
       const match = addToStarshipQueue(player);
       if (match) {
@@ -891,7 +892,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return socket.emit('error', { message: e.message || 'Insufficient balance' });
         }
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
       const bot    = { socketId: null, userId: 'bot_ssp_' + uuidv4(), username: 'Duely Bot', elo: 1000, entryFee, currency, isBot: true };
       const { roomId } = createDirectStarshipRoom(player, bot);
       socket.join(roomId);
@@ -949,7 +950,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return socket.emit('error', { message: 'Insufficient C Coins' });
         lockUser(authenticatedUser.userId);
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
       userQueues.add(authenticatedUser.userId);
       incrementCount('block-blast', socket.id, entryFee, currency);
       const match = addToBlockBlastQueue(player);
@@ -1042,7 +1043,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
             return socket.emit('error', { message: e.message || 'Insufficient balance' });
           }
         }
-        const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+        const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
         const bot = createBotPlayer(entryFee, 'block_blast');
         bot.entryFee = entryFee;
         const { roomId } = createDirectBlockBlastRoom(player, bot);
@@ -1118,7 +1119,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return socket.emit('error', { message: 'Insufficient C Coins' });
         lockUser(authenticatedUser.userId);
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
       userQueues.add(authenticatedUser.userId);
       incrementCount('piano', socket.id, entryFee, currency);
       const match = addToPianoQueue(player);
@@ -1162,7 +1163,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return socket.emit('error', { message: e.message || 'Insufficient balance' });
         }
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
       const bot = createBotPlayer(entryFee, 'piano');
       bot.entryFee = entryFee;
       const { roomId } = createDirectPianoRoom(player, bot);
@@ -1220,7 +1221,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return socket.emit('error', { message: 'Insufficient C Coins' });
         lockUser(authenticatedUser.userId);
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
       userQueues.add(authenticatedUser.userId);
       const match = addToClickQueue(player);
       if (match) { userQueues.delete(match.p1.userId); userQueues.delete(match.p2.userId); _startClickMatch(io, supabase, match); }
@@ -1244,7 +1245,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return socket.emit('error', { message: e.message || 'Insufficient balance' });
         }
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
       const bot = createBotPlayer(entryFee, 'click');
       bot.entryFee = entryFee;
       const { roomId } = createDirectClickRoom(player, bot);
@@ -1293,7 +1294,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return socket.emit('error', { message: 'Insufficient C Coins' });
         lockUser(authenticatedUser.userId);
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
       userQueues.add(authenticatedUser.userId);
       const match = addToTTTQueue(player);
       if (match) { userQueues.delete(match.p1.userId); userQueues.delete(match.p2.userId); _startTTTMatch(io, supabase, match); }
@@ -1317,7 +1318,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return socket.emit('error', { message: e.message || 'Insufficient balance' });
         }
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
       const bot = createBotPlayer(entryFee, 'ttt');
       if (!bot) return socket.emit('error', { message: 'Bots are disabled' });
       bot.entryFee = entryFee;
@@ -1370,7 +1371,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return socket.emit('error', { message: 'Insufficient C Coins' });
         lockUser(authenticatedUser.userId);
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
       userQueues.add(authenticatedUser.userId);
       incrementCount('tetris', socket.id, entryFee, currency);
       const match = addToTetrisQueue(player);
@@ -1414,7 +1415,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return socket.emit('error', { message: e.message || 'Insufficient balance' });
         }
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
       const bot = createBotPlayer(entryFee, 'tetris');
       if (!bot) return socket.emit('error', { message: 'Bots are disabled' });
       bot.entryFee = entryFee;
@@ -1490,7 +1491,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return socket.emit('error', { message: 'Insufficient C Coins' });
         lockUser(authenticatedUser.userId);
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
       userQueues.add(authenticatedUser.userId);
       incrementCount('chess', socket.id, entryFee, currency);
       const match = addToChessQueue(player);
@@ -1534,7 +1535,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return socket.emit('error', { message: e.message || 'Insufficient balance' });
         }
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
       const bot = createBotPlayer(entryFee, 'chess');
       if (!bot) return socket.emit('error', { message: 'Bots are disabled' });
       bot.entryFee = entryFee;
@@ -1684,7 +1685,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return socket.emit('error', { message: 'Insufficient C Coins' });
         lockUser(authenticatedUser.userId);
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
       userQueues.add(authenticatedUser.userId);
       const match = addToCrossroadQueue(player);
       if (match) {
@@ -1717,7 +1718,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return socket.emit('error', { message: e.message || 'Insufficient balance' });
         }
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
       const bot    = { socketId: null, userId: 'bot_crd_' + uuidv4(), username: 'Duely Bot', elo: 1000, entryFee, currency, isBot: true };
       const { roomId } = createDirectCrossroadRoom(player, bot);
       socket.join(roomId);
@@ -1796,7 +1797,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
             return socket.emit('error', { message: 'Insufficient C Coins' });
           lockUser(authenticatedUser.userId);
         }
-        const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+        const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
         userQueues.add(authenticatedUser.userId);
         incrementCount('scrabble', socket.id, entryFee, currency);
         const match = addToWordleQueue(player);
@@ -1882,7 +1883,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
             else await deductCoins(supabase, authenticatedUser.userId, parseFloat(entryFee));
           } catch (e) { return socket.emit('error', { message: e.message || 'Insufficient balance' }); }
         }
-        const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+        const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
         const { v4: uuid } = require('uuid');
         const botSocketId = 'bot_wordle_' + uuid();
         const bot = { socketId: botSocketId, userId: botSocketId, username: 'Duely Bot', elo: 1000, entryFee, currency, isBot: true };
@@ -1957,7 +1958,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (entryFee > 0 && currency !== 'diamonds' && profile.c_coins < entryFee)
         return socket.emit('error', { message: 'Insufficient C Coins' });
       if (entryFee > 0) lockUser(authenticatedUser.userId);
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, side };
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, side, isDemo: authenticatedUser.isDemo || false };
       userQueues.add(authenticatedUser.userId);
       incrementCount('coin-flip', socket.id, entryFee, currency);
       const match = addToCoinFlipQueue(player);
@@ -2022,7 +2023,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
             }
           } catch (e) { return socket.emit('error', { message: e.message || 'Insufficient balance' }); }
         }
-        const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, side };
+        const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, side, isDemo: authenticatedUser.isDemo || false };
         const bot = { socketId: `bot_cf_${uuidv4()}`, userId: `bot_cf_${uuidv4()}`, username: 'Duely Bot', elo: 1000, entryFee, currency, side: side === 'heads' ? 'tails' : 'heads', isBot: true };
         // Use createDirectCoinFlipRoom so the room is tracked in coinFlipRooms map.
         // This means getCoinFlipRoomBySocket finds it on disconnect → _handleForfeit
@@ -2065,7 +2066,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         if (currency === 'coins' && profile.c_coins < entryFee) return socket.emit('error', { message: 'Insufficient C Coins' });
         lockUser(authenticatedUser.userId);
       }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
       userQueues.add(authenticatedUser.userId);
       incrementCount('blackjack', socket.id, entryFee, currency);
       const match = addToBlackjackQueue(player);
@@ -2206,7 +2207,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
             else await deductCoins(supabase, authenticatedUser.userId, parseFloat(entryFee));
           } catch (e) { return socket.emit('error', { message: e.message || 'Insufficient balance' }); }
         }
-        const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+        const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
         const bot = { socketId: null, userId: 'bot_bj_' + uuidv4(), username: 'Duely Bot', elo: 1000, entryFee, currency, isBot: true };
         const { roomId } = createDirectBlackjackRoom(player, bot);
         if (entryFee > 0) { const r = getBlackjackRoom(roomId); if (r) r.feesDeducted = true; }
@@ -2512,7 +2513,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     });
     io.emit('queue_entry_removed', { id: p1.socketId });
     io.emit('queue_entry_removed', { id: p2.socketId });
-    if (!p1.isBot && !p2.isBot) {
+    if (!p1.isBot && !p2.isBot && !p1.isDemo && !p2.isDemo) {
       io.emit('active_game_started', {
         id: roomId,
         gameType: 'type',
@@ -2541,7 +2542,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     });
     io.emit('queue_entry_removed', { id: p1.socketId });
     io.emit('queue_entry_removed', { id: p2.socketId });
-    if (!p1.isBot && !p2.isBot) {
+    if (!p1.isBot && !p2.isBot && !p1.isDemo && !p2.isDemo) {
       io.emit('active_game_started', {
         id: roomId,
         gameType: 'c4',
@@ -2626,7 +2627,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     });
     io.emit('queue_entry_removed', { id: p1.socketId });
     io.emit('queue_entry_removed', { id: p2.socketId });
-    if (!p1.isBot && !p2.isBot) {
+    if (!p1.isBot && !p2.isBot && !p1.isDemo && !p2.isDemo) {
       io.emit('active_game_started', {
         id: roomId,
         gameType: 'piano',
@@ -2685,7 +2686,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     });
     io.emit('queue_entry_removed', { id: p1.socketId });
     io.emit('queue_entry_removed', { id: p2.socketId });
-    if (!p1.isBot && !p2.isBot) {
+    if (!p1.isBot && !p2.isBot && !p1.isDemo && !p2.isDemo) {
       io.emit('active_game_started', {
         id: roomId,
         gameType: 'tetris',
@@ -2717,7 +2718,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     });
     io.emit('queue_entry_removed', { id: p1.socketId });
     io.emit('queue_entry_removed', { id: p2.socketId });
-    if (!p1.isBot && !p2.isBot) {
+    if (!p1.isBot && !p2.isBot && !p1.isDemo && !p2.isDemo) {
       io.emit('active_game_started', {
         id: roomId,
         gameType: 'chess',

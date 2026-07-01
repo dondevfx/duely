@@ -13,7 +13,8 @@ function addToStarshipQueue(player) {
   const idx = starshipQueue.findIndex(p =>
     p.socketId !== player.socketId &&
     p.entryFee === player.entryFee &&
-    p.currency === player.currency
+    p.currency === player.currency &&
+    !!p.isDemo === !!player.isDemo
   );
   if (idx !== -1) {
     const opp = starshipQueue.splice(idx, 1)[0];

@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const { requireAuth } = require('../middleware/auth');
+const { isDemo } = require('../services/demoAccounts');
 const {
   getBalance, creditCoins, deductCoins,
   getDiamondBalance, creditDiamonds, deductDiamonds,
@@ -115,6 +116,7 @@ module.exports = function walletRoutes(supabase, io) {
 
   // ── Withdraw via SimpleSwap (any coin → player's address) ─────────────
   router.post('/withdraw', requireAuth, async (req, res) => {
+    if (isDemo(req.user.id)) return res.status(403).json({ error: 'Demo accounts cannot withdraw.' });
     if (!req.user.email_confirmed_at) {
       return res.status(403).json({ error: 'Please verify your email before withdrawing.' });
     }
@@ -308,6 +310,7 @@ module.exports = function walletRoutes(supabase, io) {
       .from('profiles').select('id, username').eq('username', recipientUsername.trim()).single();
     if (!recipient) return res.status(404).json({ error: 'User not found' });
     if (recipient.id === req.user.id) return res.status(400).json({ error: 'You cannot tip yourself' });
+    if (isDemo(req.user.id) || isDemo(recipient.id)) return res.status(403).json({ error: 'Demo accounts cannot send or receive tips.' });
 
     try {
       if (isDiamonds) {

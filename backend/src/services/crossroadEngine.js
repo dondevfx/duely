@@ -13,7 +13,8 @@ function addToCrossroadQueue(player) {
   const idx = crossroadQueue.findIndex(p =>
     p.socketId !== player.socketId &&
     p.entryFee === player.entryFee &&
-    p.currency === player.currency
+    p.currency === player.currency &&
+    !!p.isDemo === !!player.isDemo
   );
   if (idx !== -1) {
     const opponent = crossroadQueue.splice(idx, 1)[0];

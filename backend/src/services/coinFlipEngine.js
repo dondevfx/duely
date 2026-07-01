@@ -18,8 +18,9 @@ function addToCoinFlipQueue(player) {
   const own = player.side === 'heads' ? headsQueues : tailsQueues;
 
   const oppQueue = opposite.get(key) || [];
-  if (oppQueue.length > 0) {
-    const opponent = oppQueue.shift();
+  const oppIdx = oppQueue.findIndex(p => !!p.isDemo === !!player.isDemo);
+  if (oppIdx !== -1) {
+    const opponent = oppQueue.splice(oppIdx, 1)[0];
     if (oppQueue.length === 0) opposite.delete(key); else opposite.set(key, oppQueue);
 
     const roomId = 'coinflip_' + uuidv4();

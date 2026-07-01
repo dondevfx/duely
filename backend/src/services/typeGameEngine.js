@@ -90,7 +90,7 @@ function tryTypeMatch() {
   if (typeQueue.length < 2) return null;
   typeQueue.sort((a, b) => a.elo - b.elo);
   const p1 = typeQueue.shift();
-  const matchIdx = typeQueue.findIndex(p => p.entryFee === p1.entryFee);
+  const matchIdx = typeQueue.findIndex(p => p.entryFee === p1.entryFee && !!p.isDemo === !!p1.isDemo);
   if (matchIdx === -1) { typeQueue.unshift(p1); return null; }
   const p2 = typeQueue.splice(matchIdx, 1)[0];
   const roomId = uuidv4();

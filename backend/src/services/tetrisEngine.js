@@ -14,7 +14,8 @@ function addToTetrisQueue(player) {
   const idx = tetrisQueue.findIndex(p =>
     p.socketId !== player.socketId &&
     p.entryFee === player.entryFee &&
-    p.currency === player.currency
+    p.currency === player.currency &&
+    !!p.isDemo === !!player.isDemo
   );
   if (idx !== -1) {
     const opponent = tetrisQueue.splice(idx, 1)[0];

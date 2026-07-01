@@ -80,7 +80,8 @@ function addToC4Queue(player) {
   const idx = c4Queue.findIndex(p =>
     p.socketId !== player.socketId &&
     p.entryFee === player.entryFee &&
-    p.currency === player.currency
+    p.currency === player.currency &&
+    !!p.isDemo === !!player.isDemo
   );
   if (idx !== -1) {
     const opponent = c4Queue.splice(idx, 1)[0];

@@ -1,5 +1,11 @@
 const { Router } = require('express');
 const { requireAuth } = require('../middleware/auth');
+const { DEMO_IDS } = require('../services/demoAccounts');
+
+// Remove demo accounts from any array of profile objects
+const stripDemos = (arr) => (arr || []).filter(p => !DEMO_IDS.includes(p.id));
+// Remove demo IDs from a plain ID→value map
+const stripDemoKeys = (map) => { for (const id of DEMO_IDS) delete map[id]; return map; };
 
 module.exports = function leaderboardRoutes(supabase) {
   const router = Router();
@@ -15,7 +21,7 @@ module.exports = function leaderboardRoutes(supabase) {
       .neq('id', adminId)
       .neq('is_private', true);
     if (error) return res.status(500).json({ error: error.message });
-    const players = data.map((p, i) => ({ rank: i + 1, ...p }));
+    const players = stripDemos(data).map((p, i) => ({ rank: i + 1, ...p }));
     let userRank = null;
     if (req.query.userId) {
       const uid = req.query.userId;
@@ -38,7 +44,7 @@ module.exports = function leaderboardRoutes(supabase) {
     const { data, error } = await query;
     if (error) return res.status(500).json({ error: error.message });
 
-    const players = data.map((p, i) => ({ rank: i + 1, ...p }));
+    const players = stripDemos(data).map((p, i) => ({ rank: i + 1, ...p }));
 
     let userRank = null;
     if (req.query.userId) {
@@ -71,7 +77,7 @@ module.exports = function leaderboardRoutes(supabase) {
       .neq('is_private', true);
     if (error) return res.status(500).json({ error: error.message });
 
-    const players = data.map((p, i) => ({ rank: i + 1, ...p }));
+    const players = stripDemos(data).map((p, i) => ({ rank: i + 1, ...p }));
 
     let userRank = null;
     if (req.query.userId) {
@@ -111,6 +117,7 @@ module.exports = function leaderboardRoutes(supabase) {
       if (!m.winner_id || m.winner_id === adminId) continue;
       winsMap[m.winner_id] = (winsMap[m.winner_id] || 0) + 1;
     }
+    stripDemoKeys(winsMap);
 
     const sorted = Object.entries(winsMap)
       .sort((a, b) => b[1] - a[1])
@@ -125,7 +132,7 @@ module.exports = function leaderboardRoutes(supabase) {
           .neq('is_private', true)
       : { data: [] };
 
-    const profileMap = Object.fromEntries((profileData || []).map(p => [p.id, p]));
+    const profileMap = Object.fromEntries(stripDemos(profileData || []).map(p => [p.id, p]));
 
     const players = sorted
       .filter(([id]) => profileMap[id])
@@ -153,7 +160,7 @@ module.exports = function leaderboardRoutes(supabase) {
       .neq('is_private', true);
     if (error) return res.status(500).json({ error: error.message });
 
-    const players = data.map((p, i) => ({ rank: i + 1, ...p }));
+    const players = stripDemos(data).map((p, i) => ({ rank: i + 1, ...p }));
 
     let userRank = null;
     if (req.query.userId) {
@@ -380,6 +387,7 @@ module.exports = function leaderboardRoutes(supabase) {
       if (!m.winner_id || m.winner_id === adminId) continue;
       winsMap[m.winner_id] = (winsMap[m.winner_id] || 0) + 1;
     }
+    stripDemoKeys(winsMap);
 
     const sorted = Object.entries(winsMap)
       .sort((a, b) => b[1] - a[1])

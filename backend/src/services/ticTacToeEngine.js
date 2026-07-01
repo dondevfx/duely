@@ -23,7 +23,8 @@ function addToTTTQueue(player) {
   const idx = tttQueue.findIndex(p =>
     p.socketId !== player.socketId &&
     p.entryFee === player.entryFee &&
-    p.currency === player.currency
+    p.currency === player.currency &&
+    !!p.isDemo === !!player.isDemo
   );
   if (idx !== -1) {
     const opponent = tttQueue.splice(idx, 1)[0];

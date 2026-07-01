@@ -17,7 +17,8 @@ function addToBlockBlastQueue(player) {
   const idx = blockBlastQueue.findIndex(p =>
     p.socketId !== player.socketId &&
     p.entryFee === player.entryFee &&
-    p.currency === player.currency
+    p.currency === player.currency &&
+    !!p.isDemo === !!player.isDemo
   );
   if (idx !== -1) {
     const opp = blockBlastQueue.splice(idx, 1)[0];

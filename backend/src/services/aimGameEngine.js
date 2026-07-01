@@ -23,7 +23,8 @@ function addToAimQueue(player) {
   const idx = aimQueue.findIndex(p =>
     p.socketId !== player.socketId &&
     p.entryFee === player.entryFee &&
-    p.currency === player.currency
+    p.currency === player.currency &&
+    !!p.isDemo === !!player.isDemo
   );
   if (idx !== -1) {
     const opponent = aimQueue.splice(idx, 1)[0];

@@ -26,7 +26,8 @@ function addToDartQueue(player) {
   const idx = dartQueue.findIndex(p =>
     p.socketId !== player.socketId &&
     p.entryFee === player.entryFee &&
-    p.currency === player.currency
+    p.currency === player.currency &&
+    !!p.isDemo === !!player.isDemo
   );
   if (idx !== -1) {
     const opp = dartQueue.splice(idx, 1)[0];

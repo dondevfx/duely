@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const { requireAuth } = require('../middleware/auth');
+const { isDemo, DEMO_IDS } = require('../services/demoAccounts');
 
 module.exports = function authRoutes(supabase) {
   const router = Router();
@@ -235,7 +236,7 @@ module.exports = function authRoutes(supabase) {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Username required' });
     const { data: target } = await supabase.from('profiles').select('id').eq('username', username.trim()).maybeSingle();
-    if (!target || target.id === ADMIN_ID) return res.status(404).json({ error: 'User not found' });
+    if (!target || target.id === ADMIN_ID || isDemo(target.id)) return res.status(404).json({ error: 'User not found' });
     if (target.id === myId) return res.status(400).json({ error: 'Cannot friend yourself' });
     const { data: existing } = await supabase.from('friends').select('id,status')
       .or(`and(requester_id.eq.${myId},addressee_id.eq.${target.id}),and(requester_id.eq.${target.id},addressee_id.eq.${myId})`)
@@ -252,7 +253,7 @@ module.exports = function authRoutes(supabase) {
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId required' });
     if (userId === myId) return res.status(400).json({ error: 'Cannot friend yourself' });
-    if (userId === ADMIN_ID) return res.status(404).json({ error: 'User not found' });
+    if (userId === ADMIN_ID || isDemo(userId)) return res.status(404).json({ error: 'User not found' });
     const { data: existing } = await supabase.from('friends').select('id,status')
       .or(`and(requester_id.eq.${myId},addressee_id.eq.${userId}),and(requester_id.eq.${userId},addressee_id.eq.${myId})`)
       .maybeSingle();

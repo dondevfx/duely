@@ -48,7 +48,7 @@ function tryMemoryMatch() {
   if (memoryQueue.length < 2) return null;
   memoryQueue.sort((a, b) => a.elo - b.elo);
   const p1 = memoryQueue.shift();
-  const idx = memoryQueue.findIndex(p => p.entryFee === p1.entryFee && p.currency === p1.currency);
+  const idx = memoryQueue.findIndex(p => p.entryFee === p1.entryFee && p.currency === p1.currency && !!p.isDemo === !!p1.isDemo);
   if (idx === -1) { memoryQueue.unshift(p1); return null; }
   const p2 = memoryQueue.splice(idx, 1)[0];
   const roomId = uuidv4();

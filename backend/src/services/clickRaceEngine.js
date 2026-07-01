@@ -46,7 +46,8 @@ function addToClickQueue(player) {
   const idx = clickQueue.findIndex(p =>
     p.socketId !== p1.socketId &&
     p.entryFee === p1.entryFee &&
-    p.currency === p1.currency
+    p.currency === p1.currency &&
+    !!p.isDemo === !!p1.isDemo
   );
   if (idx === -1) { clickQueue.unshift(p1); return null; }
   const p2     = clickQueue.splice(idx, 1)[0];
