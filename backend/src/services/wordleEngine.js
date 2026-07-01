@@ -415,10 +415,90 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
   deleteWordleRoom(room.roomId);
 }
 
+// ── Bot solver ────────────────────────────────────────────────────────────────
+// Filters the answer list to candidates consistent with all feedback so far,
+// then returns the next guess. Uses CRANE as the opening move.
+const BOT_OPENER = 'CRANE';
+
+function _botFilterCandidates(candidates, history) {
+  return candidates.filter(word => {
+    for (const { guess, feedback } of history) {
+      // Count how many times each letter must appear (from correct+present hits)
+      const minCount = {};
+      const maxCount = {};
+      for (let i = 0; i < WORD_LENGTH; i++) {
+        const { letter, status } = feedback[i];
+        if (status === 'correct' || status === 'present') {
+          minCount[letter] = (minCount[letter] || 0) + 1;
+        }
+      }
+      // absent letters set a ceiling (equal to minCount, or 0 if never seen)
+      for (let i = 0; i < WORD_LENGTH; i++) {
+        const { letter, status } = feedback[i];
+        if (status === 'absent') {
+          maxCount[letter] = minCount[letter] || 0;
+        }
+      }
+      // Check per-position constraints
+      for (let i = 0; i < WORD_LENGTH; i++) {
+        const { letter, status } = feedback[i];
+        if (status === 'correct' && word[i] !== letter) return false;
+        if (status === 'present' && word[i] === letter) return false;
+        if (status === 'present' && !word.includes(letter)) return false;
+      }
+      // Check letter count constraints
+      for (const [letter, min] of Object.entries(minCount)) {
+        if ((word.split(letter).length - 1) < min) return false;
+      }
+      for (const [letter, max] of Object.entries(maxCount)) {
+        if ((word.split(letter).length - 1) > max) return false;
+      }
+    }
+    return true;
+  });
+}
+
+async function scheduleBotWordleMove(io, supabase, roomId, botSocketId) {
+  const room = rooms.get(roomId);
+  if (!room || room.settled) return;
+
+  let candidates = [...ANSWERS];
+  const history  = [];
+  let guessNum   = 0;
+
+  while (guessNum < MAX_GUESSES) {
+    const delay = 1500 + Math.floor(Math.random() * 1500);
+    await new Promise(r => setTimeout(r, delay));
+
+    const fresh = rooms.get(roomId);
+    if (!fresh || fresh.settled) return;
+
+    const ps = fresh.pstate[botSocketId];
+    if (!ps || ps.finished) return;
+
+    const guess = guessNum === 0 ? BOT_OPENER : (candidates[Math.floor(Math.random() * Math.min(candidates.length, 5))] || candidates[0] || BOT_OPENER);
+    const feedback = evaluateGuess(fresh.word, guess);
+    history.push({ guess, feedback });
+
+    // Update candidates for next turn
+    candidates = _botFilterCandidates(candidates, history);
+
+    await handleWordleGuess(io, supabase, roomId, botSocketId, guess);
+
+    guessNum++;
+
+    // Check if bot just solved it
+    const updated = rooms.get(roomId);
+    if (!updated || updated.settled) return;
+    if (updated.pstate[botSocketId]?.finished) return;
+  }
+}
+
 module.exports = {
   addToWordleQueue, removeFromWordleQueue,
   createDirectWordleRoom,
   getWordleRoom, deleteWordleRoom, getWordleRoomBySocket,
   startWordleGame, handleWordleGuess,
+  scheduleBotWordleMove,
   evaluateGuess, MAX_GUESSES, WORD_LENGTH,
 };

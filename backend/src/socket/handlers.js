@@ -95,6 +95,7 @@ const {
   createDirectWordleRoom,
   getWordleRoom, deleteWordleRoom, getWordleRoomBySocket,
   startWordleGame, handleWordleGuess,
+  scheduleBotWordleMove,
 } = require('../services/wordleEngine');
 const {
   addToCoinFlipQueue, removeFromCoinFlipQueue,
@@ -1866,6 +1867,44 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     socket.on('wordle_guess', ({ roomId, guess }) => {
       if (!authenticatedUser) return;
       handleWordleGuess(io, supabase, roomId, socket.id, guess || '');
+    });
+
+    socket.on('play_scrabble_vs_bot', async ({ entryFee = 0, currency = 'coins' } = {}) => {
+      if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      socket._startingGame = 'scrabble';
+      try {
+        if (currency !== 'diamonds') entryFee = 0; // bot games free for coins
+        const { data: profile } = await supabase.from('profiles').select('elo,username,c_coins,diamonds').eq('id', authenticatedUser.userId).single();
+        if (entryFee > 0) {
+          try {
+            if (currency === 'diamonds') await deductDiamonds(supabase, authenticatedUser.userId, Math.floor(entryFee));
+            else await deductCoins(supabase, authenticatedUser.userId, parseFloat(entryFee));
+          } catch (e) { return socket.emit('error', { message: e.message || 'Insufficient balance' }); }
+        }
+        const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+        const { v4: uuid } = require('uuid');
+        const botSocketId = 'bot_wordle_' + uuid();
+        const bot = { socketId: botSocketId, userId: botSocketId, username: 'Duely Bot', elo: 1000, entryFee, currency, isBot: true };
+        const { roomId } = createDirectWordleRoom(player, bot);
+        const room = getWordleRoom(roomId);
+        if (room) room.feesDeducted = true;
+        socket.join(roomId);
+        socket.emit('scrabble_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo }, entryFee, vsBot: true });
+        socket.emit('scrabble_countdown', { count: 3 });
+        await new Promise(r => setTimeout(r, 1000));
+        if (!getWordleRoom(roomId)) return;
+        socket.emit('scrabble_countdown', { count: 2 });
+        await new Promise(r => setTimeout(r, 1000));
+        if (!getWordleRoom(roomId)) return;
+        socket.emit('scrabble_countdown', { count: 1 });
+        await new Promise(r => setTimeout(r, 1000));
+        if (!getWordleRoom(roomId)) return;
+        startWordleGame(io, supabase, roomId);
+        // Bot starts guessing after a short pause
+        setTimeout(() => scheduleBotWordleMove(io, supabase, roomId, botSocketId), 500);
+      } finally {
+        socket._startingGame = null;
+      }
     });
 
     // ════════════════════════════════════════════════════════════════

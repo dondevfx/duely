@@ -267,6 +267,22 @@ export default function WordleGame() {
     setStatusMsg('Finding an opponent…');
   }
 
+  function playVsBot() {
+    if (!authenticated) { doAuth(); return; }
+    lastSettingsRef.current = { entryFee, currency: betCurrency };
+    socket.emit('play_scrabble_vs_bot', { entryFee, currency: betCurrency });
+    setPhase('queue');
+    setStatusMsg('Starting bot match…');
+  }
+
+  function playVsBotFree() {
+    if (!authenticated) { doAuth(); return; }
+    lastSettingsRef.current = { entryFee: 0, currency: 'coins' };
+    socket.emit('play_scrabble_vs_bot', { entryFee: 0, currency: 'coins' });
+    setPhase('queue');
+    setStatusMsg('Starting bot match…');
+  }
+
   function leaveQueue() {
     socket.emit('leave_scrabble_queue');
     setPhase('lobby');
@@ -389,6 +405,9 @@ export default function WordleGame() {
           balance={balance}
           authenticated={authenticated} doAuth={doAuth}
           onQueue={joinQueue}
+          onBot={playVsBot}
+          onBotFree={playVsBotFree}
+          botLabel="🎮 Play Free vs Bot"
           onCreatePrivate={createPrivate}
           onJoinPrivate={joinPrivate}
           statusMsg={statusMsg}
