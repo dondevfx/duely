@@ -165,13 +165,11 @@ export default function Navbar() {
                       <span className="text-sm font-black text-white font-mono">
                         {(profile.diamonds ?? 0).toLocaleString()}
                       </span>
-                      <span className="text-xs text-muted group-hover:text-accent transition-colors">Diamonds</span>
                     </>
                   ) : (
                     <>
                       <CoinIcon size="1.1em" />
-                      <span className="text-base font-black text-white font-mono">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</span>
-                      <span className="text-xs text-muted group-hover:text-accent transition-colors">Coins</span>
+                      <span className="text-sm font-black text-white font-mono">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</span>
                     </>
                   )}
                   <span className="text-muted text-xs">▾</span>
