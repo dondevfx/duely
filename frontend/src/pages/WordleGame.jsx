@@ -527,15 +527,8 @@ export default function WordleGame() {
           gameLabel="🔤 Word VS"
           extraRows={[
             { label: 'The Word', value: result.word },
-            {
-              label: 'Grids',
-              value: (
-                <div className="flex gap-5 justify-center flex-wrap pt-1">
-                  <MiniGrid guesses={result.myGuesses || []} label="You" />
-                  <MiniGrid guesses={result.opponentGuesses || []} label={result.opponentUsername || 'Opponent'} />
-                </div>
-              ),
-            },
+            { label: 'Your guesses', value: `${(result.myGuesses || []).length} / ${MAX_GUESSES}` },
+            { label: 'Their guesses', value: `${(result.opponentGuesses || []).length} / ${MAX_GUESSES}` },
           ]}
           onPlayAgain={playAgain}
           onBackToLobby={backToLobby}

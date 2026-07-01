@@ -297,12 +297,7 @@ export default function GameLobby({
 
         {/* Free play — always available */}
         {onBotFree && (() => {
-          const isSoloEndless = botLabel && botLabel.includes('Endless');
-          const label = isSoloEndless
-            ? botLabel
-            : isDiamonds
-              ? (botLabel && !botLabel.toLowerCase().includes('bet') ? botLabel : '🎮 Play Free vs Bot')
-              : '🎮 Play Free vs Bot';
+          const label = botLabel || '🎮 Play Free vs Bot';
           return (
             <GlowButton
               onClick={session ? onBotFree : () => navigate('/login')}
