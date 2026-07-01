@@ -176,23 +176,23 @@ export default function Navbar() {
                 </button>
 
                 {dropdownOpen && (
-                  <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-surface border border-border rounded-xl shadow-glow-lg w-52 overflow-hidden z-50">
+                  <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-surface border border-border rounded-xl shadow-glow-lg w-64 overflow-hidden z-50">
                     <div className="p-1">
                       <button onClick={() => { setDisplayCurrency('coins'); setDropdownOpen(false); }}
-                        className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm transition-all ${!isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
-                        <div className="flex items-center gap-2">
-                          <CoinIcon size="1em" />
-                          <span className="font-medium">Coins</span>
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all ${!isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
+                        <CoinIcon size="1em" />
+                        <div className="flex flex-col items-start min-w-0">
+                          <span className="font-medium text-xs">Coins</span>
+                          <span className="font-mono font-bold text-white text-sm leading-tight">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</span>
                         </div>
-                        <span className="font-mono font-bold text-white">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</span>
                       </button>
                       <button onClick={() => { setDisplayCurrency('diamonds'); setDropdownOpen(false); }}
-                        className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm transition-all ${isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
-                        <div className="flex items-center gap-2">
-                          <span className="relative -top-px">💎</span>
-                          <span className="font-medium">Diamonds</span>
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all ${isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
+                        <span className="relative -top-px">💎</span>
+                        <div className="flex flex-col items-start min-w-0">
+                          <span className="font-medium text-xs">Diamonds</span>
+                          <span className="font-mono font-bold text-white text-sm leading-tight">{(profile.diamonds ?? 0).toLocaleString()}</span>
                         </div>
-                        <span className="font-mono font-bold text-white">{(profile.diamonds ?? 0).toLocaleString()}</span>
                       </button>
                     </div>
                     <div className="border-t border-border p-2">
@@ -349,14 +349,20 @@ export default function Navbar() {
                   <div className="absolute top-full mt-2 right-0 bg-surface border border-border rounded-xl shadow-glow-lg z-50 overflow-hidden" style={{ minWidth: 190 }}>
                     <div className="p-1">
                       <button onClick={() => { setDisplayCurrency('coins'); setMobileCurrencyOpen(false); }}
-                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs transition-all ${!isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
-                        <div className="flex items-center gap-2"><CoinIcon size="1em" /><span className="font-medium">Coins</span></div>
-                        <span className="font-mono font-bold text-white">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</span>
+                        className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs transition-all ${!isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
+                        <CoinIcon size="1em" />
+                        <div className="flex flex-col items-start min-w-0">
+                          <span className="font-medium">Coins</span>
+                          <span className="font-mono font-bold text-white leading-tight">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</span>
+                        </div>
                       </button>
                       <button onClick={() => { setDisplayCurrency('diamonds'); setMobileCurrencyOpen(false); }}
-                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs transition-all ${isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
-                        <div className="flex items-center gap-2"><span>💎</span><span className="font-medium">Diamonds</span></div>
-                        <span className="font-mono font-bold text-white">{(profile.diamonds ?? 0).toLocaleString()}</span>
+                        className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs transition-all ${isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
+                        <span>💎</span>
+                        <div className="flex flex-col items-start min-w-0">
+                          <span className="font-medium">Diamonds</span>
+                          <span className="font-mono font-bold text-white leading-tight">{(profile.diamonds ?? 0).toLocaleString()}</span>
+                        </div>
                       </button>
                     </div>
                     <div className="border-t border-border p-1.5">
