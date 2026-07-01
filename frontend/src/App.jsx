@@ -41,6 +41,7 @@ import Transactions from './pages/Transactions';
 import Rewards from './pages/Rewards';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import ResetPassword from './pages/ResetPassword';
 import ToS from './pages/ToS';
 import Admin from './pages/Admin';
 import SpectateView from './pages/SpectateView';
@@ -79,6 +80,16 @@ function Shell() {
       navigate('/login', { replace: true });
     }
   }, [mfaPending, session, loading, navigate]);
+
+  // Intercept Supabase password-recovery links on any page and send them
+  // to /reset-password where the token is consumed. detectSessionInUrl is
+  // disabled on the supabase client so we must handle this ourselves.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    if (params.get('type') === 'recovery' && params.get('access_token')) {
+      navigate('/reset-password' + window.location.hash, { replace: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   function handleChatToggle(next) {
@@ -120,6 +131,7 @@ function Shell() {
           <Route path="/game/random"        element={<Navigate to="/game/quick-match" replace />} />
           <Route path="/transactions"       element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
           <Route path="/rewards"            element={<Rewards />} />
+          <Route path="/reset-password"      element={<ResetPassword />} />
           <Route path="/tos"                element={<ToS />} />
           <Route path="/admin"              element={<ProtectedRoute><Admin /></ProtectedRoute>} />
           <Route path="*"                   element={<Navigate to="/" replace />} />

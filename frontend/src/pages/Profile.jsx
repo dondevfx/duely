@@ -1219,7 +1219,7 @@ export default function Profile() {
     const email = session?.user?.email;
     if (!email) return;
     await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + '/profile',
+      redirectTo: window.location.origin + '/reset-password',
     });
     setResetMsg('Password reset email sent — check your inbox.');
   }
