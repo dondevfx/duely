@@ -5,19 +5,30 @@ import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import GameLobby, { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
 import GlowButton from '../components/GlowButton';
+import ResultScreen from '../components/ResultScreen';
 import CoinIcon from '../components/CoinIcon';
 
 const MAX_GUESSES = 6;
 const WORD_LENGTH = 5;
 
-// ── Duely brand colours ──────────────────────────────────────────────────────
-const C = {
+// ── Colours ──────────────────────────────────────────────────────────────────
+const CLR = {
   correct: '#22c55e',
   present: '#f59e0b',
   absent:  '#2d3748',
-  empty:   'transparent',
-  border:  { empty: 'rgba(255,255,255,0.15)', active: 'var(--color-primary)', correct: '#22c55e', present: '#f59e0b', absent: '#374151' },
-  key:     { default: '#374151', correct: '#16a34a', present: '#b45309', absent: '#1f2937' },
+  border:  {
+    empty:   'rgba(255,255,255,0.15)',
+    active:  '#1E90FF',
+    correct: '#22c55e',
+    present: '#f59e0b',
+    absent:  '#374151',
+  },
+  key: {
+    default: '#374151',
+    correct: '#16a34a',
+    present: '#b45309',
+    absent:  '#1f2937',
+  },
 };
 
 const WORDLE_CSS = `
@@ -29,7 +40,7 @@ const WORDLE_CSS = `
 }
 @keyframes wdl-pop {
   0%   { transform: scale(1); }
-  50%  { transform: scale(1.12); }
+  50%  { transform: scale(1.1); }
   100% { transform: scale(1); }
 }
 @keyframes wdl-shake {
@@ -41,29 +52,113 @@ const WORDLE_CSS = `
 }
 @keyframes wdl-bounce {
   0%,100% { transform: translateY(0); }
-  40%     { transform: translateY(-12px); }
-  70%     { transform: translateY(-6px); }
+  40%     { transform: translateY(-10px); }
+  70%     { transform: translateY(-4px); }
 }
-@keyframes wdl-pulse-border {
-  0%,100% { box-shadow: 0 0 0 0 rgba(30,144,255,0.25); }
-  50%     { box-shadow: 0 0 0 4px rgba(30,144,255,0.25); }
-}
-.wdl-tile { transition: background 0s, border-color 0.1s; perspective: 250px; }
+.wdl-tile { perspective: 250px; }
 .wdl-tile.flip { animation: wdl-flip 0.5s ease forwards; }
-.wdl-tile.bounce { animation: wdl-bounce 0.6s ease; }
-.wdl-row.shake { animation: wdl-shake 0.4s ease; }
-.wdl-active-row .wdl-tile:not(.flip):not(.revealed) {
-  animation: wdl-pulse-border 2s ease-in-out infinite;
-}
-.wdl-key { transition: background 0.2s, color 0.2s; user-select: none; -webkit-tap-highlight-color: transparent; }
-.wdl-key:active { opacity: 0.75; transform: scale(0.96); }
+.wdl-tile.bounce { animation: wdl-bounce 0.5s ease; }
+.wdl-tile.pop { animation: wdl-pop 0.08s ease; }
+.wdl-row.shake { animation: wdl-shake 0.35s ease; }
+.wdl-key { user-select: none; -webkit-tap-highlight-color: transparent; transition: background 0.15s, color 0.15s; }
+.wdl-key:active { opacity: 0.7; transform: scale(0.95); }
 `;
 
-const ROWS_KB = [
+const KB_ROWS = [
   ['Q','W','E','R','T','Y','U','I','O','P'],
   ['A','S','D','F','G','H','J','K','L'],
   ['ENTER','Z','X','C','V','B','N','M','⌫'],
 ];
+
+// ── Solo word list (client-side only — no server needed) ─────────────────────
+const SOLO_WORDS = [
+  'ABOUT','ABOVE','ABUSE','ACUTE','AFTER','AGAIN','ALARM','ALIVE','ALLOW','ALONE',
+  'ALTER','ANGEL','ANGRY','APPLE','ARENA','ARISE','ARRAY','ATTIC','AVOID','AWAKE',
+  'AWARD','BADGE','BEACH','BEARD','BEAST','BLACK','BLADE','BLAST','BLAZE','BLEED',
+  'BLEND','BLIND','BLOCK','BLOOD','BLOOM','BLUNT','BOARD','BOOST','BRAVE','BREAD',
+  'BREAK','BRIDE','BRING','BROWN','BRUSH','BUILD','BURST','CANDY','CAUSE','CHAOS',
+  'CHARM','CHASE','CHECK','CHESS','CHEST','CHIEF','CHILD','CIVIL','CLASH','CLASS',
+  'CLEAN','CLEAR','CLICK','CLIFF','CLIMB','CLOCK','CLOSE','CLOUD','COACH','COLOR',
+  'COUNT','COURT','COVER','CRACK','CRANE','CRASH','CRAZY','CREAM','CRIME','CROSS',
+  'CROWD','CROWN','CRUEL','CRUSH','CYCLE','DANCE','DEATH','DEMON','DEPTH','DIRTY',
+  'DODGE','DOUBT','DRAFT','DRAIN','DREAM','DRINK','DRIVE','DRUNK','EARLY','EARTH',
+  'EIGHT','ELITE','EMPTY','ENJOY','EQUAL','ERROR','EXACT','EXIST','EXTRA','FAITH',
+  'FALSE','FANCY','FAULT','FEAST','FIBER','FIGHT','FINAL','FLAME','FLASH','FLOAT',
+  'FLOOD','FOCUS','FORCE','FOUND','FRAME','FRAUD','FRESH','FROST','FULLY','FUNNY',
+  'GIANT','GLASS','GLEAM','GLOBE','GOING','GRACE','GRAND','GRAPE','GRASS','GRAVE',
+  'GREAT','GREED','GRIND','GROSS','GROUP','GROVE','GUARD','GUESS','GUIDE','HAPPY',
+  'HARSH','HEART','HEAVY','HEIST','HONEY','HONOR','HORSE','HOTEL','HOUSE','HUMAN',
+  'HUMOR','IDEAL','IMAGE','INNER','IVORY','JEWEL','JUDGE','JUICE','JUMBO','LARGE',
+  'LASER','LAUGH','LAYER','LEARN','LEGAL','LEMON','LEVEL','LIGHT','LIMIT','LOCAL',
+  'LOGIC','LUCKY','MAGIC','MAJOR','MAPLE','MARCH','MATCH','MERCY','METAL','MODEL',
+  'MONEY','MONTH','MORAL','MOUNT','MOUSE','MOUTH','MUSIC','NERVE','NEVER','NIGHT',
+  'NOBLE','NOISE','NORTH','NOVEL','NURSE','ORDER','OUTER','OZONE','PAINT','PANIC',
+  'PAPER','PARTY','PAUSE','PEACH','PEARL','PHONE','PHOTO','PILOT','PITCH','PLACE',
+  'PLAIN','PLANE','PLANT','POLAR','PORCH','POWER','PRESS','PRICE','PRIDE','PRIZE',
+  'PROVE','PULSE','PUNCH','QUEEN','QUICK','QUIET','QUOTE','RADAR','RADIO','RAISE',
+  'RANGE','RAPID','REACH','READY','REALM','RIDER','RISKY','RIVER','ROBOT','ROUGH',
+  'ROUND','ROYAL','RULER','SADLY','SAINT','SALAD','SAUCE','SCALE','SCENE','SCORE',
+  'SCOUT','SENSE','SEVEN','SHARE','SHARK','SHARP','SHELL','SHIFT','SHINE','SHIRT',
+  'SHOOT','SHORT','SHOUT','SIGHT','SINCE','SKILL','SKULL','SLAVE','SLEEP','SLICE',
+  'SLIDE','SLOPE','SMART','SMELL','SMOKE','SNAKE','SOLAR','SOLVE','SPACE','SPARK',
+  'SPEAK','SPEND','SPICE','SPINE','SPLIT','SPOON','SPORT','STAIN','STAND','STARE',
+  'START','STEAL','STEAM','STEEL','STICK','STILL','STOCK','STOOD','STORE','STORM',
+  'STORY','STUDY','STYLE','SUGAR','SUNNY','SUPER','SWEAR','SWEET','SWIFT','SWING',
+  'TABLE','TASTE','TEETH','TEMPO','THICK','THORN','THREE','THUMB','TIGER','TIRED',
+  'TITLE','TOAST','TOPIC','TOTAL','TOUCH','TOUGH','TOWER','TOXIC','TRACE','TRACK',
+  'TRADE','TRAIL','TRAIN','TRAIT','TRASH','TRICK','TROOP','TRUCK','TRULY','TRUST',
+  'TRUTH','TWICE','TWIST','UNCLE','UNDER','UNION','UNTIL','UPPER','UPSET','URBAN',
+  'USUAL','VALID','VALUE','VIRAL','VIRUS','VISIT','VOICE','WATCH','WATER','WEARY',
+  'WEIRD','WHALE','WHEAT','WHEEL','WHERE','WHILE','WHITE','WHOLE','WITCH','WOMAN',
+  'WORLD','WORRY','WORSE','WORTH','WRECK','WRONG','YACHT','YIELD','YOUNG','YOUTH',
+];
+
+function getSoloWord() {
+  return SOLO_WORDS[Math.floor(Math.random() * SOLO_WORDS.length)];
+}
+
+function evalGuessLocal(secret, guess) {
+  const result = Array(WORD_LENGTH).fill('absent');
+  const sec = secret.split('');
+  const gue = guess.split('');
+  for (let i = 0; i < WORD_LENGTH; i++) {
+    if (gue[i] === sec[i]) { result[i] = 'correct'; sec[i] = null; gue[i] = null; }
+  }
+  for (let i = 0; i < WORD_LENGTH; i++) {
+    if (gue[i] === null) continue;
+    const j = sec.indexOf(gue[i]);
+    if (j !== -1) { result[i] = 'present'; sec[j] = null; }
+  }
+  return result.map((status, i) => ({ letter: guess[i], status }));
+}
+
+// ── Mini guess grid for result screen extra rows ──────────────────────────────
+function MiniGrid({ guesses, label }) {
+  return (
+    <div className="flex flex-col gap-1 items-center">
+      <p className="text-xs text-muted font-semibold mb-0.5 uppercase tracking-wide">{label}</p>
+      {Array(MAX_GUESSES).fill(null).map((_, r) => {
+        const row = guesses[r] || [];
+        return (
+          <div key={r} className="flex gap-1">
+            {Array(WORD_LENGTH).fill(null).map((__, c) => {
+              const cell = row[c];
+              return (
+                <div key={c} className="w-7 h-7 rounded flex items-center justify-center text-[11px] font-black text-white"
+                  style={{
+                    background: cell ? CLR[cell.status] : 'transparent',
+                    border: `1.5px solid ${cell ? (CLR.border[cell.status] || '#374151') : 'rgba(255,255,255,0.1)'}`,
+                  }}>
+                  {cell?.letter || ''}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function WordleGame() {
   const navigate   = useNavigate();
@@ -72,10 +167,10 @@ export default function WordleGame() {
   const { profile } = useAuth();
   const { displayCurrency: betCurrency, setDisplayCurrency: setBetCurrency } = useCurrency();
 
-  const socketRef  = useRef(socket);
+  const socketRef = useRef(socket);
   useEffect(() => { socketRef.current = socket; }, [socket]);
 
-  // ── Shared phase + bet state ──────────────────────────────────────────────
+  // ── Phase + bet state ─────────────────────────────────────────────────────
   const [phase,       setPhase]       = useState('lobby');
   const [entryFee,    setEntryFee]    = useState(() => location.state?.entryFee ?? (betCurrency === 'diamonds' ? DIAMOND_FEES[0] : COIN_FEES[0]));
   const [roomId,      setRoomId]      = useState(null);
@@ -83,30 +178,35 @@ export default function WordleGame() {
   const [countdown,   setCountdown]   = useState(null);
   const [privateCode, setPrivateCode] = useState('');
   const [statusMsg,   setStatusMsg]   = useState('');
-
+  const lastModeRef   = useRef('pvp'); // 'pvp' | 'solo' | 'private'
   const lastSettingsRef = useRef({ entryFee: 0, currency: betCurrency });
+  const eloBeforeRef  = useRef(profile?.elo ?? 1000);
 
-  const balance = betCurrency === 'diamonds' ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const isDiamonds = betCurrency === 'diamonds';
+  const balance    = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
 
   useEffect(() => {
     if (location.state?.betCurrency) setBetCurrency(location.state.betCurrency);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Active game state ──────────────────────────────────────────────────────
-  const [guesses,   setGuesses]   = useState([]);
+  // ── Game state ────────────────────────────────────────────────────────────
+  const [guesses,    setGuesses]    = useState([]);
   const [currentRow, setCurrentRow] = useState([]);
-  const [letterMap, setLetterMap] = useState({});
-  const [oppCount,  setOppCount]  = useState(0);
-  const [shakeRow,  setShakeRow]  = useState(false);
-  const [flipRow,   setFlipRow]   = useState(null);
-  const [bounceRow, setBounceRow] = useState(null);
-  const [errorMsg,  setErrorMsg]  = useState('');
-  const [oppFailed, setOppFailed] = useState(false);
-  const [failSecs,  setFailSecs]  = useState(null);
-  const [myDone,    setMyDone]    = useState(false);
-  const [result,    setResult]    = useState(null);
+  const [letterMap,  setLetterMap]  = useState({});
+  const [oppCount,   setOppCount]   = useState(0);
+  const [shakeRow,   setShakeRow]   = useState(false);
+  const [flipRow,    setFlipRow]    = useState(null);
+  const [bounceRow,  setBounceRow]  = useState(null);
+  const [errorMsg,   setErrorMsg]   = useState('');
+  const [oppFailed,  setOppFailed]  = useState(false);
+  const [failSecs,   setFailSecs]   = useState(null);
+  const [myDone,     setMyDone]     = useState(false);
+  const [result,     setResult]     = useState(null);
   const failIntervalRef = useRef(null);
+
+  // ── Solo-mode state ────────────────────────────────────────────────────────
+  const [soloWord,   setSoloWord]   = useState('');
+  const [soloDone,   setSoloDone]   = useState(false);
 
   // ── Forfeit on unmount ────────────────────────────────────────────────────
   useEffect(() => {
@@ -115,7 +215,7 @@ export default function WordleGame() {
     };
   }, []);
 
-  // ── Socket event listeners ────────────────────────────────────────────────
+  // ── Socket events ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!socket) return;
 
@@ -124,6 +224,7 @@ export default function WordleGame() {
       setOpponent(opp);
       setEntryFee(fee || 0);
       if (cur) setBetCurrency(cur);
+      eloBeforeRef.current = profile?.elo ?? 1000;
     });
 
     socket.on('scrabble_countdown', ({ count }) => {
@@ -138,57 +239,21 @@ export default function WordleGame() {
 
     socket.on('wordle_start', () => {
       setCountdown(null);
-      setGuesses([]);
-      setCurrentRow([]);
-      setLetterMap({});
-      setOppCount(0);
-      setMyDone(false);
-      setOppFailed(false);
-      setFailSecs(null);
-      setResult(null);
+      resetGameState();
       setPhase('playing');
     });
 
     socket.on('wordle_guess_result', ({ feedback, guessNumber, solved }) => {
-      const rowIndex = guessNumber - 1;
-      setGuesses(prev => { const n = [...prev]; n[rowIndex] = feedback; return n; });
-      setFlipRow(rowIndex);
-      setTimeout(() => {
-        setFlipRow(null);
-        setLetterMap(prev => {
-          const next = { ...prev };
-          const RANK = { correct: 2, present: 1, absent: 0 };
-          for (const { letter, status } of feedback) {
-            if ((RANK[status] ?? -1) > (RANK[next[letter]] ?? -1)) next[letter] = status;
-          }
-          return next;
-        });
-        if (solved) {
-          setBounceRow(rowIndex);
-          setTimeout(() => setBounceRow(null), 700);
-          setMyDone(true);
-        }
-      }, WORD_LENGTH * 300 + 50);
-      setCurrentRow([]);
+      revealRow(guessNumber - 1, feedback, solved);
     });
 
-    socket.on('wordle_error', ({ error }) => {
-      flashError(error);
-      triggerShake();
-    });
+    socket.on('wordle_error', ({ error }) => { flashError(error); triggerShake(); });
 
     socket.on('wordle_opponent_progress', ({ guessCount }) => setOppCount(guessCount));
 
     socket.on('wordle_opponent_failed', ({ timeLimit }) => {
       setOppFailed(true);
-      let secs = timeLimit;
-      setFailSecs(secs);
-      if (failIntervalRef.current) clearInterval(failIntervalRef.current);
-      failIntervalRef.current = setInterval(() => {
-        secs--;
-        setFailSecs(secs);
-        if (secs <= 0) { clearInterval(failIntervalRef.current); failIntervalRef.current = null; }
-      }, 1000);
+      startFailTimer(timeLimit);
     });
 
     socket.on('wordle_result', (res) => {
@@ -197,202 +262,289 @@ export default function WordleGame() {
       setPhase('result');
     });
 
-    socket.on('private_room_created', ({ code }) => {
-      setPrivateCode(code);
-      setPhase('private_waiting');
-    });
-
-    socket.on('private_room_error', ({ message }) => {
-      setStatusMsg(message || 'Private room error');
-      setPhase('lobby');
-    });
-
+    socket.on('private_room_created', ({ code }) => { setPrivateCode(code); setPhase('private_waiting'); });
+    socket.on('private_room_error',   ({ message }) => { setStatusMsg(message || 'Room error'); setPhase('lobby'); });
+    socket.on('scrabble_queue_left',  () => { setPhase('lobby'); setStatusMsg(''); });
     socket.on('opponent_disconnected', () => {
       if (failIntervalRef.current) { clearInterval(failIntervalRef.current); failIntervalRef.current = null; }
-      setStatusMsg('Opponent disconnected — you win!');
     });
 
-    socket.on('scrabble_queue_left', () => { setPhase('lobby'); setStatusMsg(''); });
-
     return () => {
-      socket.off('scrabble_match_found');
-      socket.off('scrabble_countdown');
-      socket.off('match_cancelled');
-      socket.off('wordle_start');
-      socket.off('wordle_guess_result');
-      socket.off('wordle_error');
-      socket.off('wordle_opponent_progress');
-      socket.off('wordle_opponent_failed');
-      socket.off('wordle_result');
-      socket.off('private_room_created');
-      socket.off('private_room_error');
-      socket.off('opponent_disconnected');
-      socket.off('scrabble_queue_left');
+      ['scrabble_match_found','scrabble_countdown','match_cancelled','wordle_start',
+       'wordle_guess_result','wordle_error','wordle_opponent_progress','wordle_opponent_failed',
+       'wordle_result','private_room_created','private_room_error','scrabble_queue_left',
+       'opponent_disconnected'].forEach(e => socket.off(e));
     };
   }, [socket]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Auto-queue from quick-match ────────────────────────────────────────────
+  // ── Auto-queue ────────────────────────────────────────────────────────────
   const _autoFired = useRef(false);
   useEffect(() => {
     if (!location.state?.autoQueue || _autoFired.current || !authenticated || !socket) return;
     _autoFired.current = true;
     const fee = location.state.entryFee ?? 0;
     const cur = location.state.currency ?? 'coins';
-    setEntryFee(fee);
-    setBetCurrency(cur);
+    setEntryFee(fee); setBetCurrency(cur);
     lastSettingsRef.current = { entryFee: fee, currency: cur };
+    lastModeRef.current = 'pvp';
     socket.emit('join_scrabble_queue', { entryFee: fee, currency: cur });
     setPhase('queue');
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, authenticated]);
+  }, [socket, authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Error flash ───────────────────────────────────────────────────────────
-  const errorTimeoutRef = useRef(null);
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function resetGameState() {
+    setGuesses([]); setCurrentRow([]); setLetterMap({});
+    setOppCount(0); setMyDone(false); setOppFailed(false);
+    setFailSecs(null); setResult(null); setSoloDone(false);
+    if (failIntervalRef.current) { clearInterval(failIntervalRef.current); failIntervalRef.current = null; }
+  }
+
+  const errorTORef = useRef(null);
   function flashError(msg) {
     setErrorMsg(msg);
-    if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
-    errorTimeoutRef.current = setTimeout(() => setErrorMsg(''), 1800);
+    if (errorTORef.current) clearTimeout(errorTORef.current);
+    errorTORef.current = setTimeout(() => setErrorMsg(''), 1800);
   }
+
   function triggerShake() {
     setShakeRow(true);
-    setTimeout(() => setShakeRow(false), 450);
+    setTimeout(() => setShakeRow(false), 400);
   }
 
-  // ── Queue / private actions ───────────────────────────────────────────────
+  function startFailTimer(secs) {
+    if (failIntervalRef.current) clearInterval(failIntervalRef.current);
+    let s = secs;
+    setFailSecs(s);
+    failIntervalRef.current = setInterval(() => {
+      s--;
+      setFailSecs(s);
+      if (s <= 0) { clearInterval(failIntervalRef.current); failIntervalRef.current = null; }
+    }, 1000);
+  }
+
+  function revealRow(rowIndex, feedback, solved) {
+    setGuesses(prev => { const n = [...prev]; n[rowIndex] = feedback; return n; });
+    setFlipRow(rowIndex);
+    setTimeout(() => {
+      setFlipRow(null);
+      setLetterMap(prev => {
+        const RANK = { correct: 2, present: 1, absent: 0 };
+        const next = { ...prev };
+        for (const { letter, status } of feedback) {
+          if ((RANK[status] ?? -1) > (RANK[next[letter]] ?? -1)) next[letter] = status;
+        }
+        return next;
+      });
+      if (solved) { setBounceRow(rowIndex); setTimeout(() => setBounceRow(null), 600); }
+    }, WORD_LENGTH * 300 + 50);
+    setCurrentRow([]);
+  }
+
+  // ── Queue / lobby actions ─────────────────────────────────────────────────
   function joinQueue() {
     if (!authenticated) { doAuth(); return; }
+    lastModeRef.current = 'pvp';
     lastSettingsRef.current = { entryFee, currency: betCurrency };
+    eloBeforeRef.current = profile?.elo ?? 1000;
     socket.emit('join_scrabble_queue', { entryFee, currency: betCurrency });
-    setPhase('queue');
-    setStatusMsg('Finding an opponent…');
+    setPhase('queue'); setStatusMsg('Finding an opponent…');
   }
 
-  function playVsBot() {
+  function startSolo() {
     if (!authenticated) { doAuth(); return; }
-    lastSettingsRef.current = { entryFee, currency: betCurrency };
-    socket.emit('play_scrabble_vs_bot', { entryFee, currency: betCurrency });
-    setPhase('queue');
-    setStatusMsg('Starting bot match…');
-  }
-
-  function playVsBotFree() {
-    if (!authenticated) { doAuth(); return; }
-    lastSettingsRef.current = { entryFee: 0, currency: 'coins' };
-    socket.emit('play_scrabble_vs_bot', { entryFee: 0, currency: 'coins' });
-    setPhase('queue');
-    setStatusMsg('Starting bot match…');
+    lastModeRef.current = 'solo';
+    resetGameState();
+    const word = getSoloWord();
+    setSoloWord(word);
+    setPhase('playing');
   }
 
   function leaveQueue() {
     socket.emit('leave_scrabble_queue');
-    setPhase('lobby');
-    setStatusMsg('');
+    setPhase('lobby'); setStatusMsg('');
   }
 
   function createPrivate(fee, cur) {
     if (!authenticated) { doAuth(); return; }
+    lastModeRef.current = 'private';
     socket.emit('create_private_room', { gameType: 'scrabble', entryFee: fee, currency: cur });
   }
 
   function joinPrivate(code) {
     if (!authenticated) { doAuth(); return; }
+    lastModeRef.current = 'pvp';
     socket.emit('join_private_room', { gameType: 'scrabble', code });
   }
 
   function cancelPrivate() {
     socket.emit('cancel_private_room');
-    setPhase('lobby');
-    setPrivateCode('');
-    setStatusMsg('');
+    setPhase('lobby'); setPrivateCode(''); setStatusMsg('');
   }
 
   function backToLobby() {
-    setPhase('lobby');
-    setResult(null);
-    setGuesses([]);
-    setCurrentRow([]);
-    setLetterMap({});
-    setStatusMsg('');
-    setPrivateCode('');
+    resetGameState();
+    setPhase('lobby'); setResult(null);
+    setStatusMsg(''); setPrivateCode('');
   }
 
   function playAgain() {
-    const s = lastSettingsRef.current;
-    socket.emit('join_scrabble_queue', { entryFee: s.entryFee, currency: s.currency });
-    setPhase('queue');
-    setGuesses([]); setCurrentRow([]); setLetterMap({});
-    setMyDone(false); setOppFailed(false); setFailSecs(null); setResult(null);
-    setStatusMsg('Finding an opponent…');
+    resetGameState();
+    const mode = lastModeRef.current;
+    if (mode === 'solo') {
+      const word = getSoloWord();
+      setSoloWord(word);
+      setPhase('playing');
+    } else {
+      const s = lastSettingsRef.current;
+      eloBeforeRef.current = profile?.elo ?? 1000;
+      socket.emit('join_scrabble_queue', { entryFee: s.entryFee, currency: s.currency });
+      setPhase('queue'); setStatusMsg('Finding an opponent…');
+    }
   }
 
-  // ── Keyboard input (playing phase) ────────────────────────────────────────
+  // ── Keyboard input ────────────────────────────────────────────────────────
+  const isSolo   = lastModeRef.current === 'solo' && phase === 'playing';
+  const canType  = phase === 'playing' && !myDone && !soloDone;
+
   const handleKey = useCallback((key) => {
-    if (phase !== 'playing' || myDone) return;
+    if (!canType) return;
     if (key === 'ENTER' || key === 'Enter') {
       if (currentRow.length < WORD_LENGTH) { flashError('Not enough letters'); triggerShake(); return; }
-      socket.emit('wordle_guess', { roomId, guess: currentRow.join('') });
+      const guess = currentRow.join('');
+      if (isSolo) {
+        // Local solo evaluation
+        const feedback = evalGuessLocal(soloWord, guess);
+        const rowIdx   = guesses.length;
+        const solved   = feedback.every(c => c.status === 'correct');
+        revealRow(rowIdx, feedback, solved);
+        if (solved || rowIdx + 1 >= MAX_GUESSES) {
+          setTimeout(() => setSoloDone(true), WORD_LENGTH * 300 + 200);
+        }
+      } else {
+        socket.emit('wordle_guess', { roomId, guess });
+      }
     } else if (key === '⌫' || key === 'Backspace') {
       setCurrentRow(prev => prev.slice(0, -1));
     } else if (/^[A-Za-z]$/.test(key) && currentRow.length < WORD_LENGTH) {
       setCurrentRow(prev => [...prev, key.toUpperCase()]);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, myDone, currentRow, roomId, socket]);
+  }, [canType, currentRow, isSolo, soloWord, guesses, roomId, socket]);
 
   useEffect(() => {
-    const onKey = (e) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      handleKey(e.key);
-    };
+    const onKey = (e) => { if (!e.ctrlKey && !e.metaKey && !e.altKey) handleKey(e.key); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [handleKey]);
 
-  // ── Tile / key style helpers ──────────────────────────────────────────────
+  // ── Tile style ────────────────────────────────────────────────────────────
   function tileStyle(status, isCurrentRow, colIdx, isFlipping) {
     const revealed = !!status;
-    let bg = C.empty, border = C.border.empty, color = 'rgba(255,255,255,0.85)';
-    if (isFlipping) { bg = C[status] || C.absent; border = C[status] || C.absent; color = '#fff'; }
-    else if (revealed) { bg = C[status]; border = C.border[status] || C.absent; color = '#fff'; }
-    else if (isCurrentRow) { border = C.border.active; }
+    let bg = 'transparent', border = CLR.border.empty, color = 'rgba(255,255,255,0.9)';
+    if (isFlipping) { bg = CLR[status] || CLR.absent; border = bg; color = '#fff'; }
+    else if (revealed) { bg = CLR[status]; border = CLR.border[status] || CLR.border.absent; color = '#fff'; }
+    else if (isCurrentRow) border = CLR.border.active;
     const glow = revealed
-      ? status === 'correct' ? '0 0 14px rgba(34,197,94,0.45)'
-      : status === 'present' ? '0 0 14px rgba(245,158,11,0.35)' : 'none'
+      ? status === 'correct' ? '0 0 12px rgba(34,197,94,0.5)'
+      : status === 'present' ? '0 0 12px rgba(245,158,11,0.4)' : 'none'
       : 'none';
     return {
       background: bg, border: `2px solid ${border}`, color, boxShadow: glow,
       animationDelay: isFlipping ? `${colIdx * 300}ms` : '0ms',
-      animationDuration: isFlipping ? '500ms' : undefined,
     };
   }
 
   function keyStyle(letter) {
-    const status = letterMap[letter];
+    const s = letterMap[letter];
     return {
-      background: status ? C.key[status] : C.key.default,
-      color: status ? '#fff' : 'rgba(255,255,255,0.9)',
-      boxShadow: status === 'correct' ? '0 0 10px rgba(22,163,74,0.4)' : status === 'present' ? '0 0 10px rgba(180,83,9,0.4)' : 'none',
+      background: s ? CLR.key[s] : CLR.key.default,
+      color: s ? '#fff' : 'rgba(255,255,255,0.85)',
+      boxShadow: s === 'correct' ? '0 0 8px rgba(22,163,74,0.45)' : s === 'present' ? '0 0 8px rgba(180,83,9,0.4)' : 'none',
     };
   }
 
-  function gridRows() {
+  function buildGridRows() {
     const rows = [];
+    const submittedCount = guesses.length;
     for (let r = 0; r < MAX_GUESSES; r++) {
-      if (r < guesses.length) {
-        rows.push({ cells: guesses[r], type: 'submitted', idx: r });
-      } else if (r === guesses.length && phase === 'playing' && !myDone) {
+      if (r < submittedCount) {
+        rows.push({ cells: guesses[r], type: 'submitted' });
+      } else if (r === submittedCount && canType) {
         const cells = Array(WORD_LENGTH).fill(null).map((_, c) =>
-          c < currentRow.length ? { letter: currentRow[c], status: null } : { letter: '', status: null }
+          ({ letter: c < currentRow.length ? currentRow[c] : '', status: null })
         );
-        rows.push({ cells, type: 'current', idx: r });
+        rows.push({ cells, type: 'current' });
       } else {
-        rows.push({ cells: Array(WORD_LENGTH).fill({ letter: '', status: null }), type: 'future', idx: r });
+        rows.push({ cells: Array(WORD_LENGTH).fill({ letter: '', status: null }), type: 'future' });
       }
     }
     return rows;
   }
 
-  // ── Phase: lobby ─────────────────────────────────────────────────────────
+  // ── Solo done screen ──────────────────────────────────────────────────────
+  if (phase === 'playing' && soloDone) {
+    const solved = guesses.length > 0 && guesses[guesses.length - 1].every(c => c.status === 'correct');
+    return (
+      <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4 py-8 gap-5">
+        <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
+        <div className="text-center">
+          <div className="text-4xl mb-3">{solved ? '🏆' : '💀'}</div>
+          <h2 className="text-3xl font-black" style={{ color: solved ? CLR.correct : '#ef4444' }}>
+            {solved ? `Solved in ${guesses.length}!` : 'Better Luck Next Time'}
+          </h2>
+          <p className="text-muted text-sm mt-1">
+            The word was <span className="text-white font-black tracking-widest">{soloWord}</span>
+          </p>
+        </div>
+        <MiniGrid guesses={guesses} label="Your guesses" />
+        <div className="flex gap-3 flex-wrap justify-center mt-2">
+          <GlowButton variant="primary" onClick={playAgain}>Play Again</GlowButton>
+          <GlowButton variant="ghost" onClick={backToLobby}>Back to Lobby</GlowButton>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Result screen (PvP) ───────────────────────────────────────────────────
+  if (phase === 'result' && result) {
+    return (
+      <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-4 py-8">
+        <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
+        <ResultScreen
+          isWinner={result.iWon}
+          isDraw={result.isDraw}
+          winnerUsername={result.winnerUsername}
+          loserUsername={result.loserUsername}
+          newWinnerElo={result.newWinnerElo}
+          newLoserElo={result.newLoserElo}
+          eloBeforeRef={eloBeforeRef}
+          balanceChange={result.balanceChange}
+          currency={result.currency || betCurrency}
+          entryFee={result.entryFee ?? entryFee}
+          winnerStreak={result.winnerStreak ?? 0}
+          isFirstWin={result.isFirstWin ?? false}
+          profile={profile}
+          gameLabel="🔤 Word VS"
+          extraRows={[
+            { label: 'The Word', value: result.word },
+            {
+              label: 'Grids',
+              value: (
+                <div className="flex gap-5 justify-center flex-wrap pt-1">
+                  <MiniGrid guesses={result.myGuesses || []} label="You" />
+                  <MiniGrid guesses={result.opponentGuesses || []} label={result.opponentUsername || 'Opponent'} />
+                </div>
+              ),
+            },
+          ]}
+          onPlayAgain={playAgain}
+          onBackToLobby={backToLobby}
+        />
+      </div>
+    );
+  }
+
+  // ── Lobby ─────────────────────────────────────────────────────────────────
   if (phase === 'lobby') {
     return (
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4 py-8">
@@ -405,9 +557,8 @@ export default function WordleGame() {
           balance={balance}
           authenticated={authenticated} doAuth={doAuth}
           onQueue={joinQueue}
-          onBot={playVsBot}
-          onBotFree={playVsBotFree}
-          botLabel="🎮 Play Free vs Bot"
+          onBotFree={startSolo}
+          botLabel="🟩 Solo Practice"
           onCreatePrivate={createPrivate}
           onJoinPrivate={joinPrivate}
           statusMsg={statusMsg}
@@ -418,7 +569,7 @@ export default function WordleGame() {
     );
   }
 
-  // ── Phase: queue ─────────────────────────────────────────────────────────
+  // ── Queue ─────────────────────────────────────────────────────────────────
   if (phase === 'queue') {
     return (
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
@@ -432,7 +583,7 @@ export default function WordleGame() {
     );
   }
 
-  // ── Phase: private_waiting ────────────────────────────────────────────────
+  // ── Private waiting ───────────────────────────────────────────────────────
   if (phase === 'private_waiting') {
     return (
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
@@ -441,8 +592,10 @@ export default function WordleGame() {
           <div className="text-5xl mb-4">🔒</div>
           <h2 className="text-2xl font-black text-white mb-2">Private Room</h2>
           <p className="text-muted mb-4 text-sm">Share this code with a friend</p>
-          <div className="bg-surface border-2 border-primary rounded-2xl p-8 mb-6 inline-block min-w-[200px]" style={{ boxShadow: '0 0 20px rgba(30,144,255,0.2)' }}>
-            <div className="text-4xl font-black font-mono tracking-[0.25em] text-primary" style={{ textShadow: '0 0 20px rgba(30,144,255,0.5)' }}>
+          <div className="bg-surface border-2 border-primary rounded-2xl p-8 mb-6 inline-block min-w-[200px]"
+            style={{ boxShadow: '0 0 20px rgba(30,144,255,0.2)' }}>
+            <div className="text-4xl font-black font-mono tracking-[0.25em] text-primary"
+              style={{ textShadow: '0 0 20px rgba(30,144,255,0.5)' }}>
               {privateCode}
             </div>
           </div>
@@ -453,7 +606,7 @@ export default function WordleGame() {
     );
   }
 
-  // ── Phase: countdown ─────────────────────────────────────────────────────
+  // ── Countdown ─────────────────────────────────────────────────────────────
   if (phase === 'countdown') {
     return (
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
@@ -469,155 +622,117 @@ export default function WordleGame() {
     );
   }
 
-  // ── Phase: result ─────────────────────────────────────────────────────────
-  if (phase === 'result' && result) {
-    const won  = result.iWon;
-    const draw = result.isDraw;
-    const word = result.word;
-
-    function MiniGrid({ guesses: gs, label }) {
-      return (
-        <div className="flex flex-col gap-1 items-center">
-          <p className="text-xs text-muted font-medium mb-1">{label}</p>
-          {Array(MAX_GUESSES).fill(null).map((_, r) => {
-            const row = gs[r] || [];
-            return (
-              <div key={r} className="flex gap-1">
-                {Array(WORD_LENGTH).fill(null).map((__, c) => {
-                  const cell = row[c];
-                  const bg  = cell ? C[cell.status] : 'transparent';
-                  const brd = cell ? (C.border[cell.status] || '#374151') : 'rgba(255,255,255,0.1)';
-                  return (
-                    <div key={c} className="w-8 h-8 rounded flex items-center justify-center text-xs font-bold text-white"
-                      style={{ background: bg, border: `1.5px solid ${brd}` }}>
-                      {cell?.letter || ''}
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-        </div>
-      );
-    }
-
-    return (
-      <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4 py-8 gap-6">
-        <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
-        <div className="text-center">
-          <div className="text-4xl mb-3">{draw ? '🤝' : won ? '🏆' : '💀'}</div>
-          <h2 className="text-3xl font-black" style={{ color: draw ? 'var(--color-muted)' : won ? C.correct : '#ef4444' }}>
-            {draw ? 'DRAW' : won ? 'YOU WIN' : 'YOU LOSE'}
-          </h2>
-          <p className="text-muted text-sm mt-1">
-            The word was <span className="text-white font-black tracking-widest">{word}</span>
-          </p>
-        </div>
-
-        <div className="flex gap-6 justify-center flex-wrap">
-          <MiniGrid guesses={result.myGuesses} label="You" />
-          <MiniGrid guesses={result.opponentGuesses} label={result.opponentUsername || 'Opponent'} />
-        </div>
-
-        <div className="flex gap-3 flex-wrap justify-center">
-          <GlowButton variant="primary" onClick={playAgain}>Play Again</GlowButton>
-          <GlowButton variant="ghost" onClick={backToLobby}>Back to Lobby</GlowButton>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Phase: playing ────────────────────────────────────────────────────────
-  const rows = gridRows();
+  // ── Playing ───────────────────────────────────────────────────────────────
+  const gridRows = buildGridRows();
+  const isSoloMode = lastModeRef.current === 'solo';
+  const guessNum = guesses.length;
 
   return (
-    <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col select-none" style={{ touchAction: 'manipulation' }}>
+    <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col select-none overflow-hidden"
+      style={{ touchAction: 'manipulation' }}>
       <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
 
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-surfaceLight">
+      {/* ── Top bar ── */}
+      <div className="flex items-center justify-between px-4 h-12 border-b border-surfaceLight shrink-0">
+        {/* Brand mark */}
         <div className="flex items-center gap-2">
           <div className="flex gap-0.5">
             {['W','O','R','D'].map((l, i) => (
               <div key={i} className="w-5 h-5 rounded text-[9px] font-black flex items-center justify-center text-white"
-                style={{ background: [C.correct, C.present, C.correct, C.present][i] }}>
+                style={{ background: [CLR.correct, CLR.present, CLR.correct, CLR.present][i] }}>
                 {l}
               </div>
             ))}
           </div>
-          <span className="text-white font-black text-sm">Word VS</span>
+          <span className="text-white font-black text-sm tracking-wide">Word VS</span>
         </div>
+
+        {/* Centre: attempt counter */}
+        <div className="text-xs text-muted font-semibold tabular-nums">
+          {guessNum}/{MAX_GUESSES}
+          {isSoloMode && <span className="ml-1.5 text-primary">Solo</span>}
+        </div>
+
+        {/* Right: entry fee + quit */}
         <div className="flex items-center gap-3">
           {entryFee > 0 && (
-            <span className="text-xs text-muted flex items-center gap-1">
-              {entryFee}{isDiamonds ? ' 💎' : <CoinIcon size="0.8em" />}
+            <span className="text-xs text-muted inline-flex items-center gap-1">
+              {entryFee}{isDiamonds ? ' 💎' : <CoinIcon size="0.75em" />}
             </span>
           )}
-          <button onClick={() => { socket.emit('player_forfeit'); navigate('/'); }}
+          <button onClick={() => { socket?.emit('player_forfeit'); navigate('/'); }}
             className="text-xs text-muted hover:text-white transition-colors">
             Quit
           </button>
         </div>
       </div>
 
-      {/* Opponent status bar */}
-      <div className="px-4 py-2 border-b border-surfaceLight/50 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: C.correct }} />
-          <span className="text-xs text-muted">
-            <span className="text-white font-medium">{opponent?.username}</span>
-          </span>
+      {/* ── Opponent bar (PvP only) ── */}
+      {!isSoloMode && (
+        <div className="flex items-center justify-between px-4 py-2 border-b border-surfaceLight/40 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-2 h-2 rounded-full shrink-0" style={{ background: CLR.correct, boxShadow: `0 0 6px ${CLR.correct}` }} />
+            <span className="text-xs text-white font-medium truncate">{opponent?.username || 'Opponent'}</span>
+          </div>
+          <div className="flex items-center gap-1 shrink-0 ml-3">
+            {Array(MAX_GUESSES).fill(null).map((_, i) => (
+              <div key={i} className="w-3 h-3 rounded-sm transition-all duration-200"
+                style={{
+                  background: i < oppCount
+                    ? (oppFailed && oppCount >= MAX_GUESSES ? '#ef4444' : '#1E90FF')
+                    : 'rgba(255,255,255,0.1)',
+                }} />
+            ))}
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted mr-1">Guesses:</span>
-          {Array(MAX_GUESSES).fill(null).map((_, i) => (
-            <div key={i} className="w-3 h-3 rounded-sm transition-all"
-              style={{ background: i < oppCount ? (oppFailed && oppCount >= MAX_GUESSES ? '#ef4444' : 'var(--color-primary)') : 'rgba(255,255,255,0.1)' }} />
-          ))}
-        </div>
-      </div>
+      )}
 
-      {/* 60-second countdown banner */}
+      {/* ── Status banners ── */}
       {oppFailed && failSecs !== null && failSecs > 0 && !myDone && (
-        <div className="px-4 py-2 text-center" style={{ background: 'rgba(239,68,68,0.12)', borderBottom: '1px solid rgba(239,68,68,0.2)' }}>
-          <span className="text-sm font-bold" style={{ color: failSecs <= 15 ? '#ef4444' : '#f59e0b' }}>
-            ⏱ Opponent failed — you have {failSecs}s to guess the word
+        <div className="px-4 py-1.5 text-center shrink-0"
+          style={{ background: 'rgba(239,68,68,0.1)', borderBottom: '1px solid rgba(239,68,68,0.18)' }}>
+          <span className="text-xs font-bold" style={{ color: failSecs <= 15 ? '#ef4444' : '#f59e0b' }}>
+            ⏱ Opponent failed — {failSecs}s to guess the word
           </span>
         </div>
       )}
-
-      {/* Done banner */}
-      {myDone && !result && (
-        <div className="px-4 py-2 text-center" style={{ background: 'rgba(34,197,94,0.12)', borderBottom: '1px solid rgba(34,197,94,0.2)' }}>
-          <span className="text-sm font-bold text-green-400">You solved it — waiting for opponent…</span>
+      {myDone && !result && !isSoloMode && (
+        <div className="px-4 py-1.5 text-center shrink-0"
+          style={{ background: 'rgba(34,197,94,0.1)', borderBottom: '1px solid rgba(34,197,94,0.18)' }}>
+          <span className="text-xs font-bold text-green-400">You solved it — waiting for opponent…</span>
         </div>
       )}
 
-      {/* Error toast */}
+      {/* ── Error toast ── */}
       {errorMsg && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-xl font-bold text-sm text-white shadow-xl"
-          style={{ background: '#1f2937', border: '1px solid rgba(255,255,255,0.15)' }}>
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-5 py-2 rounded-xl font-bold text-sm text-white pointer-events-none"
+          style={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
           {errorMsg}
         </div>
       )}
 
-      {/* Grid */}
-      <div className="flex-1 flex flex-col items-center justify-center py-3 gap-2">
-        {rows.map((row, rIdx) => {
+      {/* ── Grid ── */}
+      <div className="flex-1 flex flex-col items-center justify-center gap-[6px] py-3 px-4">
+        {gridRows.map((row, rIdx) => {
           const isCurrentRow  = row.type === 'current';
-          const isFlippingRow = flipRow === rIdx;
+          const isFlipping    = flipRow === rIdx;
           const isBouncing    = bounceRow === rIdx;
           const isShaking     = shakeRow && isCurrentRow;
           return (
-            <div key={rIdx} className={`flex gap-2 wdl-row${isShaking ? ' shake' : ''}${isCurrentRow ? ' wdl-active-row' : ''}`}>
+            <div key={rIdx}
+              className={`flex gap-[6px] wdl-row${isShaking ? ' shake' : ''}`}>
               {row.cells.map((cell, cIdx) => {
-                const status   = row.type === 'submitted' ? cell.status : null;
-                const letter   = cell.letter || '';
-                const revealed = row.type === 'submitted';
+                const status  = row.type === 'submitted' ? cell.status : null;
+                const letter  = cell.letter || '';
+                const flipping = row.type === 'submitted' && isFlipping;
                 return (
                   <div key={cIdx}
-                    className={`wdl-tile w-14 h-14 rounded-xl flex items-center justify-center text-2xl font-black${revealed && isFlippingRow ? ' flip' : ''}${isBouncing ? ' bounce' : ''}`}
-                    style={tileStyle(status, isCurrentRow, cIdx, revealed && isFlippingRow)}>
+                    className={`wdl-tile rounded-xl flex items-center justify-center font-black text-xl${flipping ? ' flip' : ''}${isBouncing ? ' bounce' : ''}`}
+                    style={{
+                      ...tileStyle(status, isCurrentRow, cIdx, flipping),
+                      width:  'min(calc((100vw - 80px) / 5), 62px)',
+                      height: 'min(calc((100vw - 80px) / 5), 62px)',
+                    }}>
                     {letter}
                   </div>
                 );
@@ -627,21 +742,22 @@ export default function WordleGame() {
         })}
       </div>
 
-      {/* Virtual keyboard */}
-      <div className="px-2 pb-4 pt-2 flex flex-col gap-1.5" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
-        {ROWS_KB.map((row, rIdx) => (
-          <div key={rIdx} className="flex justify-center gap-1.5">
+      {/* ── Keyboard ── */}
+      <div className="shrink-0 px-2 pt-1 pb-3 flex flex-col gap-1.5"
+        style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+        {KB_ROWS.map((row, rIdx) => (
+          <div key={rIdx} className="flex justify-center gap-1">
             {row.map(key => {
               const isWide = key === 'ENTER' || key === '⌫';
               return (
-                <button key={key} onPointerDown={(e) => { e.preventDefault(); handleKey(key); }}
-                  className="wdl-key rounded-lg font-bold flex items-center justify-center transition-transform"
+                <button key={key}
+                  onPointerDown={(e) => { e.preventDefault(); handleKey(key); }}
+                  className="wdl-key rounded-lg font-bold flex items-center justify-center"
                   style={{
                     ...keyStyle(key.length === 1 ? key : null),
-                    minWidth: isWide ? 62 : 36,
-                    height: 52,
-                    fontSize: isWide ? 11 : 16,
-                    padding: isWide ? '0 8px' : 0,
+                    width:  isWide ? 'clamp(52px, 14vw, 66px)' : 'clamp(28px, 8.5vw, 44px)',
+                    height: 'clamp(44px, 12vw, 56px)',
+                    fontSize: isWide ? 10 : 'clamp(13px, 4vw, 17px)',
                   }}>
                   {key}
                 </button>

@@ -313,36 +313,20 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
   }
 
   const isDraw = !winnerPlayer;
-
-  // Emit result to each player with their own and opponent's full guess history
-  function resultFor(me) {
-    const them = room.players.find(p => p.socketId !== me.socketId);
-    return {
-      word:              room.word,
-      winnerId:          winnerPlayer?.userId || null,
-      winnerUsername:    winnerPlayer?.username || null,
-      isDraw,
-      iWon:              winnerPlayer?.socketId === me.socketId,
-      myGuesses:         room.pstate[me.socketId].guesses,
-      opponentGuesses:   room.pstate[them?.socketId]?.guesses || [],
-      myUsername:        me.username,
-      opponentUsername:  them?.username,
-    };
-  }
-  io.to(p1.socketId).emit('wordle_result', resultFor(p1));
-  io.to(p2.socketId).emit('wordle_result', resultFor(p2));
-
-  // ── Financial + stat settlement ──────────────────────────────────────────
   const fee      = room.entryFee || 0;
   const currency = room.currency || 'coins';
+  const winner   = winnerPlayer;
+  const loser    = loserPlayer;
 
-  const winner = winnerPlayer;
-  const loser  = loserPlayer;
+  // ── Financial + stat settlement ──────────────────────────────────────────
+  let newWinnerElo  = winner?.elo || 1000;
+  let newLoserElo   = loser?.elo  || 1000;
+  let balanceChange = null;
+  let winnerStreak  = 0;
+  let isFirstWin    = false;
 
   try {
-    let newWinnerElo = winner?.elo || 1000;
-    let newLoserElo  = loser?.elo  || 1000;
-    const isFree     = fee === 0;
+    const isFree = fee === 0;
 
     if (!isFree && winner && loser) {
       const ratings = calculateNewRatings(winner.elo || 1000, loser.elo || 1000);
@@ -352,7 +336,7 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
 
     if (fee > 0 && supabase && winner && loser) {
       try {
-        currency === 'diamonds'
+        balanceChange = currency === 'diamonds'
           ? await settleMatchDiamonds(supabase, winner.userId, loser.userId, fee)
           : await settleMatch(supabase, winner.userId, loser.userId, fee);
       } catch (e) { console.error('[wordle] settle error:', e.message); }
@@ -363,7 +347,11 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
         if (!winner.isBot) {
           await applyEloUpdate(supabase, winner.userId, newWinnerElo).catch(() => {});
           await supabase.rpc('increment_win',  { uid: winner.userId }).then().catch(() => {});
-          try { await updateStreaks(supabase, winner.userId, null); } catch {}
+          try {
+            const sd = await updateStreaks(supabase, winner.userId, loser.isBot ? null : loser.userId);
+            winnerStreak = sd.winnerStreak;
+            isFirstWin   = sd.isFirstWin;
+          } catch {}
         }
         if (!loser.isBot) {
           await applyEloUpdate(supabase, loser.userId, newLoserElo).catch(() => {});
@@ -373,7 +361,6 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
       if (!loser.isBot) {
         supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId).then().catch(() => {});
       }
-      // Highscore = number of guesses used to solve (lower is better) — store 0 if failed
       for (const [p, ps] of [[p1, s1], [p2, s2]]) {
         if (!p.isBot) {
           const score = ps.solved ? (MAX_GUESSES - ps.guesses.length + 1) : 0;
@@ -397,6 +384,33 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
   } catch (e) {
     console.error('[wordle] settlement error (game still resolved):', e.message);
   }
+
+  // Emit result to each player with their own and opponent's full guess history
+  function resultFor(me) {
+    const them = room.players.find(p => p.socketId !== me.socketId);
+    const iWon = winnerPlayer?.socketId === me.socketId;
+    return {
+      word:              room.word,
+      winnerId:          winnerPlayer?.userId || null,
+      winnerUsername:    winnerPlayer?.username || null,
+      loserUsername:     loserPlayer?.username || null,
+      isDraw,
+      iWon,
+      myGuesses:         room.pstate[me.socketId].guesses,
+      opponentGuesses:   room.pstate[them?.socketId]?.guesses || [],
+      myUsername:        me.username,
+      opponentUsername:  them?.username,
+      newWinnerElo,
+      newLoserElo,
+      balanceChange,
+      winnerStreak,
+      isFirstWin,
+      currency,
+      entryFee:          fee,
+    };
+  }
+  io.to(p1.socketId).emit('wordle_result', resultFor(p1));
+  io.to(p2.socketId).emit('wordle_result', resultFor(p2));
 
   gameEvents.emit('game_ended', { socketIds: [p1.socketId, p2.socketId] });
 
