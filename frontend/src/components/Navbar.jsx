@@ -24,11 +24,6 @@ const GAME_LINKS = [
   { icon: '🃏', label: 'Blackjack',   to: '/game/blackjack',   countKey: 'blackjack' },
 ];
 
-function compactNum(n) {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
-  if (n >= 1_000)     return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
-  return n.toLocaleString();
-}
 
 function fmtRakebackTimer(ms) {
   if (ms <= 0) return null;
@@ -167,8 +162,8 @@ export default function Navbar() {
                   {isDiamonds ? (
                     <>
                       <span className="relative -top-px">💎</span>
-                      <span className={`font-black text-white font-mono ${(profile.diamonds ?? 0) >= 1_000_000 ? 'text-sm' : 'text-base'}`}>
-                        {compactNum(profile.diamonds ?? 0)}
+                      <span className="text-sm font-black text-white font-mono">
+                        {(profile.diamonds ?? 0).toLocaleString()}
                       </span>
                       <span className="text-xs text-muted group-hover:text-accent transition-colors">Diamonds</span>
                     </>
@@ -199,7 +194,7 @@ export default function Navbar() {
                           <span className="relative -top-px">💎</span>
                           <span className="font-medium">Diamonds</span>
                         </div>
-                        <span className="font-mono font-bold text-white">{compactNum(profile.diamonds ?? 0)}</span>
+                        <span className="font-mono font-bold text-white">{(profile.diamonds ?? 0).toLocaleString()}</span>
                       </button>
                     </div>
                     <div className="border-t border-border p-2">
@@ -348,7 +343,7 @@ export default function Navbar() {
                   className="flex items-center gap-0.5 px-2 py-1 bg-black border border-primary/30 rounded-full font-bold text-white transition-all"
                   style={{ fontSize: 11 }}
                 >
-                  <span className="font-mono">{isDiamonds ? compactNum(profile.diamonds ?? 0) : compactNum(profile.c_coins ?? 0)}</span>
+                  <span className="font-mono">{isDiamonds ? (profile.diamonds ?? 0).toLocaleString() : (profile.c_coins ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   {isDiamonds ? <span>💎</span> : <CoinIcon size="0.9em" />}
                   <span className="text-muted" style={{ fontSize: 9 }}>▾</span>
                 </button>
@@ -363,7 +358,7 @@ export default function Navbar() {
                       <button onClick={() => { setDisplayCurrency('diamonds'); setMobileCurrencyOpen(false); }}
                         className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs transition-all ${isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
                         <div className="flex items-center gap-2"><span>💎</span><span className="font-medium">Diamonds</span></div>
-                        <span className="font-mono font-bold text-white">{compactNum(profile.diamonds ?? 0)}</span>
+                        <span className="font-mono font-bold text-white">{(profile.diamonds ?? 0).toLocaleString()}</span>
                       </button>
                     </div>
                     <div className="border-t border-border p-1.5">
