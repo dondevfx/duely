@@ -1,0 +1,424 @@
+const { v4: uuidv4 } = require('uuid');
+const { isValidWord } = require('./wordValidator');
+const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
+const { settleMatch, settleMatchDiamonds } = require('./walletService');
+const { updateHighscore } = require('./highscoreService');
+const gameEvents = require('./gameEvents');
+
+const MAX_GUESSES  = 6;
+const WORD_LENGTH  = 5;
+const FAIL_TIMER_MS = 60 * 1000;
+
+// ── Answer word list ─────────────────────────────────────────────────────────
+// Curated common 5-letter English words used as the secret answer.
+// Guess validation uses the full 173k dictionary (isValidWord) so players
+// can guess any real word, but only these appear as answers.
+const ANSWERS = [
+  'ABOUT','ABOVE','ABUSE','ACUTE','ADMIT','ADOPT','ADULT','AFTER','AGAIN','AGENT',
+  'AGREE','AHEAD','ALARM','ALBUM','ALERT','ALIEN','ALIVE','ALLEY','ALLOW','ALONE',
+  'ALONG','ALTER','ANGEL','ANGER','ANGLE','ANGRY','ANKLE','APPLE','APPLY','ARENA',
+  'ARGUE','ARISE','ARMOR','AROMA','ARRAY','ASSET','ATLAS','ATTIC','AUDIO','AUDIT',
+  'AVOID','AWAKE','AWARD','AWARE','AWFUL','ABBEY','ABIDE','AMAZE','AMBER','AMPLE',
+  'BADGE','BAKER','BEACH','BEARD','BEAST','BELLY','BENCH','BERRY','BLACK','BLADE',
+  'BLAME','BLANK','BLAST','BLAZE','BLEED','BLEND','BLESS','BLIND','BLOCK','BLOOD',
+  'BLOOM','BLOWN','BLUNT','BLUSH','BOARD','BONUS','BOOST','BOOTH','BOXER','BRAVE',
+  'BREAD','BREAK','BREED','BRICK','BRIDE','BRIEF','BRING','BRISK','BROTH','BROWN',
+  'BRUSH','BUDDY','BUILD','BUILT','BULGE','BUNCH','BURST','BUYER','BRACE','BRAID',
+  'BRASH','BRAWN','BUMPY','BUSHY','CABLE','CANDY','CARRY','CATCH','CAUSE','CEASE',
+  'CHAOS','CHARM','CHASE','CHEAP','CHEAT','CHECK','CHEEK','CHESS','CHEST','CHIEF',
+  'CHILD','CHILL','CHOIR','CIVIL','CLAIM','CLASH','CLASS','CLEAN','CLEAR','CLERK',
+  'CLICK','CLIFF','CLIMB','CLING','CLOCK','CLOSE','CLOUD','COACH','COAST','COLOR',
+  'CORAL','COUCH','COUNT','COURT','COVER','CRACK','CRAFT','CRANE','CRASH','CRAZY',
+  'CREAM','CREEK','CREST','CRIME','CRISP','CROSS','CROWD','CROWN','CRUEL','CRUSH',
+  'CRUST','CURVE','CYCLE','CACHE','CAMEL','CARGO','CEDAR','CHAMP','CHEWY','CHIMP',
+  'CHOMP','CLAMP','CLEAT','CLONE','COBRA','COMET','COVET','CREAK','CREEP','CRIMP',
+  'DAILY','DANCE','DEATH','DECAY','DELAY','DEMON','DEPTH','DERBY','DIRTY','DISCO',
+  'DITCH','DIZZY','DODGE','DOUBT','DOUGH','DRAFT','DRAIN','DRAMA','DRANK','DRAWN',
+  'DREAD','DREAM','DRESS','DRIFT','DRINK','DRIVE','DRONE','DROVE','DRUNK','DAISY',
+  'DANDY','DAZED','DECOY','DELTA','DEPOT','DOWDY','DRAWL','DROOL','DUCHY','DUSTY',
+  'EAGER','EAGLE','EARLY','EARTH','EERIE','EIGHT','ELITE','EMPTY','ENJOY','ENTER',
+  'EQUAL','ERROR','EVERY','EXACT','EXIST','EXTRA','EBONY','ELBOW','ELDER','EVADE',
+  'FABLE','FAITH','FALSE','FANCY','FATAL','FAULT','FEAST','FETCH','FEVER','FIBER',
+  'FIFTH','FIFTY','FIGHT','FINAL','FLAME','FLASH','FLESH','FLICK','FLOAT','FLOCK',
+  'FLOOD','FLOOR','FLOUR','FLUID','FOCUS','FORCE','FORGE','FOUND','FRAME','FRANK',
+  'FRAUD','FREAK','FRESH','FRONT','FROST','FRUIT','FULLY','FUNNY','FADED','FAINT',
+  'FLAKY','FLANK','FLARE','FLASK','FLINT','FLUTE','FOGGY','FOYER','FRAIL','FROTH',
+  'GIANT','GIVEN','GLARE','GLASS','GLEAM','GLOBE','GLOOM','GLOSS','GLOVE','GOING',
+  'GRACE','GRADE','GRAND','GRANT','GRAPE','GRASP','GRASS','GRAVE','GREAT','GREED',
+  'GREET','GRIND','GROAN','GROSS','GROUP','GROVE','GROWL','GROWN','GUARD','GUESS',
+  'GUEST','GUIDE','GUILT','GUSTO','GAVEL','GIDDY','GIRTH','GLAND','GLEAN','GLIDE',
+  'GLOAT','GNOME','GORGE','GOUGE','GRAVY','GRAZE','GRIEF','GRIME','GROOM','GRUEL',
+  'GRUFF','GUAVA','GULCH','GUILE','GUISE','GUMMY','GUTSY','GRILL','GROUT','GROWL',
+  'HABIT','HAPPY','HARSH','HAVEN','HEART','HEAVY','HEDGE','HEIST','HENCE','HERBS',
+  'HERON','HINGE','HOIST','HONEY','HONOR','HORSE','HOTEL','HOUSE','HOVER','HUMAN',
+  'HUMOR','HURRY','HAIKU','HAUNT','HEFTY','HELIX','HIPPO','HOMER','HORDE','HUSKY',
+  'IDEAL','IMAGE','IMPLY','INDEX','INNER','INPUT','IRONY','ISSUE','IVORY','ITCHY',
+  'JEWEL','JUDGE','JUICE','JUICY','JUMBO','JAZZY','JOKER','JOUST','KAYAK','KNACK',
+  'KNEEL','KNIFE','KNOCK','KNOWN','KUDOS','LABEL','LANCE','LARGE','LASER','LATER',
+  'LAUGH','LAYER','LEARN','LEAST','LEGAL','LEMON','LEVEL','LIGHT','LIMIT','LINER',
+  'LIVER','LOCAL','LODGE','LOGIC','LOOSE','LOWER','LOYAL','LUCKY','LADEN','LATCH',
+  'LEAFY','LEERY','LEGIT','LEMUR','LINGO','LLAMA','LOATH','LOWLY','LUCID','LUSTY',
+  'LYRIC','MAGIC','MAJOR','MAPLE','MARCH','MARRY','MATCH','MEANT','MERCY','MERIT',
+  'METAL','MINOR','MISTY','MODEL','MONEY','MONTH','MORAL','MOUNT','MOURN','MOUSE',
+  'MOUTH','MOVIE','MUSIC','MANOR','MAUVE','MELEE','MELON','MESSY','MOGUL','MOLDY',
+  'MOODY','MOSSY','MOTIF','MUDDY','MUMMY','MURKY','MUSHY','MUSKY','MANOR','MEALY',
+  'NERVE','NEVER','NIGHT','NOBLE','NOISE','NORTH','NOVEL','NURSE','NASTY','NAVAL',
+  'NERDY','NEXUS','NIPPY','NOISY','NOTCH','NUDGE','NUTTY','NIFTY','OFFER','ORDER',
+  'OUTER','OZONE','OCTET','OMEGA','ONION','OPTIC','OUTDO','OXIDE','PAINT','PANIC',
+  'PANEL','PAPER','PARTY','PAUSE','PEACH','PEARL','PEDAL','PENNY','PHONE','PHOTO',
+  'PILOT','PITCH','PIXEL','PLACE','PLAIN','PLANE','PLANT','PLAZA','POLAR','PORCH',
+  'POWER','PRESS','PRICE','PRIDE','PRIZE','PROBE','PRONE','PROSE','PROUD','PROVE',
+  'PULSE','PUNCH','PURSE','PANSY','PARKA','PENAL','PERCH','PERIL','PETTY','PIANO',
+  'PLAID','PLANK','PLUCK','PLUME','POACH','POISE','POLKA','POPPY','POSIT','PROWL',
+  'PRUNE','PSALM','PUPIL','PYGMY','QUEEN','QUICK','QUIET','QUOTA','QUOTE','RADAR',
+  'RADIO','RAISE','RALLY','RANGE','RAPID','REACH','READY','REALM','REBEL','RIDER',
+  'RISKY','RIVER','ROBOT','ROCKY','ROUGE','ROUGH','ROUND','ROYAL','RULER','RURAL',
+  'RUSTY','RAINY','RAMEN','RAVEN','REEDY','REGAL','RELAY','REIGN','REPAY','REPEL',
+  'RESIN','RIGID','RIPEN','RISEN','RIVET','ROBIN','RODEO','ROWDY','RUDDY','SADLY',
+  'SAINT','SALAD','SAUCE','SCALE','SCENE','SCORE','SCOUT','SENSE','SEVEN','SHARD',
+  'SHARE','SHARK','SHARP','SHEER','SHEET','SHELL','SHIFT','SHINE','SHIRT','SHOOT',
+  'SHORT','SHOUT','SIGHT','SILLY','SINCE','SIXTH','SIXTY','SKILL','SKULL','SLAVE',
+  'SLEEP','SLICE','SLIDE','SLOPE','SMART','SMELL','SMOKE','SNAKE','SOLAR','SOLVE',
+  'SORRY','SPACE','SPARK','SPEAK','SPEAR','SPEND','SPICE','SPINE','SPITE','SPLIT',
+  'SPOON','SPORT','STAIN','STAKE','STAND','STARE','START','STEAL','STEAM','STEEL',
+  'STERN','STICK','STIFF','STILL','STOCK','STOOD','STORE','STORM','STORY','STUDY',
+  'STYLE','SUGAR','SUITE','SUNNY','SUPER','SWAMP','SWEAR','SWEEP','SWEET','SWIFT',
+  'SWING','SYRUP','SABER','SAVOR','SCALD','SCOFF','SCONE','SCOOP','SCRUB','SEIZE',
+  'SERUM','SHADY','SHALE','SHALL','SHAME','SHANK','SHAWL','SHONE','SHOWY','SHRUB',
+  'SHUNT','SIEGE','SINEW','SIREN','SKULK','SLANT','SLASH','SLEET','SLICK','SLIMY',
+  'SLINK','SLOTH','SLUMP','SLURP','SMACK','SMEAR','SMELT','SNARE','SNEAK','SNEER',
+  'SNIFF','SNORT','SNOUT','SNOWY','SOFTY','SOGGY','SONIC','SPAWN','SPECK','SPEED',
+  'SPIKY','SPLAY','SPREE','SPRIG','SPUNK','SPURN','SQUAT','SQUID','STALK','STALL',
+  'STAMP','STUMP','STUNG','STUNK','STUNT','SUAVE','SURGE','SWATH','SWILL','SWINE',
+  'SWIRL','SWOOP','TABLE','TANGO','TASTE','TEETH','TEMPO','TENSE','THICK','THORN',
+  'THREE','THUMB','TIGER','TIMID','TIRED','TITLE','TOAST','TOPIC','TOTAL','TOUCH',
+  'TOUGH','TOWEL','TOWER','TOXIC','TRACE','TRACK','TRADE','TRAIL','TRAIN','TRAIT',
+  'TRASH','TRICK','TRIED','TROOP','TROUT','TRUCK','TRULY','TRUNK','TRUST','TRUTH',
+  'TWICE','TWIST','TABOO','TACKY','TAFFY','TANGY','TAPIR','TARDY','TAWNY','TEPID',
+  'TIARA','TIDAL','TINGE','TIPSY','TITAN','TOKEN','TORSO','TOTEM','TRAMP','TRITE',
+  'TROLL','TROMP','TROVE','TRUCE','TRUMP','TRYST','TUBBY','TUBER','TULIP','TUNER',
+  'TURBO','TWEAK','TWEED','TWEET','ULTRA','UNCLE','UNDER','UNION','UNITY','UNTIL',
+  'UPPER','UPSET','URBAN','USUAL','UTTER','UDDER','ULCER','UNDUE','USURP','VALID',
+  'VALUE','VALVE','VIGOR','VIRAL','VIRUS','VISIT','VIVID','VOICE','VOTER','VAGUE',
+  'VAPID','VAULT','VENAL','VENOM','VICAR','VISTA','VODKA','VOGUE','VOMIT','WATCH',
+  'WATER','WEARY','WEAVE','WEDGE','WEIRD','WHALE','WHEAT','WHEEL','WHERE','WHICH',
+  'WHILE','WHITE','WHOLE','WHOSE','WITCH','WOMAN','WORLD','WORRY','WORSE','WORST',
+  'WORTH','WRECK','WRIST','WRONG','WACKY','WAGER','WALTZ','WRATH','WRING','YACHT',
+  'YEARN','YIELD','YOUNG','YOUTH','ZEBRA','ZESTY','ZONAL',
+];
+
+// ── Room management ──────────────────────────────────────────────────────────
+const rooms = new Map();
+const queue = [];
+
+function getRandomWord() {
+  return ANSWERS[Math.floor(Math.random() * ANSWERS.length)];
+}
+
+// Standard Wordle evaluation with correct duplicate-letter handling.
+// Returns array of { letter, status } where status is 'correct'|'present'|'absent'.
+function evaluateGuess(secret, guess) {
+  const result   = Array(WORD_LENGTH).fill('absent');
+  const secArr   = secret.split('');
+  const gueArr   = guess.split('');
+
+  // Pass 1 — exact matches
+  for (let i = 0; i < WORD_LENGTH; i++) {
+    if (gueArr[i] === secArr[i]) {
+      result[i]  = 'correct';
+      secArr[i]  = null;
+      gueArr[i]  = null;
+    }
+  }
+  // Pass 2 — wrong position
+  for (let i = 0; i < WORD_LENGTH; i++) {
+    if (gueArr[i] === null) continue;
+    const j = secArr.indexOf(gueArr[i]);
+    if (j !== -1) {
+      result[i] = 'present';
+      secArr[j] = null;
+    }
+  }
+  return result.map((status, i) => ({ letter: guess[i], status }));
+}
+
+// Max number of 'correct' tiles in any single guess row — tiebreaker when both fail.
+function bestGuessScore(guesses) {
+  let best = 0;
+  for (const row of guesses) {
+    const n = row.filter(c => c.status === 'correct').length;
+    if (n > best) best = n;
+  }
+  return best;
+}
+
+function _makeRoom(roomId, p1, p2) {
+  return {
+    roomId,
+    word: getRandomWord(),
+    players: [p1, p2],
+    pstate: {
+      [p1.socketId]: { guesses: [], finished: false, solved: false, finishedAt: null },
+      [p2.socketId]: { guesses: [], finished: false, solved: false, finishedAt: null },
+    },
+    entryFee:    p1.entryFee || 0,
+    currency:    p1.currency || 'coins',
+    feesDeducted: false,
+    failTimer:   null,
+    settled:     false,
+    startedAt:   null,
+  };
+}
+
+// ── Public queue / room API ──────────────────────────────────────────────────
+function addToWordleQueue(player) {
+  const idx = queue.findIndex(p =>
+    p.socketId  !== player.socketId &&
+    p.entryFee  === player.entryFee &&
+    p.currency  === player.currency
+  );
+  if (idx !== -1) {
+    const opp    = queue.splice(idx, 1)[0];
+    const roomId = 'wordle_' + uuidv4();
+    rooms.set(roomId, _makeRoom(roomId, opp, player));
+    return { roomId, p1: opp, p2: player };
+  }
+  queue.push(player);
+  return null;
+}
+
+function removeFromWordleQueue(socketId) {
+  const i = queue.findIndex(p => p.socketId === socketId);
+  if (i !== -1) queue.splice(i, 1);
+}
+
+function createDirectWordleRoom(p1, p2) {
+  const roomId = 'wordle_' + uuidv4();
+  rooms.set(roomId, _makeRoom(roomId, p1, p2));
+  return { roomId };
+}
+
+function getWordleRoom(roomId)    { return rooms.get(roomId) || null; }
+function deleteWordleRoom(roomId) { rooms.delete(roomId); }
+
+function getWordleRoomBySocket(socketId) {
+  for (const room of rooms.values()) {
+    if (room.players.some(p => p.socketId === socketId)) return room;
+  }
+  return null;
+}
+
+// ── Game lifecycle ────────────────────────────────────────────────────────────
+function startWordleGame(io, supabase, roomId) {
+  const room = rooms.get(roomId);
+  if (!room) return;
+  room.startedAt = Date.now();
+  io.to(roomId).emit('wordle_start', {
+    wordLength: WORD_LENGTH,
+    maxGuesses: MAX_GUESSES,
+  });
+}
+
+// ── Guess handling ────────────────────────────────────────────────────────────
+async function handleWordleGuess(io, supabase, roomId, socketId, guessRaw) {
+  const room = rooms.get(roomId);
+  if (!room || room.settled) return;
+
+  const guess = (guessRaw || '').toUpperCase().trim();
+  if (guess.length !== WORD_LENGTH || !/^[A-Z]+$/.test(guess)) {
+    io.to(socketId).emit('wordle_error', { error: 'Guess must be 5 letters' });
+    return;
+  }
+  if (!isValidWord(guess.toLowerCase())) {
+    io.to(socketId).emit('wordle_error', { error: 'Not a valid word' });
+    return;
+  }
+
+  const ps = room.pstate[socketId];
+  if (!ps || ps.finished || ps.guesses.length >= MAX_GUESSES) return;
+
+  const feedback = evaluateGuess(room.word, guess);
+  ps.guesses.push(feedback);
+
+  const solved = feedback.every(c => c.status === 'correct');
+
+  io.to(socketId).emit('wordle_guess_result', {
+    guess,
+    feedback,
+    guessNumber: ps.guesses.length,
+    solved,
+  });
+
+  // Tell opponent only how many guesses have been used — no letters leaked
+  const opp = room.players.find(p => p.socketId !== socketId);
+  if (opp) {
+    io.to(opp.socketId).emit('wordle_opponent_progress', {
+      guessCount: ps.guesses.length,
+    });
+  }
+
+  if (solved) {
+    ps.finished   = true;
+    ps.solved     = true;
+    ps.finishedAt = Date.now();
+    if (room.failTimer) { clearTimeout(room.failTimer); room.failTimer = null; }
+    await _settleWordle(io, supabase, room, socketId);
+    return;
+  }
+
+  if (ps.guesses.length >= MAX_GUESSES) {
+    ps.finished   = true;
+    ps.solved     = false;
+    ps.finishedAt = Date.now();
+
+    const oppState = opp ? room.pstate[opp.socketId] : null;
+    if (!opp || !oppState || oppState.finished) {
+      // Both players done — compare greens immediately
+      if (room.failTimer) { clearTimeout(room.failTimer); room.failTimer = null; }
+      await _settleWordle(io, supabase, room, null);
+    } else {
+      // Give opponent 60 seconds to finish
+      io.to(opp.socketId).emit('wordle_opponent_failed', { timeLimit: 60 });
+      room.failTimer = setTimeout(async () => {
+        if (room.settled) return;
+        await _settleWordle(io, supabase, room, null);
+      }, FAIL_TIMER_MS);
+    }
+  }
+}
+
+// ── Settlement ────────────────────────────────────────────────────────────────
+async function _settleWordle(io, supabase, room, winnerSocketId) {
+  if (room.settled) return;
+  room.settled = true;
+  if (room.failTimer) { clearTimeout(room.failTimer); room.failTimer = null; }
+
+  const [p1, p2]   = room.players;
+  const s1          = room.pstate[p1.socketId];
+  const s2          = room.pstate[p2.socketId];
+
+  let winnerPlayer  = null;
+  let loserPlayer   = null;
+
+  if (winnerSocketId) {
+    winnerPlayer = room.players.find(p => p.socketId === winnerSocketId);
+    loserPlayer  = room.players.find(p => p.socketId !== winnerSocketId);
+  } else {
+    // Both failed — compare best guess score (most greens in any single row)
+    const sc1 = bestGuessScore(s1.guesses);
+    const sc2 = bestGuessScore(s2.guesses);
+    if (sc1 > sc2) { winnerPlayer = p1; loserPlayer = p2; }
+    else if (sc2 > sc1) { winnerPlayer = p2; loserPlayer = p1; }
+    // else draw — winnerPlayer stays null
+  }
+
+  const isDraw = !winnerPlayer;
+
+  // Emit result to each player with their own and opponent's full guess history
+  function resultFor(me) {
+    const them = room.players.find(p => p.socketId !== me.socketId);
+    return {
+      word:              room.word,
+      winnerId:          winnerPlayer?.userId || null,
+      winnerUsername:    winnerPlayer?.username || null,
+      isDraw,
+      iWon:              winnerPlayer?.socketId === me.socketId,
+      myGuesses:         room.pstate[me.socketId].guesses,
+      opponentGuesses:   room.pstate[them?.socketId]?.guesses || [],
+      myUsername:        me.username,
+      opponentUsername:  them?.username,
+    };
+  }
+  io.to(p1.socketId).emit('wordle_result', resultFor(p1));
+  io.to(p2.socketId).emit('wordle_result', resultFor(p2));
+
+  // ── Financial + stat settlement ──────────────────────────────────────────
+  const fee      = room.entryFee || 0;
+  const currency = room.currency || 'coins';
+
+  const winner = winnerPlayer;
+  const loser  = loserPlayer;
+
+  try {
+    let newWinnerElo = winner?.elo || 1000;
+    let newLoserElo  = loser?.elo  || 1000;
+    const isFree     = fee === 0;
+
+    if (!isFree && winner && loser) {
+      const ratings = calculateNewRatings(winner.elo || 1000, loser.elo || 1000);
+      newWinnerElo  = ratings.newWinnerElo;
+      newLoserElo   = ratings.newLoserElo;
+    }
+
+    if (fee > 0 && supabase && winner && loser) {
+      try {
+        currency === 'diamonds'
+          ? await settleMatchDiamonds(supabase, winner.userId, loser.userId, fee)
+          : await settleMatch(supabase, winner.userId, loser.userId, fee);
+      } catch (e) { console.error('[wordle] settle error:', e.message); }
+    }
+
+    if (supabase && winner && loser) {
+      if (!isFree) {
+        if (!winner.isBot) {
+          await applyEloUpdate(supabase, winner.userId, newWinnerElo).catch(() => {});
+          await supabase.rpc('increment_win',  { uid: winner.userId }).then().catch(() => {});
+          try { await updateStreaks(supabase, winner.userId, null); } catch {}
+        }
+        if (!loser.isBot) {
+          await applyEloUpdate(supabase, loser.userId, newLoserElo).catch(() => {});
+          await supabase.rpc('increment_loss', { uid: loser.userId }).then().catch(() => {});
+        }
+      }
+      if (!loser.isBot) {
+        supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId).then().catch(() => {});
+      }
+      // Highscore = number of guesses used to solve (lower is better) — store 0 if failed
+      for (const [p, ps] of [[p1, s1], [p2, s2]]) {
+        if (!p.isBot) {
+          const score = ps.solved ? (MAX_GUESSES - ps.guesses.length + 1) : 0;
+          await updateHighscore(supabase, p.userId, 'wordVS', score).catch(() => {});
+        }
+      }
+      if (!p1.isBot && !p2.isBot) {
+        await supabase.from('matches').insert({
+          player1_id:          p1.userId,
+          player2_id:          p2.userId,
+          winner_id:           winner?.userId || null,
+          game_type:           'scrabble',
+          entry_fee_c:         currency === 'coins'    ? fee : 0,
+          entry_fee_diamonds:  currency === 'diamonds' ? fee : 0,
+          prize_pool_c:        currency === 'coins'    ? fee * 2 : 0,
+          prize_pool_diamonds: currency === 'diamonds' ? fee * 2 : 0,
+          platform_fee_c:      currency === 'coins'    ? parseFloat((fee * 2 * 0.05).toFixed(4)) : 0,
+        }).then().catch(() => {});
+      }
+    }
+  } catch (e) {
+    console.error('[wordle] settlement error (game still resolved):', e.message);
+  }
+
+  gameEvents.emit('game_ended', { socketIds: [p1.socketId, p2.socketId] });
+
+  if (fee > 0 && winner) {
+    const payout = currency === 'diamonds' ? fee * 2 * 0.95 : parseFloat((fee * 2 * 0.95).toFixed(4));
+    gameEvents.emit('match_result', {
+      game: 'scrabble',
+      winnerId: winner.userId,
+      payout,
+      currency,
+      roomId: room.roomId,
+    });
+  }
+
+  io.emit('active_game_ended', { id: room.roomId });
+  deleteWordleRoom(room.roomId);
+}
+
+module.exports = {
+  addToWordleQueue, removeFromWordleQueue,
+  createDirectWordleRoom,
+  getWordleRoom, deleteWordleRoom, getWordleRoomBySocket,
+  startWordleGame, handleWordleGuess,
+  evaluateGuess, MAX_GUESSES, WORD_LENGTH,
+};

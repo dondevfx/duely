@@ -34,7 +34,7 @@ import Wallet from './pages/Wallet';
 import Tip from './pages/Tip';
 import BlockBlastGame from './pages/BlockBlastGame';
 import QuickMatch from './pages/QuickMatch';
-import ScrabbleGame from './pages/ScrabbleGame';
+import WordleGame from './pages/WordleGame';
 import CoinFlipGame from './pages/CoinFlipGame';
 import BlackjackGame from './pages/BlackjackGame';
 import Transactions from './pages/Transactions';
@@ -112,10 +112,10 @@ function Shell() {
           <Route path="/tip"                element={<Tip />} />
           <Route path="/game/block-blast"   element={<BlockBlastGame />} />
           <Route path="/game/quick-match"   element={<QuickMatch />} />
-          <Route path="/game/scrabble"      element={<ScrabbleGame />} />
+          <Route path="/game/scrabble"      element={<WordleGame />} />
           <Route path="/game/coin-flip"     element={<CoinFlipGame />} />
           <Route path="/game/blackjack"     element={<BlackjackGame />} />
-          <Route path="/game/word-vs"       element={<ScrabbleGame />} />
+          <Route path="/game/word-vs"       element={<WordleGame />} />
           <Route path="/spectate/:gameId"   element={<SpectateView />} />
           <Route path="/game/random"        element={<Navigate to="/game/quick-match" replace />} />
           <Route path="/transactions"       element={<ProtectedRoute><Transactions /></ProtectedRoute>} />

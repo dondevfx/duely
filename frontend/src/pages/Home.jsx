@@ -33,7 +33,7 @@ const GAMES = [
   },
   {
     title: 'Word VS',
-    description: 'Place words on the 6×6 board to outscore your opponent. Any word goes — no filters. 60s per turn.',
+    description: 'Guess the same 5-letter word as your opponent. Solve it first and win instantly — 6 tries each.',
     icon: '🔤',
     route: '/game/scrabble',
     available: true,

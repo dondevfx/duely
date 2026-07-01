@@ -91,12 +91,11 @@ const {
   startCrossroadRound, handleCrossroadGoal, handleCrossroadProgress,
 } = require('../services/crossroadEngine');
 const {
-  addToScrabbleQueue, removeFromScrabbleQueue,
-  getScrabbleRoom, deleteScrabbleRoom, getScrabbleRoomBySocket,
-  createDirectScrabbleRoom,
-  startScrabbleGame, scheduleBotMove,
-  handleScrabblePlay, handleScrabbleSkip, handleScrabbleExchange,
-} = require('../services/scrabbleEngine');
+  addToWordleQueue, removeFromWordleQueue,
+  createDirectWordleRoom,
+  getWordleRoom, deleteWordleRoom, getWordleRoomBySocket,
+  startWordleGame, handleWordleGuess,
+} = require('../services/wordleEngine');
 const {
   addToCoinFlipQueue, removeFromCoinFlipQueue,
   createDirectCoinFlipRoom,
@@ -1772,7 +1771,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     });
 
     // ════════════════════════════════════════════════════════════════
-    //  SCRABBLE
+    //  WORDLE (Word VS)
     // ════════════════════════════════════════════════════════════════
     socket.on('join_scrabble_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
@@ -1781,147 +1780,92 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         return socket.emit('error', { message: 'Already in a queue' });
       socket._startingGame = 'scrabble';
       try {
-      const { data: profile } = await supabase
-        .from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
-      // Player navigated away while we were awaiting the DB query — bail out cleanly
-      if (socket._pendingForfeitGame === 'scrabble') {
-        socket._pendingForfeitGame = null;
-        if (socket._pendingForfeitGameTimer) { clearTimeout(socket._pendingForfeitGameTimer); socket._pendingForfeitGameTimer = null; }
-        return;
-      }
-      if (entryFee > 0) {
-        if (currency === 'diamonds' && (profile.diamonds || 0) < entryFee)
-          return socket.emit('error', { message: 'Insufficient diamonds' });
-        if (currency === 'coins' && profile.c_coins < entryFee)
-          return socket.emit('error', { message: 'Insufficient C Coins' });
-        lockUser(authenticatedUser.userId);
-      }
-      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
-      userQueues.add(authenticatedUser.userId);
-      incrementCount('scrabble', socket.id, entryFee, currency);
-      const match = addToScrabbleQueue(player);
-      if (match) {
-        const { roomId, p1, p2 } = match;
-        userQueues.delete(p1.userId); userQueues.delete(p2.userId);
-        // Deduct fees BEFORE notifying clients
-        if (entryFee > 0) {
-          try {
-            await deductMatchFees(supabase, p1.userId, p2.userId, entryFee, currency);
-            const room = getScrabbleRoom(roomId);
-            if (room) room.feesDeducted = true;
-          } catch (e) {
-            console.error('[scrabble] fee deduction failed:', e.message);
-            deleteScrabbleRoom(roomId);
-            unlockUser(p1.userId); unlockUser(p2.userId);
-            decrementCount('scrabble', p1.socketId);
-            decrementCount('scrabble', p2.socketId);
-            io.emit('queue_entry_removed', { id: p1.socketId });
-            io.emit('queue_entry_removed', { id: p2.socketId });
-            const s1e = io.sockets.sockets.get(p1.socketId);
-            const s2e = io.sockets.sockets.get(p2.socketId);
-            if (s1e) s1e.emit('match_cancelled', { message: 'Your balance changed. Please rejoin the queue.' });
-            if (s2e) s2e.emit('match_cancelled', { message: 'Your balance changed. Please rejoin the queue.' });
-            return;
-          }
-        } else {
-          const room = getScrabbleRoom(roomId);
-          if (room) room.feesDeducted = true;
+        const { data: profile } = await supabase
+          .from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
+        if (socket._pendingForfeitGame === 'scrabble') {
+          socket._pendingForfeitGame = null;
+          if (socket._pendingForfeitGameTimer) { clearTimeout(socket._pendingForfeitGameTimer); socket._pendingForfeitGameTimer = null; }
+          return;
         }
-        const s1 = io.sockets.sockets.get(p1.socketId);
-        const s2 = io.sockets.sockets.get(p2.socketId);
-        if (s1) { s1.join(roomId); s1.emit('scrabble_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency }); }
-        if (s2) { s2.join(roomId); s2.emit('scrabble_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency }); }
-        io.emit('queue_entry_removed', { id: p1.socketId });
-        io.emit('queue_entry_removed', { id: p2.socketId });
-        // Brief countdown then start — check room still alive after each tick
-        // in case a player disconnected/forfeited during the countdown window
-        io.to(roomId).emit('scrabble_countdown', { count: 3 });
-        await new Promise(r => setTimeout(r, 1000));
-        if (!getScrabbleRoom(roomId)) return;
-        io.to(roomId).emit('scrabble_countdown', { count: 2 });
-        await new Promise(r => setTimeout(r, 1000));
-        if (!getScrabbleRoom(roomId)) return;
-        io.to(roomId).emit('scrabble_countdown', { count: 1 });
-        await new Promise(r => setTimeout(r, 1000));
-        if (!getScrabbleRoom(roomId)) return;
-        startScrabbleGame(io, supabase, roomId);
-      } else {
-        socket.emit('scrabble_queue_joined');
-        io.emit('queue_entry_added', {
-          id: socket.id, gameType: 'scrabble', entryFee, currency,
-          username: authenticatedUser.username || 'Player',
-          elo: authenticatedUser.elo || 1000,
-          profileColor: authenticatedUser.profile_color || '#1E90FF',
-          currentStreak: authenticatedUser.current_streak || 0,
-        });
-      }
+        if (entryFee > 0) {
+          if (currency === 'diamonds' && (profile.diamonds || 0) < entryFee)
+            return socket.emit('error', { message: 'Insufficient diamonds' });
+          if (currency === 'coins' && profile.c_coins < entryFee)
+            return socket.emit('error', { message: 'Insufficient C Coins' });
+          lockUser(authenticatedUser.userId);
+        }
+        const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
+        userQueues.add(authenticatedUser.userId);
+        incrementCount('scrabble', socket.id, entryFee, currency);
+        const match = addToWordleQueue(player);
+        if (match) {
+          const { roomId, p1, p2 } = match;
+          userQueues.delete(p1.userId); userQueues.delete(p2.userId);
+          if (entryFee > 0) {
+            try {
+              await deductMatchFees(supabase, p1.userId, p2.userId, entryFee, currency);
+              const room = getWordleRoom(roomId);
+              if (room) room.feesDeducted = true;
+            } catch (e) {
+              console.error('[wordle] fee deduction failed:', e.message);
+              deleteWordleRoom(roomId);
+              unlockUser(p1.userId); unlockUser(p2.userId);
+              decrementCount('scrabble', p1.socketId);
+              decrementCount('scrabble', p2.socketId);
+              io.emit('queue_entry_removed', { id: p1.socketId });
+              io.emit('queue_entry_removed', { id: p2.socketId });
+              const s1e = io.sockets.sockets.get(p1.socketId);
+              const s2e = io.sockets.sockets.get(p2.socketId);
+              if (s1e) s1e.emit('match_cancelled', { message: 'Your balance changed. Please rejoin the queue.' });
+              if (s2e) s2e.emit('match_cancelled', { message: 'Your balance changed. Please rejoin the queue.' });
+              return;
+            }
+          } else {
+            const room = getWordleRoom(roomId);
+            if (room) room.feesDeducted = true;
+          }
+          const s1 = io.sockets.sockets.get(p1.socketId);
+          const s2 = io.sockets.sockets.get(p2.socketId);
+          if (s1) { s1.join(roomId); s1.emit('scrabble_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency }); }
+          if (s2) { s2.join(roomId); s2.emit('scrabble_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency }); }
+          io.emit('queue_entry_removed', { id: p1.socketId });
+          io.emit('queue_entry_removed', { id: p2.socketId });
+          io.to(roomId).emit('scrabble_countdown', { count: 3 });
+          await new Promise(r => setTimeout(r, 1000));
+          if (!getWordleRoom(roomId)) return;
+          io.to(roomId).emit('scrabble_countdown', { count: 2 });
+          await new Promise(r => setTimeout(r, 1000));
+          if (!getWordleRoom(roomId)) return;
+          io.to(roomId).emit('scrabble_countdown', { count: 1 });
+          await new Promise(r => setTimeout(r, 1000));
+          if (!getWordleRoom(roomId)) return;
+          startWordleGame(io, supabase, roomId);
+        } else {
+          socket.emit('scrabble_queue_joined');
+          io.emit('queue_entry_added', {
+            id: socket.id, gameType: 'scrabble', entryFee, currency,
+            username: authenticatedUser.username || 'Player',
+            elo: authenticatedUser.elo || 1000,
+            profileColor: authenticatedUser.profile_color || '#1E90FF',
+            currentStreak: authenticatedUser.current_streak || 0,
+          });
+        }
       } finally {
         socket._startingGame = null;
       }
     });
 
     socket.on('leave_scrabble_queue', () => {
-      removeFromScrabbleQueue(socket.id);
+      removeFromWordleQueue(socket.id);
       if (authenticatedUser) { unlockUser(authenticatedUser.userId); userQueues.delete(authenticatedUser.userId); }
       decrementCount('scrabble', socket.id);
       io.emit('queue_entry_removed', { id: socket.id });
       socket.emit('scrabble_queue_left');
     });
 
-    socket.on('play_scrabble_vs_bot', async ({ entryFee = 0, currency = 'coins' } = {}) => {
-      if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
-      socket._startingGame = 'scrabble';
-      try {
-        if (currency !== 'diamonds') entryFee = 0; // bot games free for coins
-        const { data: profile } = await supabase.from('profiles').select('elo,username,c_coins,diamonds').eq('id', authenticatedUser.userId).single();
-        if (entryFee > 0) {
-          try {
-            if (currency === 'diamonds') await deductDiamonds(supabase, authenticatedUser.userId, Math.floor(entryFee));
-            else await deductCoins(supabase, authenticatedUser.userId, parseFloat(entryFee));
-          } catch (e) { return socket.emit('error', { message: e.message || 'Insufficient balance' }); }
-        }
-        const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency };
-        const { v4: uuid } = require('uuid');
-        const botSocketId = 'bot_scrabble_' + uuid();
-        const bot = { socketId: botSocketId, userId: botSocketId, username: 'Duely Bot', elo: 1000, entryFee, currency, isBot: true };
-        const { roomId } = createDirectScrabbleRoom(player, bot);
-        if (entryFee > 0) { const r = getScrabbleRoom(roomId); if (r) r.feesDeducted = true; }
-        socket.join(roomId);
-        if (socket._pendingForfeitGame === 'scrabble') {
-          socket._pendingForfeitGame = null;
-          if (socket._pendingForfeitGameTimer) { clearTimeout(socket._pendingForfeitGameTimer); socket._pendingForfeitGameTimer = null; }
-          await _handleForfeit(io, supabase, { roomId, room: getScrabbleRoom(roomId) }, socket.id, deleteScrabbleRoom, 'scrabble');
-          return;
-        }
-        socket.emit('scrabble_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo }, entryFee, vsBot: true });
-        socket.emit('scrabble_countdown', { count: 3 });
-        await new Promise(r => setTimeout(r, 1000));
-        if (!getScrabbleRoom(roomId)) return;
-        socket.emit('scrabble_countdown', { count: 2 });
-        await new Promise(r => setTimeout(r, 1000));
-        if (!getScrabbleRoom(roomId)) return;
-        socket.emit('scrabble_countdown', { count: 1 });
-        await new Promise(r => setTimeout(r, 1000));
-        if (!getScrabbleRoom(roomId)) return;
-        startScrabbleGame(io, supabase, roomId);
-      } finally {
-        socket._startingGame = null;
-      }
-    });
-
-    socket.on('scrabble_play_word', ({ roomId, placements }) => {
+    socket.on('wordle_guess', ({ roomId, guess }) => {
       if (!authenticatedUser) return;
-      handleScrabblePlay(io, supabase, roomId, socket.id, placements || []);
-    });
-
-    socket.on('scrabble_skip', ({ roomId }) => {
-      if (!authenticatedUser) return;
-      handleScrabbleSkip(io, supabase, roomId, socket.id);
-    });
-
-    socket.on('scrabble_exchange', ({ roomId, letters }) => {
-      if (!authenticatedUser) return;
-      handleScrabbleExchange(io, supabase, roomId, socket.id, letters || []);
+      handleWordleGuess(io, supabase, roomId, socket.id, guess || '');
     });
 
     // ════════════════════════════════════════════════════════════════
@@ -2115,7 +2059,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       removeFromStarshipQueue(socket.id);
       removeFromBlockBlastQueue(socket.id);
       removeFromCrossroadQueue(socket.id);
-      removeFromScrabbleQueue(socket.id);
+      removeFromWordleQueue(socket.id);
       removeFromCoinFlipQueue(socket.id);
       removeFromBlackjackQueue(socket.id);
       if (authenticatedUser) { unlockUser(authenticatedUser.userId); userQueues.delete(authenticatedUser.userId); }
@@ -2148,7 +2092,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         [getStarshipRoomBySocket,   deleteStarshipRoom,   'starship'],
         [getBlockBlastRoomBySocket, deleteBlockBlastRoom, 'blockBlast'],
         [getCrossroadRoomBySocket,  deleteCrossroadRoom,  'crossroad'],
-        [getScrabbleRoomBySocket,   deleteScrabbleRoom,   'scrabble'],
+        [getWordleRoomBySocket,     deleteWordleRoom,     'scrabble'],
         [getCoinFlipRoomBySocket,   deleteCoinFlipRoom,   'coin_flip'],
         [getBlackjackRoomBySocket,  deleteBlackjackRoom,  'blackjack'],
       ];
@@ -2236,11 +2180,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           if (board) socket.emit('tetris_spectator_board', { playerIdx: idx, board });
         }
       }
-      // Send current Scrabble board if available
-      const sRoom = getScrabbleRoom(roomId);
-      if (sRoom?.board) {
-        socket.emit('scrabble_spectator_board', { board: sRoom.board, scores: sRoom.scores });
-      }
+      // Wordle room — no board snapshot needed (each player has private guesses)
     });
 
     socket.on('leave_spectator', ({ roomId }) => {
@@ -2279,7 +2219,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       removeFromStarshipQueue(socket.id);
       removeFromBlockBlastQueue(socket.id);
       removeFromCrossroadQueue(socket.id);
-      removeFromScrabbleQueue(socket.id);
+      removeFromWordleQueue(socket.id);
       removeFromCoinFlipQueue(socket.id);
       removeFromBlackjackQueue(socket.id);
       // Broadcast queue entry removal so Play Now page stays in sync
@@ -2302,7 +2242,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         [getStarshipRoomBySocket,   deleteStarshipRoom,   'starship'],
         [getBlockBlastRoomBySocket, deleteBlockBlastRoom, 'blockBlast'],
         [getCrossroadRoomBySocket,  deleteCrossroadRoom,  'crossroad'],
-        [getScrabbleRoomBySocket,   deleteScrabbleRoom,   'scrabble'],
+        [getWordleRoomBySocket,     deleteWordleRoom,     'scrabble'],
         [getCoinFlipRoomBySocket,   deleteCoinFlipRoom,   'coin_flip'],
         [getBlackjackRoomBySocket,  deleteBlackjackRoom,  'blackjack'],
       ];
@@ -2779,15 +2719,15 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       case 'crossroad':    { ({ roomId } = createDirectCrossroadRoom(p1, p2)); emit2('crossroad_match_found'); startCrossroadRound(io, roomId); break; }
       case 'connectfour':  { ({ roomId } = createDirectC4Room(p1, p2)); emit2('c4_match_found');        startC4Countdown(io, supabase, roomId); break; }
       case 'scrabble': {
-        ({ roomId } = createDirectScrabbleRoom(p1, p2));
-        if (entryFee > 0) { const r = getScrabbleRoom(roomId); if (r) r.feesDeducted = true; }
+        ({ roomId } = createDirectWordleRoom(p1, p2));
+        if (entryFee > 0) { const r = getWordleRoom(roomId); if (r) r.feesDeducted = true; }
         s1.join(roomId); s2.join(roomId);
         s1.emit('scrabble_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency });
         s2.emit('scrabble_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency });
         io.to(roomId).emit('scrabble_countdown', { count: 3 });
         setTimeout(() => io.to(roomId).emit('scrabble_countdown', { count: 2 }), 1000);
         setTimeout(() => io.to(roomId).emit('scrabble_countdown', { count: 1 }), 2000);
-        setTimeout(() => startScrabbleGame(io, supabase, roomId), 3000);
+        setTimeout(() => startWordleGame(io, supabase, roomId), 3000);
         break;
       }
       case 'coin-flip': {
@@ -2821,18 +2761,13 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     socket.join(gameId);
 
     // Try to find the room in supported engines and send a snapshot
-    const scrabbleRoom = getScrabbleRoom(gameId);
+    const scrabbleRoom = getWordleRoom(gameId);
     if (scrabbleRoom) {
       const [p1, p2] = scrabbleRoom.players;
-      const scores = scrabbleRoom.scores || {};
       socket.emit('spectate_snapshot', {
         gameType: 'scrabble',
-        board: scrabbleRoom.board,
-        scores,
         player1: { userId: p1.userId, username: p1.username },
         player2: { userId: p2?.userId, username: p2?.username },
-        bagCount: scrabbleRoom.bag?.length ?? 0,
-        currentTurnUserId: scrabbleRoom.players[scrabbleRoom.turnIndex ?? 0]?.userId,
       });
       return;
     }
