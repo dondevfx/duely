@@ -95,7 +95,7 @@ const {
   createDirectWordleRoom,
   getWordleRoom, deleteWordleRoom, getWordleRoomBySocket,
   startWordleGame, handleWordleGuess,
-  scheduleBotWordleMove,
+  scheduleBotWordleMove, getRandomWordleWord,
 } = require('../services/wordleEngine');
 const {
   addToCoinFlipQueue, removeFromCoinFlipQueue,
@@ -114,7 +114,7 @@ const { checkSocketClickRate, cleanupSocket } = require('../middleware/rateLimit
 const { createBotPlayer } = require('../services/botService');
 const {
   settleMatch, settleMatchDiamonds, forfeitSettleDiamonds, forfeitSettleCoins,
-  deductCoins, deductDiamonds, deductMatchFees,
+  deductCoins, deductDiamonds, deductMatchFees, creditDiamonds,
   settleBotMatch,
 } = require('../services/walletService');
 const { lockUser, unlockUser, isLocked } = require('../services/lockService');
@@ -124,6 +124,7 @@ const { verifyToken } = require('../middleware/auth');
 module.exports = function registerSocketHandlers(io, supabase) {
   // ── Shared private-room registry (all game types) ─────────────
   const pendingPrivateRooms = new Map(); // code → { gameType, p1, createdAt }
+  const wordleSoloSessions = new Map(); // sessionId → { userId, word, fee, currency }
 const userQueues = new Set(); // userId → currently in a queue (prevents dual-tab double-join)
   // Returns true if user is in a queue OR in an active match (lock held until settlement)
   const inMatchOrQueue = (uid) => userQueues.has(uid) || isLocked(uid);
@@ -1905,6 +1906,40 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       } finally {
         socket._startingGame = null;
       }
+    });
+
+    // ── Wordle paid solo (diamond mode) ──────────────────────────────
+    socket.on('wordle_solo_start', async ({ entryFee = 0, currency = 'diamonds' } = {}) => {
+      if (!authenticatedUser) return socket.emit('wordle_solo_error', { error: 'Not authenticated' });
+      try {
+        const fee = Math.floor(entryFee);
+        if (fee > 0 && currency === 'diamonds') {
+          const { data: prof } = await supabase.from('profiles').select('diamonds').eq('id', authenticatedUser.userId).single();
+          if (!prof || prof.diamonds < fee) return socket.emit('wordle_solo_error', { error: 'Insufficient Diamonds' });
+          await deductDiamonds(supabase, authenticatedUser.userId, fee);
+        }
+        const { v4: uuid } = require('uuid');
+        const sessionId = uuid();
+        const word = getRandomWordleWord();
+        wordleSoloSessions.set(sessionId, { userId: authenticatedUser.userId, word, fee, currency });
+        setTimeout(() => wordleSoloSessions.delete(sessionId), 10 * 60 * 1000);
+        socket.emit('wordle_solo_ready', { sessionId, word });
+      } catch (e) {
+        socket.emit('wordle_solo_error', { error: e.message || 'Failed to start' });
+      }
+    });
+
+    socket.on('wordle_solo_complete', async ({ sessionId, solved }) => {
+      if (!authenticatedUser) return;
+      const session = wordleSoloSessions.get(sessionId);
+      if (!session || session.userId !== authenticatedUser.userId) return;
+      wordleSoloSessions.delete(sessionId);
+      let payout = 0;
+      if (solved && session.fee > 0 && session.currency === 'diamonds') {
+        payout = Math.floor(session.fee * 2 * 0.95);
+        await creditDiamonds(supabase, authenticatedUser.userId, payout).catch(() => {});
+      }
+      socket.emit('wordle_solo_settled', { won: solved, payout, currency: session.currency, entryFee: session.fee });
     });
 
     // ════════════════════════════════════════════════════════════════

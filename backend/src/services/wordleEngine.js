@@ -508,6 +508,10 @@ async function scheduleBotWordleMove(io, supabase, roomId, botSocketId) {
   }
 }
 
+function getRandomWordleWord() {
+  return ANSWERS[Math.floor(Math.random() * ANSWERS.length)];
+}
+
 module.exports = {
   addToWordleQueue, removeFromWordleQueue,
   createDirectWordleRoom,
@@ -515,4 +519,5 @@ module.exports = {
   startWordleGame, handleWordleGuess,
   scheduleBotWordleMove,
   evaluateGuess, MAX_GUESSES, WORD_LENGTH,
+  getRandomWordleWord,
 };

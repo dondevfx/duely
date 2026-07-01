@@ -204,8 +204,10 @@ export default function WordleGame() {
   const failIntervalRef = useRef(null);
 
   // ── Solo-mode state ────────────────────────────────────────────────────────
-  const [soloWord,   setSoloWord]   = useState('');
-  const [soloDone,   setSoloDone]   = useState(false);
+  const [soloWord,      setSoloWord]      = useState('');
+  const [soloDone,      setSoloDone]      = useState(false);
+  const [soloSessionId, setSoloSessionId] = useState(null);
+  const [soloResult,    setSoloResult]    = useState(null); // { won, payout, currency, entryFee }
 
   // ── Forfeit on unmount ────────────────────────────────────────────────────
   useEffect(() => {
@@ -268,11 +270,28 @@ export default function WordleGame() {
       if (failIntervalRef.current) { clearInterval(failIntervalRef.current); failIntervalRef.current = null; }
     });
 
+    socket.on('wordle_solo_ready', ({ sessionId, word }) => {
+      setSoloSessionId(sessionId);
+      setSoloWord(word);
+      setPhase('playing');
+    });
+
+    socket.on('wordle_solo_settled', (res) => {
+      setSoloResult(res);
+      setSoloDone(true);
+    });
+
+    socket.on('wordle_solo_error', ({ error }) => {
+      setStatusMsg(error || 'Failed to start solo');
+      setPhase('lobby');
+    });
+
     return () => {
       ['scrabble_match_found','scrabble_countdown','match_cancelled','wordle_start',
        'wordle_guess_result','wordle_error','wordle_opponent_progress','wordle_opponent_failed',
        'wordle_result','private_room_created','private_room_error','scrabble_queue_left',
-       'opponent_disconnected'].forEach(e => socket.off(e));
+       'opponent_disconnected','wordle_solo_ready','wordle_solo_settled','wordle_solo_error',
+      ].forEach(e => socket.off(e));
     };
   }, [socket]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -295,6 +314,7 @@ export default function WordleGame() {
     setGuesses([]); setCurrentRow([]); setLetterMap({});
     setOppCount(0); setMyDone(false); setOppFailed(false);
     setFailSecs(null); setResult(null); setSoloDone(false);
+    setSoloResult(null); setSoloSessionId(null);
     if (failIntervalRef.current) { clearInterval(failIntervalRef.current); failIntervalRef.current = null; }
   }
 
@@ -358,6 +378,14 @@ export default function WordleGame() {
     setPhase('playing');
   }
 
+  function startSoloPaid() {
+    if (!authenticated) { doAuth(); return; }
+    lastModeRef.current = 'solo';
+    lastSettingsRef.current = { entryFee, currency: betCurrency };
+    resetGameState();
+    socket.emit('wordle_solo_start', { entryFee, currency: betCurrency });
+  }
+
   function leaveQueue() {
     socket.emit('leave_scrabble_queue');
     setPhase('lobby'); setStatusMsg('');
@@ -417,7 +445,14 @@ export default function WordleGame() {
         const solved   = feedback.every(c => c.status === 'correct');
         revealRow(rowIdx, feedback, solved);
         if (solved || rowIdx + 1 >= MAX_GUESSES) {
-          setTimeout(() => setSoloDone(true), WORD_LENGTH * 300 + 200);
+          setTimeout(() => {
+            if (soloSessionId) {
+              // Paid session — server settles, then sets soloDone via wordle_solo_settled
+              socket.emit('wordle_solo_complete', { sessionId: soloSessionId, solved });
+            } else {
+              setSoloDone(true);
+            }
+          }, WORD_LENGTH * 300 + 200);
         }
       } else {
         socket.emit('wordle_guess', { roomId, guess });
@@ -484,23 +519,28 @@ export default function WordleGame() {
   // ── Solo done screen ──────────────────────────────────────────────────────
   if (phase === 'playing' && soloDone) {
     const solved = guesses.length > 0 && guesses[guesses.length - 1].every(c => c.status === 'correct');
+    const paidFee    = soloResult?.entryFee ?? 0;
+    const paidPayout = soloResult?.payout   ?? 0;
     return (
-      <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4 py-8 gap-5">
+      <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-4 py-8">
         <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
-        <div className="text-center">
-          <div className="text-4xl mb-3">{solved ? '🏆' : '💀'}</div>
-          <h2 className="text-3xl font-black" style={{ color: solved ? CLR.correct : '#ef4444' }}>
-            {solved ? `Solved in ${guesses.length}!` : 'Better Luck Next Time'}
-          </h2>
-          <p className="text-muted text-sm mt-1">
-            The word was <span className="text-white font-black tracking-widest">{soloWord}</span>
-          </p>
-        </div>
-        <MiniGrid guesses={guesses} label="Your guesses" />
-        <div className="flex gap-3 flex-wrap justify-center mt-2">
-          <GlowButton variant="primary" onClick={playAgain}>Play Again</GlowButton>
-          <GlowButton variant="ghost" onClick={backToLobby}>Back to Lobby</GlowButton>
-        </div>
+        <ResultScreen
+          isWinner={solved}
+          isDraw={false}
+          winnerUsername={solved ? (profile?.username ?? 'You') : null}
+          loserUsername={solved ? null : (profile?.username ?? 'You')}
+          entryFee={paidFee}
+          balanceChange={paidFee > 0 && solved ? { winnerPayout: paidPayout } : null}
+          currency={soloResult?.currency ?? betCurrency}
+          profile={profile}
+          gameLabel="🔤 Word VS"
+          extraRows={[
+            { label: 'The Word', value: soloWord },
+            { label: 'Guesses', value: `${guesses.length} / ${MAX_GUESSES}` },
+          ]}
+          onPlayAgain={playAgain}
+          onBackToLobby={backToLobby}
+        />
       </div>
     );
   }
@@ -550,6 +590,7 @@ export default function WordleGame() {
           balance={balance}
           authenticated={authenticated} doAuth={doAuth}
           onQueue={joinQueue}
+          onBot={startSoloPaid}
           onBotFree={startSolo}
           botLabel="🎮 Solo Mode"
           onCreatePrivate={createPrivate}
@@ -625,12 +666,8 @@ export default function WordleGame() {
       style={{ touchAction: 'manipulation' }}>
       <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
 
-      {/* ── Minimal top bar: just attempt counter + quit ── */}
-      <div className="flex items-center justify-between px-4 h-10 border-b border-surfaceLight shrink-0">
-        <div className="text-xs text-muted font-semibold tabular-nums">
-          {guessNum}/{MAX_GUESSES}
-          {isSoloMode && <span className="ml-1.5 text-primary">Solo</span>}
-        </div>
+      {/* ── Top bar: just quit ── */}
+      <div className="flex items-center justify-end px-4 h-9 border-b border-surfaceLight shrink-0">
         <button onClick={() => { socket?.emit('player_forfeit'); navigate('/'); }}
           className="text-xs text-muted hover:text-white transition-colors">
           Quit
@@ -645,40 +682,47 @@ export default function WordleGame() {
         </div>
       )}
 
-      {/* ── Grid ── */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-[6px] py-3 px-4">
-        {/* Opponent bar — sits directly above the grid, just like Block Burst's HUD */}
-        {!isSoloMode && (
-          <div className="flex items-center justify-between w-full max-w-[340px] mb-1">
-            <span className="text-xs text-white font-semibold truncate">{opponent?.username || 'Opponent'}</span>
-            <div className="flex items-center gap-1 shrink-0 ml-2">
-              {Array(MAX_GUESSES).fill(null).map((_, i) => (
-                <div key={i} className="w-3 h-3 rounded-sm transition-all duration-200"
-                  style={{
-                    background: i < oppCount
-                      ? (oppFailed && oppCount >= MAX_GUESSES ? '#ef4444' : '#1E90FF')
-                      : 'rgba(255,255,255,0.1)',
-                  }} />
-              ))}
+      {/* ── Grid area ── */}
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 py-3 px-4">
+
+        {/* HUD — matches Block Blast layout exactly */}
+        <div className="flex items-center justify-between w-full max-w-lg gap-2">
+          {/* My guess count */}
+          <div className="text-center min-w-[72px]">
+            <div className="text-xl font-black font-mono text-success">{guessNum}</div>
+            <div className="text-[10px] text-muted">{profile?.username ?? 'You'}</div>
+          </div>
+
+          {/* Center: mode */}
+          <div className="text-center flex-1">
+            {isSoloMode ? (
+              <span className="text-sm text-muted">Solo — <span className="text-accent font-semibold">Practice</span></span>
+            ) : (
+              <>
+                <div className="text-base font-black text-accent">Word Race</div>
+                {oppFailed && failSecs !== null && failSecs > 0 && !myDone && (
+                  <div className="text-xs font-bold mt-0.5" style={{ color: failSecs <= 15 ? '#ef4444' : '#f59e0b' }}>
+                    ⏱ {failSecs}s left
+                  </div>
+                )}
+                {myDone && !result && (
+                  <div className="text-xs font-bold text-green-400 mt-0.5">Solved! Waiting…</div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Opponent guess count */}
+          <div className="text-center min-w-[72px]">
+            <div className={`text-xl font-black font-mono ${oppCount > guessNum ? 'text-danger' : oppCount < guessNum ? 'text-success' : 'text-accent'}`}>
+              {isSoloMode ? '—' : oppCount}
+            </div>
+            <div className="text-[10px] text-muted">
+              {isSoloMode ? 'Solo' : (opponent?.username ?? 'Opponent')}
             </div>
           </div>
-        )}
+        </div>
 
-        {/* Status banners — sit above the grid tiles */}
-        {oppFailed && failSecs !== null && failSecs > 0 && !myDone && (
-          <div className="w-full max-w-[340px] px-3 py-1.5 rounded-lg text-center mb-1"
-            style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
-            <span className="text-xs font-bold" style={{ color: failSecs <= 15 ? '#ef4444' : '#f59e0b' }}>
-              ⏱ Opponent failed — {failSecs}s left
-            </span>
-          </div>
-        )}
-        {myDone && !result && !isSoloMode && (
-          <div className="w-full max-w-[340px] px-3 py-1.5 rounded-lg text-center mb-1"
-            style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}>
-            <span className="text-xs font-bold text-green-400">You solved it — waiting…</span>
-          </div>
-        )}
         {gridRows.map((row, rIdx) => {
           const isCurrentRow  = row.type === 'current';
           const isFlipping    = flipRow === rIdx;
