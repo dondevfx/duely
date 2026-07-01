@@ -1,6 +1,7 @@
 const { unlockUser } = require('./lockService');
 const { resolveAffiliates, payAffiliatesCoins, payAffiliatesDiamonds } = require('./affiliateService');
 const { creditRakeback } = require('./rakebackService');
+const { isDemo } = require('./demoAccounts');
 const PLATFORM_FEE_PERCENT = 0.05;
 
 const MAX_SINGLE_AMOUNT   = 10000;  // $10,000 hard cap per transaction
@@ -100,7 +101,7 @@ async function settleMatch(supabase, winnerId, loserId, entryFee) {
     const { error: creditErr } = await supabase.rpc('credit_coins', { user_id: winnerId, amount: payout });
     if (creditErr) throw creditErr;
 
-    if (adminId) {
+    if (adminId && !isDemo(winnerId) && !isDemo(loserId)) {
       const { owner1, owner2 } = await resolveAffiliates(supabase, winnerId, loserId)
         .catch(() => ({ owner1: null, owner2: null }));
       const { platformFee } = await payAffiliatesCoins(supabase, owner1, owner2, prizePool)
@@ -160,9 +161,11 @@ async function settleMatchDiamonds(supabase, winnerId, loserId, entryFee) {
     // Fees already deducted at match start — just credit winner
     await creditDiamonds(supabase, winnerId, winnerPayout);
 
-    await resolveAffiliates(supabase, winnerId, loserId)
-      .then(({ owner1, owner2 }) => payAffiliatesDiamonds(supabase, owner1, owner2, winnerPayout))
-      .catch(() => {});
+    if (!isDemo(winnerId) && !isDemo(loserId)) {
+      await resolveAffiliates(supabase, winnerId, loserId)
+        .then(({ owner1, owner2 }) => payAffiliatesDiamonds(supabase, owner1, owner2, winnerPayout))
+        .catch(() => {});
+    }
 
     supabase.from('transactions').insert([
       { user_id: winnerId, type: 'match_win',  amount_c: 0, crypto_amount: winnerPayout, crypto_symbol: 'diamonds', status: 'confirmed' },
@@ -288,7 +291,7 @@ async function forfeitSettleCoins(supabase, winnerId, loserId, entryFee, adminId
     const { error: creditErr } = await supabase.rpc('credit_coins', { user_id: winnerId, amount: winnerPayout });
     if (creditErr) throw creditErr;
 
-    if (adminId) {
+    if (adminId && !isDemo(winnerId) && !isDemo(loserId)) {
       const { owner1, owner2 } = await resolveAffiliates(supabase, winnerId, loserId)
         .catch(() => ({ owner1: null, owner2: null }));
       const { platformFee } = await payAffiliatesCoins(supabase, owner1, owner2, prizePool)
@@ -327,7 +330,7 @@ async function settleDrawMatch(supabase, p1Id, p2Id, entryFee) {
 
   // Pay affiliates / creator codes + admin fee (same as a normal match)
   let platformFeePercent = 0.045; // default: 4.5% (5% − 0.5% rakeback)
-  if (adminId) {
+  if (adminId && !isDemo(p1Id) && !isDemo(p2Id)) {
     try {
       const { owner1, owner2 } = await resolveAffiliates(supabase, p1Id, p2Id)
         .catch(() => ({ owner1: null, owner2: null }));
