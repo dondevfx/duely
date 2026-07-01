@@ -6,7 +6,6 @@ import { useCurrency } from '../context/CurrencyContext';
 import GameLobby, { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
 import GlowButton from '../components/GlowButton';
 import ResultScreen from '../components/ResultScreen';
-import CoinIcon from '../components/CoinIcon';
 
 const MAX_GUESSES = 6;
 const WORD_LENGTH = 5;
@@ -25,9 +24,9 @@ const CLR = {
   },
   key: {
     default: '#374151',
-    correct: '#16a34a',
-    present: '#b45309',
-    absent:  '#1f2937',
+    correct: '#22c55e',
+    present: '#f59e0b',
+    absent:  '#1a1f2e',
   },
 };
 
@@ -458,8 +457,9 @@ export default function WordleGame() {
     const s = letterMap[letter];
     return {
       background: s ? CLR.key[s] : CLR.key.default,
-      color: s ? '#fff' : 'rgba(255,255,255,0.85)',
-      boxShadow: s === 'correct' ? '0 0 8px rgba(22,163,74,0.45)' : s === 'present' ? '0 0 8px rgba(180,83,9,0.4)' : 'none',
+      color: s ? '#fff' : s === 'absent' ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.85)',
+      boxShadow: s === 'correct' ? '0 0 10px rgba(34,197,94,0.55)' : s === 'present' ? '0 0 10px rgba(245,158,11,0.5)' : 'none',
+      border: s === 'absent' ? '1px solid rgba(255,255,255,0.06)' : '1px solid transparent',
     };
   }
 
@@ -558,7 +558,7 @@ export default function WordleGame() {
           authenticated={authenticated} doAuth={doAuth}
           onQueue={joinQueue}
           onBotFree={startSolo}
-          botLabel="🟩 Solo Practice"
+          botLabel="🎮 Solo Mode"
           onCreatePrivate={createPrivate}
           onJoinPrivate={joinPrivate}
           statusMsg={statusMsg}
@@ -632,76 +632,17 @@ export default function WordleGame() {
       style={{ touchAction: 'manipulation' }}>
       <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
 
-      {/* ── Top bar ── */}
-      <div className="flex items-center justify-between px-4 h-12 border-b border-surfaceLight shrink-0">
-        {/* Brand mark */}
-        <div className="flex items-center gap-2">
-          <div className="flex gap-0.5">
-            {['W','O','R','D'].map((l, i) => (
-              <div key={i} className="w-5 h-5 rounded text-[9px] font-black flex items-center justify-center text-white"
-                style={{ background: [CLR.correct, CLR.present, CLR.correct, CLR.present][i] }}>
-                {l}
-              </div>
-            ))}
-          </div>
-          <span className="text-white font-black text-sm tracking-wide">Word VS</span>
-        </div>
-
-        {/* Centre: attempt counter */}
+      {/* ── Minimal top bar: just attempt counter + quit ── */}
+      <div className="flex items-center justify-between px-4 h-10 border-b border-surfaceLight shrink-0">
         <div className="text-xs text-muted font-semibold tabular-nums">
           {guessNum}/{MAX_GUESSES}
           {isSoloMode && <span className="ml-1.5 text-primary">Solo</span>}
         </div>
-
-        {/* Right: entry fee + quit */}
-        <div className="flex items-center gap-3">
-          {entryFee > 0 && (
-            <span className="text-xs text-muted inline-flex items-center gap-1">
-              {entryFee}{isDiamonds ? ' 💎' : <CoinIcon size="0.75em" />}
-            </span>
-          )}
-          <button onClick={() => { socket?.emit('player_forfeit'); navigate('/'); }}
-            className="text-xs text-muted hover:text-white transition-colors">
-            Quit
-          </button>
-        </div>
+        <button onClick={() => { socket?.emit('player_forfeit'); navigate('/'); }}
+          className="text-xs text-muted hover:text-white transition-colors">
+          Quit
+        </button>
       </div>
-
-      {/* ── Opponent bar (PvP only) ── */}
-      {!isSoloMode && (
-        <div className="flex items-center justify-between px-4 py-2 border-b border-surfaceLight/40 shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-2 h-2 rounded-full shrink-0" style={{ background: CLR.correct, boxShadow: `0 0 6px ${CLR.correct}` }} />
-            <span className="text-xs text-white font-medium truncate">{opponent?.username || 'Opponent'}</span>
-          </div>
-          <div className="flex items-center gap-1 shrink-0 ml-3">
-            {Array(MAX_GUESSES).fill(null).map((_, i) => (
-              <div key={i} className="w-3 h-3 rounded-sm transition-all duration-200"
-                style={{
-                  background: i < oppCount
-                    ? (oppFailed && oppCount >= MAX_GUESSES ? '#ef4444' : '#1E90FF')
-                    : 'rgba(255,255,255,0.1)',
-                }} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Status banners ── */}
-      {oppFailed && failSecs !== null && failSecs > 0 && !myDone && (
-        <div className="px-4 py-1.5 text-center shrink-0"
-          style={{ background: 'rgba(239,68,68,0.1)', borderBottom: '1px solid rgba(239,68,68,0.18)' }}>
-          <span className="text-xs font-bold" style={{ color: failSecs <= 15 ? '#ef4444' : '#f59e0b' }}>
-            ⏱ Opponent failed — {failSecs}s to guess the word
-          </span>
-        </div>
-      )}
-      {myDone && !result && !isSoloMode && (
-        <div className="px-4 py-1.5 text-center shrink-0"
-          style={{ background: 'rgba(34,197,94,0.1)', borderBottom: '1px solid rgba(34,197,94,0.18)' }}>
-          <span className="text-xs font-bold text-green-400">You solved it — waiting for opponent…</span>
-        </div>
-      )}
 
       {/* ── Error toast ── */}
       {errorMsg && (
@@ -713,6 +654,38 @@ export default function WordleGame() {
 
       {/* ── Grid ── */}
       <div className="flex-1 flex flex-col items-center justify-center gap-[6px] py-3 px-4">
+        {/* Opponent bar — sits directly above the grid, just like Block Burst's HUD */}
+        {!isSoloMode && (
+          <div className="flex items-center justify-between w-full max-w-[340px] mb-1">
+            <span className="text-xs text-white font-semibold truncate">{opponent?.username || 'Opponent'}</span>
+            <div className="flex items-center gap-1 shrink-0 ml-2">
+              {Array(MAX_GUESSES).fill(null).map((_, i) => (
+                <div key={i} className="w-3 h-3 rounded-sm transition-all duration-200"
+                  style={{
+                    background: i < oppCount
+                      ? (oppFailed && oppCount >= MAX_GUESSES ? '#ef4444' : '#1E90FF')
+                      : 'rgba(255,255,255,0.1)',
+                  }} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Status banners — sit above the grid tiles */}
+        {oppFailed && failSecs !== null && failSecs > 0 && !myDone && (
+          <div className="w-full max-w-[340px] px-3 py-1.5 rounded-lg text-center mb-1"
+            style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
+            <span className="text-xs font-bold" style={{ color: failSecs <= 15 ? '#ef4444' : '#f59e0b' }}>
+              ⏱ Opponent failed — {failSecs}s left
+            </span>
+          </div>
+        )}
+        {myDone && !result && !isSoloMode && (
+          <div className="w-full max-w-[340px] px-3 py-1.5 rounded-lg text-center mb-1"
+            style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}>
+            <span className="text-xs font-bold text-green-400">You solved it — waiting…</span>
+          </div>
+        )}
         {gridRows.map((row, rIdx) => {
           const isCurrentRow  = row.type === 'current';
           const isFlipping    = flipRow === rIdx;
