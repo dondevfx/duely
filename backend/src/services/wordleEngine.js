@@ -331,7 +331,7 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
   try {
     const isFree = fee === 0;
 
-    if (!isFree && winner && loser) {
+    if (winner && loser) {
       const ratings = calculateNewRatings(winner.elo || 1000, loser.elo || 1000);
       newWinnerElo  = ratings.newWinnerElo;
       newLoserElo   = ratings.newLoserElo;
@@ -351,20 +351,18 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
     }
 
     if (supabase && winner && loser) {
-      if (!isFree) {
-        if (!winner.isBot) {
-          await applyEloUpdate(supabase, winner.userId, newWinnerElo, true).catch(() => {});
-          await supabase.rpc('increment_win',  { uid: winner.userId }).then().catch(() => {});
-          try {
-            const sd = await updateStreaks(supabase, winner.userId, loser.isBot ? null : loser.userId);
-            winnerStreak = sd.winnerStreak;
-            isFirstWin   = sd.isFirstWin;
-          } catch {}
-        }
-        if (!loser.isBot) {
-          await applyEloUpdate(supabase, loser.userId, newLoserElo, true).catch(() => {});
-          await supabase.rpc('increment_loss', { uid: loser.userId }).then().catch(() => {});
-        }
+      if (!winner.isBot) {
+        await supabase.from('profiles').update({ elo: newWinnerElo }).eq('id', winner.userId).catch(() => {});
+        await supabase.rpc('increment_win', { uid: winner.userId }).catch(() => {});
+        try {
+          const sd = await updateStreaks(supabase, winner.userId, loser.isBot ? null : loser.userId);
+          winnerStreak = sd.winnerStreak;
+          isFirstWin   = sd.isFirstWin;
+        } catch {}
+      }
+      if (!loser.isBot) {
+        await supabase.from('profiles').update({ elo: newLoserElo }).eq('id', loser.userId).catch(() => {});
+        await supabase.rpc('increment_loss', { uid: loser.userId }).catch(() => {});
       }
       if (!loser.isBot) {
         supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId).then().catch(() => {});
