@@ -353,7 +353,7 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
     if (supabase && winner && loser) {
       if (!isFree) {
         if (!winner.isBot) {
-          await applyEloUpdate(supabase, winner.userId, newWinnerElo).catch(() => {});
+          await applyEloUpdate(supabase, winner.userId, newWinnerElo, true).catch(() => {});
           await supabase.rpc('increment_win',  { uid: winner.userId }).then().catch(() => {});
           try {
             const sd = await updateStreaks(supabase, winner.userId, loser.isBot ? null : loser.userId);
@@ -362,7 +362,7 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
           } catch {}
         }
         if (!loser.isBot) {
-          await applyEloUpdate(supabase, loser.userId, newLoserElo).catch(() => {});
+          await applyEloUpdate(supabase, loser.userId, newLoserElo, true).catch(() => {});
           await supabase.rpc('increment_loss', { uid: loser.userId }).then().catch(() => {});
         }
       }

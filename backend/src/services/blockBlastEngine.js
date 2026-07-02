@@ -346,7 +346,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
   Promise.resolve().then(async () => {
     let winnerStreak = 0, isFirstWin = false;
     if (supabase && !isFree && !winner.isBot) {
-      try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
+      try { await applyEloUpdate(supabase, winner.userId, newWinnerElo, true); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
       try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
       try { ({ winnerStreak, isFirstWin } = await updateStreaks(supabase, winner.userId, null)); } catch {}
     }
@@ -354,7 +354,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
       try { await supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId); } catch {}
     }
     if (supabase && !isFree && !loser.isBot) {
-      try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
+      try { await applyEloUpdate(supabase, loser.userId, newLoserElo, true); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
       try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
     }
     if (supabase) {

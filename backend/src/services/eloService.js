@@ -92,13 +92,16 @@ async function updateElo(supabase, winnerId, loserId, winnerElo, loserElo) {
 /**
  * Apply ELO update only after a player has completed placement (3+ total matches).
  * ELO updates happen BEFORE wins/losses are incremented, so compare against current total.
+ * Pass force=true to skip the placement guard (e.g. paid matches).
  */
-async function applyEloUpdate(supabase, userId, newElo) {
+async function applyEloUpdate(supabase, userId, newElo, force = false) {
   try {
-    const { data } = await supabase
-      .from('profiles').select('wins, losses').eq('id', userId).single();
-    const total = (data?.wins ?? 0) + (data?.losses ?? 0);
-    if (total < 3) return; // still in placement — no ELO change
+    if (!force) {
+      const { data } = await supabase
+        .from('profiles').select('wins, losses').eq('id', userId).single();
+      const total = (data?.wins ?? 0) + (data?.losses ?? 0);
+      if (total < 3) return; // still in placement — no ELO change
+    }
     await supabase.from('profiles').update({ elo: newElo }).eq('id', userId);
   } catch (e) {
     console.error('[applyEloUpdate] error:', e.message);
