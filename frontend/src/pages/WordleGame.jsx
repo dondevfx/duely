@@ -163,11 +163,13 @@ export default function WordleGame() {
   const navigate   = useNavigate();
   const location   = useLocation();
   const { socket, authenticated, doAuth, playerCounts } = useSocket();
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const { displayCurrency: betCurrency, setDisplayCurrency: setBetCurrency } = useCurrency();
 
   const socketRef = useRef(socket);
   useEffect(() => { socketRef.current = socket; }, [socket]);
+  const refreshProfileRef = useRef(refreshProfile);
+  useEffect(() => { refreshProfileRef.current = refreshProfile; }, [refreshProfile]);
 
   // ── Phase + bet state ─────────────────────────────────────────────────────
   const [phase,       setPhase]       = useState('lobby');
@@ -261,6 +263,8 @@ export default function WordleGame() {
       if (failIntervalRef.current) { clearInterval(failIntervalRef.current); failIntervalRef.current = null; }
       setResult(res);
       setPhase('result');
+      refreshProfileRef.current?.();
+      setTimeout(() => refreshProfileRef.current?.(), 2000);
     });
 
     socket.on('private_room_created', ({ code }) => { setPrivateCode(code); setPhase('private_waiting'); });
