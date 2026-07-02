@@ -89,6 +89,8 @@ export default function ResultScreen({
   const totalMatches = (profile?.wins ?? 0) + (profile?.losses ?? 0);
   const ranked = isRanked(profile);
   const placement = placementMatches(profile);
+  // Paid matches always update ELO regardless of placement — show the real number
+  const showElo = ranked || (entryFee > 0 && elo != null);
 
   return (
     <div
@@ -177,7 +179,7 @@ export default function ResultScreen({
             ))}
             <div className="flex justify-between border-t border-surfaceLight/40 pt-2">
               <span className="text-muted">ELO</span>
-              {ranked ? (
+              {showElo ? (
                 <span className="text-white font-bold">
                   {elo ?? '—'}{' '}
                   {eloDelta != null && (
