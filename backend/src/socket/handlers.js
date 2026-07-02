@@ -1935,12 +1935,27 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       const session = wordleSoloSessions.get(sessionId);
       if (!session || session.userId !== authenticatedUser.userId) return;
       wordleSoloSessions.delete(sessionId);
+      const userId = authenticatedUser.userId;
+
       let payout = 0;
       if (solved && session.fee > 0 && session.currency === 'diamonds') {
         payout = Math.floor(session.fee * 2 * 0.95);
-        await creditDiamonds(supabase, authenticatedUser.userId, payout).catch(() => {});
+        await creditDiamonds(supabase, userId, payout).catch(() => {});
       }
-      socket.emit('wordle_solo_settled', { won: solved, payout, currency: session.currency, entryFee: session.fee });
+
+      // ELO — fetch current elo, apply ±25, update DB and increment win/loss
+      let newElo = null;
+      try {
+        const { data: prof } = await supabase.from('profiles').select('elo').eq('id', userId).single();
+        const currentElo = prof?.elo ?? 1000;
+        newElo = solved ? currentElo + 25 : Math.max(0, currentElo - 25);
+        await supabase.from('profiles').update({ elo: newElo }).eq('id', userId);
+        await supabase.rpc(solved ? 'increment_win' : 'increment_loss', { uid: userId }).catch(() => {});
+      } catch (e) {
+        console.error('[wordle_solo] ELO update failed:', e.message);
+      }
+
+      socket.emit('wordle_solo_settled', { won: solved, payout, currency: session.currency, entryFee: session.fee, newElo });
     });
 
     // ════════════════════════════════════════════════════════════════

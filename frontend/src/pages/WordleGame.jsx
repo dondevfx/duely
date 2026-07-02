@@ -283,6 +283,8 @@ export default function WordleGame() {
     socket.on('wordle_solo_settled', (res) => {
       setSoloResult(res);
       setSoloDone(true);
+      refreshProfileRef.current?.();
+      setTimeout(() => refreshProfileRef.current?.(), 2000);
     });
 
     socket.on('wordle_solo_error', ({ error }) => {
@@ -525,6 +527,7 @@ export default function WordleGame() {
     const solved = guesses.length > 0 && guesses[guesses.length - 1].every(c => c.status === 'correct');
     const paidFee    = soloResult?.entryFee ?? 0;
     const paidPayout = soloResult?.payout   ?? 0;
+    const newElo     = soloResult?.newElo   ?? null;
     return (
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-4 py-8">
         <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
@@ -533,6 +536,9 @@ export default function WordleGame() {
           isDraw={false}
           winnerUsername={solved ? (profile?.username ?? 'You') : null}
           loserUsername={solved ? null : (profile?.username ?? 'You')}
+          newWinnerElo={solved ? newElo : undefined}
+          newLoserElo={solved ? undefined : newElo}
+          eloBeforeRef={eloBeforeRef}
           entryFee={paidFee}
           balanceChange={paidFee > 0 && solved ? { winnerPayout: paidPayout } : null}
           currency={soloResult?.currency ?? betCurrency}
