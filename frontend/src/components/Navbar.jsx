@@ -140,8 +140,8 @@ export default function Navbar() {
             </div>
           </button>
 
-          {/* Logo — absolutely centered on mobile, left-aligned on desktop */}
-          <div className="absolute left-1/2 -translate-x-1/2 lg:relative lg:left-auto lg:translate-x-0 lg:w-56 lg:shrink-0 flex justify-center lg:justify-start pointer-events-none lg:pointer-events-auto">
+          {/* Logo — left-aligned (in flex flow) so a large balance can't overlap it */}
+          <div className="relative shrink-0 lg:w-56 flex justify-start pointer-events-auto">
             <Link to="/" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-1.5 pointer-events-auto">
               <span className="text-2xl lg:text-3xl font-black tracking-tight text-primary" style={{ textShadow: '0 0 22px rgba(30,144,255,0.6)' }}>
                 Duely
