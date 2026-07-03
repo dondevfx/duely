@@ -274,15 +274,23 @@ export default function WordleGame() {
       if (failIntervalRef.current) { clearInterval(failIntervalRef.current); failIntervalRef.current = null; }
     });
 
-    socket.on('wordle_solo_ready', ({ sessionId, word }) => {
+    socket.on('wordle_solo_ready', ({ sessionId }) => {
+      // Paid solo is server-authoritative — the answer word is NOT sent here.
       setSoloSessionId(sessionId);
-      setSoloWord(word);
+      setSoloWord('');
       setPhase('playing');
     });
 
+    // Server-evaluated guess result for paid solo (mirrors wordle_guess_result)
+    socket.on('wordle_solo_guess_result', ({ feedback, guessNumber, solved }) => {
+      revealRow(guessNumber - 1, feedback, solved);
+    });
+
     socket.on('wordle_solo_settled', (res) => {
+      if (res?.word) setSoloWord(res.word); // reveal the answer for the result screen
       setSoloResult(res);
-      setSoloDone(true);
+      // Delay so the final row's flip animation finishes before the result card
+      setTimeout(() => setSoloDone(true), WORD_LENGTH * 300 + 400);
       refreshProfileRef.current?.();
       setTimeout(() => refreshProfileRef.current?.(), 2000);
     });
@@ -297,6 +305,7 @@ export default function WordleGame() {
        'wordle_guess_result','wordle_error','wordle_opponent_progress','wordle_opponent_failed',
        'wordle_result','private_room_created','private_room_error','scrabble_queue_left',
        'opponent_disconnected','wordle_solo_ready','wordle_solo_settled','wordle_solo_error',
+       'wordle_solo_guess_result',
       ].forEach(e => socket.off(e));
     };
   }, [socket]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -444,21 +453,19 @@ export default function WordleGame() {
     if (key === 'ENTER' || key === 'Enter') {
       if (currentRow.length < WORD_LENGTH) { flashError('Not enough letters'); triggerShake(); return; }
       const guess = currentRow.join('');
-      if (isSolo) {
-        // Local solo evaluation
+      if (isSolo && soloSessionId) {
+        // Paid solo is server-authoritative: submit the guess and let the server
+        // evaluate it (wordle_solo_guess_result) and settle (wordle_solo_settled).
+        // The client never sees the word or decides the outcome.
+        socket.emit('wordle_solo_guess', { sessionId: soloSessionId, guess });
+      } else if (isSolo) {
+        // Free practice solo — no money/ELO, evaluated locally against a client word.
         const feedback = evalGuessLocal(soloWord, guess);
         const rowIdx   = guesses.length;
         const solved   = feedback.every(c => c.status === 'correct');
         revealRow(rowIdx, feedback, solved);
         if (solved || rowIdx + 1 >= MAX_GUESSES) {
-          setTimeout(() => {
-            if (soloSessionId) {
-              // Paid session — server settles, then sets soloDone via wordle_solo_settled
-              socket.emit('wordle_solo_complete', { sessionId: soloSessionId, solved });
-            } else {
-              setSoloDone(true);
-            }
-          }, WORD_LENGTH * 300 + 200);
+          setTimeout(() => setSoloDone(true), WORD_LENGTH * 300 + 200);
         }
       } else {
         socket.emit('wordle_guess', { roomId, guess });
@@ -469,7 +476,7 @@ export default function WordleGame() {
       setCurrentRow(prev => [...prev, key.toUpperCase()]);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canType, currentRow, isSolo, soloWord, guesses, roomId, socket]);
+  }, [canType, currentRow, isSolo, soloWord, soloSessionId, guesses, roomId, socket]);
 
   useEffect(() => {
     const onKey = (e) => { if (!e.ctrlKey && !e.metaKey && !e.altKey) handleKey(e.key); };

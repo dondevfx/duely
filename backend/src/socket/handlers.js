@@ -13,7 +13,9 @@ const {
   getWordleRoom, deleteWordleRoom, getWordleRoomBySocket,
   startWordleGame, handleWordleGuess,
   scheduleBotWordleMove, getRandomWordleWord,
+  evaluateGuess, MAX_GUESSES, WORD_LENGTH,
 } = require('../services/wordleEngine');
+const { isValidWord } = require('../services/wordValidator');
 const {
   addToCoinFlipQueue, removeFromCoinFlipQueue,
   createDirectCoinFlipRoom,
@@ -620,18 +622,46 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         const { v4: uuid } = require('uuid');
         const sessionId = uuid();
         const word = getRandomWordleWord();
-        wordleSoloSessions.set(sessionId, { userId: authenticatedUser.userId, word, fee, currency });
+        // The answer word is kept SERVER-SIDE only — it is never sent to the
+        // client. Guesses are submitted to and evaluated by the server, so the
+        // client cannot self-report "solved". Prevents free diamond/ELO minting.
+        wordleSoloSessions.set(sessionId, { userId: authenticatedUser.userId, word, fee, currency, guesses: 0, finished: false });
         setTimeout(() => wordleSoloSessions.delete(sessionId), 10 * 60 * 1000);
-        socket.emit('wordle_solo_ready', { sessionId, word });
+        socket.emit('wordle_solo_ready', { sessionId });
       } catch (e) {
         socket.emit('wordle_solo_error', { error: e.message || 'Failed to start' });
       }
     });
 
-    socket.on('wordle_solo_complete', async ({ sessionId, solved }) => {
+    // Server-authoritative solo guess: the client submits a guess, the server
+    // evaluates it against the hidden word and decides when the game is solved
+    // or exhausted, then settles. No trust in any client-supplied outcome.
+    socket.on('wordle_solo_guess', async ({ sessionId, guess }) => {
       if (!authenticatedUser) return;
       const session = wordleSoloSessions.get(sessionId);
-      if (!session || session.userId !== authenticatedUser.userId) return;
+      if (!session || session.userId !== authenticatedUser.userId || session.finished) return;
+
+      const g = (guess || '').toUpperCase().trim();
+      if (g.length !== WORD_LENGTH || !/^[A-Z]+$/.test(g)) {
+        return socket.emit('wordle_error', { error: 'Guess must be 5 letters' });
+      }
+      if (!isValidWord(g.toLowerCase())) {
+        return socket.emit('wordle_error', { error: 'Not a valid word' });
+      }
+      if (session.guesses >= MAX_GUESSES) return;
+
+      const feedback = evaluateGuess(session.word, g);
+      session.guesses += 1;
+      const solved = feedback.every(c => c.status === 'correct');
+      const guessNumber = session.guesses;
+      const done = solved || guessNumber >= MAX_GUESSES;
+
+      socket.emit('wordle_solo_guess_result', { feedback, guessNumber, solved });
+
+      if (!done) return;
+
+      // ── Settle (server-decided outcome) ──────────────────────────────
+      session.finished = true;
       wordleSoloSessions.delete(sessionId);
       const userId = authenticatedUser.userId;
 
@@ -641,7 +671,6 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         await creditDiamonds(supabase, userId, payout).catch(() => {});
       }
 
-      // ELO — fetch current elo, apply ±25, update DB and increment win/loss
       let newElo = null;
       try {
         const { data: prof } = await supabase.from('profiles').select('elo').eq('id', userId).single();
@@ -653,7 +682,9 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         console.error('[wordle_solo] ELO update failed:', e.message);
       }
 
-      socket.emit('wordle_solo_settled', { won: solved, payout, currency: session.currency, entryFee: session.fee, newElo });
+      socket.emit('wordle_solo_settled', {
+        won: solved, payout, currency: session.currency, entryFee: session.fee, newElo, word: session.word,
+      });
     });
 
     // ════════════════════════════════════════════════════════════════

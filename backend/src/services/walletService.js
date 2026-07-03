@@ -244,10 +244,19 @@ async function recordWithdrawal(supabase, userId, amount, source) {
   }
 }
 
-// Returns how much the user can withdraw via each method.
-// crypto: limited to total crypto deposited minus already withdrawn, capped at balance.
-// fiat:   limited to total fiat deposited minus already withdrawn, capped at balance.
-// Game winnings increase c_coins but are not withdrawable — they are in-platform only.
+// Returns how much the user can withdraw.
+//
+// The entire c_coins balance is withdrawable — including game winnings and
+// affiliate earnings — because there is no free coin faucet (new accounts start
+// at 0, PvP is zero-sum minus rake, bot coin games are free-entry only, and the
+// only bonus that mints coins is the 1/day daily bonus). Every coin therefore
+// traces back to a real deposit, real rake, or a zero-sum transfer, so gating by
+// funding source would only serve to trap users' legitimate winnings.
+//
+// NOTE: profiles.crypto_deposited / crypto_withdrawn (and fiat_*) are still
+// tracked (see recordDeposit/recordWithdrawal) and remain available if strict
+// source-of-funds / AML gating is ever required — wire them in here to cap each
+// method to (deposited − withdrawn). Not enforced today by design.
 async function getWithdrawable(supabase, userId) {
   const { data } = await supabase.from('profiles')
     .select('c_coins').eq('id', userId).single();

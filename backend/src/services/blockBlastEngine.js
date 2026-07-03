@@ -4,8 +4,14 @@ const { v4: uuidv4 } = require('uuid');
 const { updateHighscore } = require('./highscoreService');
 const MAX_SCORE = 15_000_000;
 // Max points a single move can legitimately award:
-// scoreForClear(16 lines, 5 cells, chain=3) ≈ 77k — use 150k to give headroom for combos
+// scoreForClear(16 lines, 5 cells, chain=3) ≈ 77k — use 150k to give headroom for combos.
+// This doubles as the token-bucket burst capacity (one big combo can land instantly).
 const MAX_DELTA_PER_PING = 150_000;
+// Sustained score growth cap, in points per millisecond. The bucket refills at
+// this rate, so no matter how fast a client spams pings, the score can't grow
+// faster than SCORE_REFILL_PER_MS × time — killing the "spam pings, each +150k"
+// exploit while leaving legitimate bursty play (refilled bucket) untouched.
+const SCORE_REFILL_PER_MS = 200; // 200k points/sec sustained ceiling
 const gameEvents = require('./gameEvents');
 
 const blockBlastRooms = new Map();
@@ -71,6 +77,7 @@ function _makeRoom(roomId, p1, p2) {
     // Server-tracked scores from pings — authoritative source for final score
     pingScores:     {},
     pingTimes:      {},
+    scoreBuckets:   {}, // token-bucket allowance per socket (anti score-spam)
   };
 }
 
@@ -84,26 +91,31 @@ function trackBlockBlastScorePing(roomId, socketId, rawScore) {
   const prev      = room.pingScores[socketId] ?? 0;
   const lastTime  = room.pingTimes[socketId]  ?? (room.startTime || now);
   const delta     = (rawScore || 0) - prev;
-  const elapsed   = now - lastTime;
+  const elapsed   = Math.max(0, now - lastTime);
 
   // Score must be non-decreasing
   if (rawScore < prev) return prev;
 
-  // If the jump in one ping exceeds what's physically possible, clamp it.
-  // This means a cheater sending fake high scores gets their score clamped to
-  // prev + MAX_DELTA rather than the spoofed value.
-  const clamped = delta > MAX_DELTA_PER_PING
-    ? Math.min(prev + MAX_DELTA_PER_PING, MAX_SCORE)
-    : Math.min(rawScore, MAX_SCORE);
+  // Token-bucket rate limit. The bucket refills by elapsed × SCORE_REFILL_PER_MS
+  // (capped at MAX_DELTA_PER_PING of burst capacity) and the score may only grow
+  // by what the bucket permits. Because rapid-fire pings have tiny elapsed time,
+  // they barely refill the bucket — so spamming pings can no longer inflate the
+  // score. Legitimate play, which pings over real time, refills normally.
+  const bucketPrev = room.scoreBuckets[socketId] ?? MAX_DELTA_PER_PING;
+  const bucket     = Math.min(MAX_DELTA_PER_PING, bucketPrev + elapsed * SCORE_REFILL_PER_MS);
 
-  // Log suspicious pings (big jumps that got clamped) for review
-  if (delta > MAX_DELTA_PER_PING) {
+  const grant   = Math.max(0, Math.min(delta, bucket));
+  const clamped = Math.min(prev + grant, MAX_SCORE);
+
+  // Log throttled pings (client tried to grow faster than allowed) for review
+  if (delta > grant) {
     const player = room.players.find(p => p.socketId === socketId);
-    console.warn(`[blockBlast] suspicious score ping — user:${player?.userId} claimed:${rawScore} prev:${prev} delta:${delta} clamped to:${clamped}`);
+    console.warn(`[blockBlast] score ping throttled — user:${player?.userId} claimed:${rawScore} prev:${prev} delta:${delta} granted:${grant} clamped to:${clamped}`);
   }
 
-  room.pingScores[socketId] = clamped;
-  room.pingTimes[socketId]  = now;
+  room.scoreBuckets[socketId] = bucket - (clamped - prev);
+  room.pingScores[socketId]   = clamped;
+  room.pingTimes[socketId]    = now;
   return clamped;
 }
 
