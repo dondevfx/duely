@@ -108,14 +108,24 @@ module.exports = function affiliateRoutes(supabase) {
     const earningsC = parseFloat(profile.affiliate_earnings_c ?? 0);
     if (earningsC <= 0) return res.status(400).json({ error: 'No earnings to collect' });
 
-    // Zero out — use .gte so floating-point noise doesn't block the update
-    const { error: zeroErr } = await supabase
+    // Zero out — use .gte so floating-point noise doesn't block the update.
+    // Return the affected row so we can confirm THIS request is the one that
+    // actually zeroed the earnings. Without this check, two concurrent requests
+    // both read the same earningsC, both fall through to creditCoins, and the
+    // user is credited twice while earnings are deducted once (a mintable race).
+    const { data: zeroed, error: zeroErr } = await supabase
       .from('profiles')
       .update({ affiliate_earnings_c: 0 })
       .eq('id', req.user.id)
-      .gte('affiliate_earnings_c', earningsC);
+      .gte('affiliate_earnings_c', earningsC)
+      .select('id');
 
     if (zeroErr) return res.status(500).json({ error: 'Failed to zero earnings' });
+    // 0 rows affected → another concurrent request already collected. Abort
+    // without crediting so earnings can never be double-collected.
+    if (!zeroed || zeroed.length === 0) {
+      return res.status(400).json({ error: 'No earnings to collect' });
+    }
 
     try {
       await creditCoins(supabase, req.user.id, earningsC);

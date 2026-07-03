@@ -126,11 +126,15 @@ module.exports = function walletRoutes(supabase, io) {
     if (activeWithdrawals.has(req.user.id)) {
       return res.status(429).json({ error: 'A withdrawal is already in progress' });
     }
-    activeWithdrawals.add(req.user.id);
 
     const { coin, address, memo } = req.body;
 
-    // Validate coin — any SimpleSwap-supported coin
+    // Validate coin — any SimpleSwap-supported coin.
+    // NOTE: all of these early-return validations run BEFORE the in-flight lock
+    // is acquired below. Acquiring the lock earlier leaked it on every validation
+    // failure (no delete on those returns), permanently locking the user out of
+    // withdrawing until server restart. These checks are synchronous, so no
+    // concurrent request can slip through before the lock is set.
     if (!coin || !SS_TICKERS[coin.toLowerCase()]) {
       return res.status(400).json({ error: 'Invalid or unsupported withdrawal coin' });
     }
@@ -150,6 +154,10 @@ module.exports = function walletRoutes(supabase, io) {
     if (amount < coinMin) {
       return res.status(400).json({ error: `Minimum withdrawal is $${coinMin}.` });
     }
+
+    // Acquire the in-flight lock only after all validation has passed, so a
+    // rejected request never leaves the user locked. Released in `finally`.
+    activeWithdrawals.add(req.user.id);
 
     try {
       // ── Rate limit ───────────────────────────────────────────────────
