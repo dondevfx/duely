@@ -163,7 +163,7 @@ export default function GameLobby({
 
   return (
     <div className="w-full max-w-md animate-slide-up">
-      <h1 className="text-3xl sm:text-5xl font-black text-white text-center mb-3">{title}</h1>
+      <h1 className="text-5xl font-black text-white text-center mb-3">{title}</h1>
       {description && (
         <p className="text-center text-muted text-base leading-relaxed mb-6 px-2">{description}</p>
       )}
