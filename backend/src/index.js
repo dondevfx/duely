@@ -1,8 +1,11 @@
-require('dotenv').config();
+// Sentry must be required/initialised before anything else so it can
+// instrument the app. No-op until SENTRY_DSN is set. (Also loads dotenv.)
+const { Sentry, enabled: sentryEnabled } = require('./instrument');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const helmet = require('helmet');
 const { createClient } = require('@supabase/supabase-js');
 
 const authRoutes = require('./routes/auth');
@@ -42,6 +45,14 @@ const supabase = createClient(
 // Trust Railway's reverse proxy so rate-limiter sees real client IPs
 app.set('trust proxy', 1);
 
+// Security headers. This is a JSON API consumed cross-origin by the frontend,
+// so CSP (meant for HTML pages) is disabled and CORP is set to cross-origin —
+// the valuable protections (HSTS, no-sniff, hide X-Powered-By, etc.) stay on.
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
+
 app.use(cors({
   origin: allowedOrigins,
   credentials: true,
@@ -80,6 +91,10 @@ registerSocketHandlers(io, supabase);
 
 // JSON 404 for any unmatched API route — prevents Express returning HTML pages
 app.use((_req, res) => res.status(404).json({ error: 'Route not found' }));
+
+// Sentry error handler — reports thrown errors before our handler formats them.
+// No-op when Sentry isn't configured. Must come after routes, before ours.
+if (sentryEnabled) Sentry.setupExpressErrorHandler(app);
 
 // Global error handler — converts all unhandled throws to JSON (never HTML)
 // eslint-disable-next-line no-unused-vars
