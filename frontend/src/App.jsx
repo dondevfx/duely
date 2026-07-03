@@ -113,6 +113,7 @@ function Shell() {
       </div>
       {/* Main content always interactive */}
       <main className={`absolute top-14 bottom-0 left-0 right-0 overflow-y-auto transition-[left,right] duration-300 lg:left-56 ${chatOpen ? 'lg:right-80' : 'lg:right-0'}`}>
+        <div className="tv-scale">
         <Routes>
           <Route path="/"                  element={<Home />} />
           <Route path="/leaderboard"        element={<Leaderboard />} />
@@ -136,6 +137,7 @@ function Shell() {
           <Route path="/admin"              element={<ProtectedRoute><Admin /></ProtectedRoute>} />
           <Route path="*"                   element={<Navigate to="/" replace />} />
         </Routes>
+        </div>
       </main>
       <ForfeitToast />
       <ReconnectOverlay />

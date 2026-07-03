@@ -94,3 +94,18 @@ html.light .bg-black { background-color: #e8ecf4 !important; }
 /* Light mode hover overrides */
 html.light .hover\:text-white:hover { color: #1e293b !important; }
 html.light .hover\:bg-surfaceLight:hover { background-color: #cdd4e0 !important; }
+
+/* ── TV / large high-DPI display fit ──────────────────────────────────────
+   Only the main content is scaled — the navbar and sidebars are untouched.
+   4K TVs render at ~1920 CSS px but with devicePixelRatio ≥ 2, so we can
+   target them without affecting standard 1080p (1×) monitors. Genuinely
+   large-width displays (2560px+, native 4K) are scaled by width. */
+@media (min-width: 1900px) and (min-resolution: 1.5dppx) {
+  .tv-scale { zoom: 0.85; }
+}
+@media (min-width: 2560px) {
+  .tv-scale { zoom: 0.8; }
+}
+@media (min-width: 3400px) {
+  .tv-scale { zoom: 0.7; }
+}
