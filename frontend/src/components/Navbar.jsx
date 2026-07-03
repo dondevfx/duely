@@ -205,7 +205,7 @@ export default function Navbar() {
                 )}
               </div>
               <Link to="/tip" onClick={() => setDropdownOpen(false)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-border bg-black hover:border-primary/60 hover:text-white text-muted text-sm font-semibold transition-all">
+                className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-primary bg-primary hover:bg-blue-500 text-white text-sm font-semibold transition-all shadow-glow">
                 💸 Tip
               </Link>
 
@@ -214,7 +214,7 @@ export default function Navbar() {
                 <button
                   onClick={handleRakebackOpen}
                   title="Rakeback"
-                  className="flex items-center justify-center w-9 h-9 rounded-full border border-border bg-black hover:border-primary/60 transition-all text-lg"
+                  className="flex items-center justify-center w-9 h-9 rounded-full border border-primary bg-primary hover:bg-blue-500 transition-all text-lg shadow-glow"
                 >
                   🎁
                 </button>
@@ -372,7 +372,7 @@ export default function Navbar() {
                       return !o;
                     });
                   }}
-                  className="flex items-center justify-center w-7 h-7 rounded-full border border-border bg-black"
+                  className="flex items-center justify-center w-7 h-7 rounded-full border border-primary bg-primary hover:bg-blue-500 transition-all"
                   style={{ fontSize: 14 }}
                   title="Rakeback"
                 >
