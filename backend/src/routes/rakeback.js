@@ -34,21 +34,8 @@ module.exports = function rakebackRoutes(supabase) {
       const daily   = p?.rakeback_daily   ?? 0;
       const weekly  = p?.rakeback_weekly  ?? 0;
 
-      // Instant claimable: balance > 0 AND (no prior claim OR 5 minutes have passed)
-      const instantAt = p?.rakeback_instant_at ? new Date(p.rakeback_instant_at) : null;
       const INSTANT_COOLDOWN = 5 * 60 * 1000;
-      const instantClaimable = Math.floor(instant) >= 1 && (instantAt === null || (now - instantAt) >= INSTANT_COOLDOWN);
-      const instantNextAt = !instantClaimable && instantAt ? new Date(instantAt.getTime() + INSTANT_COOLDOWN).toISOString() : null;
-
-      // Daily claimable: daily_at is null OR more than 24h ago, AND balance > 0
-      const dailyAt = p?.rakeback_daily_at ? new Date(p.rakeback_daily_at) : null;
-      const dailyClaimable = Math.floor(daily) >= 1 && (dailyAt === null || (now - dailyAt) >= 24 * 60 * 60 * 1000);
-      const dailyNextAt = !dailyClaimable && dailyAt ? new Date(dailyAt.getTime() + 24 * 60 * 60 * 1000).toISOString() : null;
-
-      // Weekly claimable: weekly_at is null OR before the most recent Monday midnight UTC, AND balance > 0
-      const weeklyAt = p?.rakeback_weekly_at ? new Date(p.rakeback_weekly_at) : null;
-      const lastMonday = lastMondayUTC(now);
-      const weeklyClaimable = Math.floor(weekly) >= 1 && (weeklyAt === null || weeklyAt < lastMonday);
+      const DAILY_COOLDOWN   = 24 * 60 * 60 * 1000;
 
       function nextMondayUTC(from) {
         const d = new Date(from);
@@ -58,7 +45,32 @@ module.exports = function rakebackRoutes(supabase) {
         d.setUTCHours(0, 0, 0, 0);
         return d;
       }
-      const weeklyNextAt = !weeklyClaimable ? nextMondayUTC(now).toISOString() : null;
+
+      // A countdown timer is shown ONLY when the user is on cooldown from a
+      // PRIOR claim (the *_at timestamp is set and still within the window).
+      // If they've never claimed — or have nothing to claim — there is no timer;
+      // they just see "Claim" (disabled when the balance is 0). The timer only
+      // starts once a claim is made.
+
+      // Instant — 5 minute cooldown
+      const instantAt = p?.rakeback_instant_at ? new Date(p.rakeback_instant_at) : null;
+      const instantOnCooldown = instantAt !== null && (now - instantAt) < INSTANT_COOLDOWN;
+      const instantClaimable  = Math.floor(instant) >= 1 && !instantOnCooldown;
+      const instantNextAt = instantOnCooldown ? new Date(instantAt.getTime() + INSTANT_COOLDOWN).toISOString() : null;
+
+      // Daily — 24 hour cooldown
+      const dailyAt = p?.rakeback_daily_at ? new Date(p.rakeback_daily_at) : null;
+      const dailyOnCooldown = dailyAt !== null && (now - dailyAt) < DAILY_COOLDOWN;
+      const dailyClaimable  = Math.floor(daily) >= 1 && !dailyOnCooldown;
+      const dailyNextAt = dailyOnCooldown ? new Date(dailyAt.getTime() + DAILY_COOLDOWN).toISOString() : null;
+
+      // Weekly — resets each Monday 00:00 UTC. On cooldown means already claimed
+      // at or after the most recent Monday (never-claimed = weeklyAt null = no timer).
+      const weeklyAt = p?.rakeback_weekly_at ? new Date(p.rakeback_weekly_at) : null;
+      const lastMonday = lastMondayUTC(now);
+      const weeklyOnCooldown = weeklyAt !== null && weeklyAt >= lastMonday;
+      const weeklyClaimable  = Math.floor(weekly) >= 1 && !weeklyOnCooldown;
+      const weeklyNextAt = weeklyOnCooldown ? nextMondayUTC(now).toISOString() : null;
 
       return res.json({ instant, instantClaimable, instantNextAt, daily, dailyClaimable, dailyNextAt, weekly, weeklyClaimable, weeklyNextAt });
     } catch (e) {

@@ -204,11 +204,6 @@ export default function Navbar() {
                   </div>
                 )}
               </div>
-              <Link to="/tip" onClick={() => setDropdownOpen(false)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-primary bg-primary hover:bg-blue-500 text-white text-sm font-semibold transition-all shadow-glow">
-                💸 Tip
-              </Link>
-
               {/* Rakeback button + dropdown */}
               <div className="relative" ref={rakebackRef}>
                 <button

@@ -17,6 +17,7 @@ const NAV = [
   { icon: '👤', label: 'Profile',       route: '/profile' },
   { icon: '🏆', label: 'Leaderboard',   route: '/leaderboard' },
   { icon: '💳', label: 'Wallet',         route: '/wallet' },
+  { icon: '💸', label: 'Tip',            route: '/tip' },
 ];
 
 function linkCls(isActive) {
