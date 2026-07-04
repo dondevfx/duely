@@ -23,7 +23,7 @@ const TABS = [
 
 const GAME_LEADERBOARDS = [
   { id: 'blockBlast',    label: 'Block Burst',  icon: '🟦', scoreLabel: 'Score' },
-  { id: 'scrabble',      label: 'Word VS',      icon: '🔤', scoreLabel: 'Score' },
+  { id: 'scrabble',      label: 'Word VS',      icon: '🔤', scoreLabel: 'Wins'  },
   { id: 'coinFlip',      label: 'Coin Flip',    icon: '🟡', scoreLabel: 'Wins'  },
   { id: 'blackjack',     label: 'Blackjack',    icon: '🃏', scoreLabel: 'Wins'  },
 ];

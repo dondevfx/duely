@@ -304,11 +304,12 @@ module.exports = function leaderboardRoutes(supabase) {
 
   // Game-specific highscore leaderboard
   // Score-based games use game_highscores; all others use wins from matches table
-  const SCORE_GAMES = new Set(['blockBlast', 'tetris', 'snake', 'galaga', 'asteroids', 'piano', 'twoFortyEight', 'clickRace', 'wordVS']);
+  const SCORE_GAMES = new Set(['blockBlast', 'tetris', 'snake', 'galaga', 'asteroids', 'piano', 'twoFortyEight', 'clickRace']);
 
   // Frontend game-type IDs → DB game_type values (highscores table uses different keys than matches)
   const GAME_TYPE_MAP = {
-    scrabble: 'wordVS',    // frontend sends 'scrabble', highscores stored as 'wordVS'
+    // Word VS ('scrabble') is a 1v1 game — ranked by wins from the matches table,
+    // so it is intentionally NOT mapped to the 'wordVS' highscore key.
     coinFlip: 'coin_flip', // frontend sends 'coinFlip', matches stored as 'coin_flip'
   };
 
