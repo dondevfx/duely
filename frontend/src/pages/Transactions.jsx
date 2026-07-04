@@ -78,6 +78,9 @@ function TxRow({ tx }) {
           <div className="text-sm text-white font-semibold leading-snug">
             {humanize(tx.type)}
           </div>
+          {tx.notes && (
+            <div className="text-xs text-muted leading-snug mt-0.5">{tx.notes}</div>
+          )}
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             {tx.crypto_amount && tx.crypto_symbol && !isDiamonds && (
               <span className="text-xs text-muted">
@@ -187,7 +190,7 @@ export default function Transactions() {
         <p className="text-muted mb-8">Full history of your Coin activity</p>
 
         {/* Filter tabs */}
-        <div className="bg-surface border border-surfaceLight rounded-2xl p-2 mb-6 flex flex-wrap gap-1">
+        <div className="bg-surface border border-surfaceLight rounded-2xl p-2 mb-6 flex flex-nowrap gap-1 overflow-x-auto">
           {FILTERS.map(f => (
             <button
               key={f.key}

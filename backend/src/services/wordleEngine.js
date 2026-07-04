@@ -341,11 +341,12 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
       try {
         if (hasBot && human) {
           const humanWon = winner && !winner.isBot;
-          balanceChange = await settleBotMatch(supabase, human.userId, fee, currency, humanWon);
+          balanceChange = await settleBotMatch(supabase, human.userId, fee, currency, humanWon, { game: 'Word VS' });
         } else {
+          const meta = { game: 'Word VS', winnerUsername: winner.username, loserUsername: loser.username };
           balanceChange = currency === 'diamonds'
-            ? await settleMatchDiamonds(supabase, winner.userId, loser.userId, fee)
-            : await settleMatch(supabase, winner.userId, loser.userId, fee);
+            ? await settleMatchDiamonds(supabase, winner.userId, loser.userId, fee, meta)
+            : await settleMatch(supabase, winner.userId, loser.userId, fee, meta);
         }
       } catch (e) { console.error('[wordle] settle error:', e.message); }
     }

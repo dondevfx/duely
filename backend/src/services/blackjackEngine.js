@@ -363,16 +363,17 @@ async function _resolveGame(io, supabase, roomId) {
           }
           balanceChange = { winnerPayout: room.entryFee };
         } else {
-          balanceChange = await settleBotMatch(supabase, humanId, room.entryFee, room.currency, !winner.isBot);
+          balanceChange = await settleBotMatch(supabase, humanId, room.entryFee, room.currency, !winner.isBot, { game: 'Blackjack' });
         }
       } else if (isDraw) {
         balanceChange = room.currency === 'diamonds'
           ? await settleDrawMatchDiamonds(supabase, p1.userId, p2.userId, room.entryFee)
           : await settleDrawMatch(supabase, p1.userId, p2.userId, room.entryFee);
       } else {
+        const meta = { game: 'Blackjack', winnerUsername: winner.username, loserUsername: loser.username };
         balanceChange = room.currency === 'diamonds'
-          ? await settleMatchDiamonds(supabase, winner.userId, loser.userId, room.entryFee)
-          : await settleMatch(supabase, winner.userId, loser.userId, room.entryFee);
+          ? await settleMatchDiamonds(supabase, winner.userId, loser.userId, room.entryFee, meta)
+          : await settleMatch(supabase, winner.userId, loser.userId, room.entryFee, meta);
       }
     } catch (e) { console.error('[blackjackEngine] settle:', e.message); }
   }

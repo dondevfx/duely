@@ -233,7 +233,7 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
       let balanceChange = null;
       if (room.entryFee > 0) {
         try {
-          balanceChange = await settleBotMatch(supabase, player.userId, room.entryFee, room.currency || 'coins', humanWon);
+          balanceChange = await settleBotMatch(supabase, player.userId, room.entryFee, room.currency || 'coins', humanWon, { game: 'Block Burst' });
         } catch (e) { console.error('[blockBlastEngine] solo settle:', e.message); }
       }
       if (supabase) {
@@ -330,11 +330,12 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
       if (_hasBot) {
         const _humanId = winner.isBot ? loser.userId : winner.userId;
         const _humanWon = !winner.isBot;
-        balanceChange = await settleBotMatch(supabase, _humanId, room.entryFee, room.currency || 'coins', _humanWon);
+        balanceChange = await settleBotMatch(supabase, _humanId, room.entryFee, room.currency || 'coins', _humanWon, { game: 'Block Burst' });
       } else {
+        const meta = { game: 'Block Burst', winnerUsername: winner.username, loserUsername: loser.username };
         balanceChange = room.currency === 'diamonds'
-          ? await settleMatchDiamonds(supabase, winner.userId, loser.userId, room.entryFee)
-          : await settleMatch(supabase, winner.userId, loser.userId, room.entryFee);
+          ? await settleMatchDiamonds(supabase, winner.userId, loser.userId, room.entryFee, meta)
+          : await settleMatch(supabase, winner.userId, loser.userId, room.entryFee, meta);
       }
     } catch (e) { console.error('BlockBlast settle:', e.message); }
   }

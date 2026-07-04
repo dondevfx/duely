@@ -87,9 +87,17 @@ async function deductMatchFees(supabase, p1Id, p2Id, entryFee, currency) {
   }
 }
 
+// Builds the "notes" shown on a match transaction, e.g. "Coin Flip vs Alice".
+// meta = { game, winnerUsername, loserUsername }. Returns null when no game given
+// (older callers) so the column simply stays empty.
+function matchNote(game, opponent) {
+  if (!game) return null;
+  return opponent ? `${game} vs ${opponent}` : game;
+}
+
 // Coin match settlement — fees already deducted at match start, just credit winner 95% of pot.
 // Returns { winnerPayout }
-async function settleMatch(supabase, winnerId, loserId, entryFee) {
+async function settleMatch(supabase, winnerId, loserId, entryFee, meta = {}) {
   const adminId = process.env.ADMIN_USER_ID;
   try {
     const fee = parseFloat(entryFee);
@@ -115,8 +123,8 @@ async function settleMatch(supabase, winnerId, loserId, entryFee) {
     await creditRakeback(supabase, winnerId, loserId, prizePool, 'coins').catch(() => {});
 
     supabase.from('transactions').insert([
-      { user_id: winnerId, type: 'match_win',  amount_c: payout, status: 'confirmed' },
-      { user_id: loserId,  type: 'match_loss', amount_c: fee,    status: 'confirmed' },
+      { user_id: winnerId, type: 'match_win',  amount_c: payout, status: 'confirmed', notes: matchNote(meta.game, meta.loserUsername) },
+      { user_id: loserId,  type: 'match_loss', amount_c: fee,    status: 'confirmed', notes: matchNote(meta.game, meta.winnerUsername) },
     ]).then().catch(e => console.error('[tx] coin match insert failed:', e.message));
 
     return { winnerPayout: payout };
@@ -152,7 +160,7 @@ async function deductDiamonds(supabase, userId, amount) {
 }
 
 // Diamond match settlement — fees already deducted at match start, just credit winner 2x.
-async function settleMatchDiamonds(supabase, winnerId, loserId, entryFee) {
+async function settleMatchDiamonds(supabase, winnerId, loserId, entryFee, meta = {}) {
   try {
     const fee = Math.floor(entryFee);
     if (fee <= 0) return { winnerPayout: 0 };
@@ -168,8 +176,8 @@ async function settleMatchDiamonds(supabase, winnerId, loserId, entryFee) {
     }
 
     supabase.from('transactions').insert([
-      { user_id: winnerId, type: 'match_win',  amount_c: 0, crypto_amount: winnerPayout, crypto_symbol: 'diamonds', status: 'confirmed' },
-      { user_id: loserId,  type: 'match_loss', amount_c: 0, crypto_amount: fee, crypto_symbol: 'diamonds', status: 'confirmed' },
+      { user_id: winnerId, type: 'match_win',  amount_c: 0, crypto_amount: winnerPayout, crypto_symbol: 'diamonds', status: 'confirmed', notes: matchNote(meta.game, meta.loserUsername) },
+      { user_id: loserId,  type: 'match_loss', amount_c: 0, crypto_amount: fee, crypto_symbol: 'diamonds', status: 'confirmed', notes: matchNote(meta.game, meta.winnerUsername) },
     ]).then().catch(e => console.error('[tx] diamond match insert failed:', e.message));
 
     return { winnerPayout };
@@ -182,14 +190,15 @@ async function settleMatchDiamonds(supabase, winnerId, loserId, entryFee) {
 // Bot match settlement: entry fee already deducted upfront by handler.
 // On win: credit back 2x entry fee * 0.95 (payout).
 // On loss: nothing (fee was already taken).
-async function settleBotMatch(supabase, humanUserId, entryFee, currency, humanWon) {
+async function settleBotMatch(supabase, humanUserId, entryFee, currency, humanWon, meta = {}) {
+  const note = matchNote(meta.game, 'Bot');
   if (!humanWon) {
     if (parseFloat(entryFee) > 0) {
       supabase.from('transactions').insert({
         user_id: humanUserId, type: 'match_loss',
         amount_c: currency === 'diamonds' ? 0 : parseFloat(entryFee),
         ...(currency === 'diamonds' ? { crypto_amount: Math.floor(entryFee), crypto_symbol: 'diamonds' } : {}),
-        status: 'confirmed',
+        status: 'confirmed', notes: note,
       }).then().catch(e => console.error('[tx] bot loss insert failed:', e.message));
     }
     return { winnerPayout: 0 };
@@ -199,14 +208,14 @@ async function settleBotMatch(supabase, humanUserId, entryFee, currency, humanWo
     await creditDiamonds(supabase, humanUserId, payout);
     supabase.from('transactions').insert({
       user_id: humanUserId, type: 'match_win',
-      amount_c: 0, crypto_amount: payout, crypto_symbol: 'diamonds', status: 'confirmed',
+      amount_c: 0, crypto_amount: payout, crypto_symbol: 'diamonds', status: 'confirmed', notes: note,
     }).then().catch(e => console.error('[tx] bot win insert failed:', e.message));
     return { winnerPayout: payout };
   } else {
     const payout = parseFloat((entryFee * 2 * 0.95).toFixed(4));
     await creditCoins(supabase, humanUserId, payout);
     supabase.from('transactions').insert({
-      user_id: humanUserId, type: 'match_win', amount_c: payout, status: 'confirmed',
+      user_id: humanUserId, type: 'match_win', amount_c: payout, status: 'confirmed', notes: note,
     }).then().catch(e => console.error('[tx] bot win insert failed:', e.message));
     return { winnerPayout: payout };
   }

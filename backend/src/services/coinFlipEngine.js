@@ -97,11 +97,12 @@ async function resolveCoinFlip(io, supabase, roomId) {
     try {
       if (winner.isBot || loser.isBot) {
         const humanId = winner.isBot ? loser.userId : winner.userId;
-        balanceChange = await settleBotMatch(supabase, humanId, room.entryFee, room.currency, !winner.isBot);
+        balanceChange = await settleBotMatch(supabase, humanId, room.entryFee, room.currency, !winner.isBot, { game: 'Coin Flip' });
       } else {
+        const meta = { game: 'Coin Flip', winnerUsername: winner.username, loserUsername: loser.username };
         balanceChange = room.currency === 'diamonds'
-          ? await settleMatchDiamonds(supabase, winner.userId, loser.userId, room.entryFee)
-          : await settleMatch(supabase, winner.userId, loser.userId, room.entryFee);
+          ? await settleMatchDiamonds(supabase, winner.userId, loser.userId, room.entryFee, meta)
+          : await settleMatch(supabase, winner.userId, loser.userId, room.entryFee, meta);
       }
     } catch (e) { console.error('[coinFlipEngine] settle:', e.message); }
   }
