@@ -10,6 +10,7 @@ const FILTERS = [
   { key: 'withdrawal', label: 'Withdrawals' },
   { key: 'match_win',  label: 'Match Wins' },
   { key: 'match_loss', label: 'Match Losses' },
+  { key: 'coins',      label: '🪙 Coins' },
   { key: 'diamonds',   label: '💎 Diamonds' },
   { key: 'tip',        label: 'Tips' },
 ];
@@ -125,6 +126,10 @@ function matchesFilter(tx, filterKey) {
   if (filterKey === 'all') return true;
   if (filterKey === 'diamonds') {
     return tx.crypto_symbol?.toLowerCase() === 'diamonds';
+  }
+  if (filterKey === 'coins') {
+    // All coin-denominated activity — the counterpart to the Diamonds tab
+    return tx.crypto_symbol?.toLowerCase() !== 'diamonds';
   }
   if (filterKey === 'tip') {
     return tx.type === 'tip_sent' || tx.type === 'tip_received' || tx.type === 'tip';
