@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
-import { playMatchFound } from '../utils/sound';
+import { playMatchFound, playCard, playCountdown } from '../utils/sound';
 import { useCurrency } from '../context/CurrencyContext';
 import { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
 import BetSlider from '../components/BetSlider';
@@ -272,9 +272,12 @@ export default function BlackjackGame() {
         prevHandLenRef.current = d.hand.length;
         setPhase('playing');
         setTimeLeft(d.timeLimit || 20);
+        // Deal sound — one flick per card being dealt out.
+        (d.hand || []).forEach((_, i) => setTimeout(playCard, i * 180));
       }
       return;
     }
+    playCountdown(); // tick on each 3 · 2 · 1
     const id = setTimeout(() => setCountdown(c => c - 1), 1000);
     return () => clearTimeout(id);
   }, [countdown]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -333,6 +336,7 @@ export default function BlackjackGame() {
     });
 
     socket.on('bj_opp_card', ({ card }) => {
+      playCard(); // opponent drew a card
       oppBufferedRef.current.push(card);
       // Reveal immediately only if I've already hit at least as many times
       if (myHitCountRef.current >= oppBufferedRef.current.length) {
@@ -343,6 +347,7 @@ export default function BlackjackGame() {
 
     socket.on('bj_card', ({ hand, score }) => {
       myHitCountRef.current++;
+      playCard(); // I drew a card
       // Reveal one buffered opponent card if available
       if (oppBufferedRef.current.length > oppRevealedRef.current) {
         const cardToReveal = oppBufferedRef.current[oppRevealedRef.current];
@@ -388,6 +393,7 @@ export default function BlackjackGame() {
     });
 
     socket.on('bj_split_hand2', ({ hand, score }) => {
+      playCard();
       setSplitData(d => d ? { ...d, hand2: hand, score2: score, activeHand: 2 } : d);
       setMyHand(hand);
       setMyScore(score);

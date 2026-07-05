@@ -97,3 +97,39 @@ export function playCoin() {
   tone(1318, 0.00, 0.07, { type: 'square', gain: 0.12 });
   tone(1760, 0.06, 0.10, { type: 'square', gain: 0.10 });
 }
+
+// Card dealt / drawn — quick two-blip flick.
+export function playCard() {
+  tone(1200, 0.00, 0.05, { type: 'square', gain: 0.09 });
+  tone(760,  0.03, 0.05, { type: 'square', gain: 0.07 });
+}
+
+// Block Burst: a piece is placed on the board — soft low thud.
+export function playPlace() {
+  tone(190, 0.00, 0.09, { type: 'sine', gain: 0.18, slideTo: 120 });
+}
+
+// Block Burst: a line/column clears — bright ascending sparkle.
+export function playClear() {
+  tone(523.25, 0.00, 0.10, { type: 'triangle', gain: 0.18 });
+  tone(783.99, 0.06, 0.12, { type: 'triangle', gain: 0.18 });
+  tone(1046.5, 0.12, 0.14, { type: 'triangle', gain: 0.20 });
+}
+
+// Block Burst: Blast Mode unlocked — rising energy sweep.
+export function playBlast() {
+  tone(300, 0.00, 0.18, { type: 'sawtooth', gain: 0.20, slideTo: 950 });
+}
+
+// Money deposited — bright cash-register cascade.
+export function playDeposit() {
+  tone(1318.5, 0.00, 0.12, { type: 'triangle', gain: 0.22 });
+  tone(1760.0, 0.10, 0.16, { type: 'triangle', gain: 0.24 });
+  tone(2093.0, 0.20, 0.22, { type: 'triangle', gain: 0.20 });
+}
+
+// Tip received — a friendly two-note coin drop.
+export function playTip() {
+  tone(987.77,  0.00, 0.08, { type: 'triangle', gain: 0.18 });
+  tone(1318.51, 0.07, 0.15, { type: 'triangle', gain: 0.20 });
+}

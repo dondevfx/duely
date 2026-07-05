@@ -46,6 +46,7 @@ import ToS from './pages/ToS';
 import Admin from './pages/Admin';
 import SpectateView from './pages/SpectateView';
 import ForfeitToast from './components/ForfeitToast';
+import NotifyToast from './components/NotifyToast';
 import ReconnectOverlay from './components/ReconnectOverlay';
 import AgeToSModal, { useTosAccepted } from './components/AgeToSModal';
 import SaveLoginPrompt from './components/SaveLoginPrompt';
@@ -147,18 +148,6 @@ function Shell() {
   );
 }
 
-function TipRefresher() {
-  const { socket } = useSocket();
-  const { refreshProfile } = useAuth();
-  useEffect(() => {
-    if (!socket) return;
-    const handler = () => refreshProfile();
-    socket.on('tip_received', handler);
-    return () => socket.off('tip_received', handler);
-  }, [socket, refreshProfile]);
-  return null;
-}
-
 export default function App() {
   return (
     <BrowserRouter>
@@ -166,7 +155,7 @@ export default function App() {
         <SocketProvider>
           <WalletProvider>
             <CurrencyProvider>
-              <TipRefresher />
+              <NotifyToast />
               <Shell />
             </CurrencyProvider>
           </WalletProvider>

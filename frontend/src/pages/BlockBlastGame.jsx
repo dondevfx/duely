@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLocation } from 'react-router-dom';
-import { playMatchFound, playCountdown } from '../utils/sound';
+import { playMatchFound, playCountdown, playPlace, playClear, playBlast } from '../utils/sound';
 import { useSocket } from '../context/SocketContext';
 import { useCurrency } from '../context/CurrencyContext';
 import GlowButton from '../components/GlowButton';
@@ -485,6 +485,7 @@ export default function BlockBlastGame() {
     let cleared = 0;
     for (let c = 0; c < GRID; c++) { if (g[r][c] !== null) { g[r][c] = null; cleared++; } }
     if (cleared === 0) return;
+    playClear();
 
     const pts = cleared * 20;
     const newScore = scoreRef.current + pts;
@@ -516,6 +517,9 @@ export default function BlockBlastGame() {
     const placed = place(gridRef.current, piece, r, c);
     const { grid: cleared, cleared: numCleared, fullRows, fullCols, chain } = clearLines(placed);
 
+    playPlace();
+    if (numCleared > 0) playClear();
+
     const pts = scoreForClear(numCleared, piece.cells.length, chain);
     const newScore = scoreRef.current + pts;
 
@@ -527,6 +531,7 @@ export default function BlockBlastGame() {
     if (newEnergy >= 100 && !blastModeRef.current) {
       blastModeRef.current = true;
       setBlastMode(true);
+      playBlast();
       setBlastSecondsLeft(5);
       if (blastTimerRef.current) clearTimeout(blastTimerRef.current);
       blastTimerRef.current = setTimeout(() => {

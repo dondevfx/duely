@@ -121,6 +121,16 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     }
   });
 
+  // Deposit credited by a background service (swapPoller / blockchainMonitor):
+  // notify the depositing user's live sockets so the UI can toast + refresh.
+  gameEvents.on('deposit_credited', ({ userId, amount, currency }) => {
+    for (const [, sock] of io.sockets.sockets) {
+      if (sock._authenticatedUserId === userId) {
+        sock.emit('deposit_credited', { amount, currency });
+      }
+    }
+  });
+
   function _genPrivateCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let c = '';

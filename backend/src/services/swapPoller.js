@@ -14,6 +14,7 @@
 
 const { getExchangeStatus } = require('./simpleSwapService');
 const { creditCoins, recordDeposit } = require('./walletService');
+const gameEvents = require('./gameEvents');
 
 const POLL_INTERVAL_MS  = 30_000;   // check each exchange every 30s
 const MAX_WAIT_MS       = 60 * 60 * 1000;  // give up after 1 hour
@@ -85,6 +86,7 @@ async function poll(exchangeId, userId, startedAt, creditUser) {
           .eq('status', 'converting');
 
         console.log(`[swapPoller] ✓ credited $${usdcCredit} to user ${userId} (received $${usdcRaw} USDC, 0.5% fee, exchange ${exchangeId})`);
+        gameEvents.emit('deposit_credited', { userId, amount: usdcCredit, currency: 'coins' });
       } else {
         // $7–$9.99 buffer band — platform keeps USDC, no user credit
         await supabaseRef

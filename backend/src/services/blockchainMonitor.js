@@ -342,6 +342,7 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
   const estimatedUsd = amount * priceUsd;
 
   const { creditCoins, recordDeposit } = require('./walletService');
+  const gameEvents = require('./gameEvents');
   const usdcAddress = process.env.USDC_SPL_ADDRESS;
 
   // ── USDC: credit directly, no swap needed — apply 0.1% fee ──────────────────
@@ -359,6 +360,7 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
       crypto_amount: amount, crypto_symbol: 'USDC', tx_hash: txHash, status: 'confirmed',
     });
     console.log(`[monitor] USDC deposit — received $${amount}, credited $${credited} (0.1% fee) to user ${userId}`);
+    gameEvents.emit('deposit_credited', { userId, amount: credited, currency: 'coins' });
     _seenTxs.add(txHash);
     return;
   }
@@ -417,6 +419,7 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     if (creditUser && credited > 0) {
       await creditCoins(supabase, userId, credited);
       await recordDeposit(supabase, userId, credited, 'crypto');
+      gameEvents.emit('deposit_credited', { userId, amount: credited, currency: 'coins' });
       console.log(`[monitor] ✓ SOL credited $${credited} to user ${userId} ($${usdcReceived} USDC received, 0.1% fee)`);
     } else {
       console.log(`[monitor] SOL $${netUsd.toFixed(2)} below $1.50 — swapped ${usdcReceived} USDC, no user credit`);
