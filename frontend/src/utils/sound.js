@@ -160,10 +160,11 @@ export function playPlace() {
   tone(430, 0.00, 0.025, { type: 'triangle', gain: 0.045 }); // faint tick on top
 }
 
-// Word VS: a very subtle, satisfying key press when typing a letter.
+// Word VS: a subtle, satisfying key "click" when typing a letter — a tiny
+// crisp high transient plus a faint short body (like a soft mechanical key).
 export function playType() {
-  tone(175,  0.00, 0.022, { type: 'sine',   gain: 0.05 });  // soft low body
-  tone(2400, 0.00, 0.010, { type: 'square', gain: 0.022 }); // faint click on top
+  noiseBurst(0.012, { gain: 0.11, filter: 'highpass', freq: 2800 });
+  tone(760, 0.00, 0.013, { type: 'square', gain: 0.03 });
 }
 
 // Block Burst: a line/column clears — bright ascending sparkle.
