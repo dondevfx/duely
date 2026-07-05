@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
+import { playMatchFound, playCountdown } from '../utils/sound';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import GameLobby, { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
@@ -228,10 +229,12 @@ export default function WordleGame() {
       setEntryFee(fee || 0);
       if (cur) setBetCurrency(cur);
       eloBeforeRef.current = profile?.elo ?? 1000;
+      playMatchFound();
     });
 
     socket.on('scrabble_countdown', ({ count }) => {
       setCountdown(count);
+      if (count > 0) playCountdown();
       setPhase('countdown');
     });
 

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { getRank, isRanked, placementMatches, getDisplayRank } from '../utils/ranks';
 import CoinIcon from './CoinIcon';
+import { playWin, playLoss, playDraw } from '../utils/sound';
+import { confettiBurst } from '../utils/confetti';
 
 function fmt(n) {
   return Number(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -91,6 +93,13 @@ export default function ResultScreen({
   const placement = placementMatches(profile);
   // Paid matches always update ELO regardless of placement — show the real number
   const showElo = ranked || (entryFee > 0 && elo != null);
+
+  // Play the result sound (and confetti on a win) once when this card mounts.
+  useEffect(() => {
+    if (isDraw) playDraw();
+    else if (isWinner) { playWin(); confettiBurst(); }
+    else playLoss();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div

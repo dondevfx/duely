@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { playMatchFound, playCountdown, playGo } from '../utils/sound';
 import { useSocket } from '../context/SocketContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
@@ -296,6 +297,7 @@ export default function CoinFlipGame() {
       rotRef.current = 0;
       setStatusMsg(`vs ${opponent.username}`);
       setCountdown(3);
+      playMatchFound();
       setPhase('countdown');
       if ((fee ?? 0) > 0) {
         const isDiamonds = (cur ?? 'coins') === 'diamonds';
@@ -305,9 +307,9 @@ export default function CoinFlipGame() {
         );
         refreshProfile();
       }
-      const t1 = setTimeout(() => setCountdown(2), 1000);
-      const t2 = setTimeout(() => setCountdown(1), 2000);
-      const t3 = setTimeout(() => { setCountdown(0); setPhase('flipping'); }, 3000);
+      const t1 = setTimeout(() => { setCountdown(2); playCountdown(); }, 1000);
+      const t2 = setTimeout(() => { setCountdown(1); playCountdown(); }, 2000);
+      const t3 = setTimeout(() => { setCountdown(0); playGo(); setPhase('flipping'); }, 3000);
       return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
     });
 

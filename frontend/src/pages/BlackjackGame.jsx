@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import { playMatchFound } from '../utils/sound';
 import { useCurrency } from '../context/CurrencyContext';
 import { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
 import BetSlider from '../components/BetSlider';
@@ -310,6 +311,7 @@ export default function BlackjackGame() {
       setRoomId(rid);
       setOpponentUsername(opponent.username);
       setCountdown(3); // triggers countdown → game starts when countdown hits 0
+      playMatchFound();
       if ((fee ?? 0) > 0) {
         const isDiamonds = (cur ?? 'coins') === 'diamonds';
         updateProfile(isDiamonds

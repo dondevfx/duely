@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLocation } from 'react-router-dom';
+import { playMatchFound, playCountdown } from '../utils/sound';
 import { useSocket } from '../context/SocketContext';
 import { useCurrency } from '../context/CurrencyContext';
 import GlowButton from '../components/GlowButton';
@@ -300,6 +301,7 @@ export default function BlockBlastGame() {
       isSoloRef.current = !!vsBot;
       setPhase('countdown');
       setCountdown(3);
+      playMatchFound();
       if ((fee ?? 0) > 0) {
         const isDiamonds = (cur ?? 'coins') === 'diamonds';
         updateProfile(isDiamonds
@@ -315,7 +317,7 @@ export default function BlockBlastGame() {
       setStatusMsg(message || 'Match cancelled. Please try again.');
     });
 
-    socket.on('block_blast_countdown', ({ count }) => setCountdown(count));
+    socket.on('block_blast_countdown', ({ count }) => { setCountdown(count); if (count > 0) playCountdown(); });
 
     socket.on('block_blast_start', ({ seed }) => {
       if (gameOverRef.current) return; // opponent already left — don't overwrite result screen

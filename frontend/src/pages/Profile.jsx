@@ -10,6 +10,7 @@ import { getRank } from '../utils/ranks';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
 import { ProfilePopup } from '../components/ChatSidebar';
+import { isMuted, setMuted, playMatchFound } from '../utils/sound';
 
 const GAME_INFO = {
   scrabble:      { emoji: '🔤', name: 'Word VS' },
@@ -227,6 +228,7 @@ function MatchRow({ match, myId }) {
 function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, setResetMsg, sendPasswordReset }) {
   const [theme, setThemeState]   = useState(() => localStorage.getItem('theme') || 'dark');
   const [language, setLangState] = useState(() => localStorage.getItem('language') || 'en');
+  const [soundOn, setSoundOn]    = useState(() => !isMuted());
   const [showLang, setShowLang]  = useState(false);
   const [showVerify, setShowVerify] = useState(false);
   const [isPrivate, setIsPrivate]   = useState(profile?.is_private || false);
@@ -292,6 +294,13 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
     setThemeState(next);
     localStorage.setItem('theme', next);
     applyTheme(next);
+  }
+
+  function toggleSound() {
+    const next = !soundOn;
+    setSoundOn(next);
+    setMuted(!next);
+    if (next) playMatchFound(); // preview so the user hears it's on
   }
 
   function selectLanguage(code) {
@@ -367,6 +376,23 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
                 className={`relative w-12 h-6 rounded-full transition-colors duration-200 focus:outline-none ${theme === 'light' ? 'bg-primary' : 'bg-surfaceLight border border-border'}`}
               >
                 <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${theme === 'light' ? 'translate-x-6' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Sound effects */}
+          <div className="mb-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-bold text-white">Sound effects</div>
+                <div className="text-xs text-muted">{soundOn ? 'On — win, loss & game sounds' : 'Muted'}</div>
+              </div>
+              <button
+                onClick={toggleSound}
+                aria-label="Toggle sound effects"
+                className={`relative w-12 h-6 rounded-full transition-colors duration-200 focus:outline-none ${soundOn ? 'bg-primary' : 'bg-surfaceLight border border-border'}`}
+              >
+                <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${soundOn ? 'translate-x-6' : 'translate-x-0.5'}`} />
               </button>
             </div>
           </div>
