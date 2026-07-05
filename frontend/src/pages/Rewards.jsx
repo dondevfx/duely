@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { isRanked, placementMatches } from '../utils/ranks';
 import DailyBonus from '../components/DailyBonus';
 import SpinWheel from '../components/SpinWheel';
+import { playWheelSpin, playWin } from '../utils/sound';
 
 // ── Tier definitions ───────────────────────────────────────────────────────
 const TIERS = [
@@ -229,6 +230,7 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
       const newRot = rotRef.current + 6 * 360 + delta;
       rotRef.current = newRot;
       setRotation(newRot);
+      playWheelSpin(4.2);
 
       // Set local cooldown immediately — countdown starts before parent fetchStatus returns
       setLocalNextSpinAt(nextSpinAt);
@@ -236,6 +238,7 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
       setTimeout(() => {
         setWon(prize);
         setSpinning(false);
+        playWin();
         if (onSpinComplete) onSpinComplete();
       }, 4300);
     } catch (e) {

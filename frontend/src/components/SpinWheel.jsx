@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
+import { playWheelSpin, playWin } from '../utils/sound';
 
 // Segments: White=1K (59%), Blue=5K (35%), Black=20K (5%), Grey=50K (1%)
 const SEG = [
@@ -134,9 +135,11 @@ export default function SpinWheel({ locked = false }) {
       const newRot = rotRef.current + 5 * 360 + delta;
       rotRef.current = newRot;
       setRotation(newRot);
+      playWheelSpin(4.2);
       setTimeout(() => {
         setWon(prize);
         setSpinning(false);
+        playWin();
         refreshProfile();
         fetchStatus();
       }, 4300);

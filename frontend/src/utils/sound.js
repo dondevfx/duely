@@ -133,3 +133,15 @@ export function playTip() {
   tone(987.77,  0.00, 0.08, { type: 'triangle', gain: 0.18 });
   tone(1318.51, 0.07, 0.15, { type: 'triangle', gain: 0.20 });
 }
+
+// Prize-wheel spin: a run of ticks that decelerate over `duration` seconds
+// (mimicking the wheel slowing to a stop). Play a win sound when it lands.
+export function playWheelSpin(duration = 4.2) {
+  if (muted || !getCtx()) return;
+  const ticks = 36;
+  for (let i = 0; i < ticks; i++) {
+    const p = i / ticks;
+    const t = (p * p) * duration;        // ease-in → gaps widen as it slows
+    tone(820 - p * 220, t, 0.028, { type: 'square', gain: 0.075 });
+  }
+}
