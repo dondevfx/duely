@@ -690,9 +690,9 @@ export default function WordleGame() {
       {/* ── Grid area ── */}
       <div className="flex-1 flex flex-col items-center justify-center gap-3 py-3 px-4 relative">
 
-        {/* ── Error toast — centered over the board ── */}
+        {/* ── Error toast — top of the board, centered on the board ── */}
         {errorMsg && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 px-5 py-2 rounded-xl font-bold text-sm text-white pointer-events-none whitespace-nowrap"
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-50 px-5 py-2 rounded-xl font-bold text-sm text-white pointer-events-none whitespace-nowrap"
             style={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
             {errorMsg}
           </div>
