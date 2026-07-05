@@ -687,7 +687,9 @@ export default function WordleGame() {
             {countdown ?? '…'}
           </div>
           <p className="text-muted">Get ready…</p>
-          {opponent && <p className="text-xs text-muted mt-2">vs {opponent.username}</p>}
+          {lastModeRef.current === 'solo'
+            ? <p className="text-xs text-muted mt-2">vs Duely Bot</p>
+            : opponent && <p className="text-xs text-muted mt-2">vs {opponent.username}</p>}
         </div>
       </div>
     );
