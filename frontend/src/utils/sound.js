@@ -56,7 +56,7 @@ function tone(freq, start, dur, { type = 'sine', gain = 0.2, slideTo = null } = 
 
 // Short filtered white-noise burst — used for realistic "swish/flick" sounds
 // (e.g. a card being dealt) that pure oscillators can't reproduce.
-function noiseBurst(dur, { gain = 0.14, filter = 'highpass', freq = 2200, start = 0 } = {}) {
+function noiseBurst(dur, { gain = 0.14, filter = 'highpass', freq = 2200, q = null, start = 0 } = {}) {
   const ac = getCtx();
   if (!ac || muted) return;
   const t0 = ac.currentTime + start;
@@ -69,6 +69,7 @@ function noiseBurst(dur, { gain = 0.14, filter = 'highpass', freq = 2200, start 
   const biquad = ac.createBiquadFilter();
   biquad.type = filter;
   biquad.frequency.value = freq;
+  if (q != null) biquad.Q.value = q;
   const g = ac.createGain();
   g.gain.setValueAtTime(gain, t0);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
@@ -145,17 +146,24 @@ export function playCoin() {
   tone(1760, 0.06, 0.10, { type: 'square', gain: 0.10 });
 }
 
-// Card dealt / drawn — a short filtered-noise "swish/flick", like a card
-// sliding off the deck (two quick swishes read as a deal).
+// Card dealt / drawn — a papery "fwip": band-limited noise around ~1.5 kHz
+// with a fast decay (the card sliding), plus a faint low tap as it settles.
 export function playCard() {
-  noiseBurst(0.055, { gain: 0.13, filter: 'highpass', freq: 2600, start: 0.00 });
-  noiseBurst(0.045, { gain: 0.08, filter: 'highpass', freq: 3400, start: 0.05 });
+  noiseBurst(0.05,  { gain: 0.17, filter: 'bandpass', freq: 1500, q: 0.7, start: 0.00 });
+  noiseBurst(0.03,  { gain: 0.07, filter: 'bandpass', freq: 2400, q: 1.2, start: 0.02 });
+  tone(240, 0.035, 0.05, { type: 'sine', gain: 0.06 }); // soft settle tap
 }
 
 // Block Burst: a piece is placed on the board — subtle, satisfying soft tock.
 export function playPlace() {
   tone(160, 0.00, 0.06, { type: 'sine',     gain: 0.13 }); // soft low body
   tone(430, 0.00, 0.025, { type: 'triangle', gain: 0.045 }); // faint tick on top
+}
+
+// Word VS: a very subtle, satisfying key press when typing a letter.
+export function playType() {
+  tone(175,  0.00, 0.022, { type: 'sine',   gain: 0.05 });  // soft low body
+  tone(2400, 0.00, 0.010, { type: 'square', gain: 0.022 }); // faint click on top
 }
 
 // Block Burst: a line/column clears — bright ascending sparkle.
@@ -183,19 +191,42 @@ export function playTip() {
   tone(1318.51, 0.07, 0.15, { type: 'triangle', gain: 0.20 });
 }
 
-// Prize-wheel spin: fire exactly ONE tick each time a segment boundary passes
-// the pointer, timed to the wheel's real deceleration curve. The wheel uses
-// `transition: transform <duration>s cubic-bezier(0.17,0.67,0.12,0.99)`, so we
-// invert that easing to find when each segment crossing happens — the ticks
-// naturally slow to one-per-segment as the wheel stops (no bunching at the end).
-export function playWheelSpin({ duration = 4, totalDegrees = 1800, segments = 8 } = {}) {
+// Fire one tick each time the rotating thing crosses a `stepDegrees` boundary,
+// timed to a CSS cubic-bezier deceleration — so ticks slow down exactly as the
+// animation does (no bunching at the end). Shared by the wheel and the coin.
+function _decelTicks({ duration, totalDegrees, stepDegrees, bezier, freqStart, freqDrop, gain, dur = 0.02, type = 'square' }) {
   if (muted || !getCtx()) return;
-  const bez = [0.17, 0.67, 0.12, 0.99];
-  const segAngle = 360 / segments;
-  const crossings = Math.floor(totalDegrees / segAngle);
+  const crossings = Math.floor(totalDegrees / stepDegrees);
   for (let k = 1; k <= crossings; k++) {
-    const progress = Math.min(1, (k * segAngle) / totalDegrees);
-    const tf = _bezierTimeAtProgress(bez, progress); // time fraction 0..1
-    tone(720 - 130 * tf, tf * duration, 0.02, { type: 'square', gain: 0.06 });
+    const progress = Math.min(1, (k * stepDegrees) / totalDegrees);
+    const tf = _bezierTimeAtProgress(bezier, progress); // time fraction 0..1
+    tone(freqStart - freqDrop * tf, tf * duration, dur, { type, gain });
   }
+}
+
+// Prize-wheel spin: one tick per segment crossing, matched to the wheel's
+// `transition: transform <duration>s cubic-bezier(0.17,0.67,0.12,0.99)`.
+export function playWheelSpin({ duration = 4, totalDegrees = 1800, segments = 8 } = {}) {
+  _decelTicks({
+    duration, totalDegrees, stepDegrees: 360 / segments,
+    bezier: [0.17, 0.67, 0.12, 0.99], freqStart: 720, freqDrop: 130, gain: 0.06,
+  });
+}
+
+// Coin flip: a metallic flutter that ticks on each half-rotation (face flip)
+// and decelerates with the coin's easing (cubic-bezier(0,0,0.12,1)) until it
+// settles. Call playCoinLand() when it comes to rest.
+export function playCoinFlip({ duration = 4.2, totalDegrees = 4320 } = {}) {
+  _decelTicks({
+    duration, totalDegrees, stepDegrees: 180,
+    bezier: [0, 0, 0.12, 1], freqStart: 1000, freqDrop: 320, gain: 0.05,
+    dur: 0.016, type: 'triangle',
+  });
+}
+
+// Coin flip landing — a short metallic "cling".
+export function playCoinLand() {
+  tone(1568, 0.00, 0.20, { type: 'triangle', gain: 0.18 });
+  tone(2093, 0.02, 0.16, { type: 'triangle', gain: 0.10 });
+  tone(1046, 0.00, 0.10, { type: 'sine',     gain: 0.08 });
 }

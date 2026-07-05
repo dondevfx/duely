@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { playMatchFound, playCountdown, playGo } from '../utils/sound';
+import { playMatchFound, playCountdown, playGo, playCoinFlip, playCoinLand } from '../utils/sound';
 import { useSocket } from '../context/SocketContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
@@ -247,6 +247,7 @@ export default function CoinFlipGame() {
       coinRef.current.style.transition = 'transform 4.2s cubic-bezier(0.0, 0.0, 0.12, 1.0)';
       coinRef.current.style.transform  = `perspective(700px) rotateX(${target}deg)`;
       rotRef.current = target;
+      playCoinFlip({ duration: 4.2, totalDegrees: toFace + 12 * 360 });
     }
   }, [stopSpin]);
 
@@ -326,7 +327,7 @@ export default function CoinFlipGame() {
       landCoin(data.result);
 
       // After transition completes show label for 2s, then result screen
-      setTimeout(() => setResultLanded(true), 4200);
+      setTimeout(() => { setResultLanded(true); playCoinLand(); }, 4200);
       setTimeout(() => {
         const res = pendingResultRef.current;
         const myId = profileRef.current?.id;

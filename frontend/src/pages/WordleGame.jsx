@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
-import { playMatchFound, playCountdown } from '../utils/sound';
+import { playMatchFound, playCountdown, playType } from '../utils/sound';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import GameLobby, { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
@@ -477,6 +477,7 @@ export default function WordleGame() {
       setCurrentRow(prev => prev.slice(0, -1));
     } else if (/^[A-Za-z]$/.test(key) && currentRow.length < WORD_LENGTH) {
       setCurrentRow(prev => [...prev, key.toUpperCase()]);
+      playType();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canType, currentRow, isSolo, soloWord, soloSessionId, guesses, roomId, socket]);
