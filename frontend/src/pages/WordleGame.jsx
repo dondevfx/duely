@@ -205,6 +205,7 @@ export default function WordleGame() {
   const [myDone,     setMyDone]     = useState(false);
   const [result,     setResult]     = useState(null);
   const failIntervalRef = useRef(null);
+  const soloCdTimersRef = useRef([]);
 
   // ── Solo-mode state ────────────────────────────────────────────────────────
   const [soloWord,      setSoloWord]      = useState('');
@@ -281,7 +282,7 @@ export default function WordleGame() {
       // Paid solo is server-authoritative — the answer word is NOT sent here.
       setSoloSessionId(sessionId);
       setSoloWord('');
-      setPhase('playing');
+      runSoloCountdown();
     });
 
     // Server-evaluated guess result for paid solo (mirrors wordle_guess_result)
@@ -334,6 +335,21 @@ export default function WordleGame() {
     setFailSecs(null); setResult(null); setSoloDone(false);
     setSoloResult(null); setSoloSessionId(null);
     if (failIntervalRef.current) { clearInterval(failIntervalRef.current); failIntervalRef.current = null; }
+    soloCdTimersRef.current.forEach(clearTimeout);
+    soloCdTimersRef.current = [];
+  }
+
+  // 3·2·1 countdown for solo modes (PvP/bot get theirs from the server).
+  function runSoloCountdown() {
+    soloCdTimersRef.current.forEach(clearTimeout);
+    setCountdown(3);
+    setPhase('countdown');
+    playCountdown();
+    soloCdTimersRef.current = [
+      setTimeout(() => { setCountdown(2); playCountdown(); }, 1000),
+      setTimeout(() => { setCountdown(1); playCountdown(); }, 2000),
+      setTimeout(() => { setCountdown(null); setPhase('playing'); }, 3000),
+    ];
   }
 
   const errorTORef = useRef(null);
@@ -393,7 +409,7 @@ export default function WordleGame() {
     resetGameState();
     const word = getSoloWord();
     setSoloWord(word);
-    setPhase('playing');
+    runSoloCountdown();
   }
 
   function startSoloPaid() {
@@ -438,7 +454,7 @@ export default function WordleGame() {
     if (mode === 'solo') {
       const word = getSoloWord();
       setSoloWord(word);
-      setPhase('playing');
+      runSoloCountdown();
     } else {
       const s = lastSettingsRef.current;
       eloBeforeRef.current = profile?.elo ?? 1000;
