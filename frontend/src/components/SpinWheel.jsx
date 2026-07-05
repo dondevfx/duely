@@ -132,10 +132,11 @@ export default function SpinWheel({ locked = false }) {
       const curMod = ((rotRef.current % 360) + 360) % 360;
       const target = (360 - center) % 360;
       const delta  = (target - curMod + 360) % 360;
-      const newRot = rotRef.current + 5 * 360 + delta;
+      const spinDegrees = 5 * 360 + delta;
+      const newRot = rotRef.current + spinDegrees;
       rotRef.current = newRot;
       setRotation(newRot);
-      playWheelSpin(4.2);
+      playWheelSpin({ duration: 4, totalDegrees: spinDegrees, segments: SEG.length });
       setTimeout(() => {
         setWon(prize);
         setSpinning(false);

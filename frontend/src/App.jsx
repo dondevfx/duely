@@ -19,7 +19,7 @@
   } catch {}
 })();
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider, useSocket } from './context/SocketContext';
 import { WalletProvider } from './context/WalletContext';
@@ -73,6 +73,11 @@ function Shell() {
   const [tosAccepted, setTosAccepted] = useState(useTosAccepted());
   const [chatOpen, setChatOpen] = useState(getInitialChatOpen);
   const navigate = useNavigate();
+  const location = useLocation();
+  // Interactive game pages must NOT be inside the TV zoom wrapper — CSS `zoom`
+  // on an ancestor breaks position:fixed drag math (e.g. Block Burst's drag
+  // ghost jumps away from the cursor when the browser is zoomed out).
+  const isGamePage = location.pathname.startsWith('/game/');
 
   // When MFA is pending and there's no session (saved-login MFA flow),
   // redirect to /login so the MFA form is shown
@@ -114,7 +119,7 @@ function Shell() {
       </div>
       {/* Main content always interactive */}
       <main className={`absolute top-14 bottom-0 left-0 right-0 overflow-y-auto transition-[left,right] duration-300 lg:left-56 ${chatOpen ? 'lg:right-80' : 'lg:right-0'}`}>
-        <div className="tv-scale">
+        <div className={isGamePage ? '' : 'tv-scale'}>
         <Routes>
           <Route path="/"                  element={<Home />} />
           <Route path="/leaderboard"        element={<Leaderboard />} />

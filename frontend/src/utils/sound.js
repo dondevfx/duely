@@ -54,14 +54,61 @@ function tone(freq, start, dur, { type = 'sine', gain = 0.2, slideTo = null } = 
   osc.stop(t0 + dur + 0.03);
 }
 
+// Short filtered white-noise burst — used for realistic "swish/flick" sounds
+// (e.g. a card being dealt) that pure oscillators can't reproduce.
+function noiseBurst(dur, { gain = 0.14, filter = 'highpass', freq = 2200, start = 0 } = {}) {
+  const ac = getCtx();
+  if (!ac || muted) return;
+  const t0 = ac.currentTime + start;
+  const frames = Math.max(1, Math.floor(ac.sampleRate * dur));
+  const buffer = ac.createBuffer(1, frames, ac.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < frames; i++) data[i] = Math.random() * 2 - 1;
+  const src = ac.createBufferSource();
+  src.buffer = buffer;
+  const biquad = ac.createBiquadFilter();
+  biquad.type = filter;
+  biquad.frequency.value = freq;
+  const g = ac.createGain();
+  g.gain.setValueAtTime(gain, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  src.connect(biquad); biquad.connect(g); g.connect(ac.destination);
+  src.start(t0);
+  src.stop(t0 + dur + 0.02);
+}
+
+// CSS cubic-bezier(x1,y1,x2,y2) sampled at parameter s → [x(time), y(progress)].
+function _bezierXY(x1, y1, x2, y2, s) {
+  const mt = 1 - s;
+  return [
+    3 * mt * mt * s * x1 + 3 * mt * s * s * x2 + s * s * s,
+    3 * mt * mt * s * y1 + 3 * mt * s * s * y2 + s * s * s,
+  ];
+}
+// Inverse: given a progress fraction (0..1), return the time fraction (0..1)
+// at which the easing curve reaches it. Used to align wheel ticks to the
+// wheel's actual deceleration so exactly one tick fires per segment crossing.
+function _bezierTimeAtProgress(bez, targetY) {
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 26; i++) {
+    const mid = (lo + hi) / 2;
+    if (_bezierXY(bez[0], bez[1], bez[2], bez[3], mid)[1] < targetY) lo = mid;
+    else hi = mid;
+  }
+  const s = (lo + hi) / 2;
+  return _bezierXY(bez[0], bez[1], bez[2], bez[3], s)[0];
+}
+
 // ── Public sound effects ──────────────────────────────────────────────
 
-// Victory: bright ascending C-major arpeggio.
+// Victory / prize won — cash-register "cha-ching" plus a coin sparkle.
 export function playWin() {
-  tone(523.25, 0.00, 0.16, { type: 'triangle', gain: 0.26 }); // C5
-  tone(659.25, 0.11, 0.16, { type: 'triangle', gain: 0.26 }); // E5
-  tone(783.99, 0.22, 0.16, { type: 'triangle', gain: 0.26 }); // G5
-  tone(1046.5, 0.33, 0.34, { type: 'triangle', gain: 0.30 }); // C6
+  tone(1046.5, 0.00, 0.09, { type: 'square',   gain: 0.15 }); // "cha"
+  tone(1568.0, 0.09, 0.30, { type: 'triangle', gain: 0.22 }); // "chinnng" (held)
+  tone(2093.0, 0.11, 0.22, { type: 'triangle', gain: 0.11 }); // bright shimmer
+  // falling coin tinkles
+  tone(2637.0, 0.20, 0.10, { type: 'triangle', gain: 0.09 });
+  tone(3136.0, 0.28, 0.12, { type: 'triangle', gain: 0.07 });
 }
 
 // Defeat: descending downward glide.
@@ -98,15 +145,17 @@ export function playCoin() {
   tone(1760, 0.06, 0.10, { type: 'square', gain: 0.10 });
 }
 
-// Card dealt / drawn — quick two-blip flick.
+// Card dealt / drawn — a short filtered-noise "swish/flick", like a card
+// sliding off the deck (two quick swishes read as a deal).
 export function playCard() {
-  tone(1200, 0.00, 0.05, { type: 'square', gain: 0.09 });
-  tone(760,  0.03, 0.05, { type: 'square', gain: 0.07 });
+  noiseBurst(0.055, { gain: 0.13, filter: 'highpass', freq: 2600, start: 0.00 });
+  noiseBurst(0.045, { gain: 0.08, filter: 'highpass', freq: 3400, start: 0.05 });
 }
 
-// Block Burst: a piece is placed on the board — soft low thud.
+// Block Burst: a piece is placed on the board — subtle, satisfying soft tock.
 export function playPlace() {
-  tone(190, 0.00, 0.09, { type: 'sine', gain: 0.18, slideTo: 120 });
+  tone(160, 0.00, 0.06, { type: 'sine',     gain: 0.13 }); // soft low body
+  tone(430, 0.00, 0.025, { type: 'triangle', gain: 0.045 }); // faint tick on top
 }
 
 // Block Burst: a line/column clears — bright ascending sparkle.
@@ -134,14 +183,19 @@ export function playTip() {
   tone(1318.51, 0.07, 0.15, { type: 'triangle', gain: 0.20 });
 }
 
-// Prize-wheel spin: a run of ticks that decelerate over `duration` seconds
-// (mimicking the wheel slowing to a stop). Play a win sound when it lands.
-export function playWheelSpin(duration = 4.2) {
+// Prize-wheel spin: fire exactly ONE tick each time a segment boundary passes
+// the pointer, timed to the wheel's real deceleration curve. The wheel uses
+// `transition: transform <duration>s cubic-bezier(0.17,0.67,0.12,0.99)`, so we
+// invert that easing to find when each segment crossing happens — the ticks
+// naturally slow to one-per-segment as the wheel stops (no bunching at the end).
+export function playWheelSpin({ duration = 4, totalDegrees = 1800, segments = 8 } = {}) {
   if (muted || !getCtx()) return;
-  const ticks = 36;
-  for (let i = 0; i < ticks; i++) {
-    const p = i / ticks;
-    const t = (p * p) * duration;        // ease-in → gaps widen as it slows
-    tone(820 - p * 220, t, 0.028, { type: 'square', gain: 0.075 });
+  const bez = [0.17, 0.67, 0.12, 0.99];
+  const segAngle = 360 / segments;
+  const crossings = Math.floor(totalDegrees / segAngle);
+  for (let k = 1; k <= crossings; k++) {
+    const progress = Math.min(1, (k * segAngle) / totalDegrees);
+    const tf = _bezierTimeAtProgress(bez, progress); // time fraction 0..1
+    tone(720 - 130 * tf, tf * duration, 0.02, { type: 'square', gain: 0.06 });
   }
 }

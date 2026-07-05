@@ -227,10 +227,11 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
       const jitter = (Math.random() - 0.5) * (STEP * 0.4);
       const target = ((360 - center + jitter) % 360 + 360) % 360;
       const delta = (target - curMod + 360) % 360;
-      const newRot = rotRef.current + 6 * 360 + delta;
+      const spinDegrees = 6 * 360 + delta;
+      const newRot = rotRef.current + spinDegrees;
       rotRef.current = newRot;
       setRotation(newRot);
-      playWheelSpin(4.2);
+      playWheelSpin({ duration: 4, totalDegrees: spinDegrees, segments: tier.prizes.length });
 
       // Set local cooldown immediately — countdown starts before parent fetchStatus returns
       setLocalNextSpinAt(nextSpinAt);
