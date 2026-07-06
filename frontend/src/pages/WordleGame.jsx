@@ -470,6 +470,7 @@ export default function WordleGame() {
   const handleKey = useCallback((key) => {
     if (!canType) return;
     if (key === 'ENTER' || key === 'Enter') {
+      playType();
       if (currentRow.length < WORD_LENGTH) { flashError('Not enough letters'); triggerShake(); return; }
       const guess = currentRow.join('');
       if (isSolo && soloSessionId) {
@@ -491,6 +492,7 @@ export default function WordleGame() {
       }
     } else if (key === '⌫' || key === 'Backspace') {
       setCurrentRow(prev => prev.slice(0, -1));
+      playType();
     } else if (/^[A-Za-z]$/.test(key) && currentRow.length < WORD_LENGTH) {
       setCurrentRow(prev => [...prev, key.toUpperCase()]);
       playType();
