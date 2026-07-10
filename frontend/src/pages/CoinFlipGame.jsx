@@ -24,28 +24,15 @@ const EDGE_N = 36;            // number of cylinder-edge segments
 const ARC_W  = (2 * Math.PI * COIN_R) / EDGE_N + 1.5; // arc width + small overlap
 
 // Coin rendered purely via DOM refs — no React state for transforms
-// Decorative engraving overlay for a coin face — a reeded (ticked) rim, two
-// concentric rings, and a faint sunburst behind the letter. tickColor/ringColor
-// let the blue Heads face and the light Tails face use contrasting engraving.
-function CoinDetail({ tickColor, ringColor }) {
-  const ringMask  = 'radial-gradient(circle, transparent 0 42%, #000 43%, #000 49%, transparent 50%)';
-  const burstMask = 'radial-gradient(circle, #000 0 55%, transparent 62%)';
+// Decorative engraving for a coin face — just a reeded (milled) rim right at
+// the edge of the coin. tickColor lets the blue Heads face and the light Tails
+// face use a contrasting tint.
+function CoinDetail({ tickColor }) {
+  const rimMask = 'radial-gradient(circle closest-side, transparent 0 84%, #000 88%, #000 100%)';
   return (
-    <>
-      {/* reeded / milled rim */}
-      <div style={{ position:'absolute', inset:8, borderRadius:'50%',
-        background:`repeating-conic-gradient(${tickColor} 0deg 2deg, transparent 2deg 5deg)`,
-        WebkitMask: ringMask, mask: ringMask, opacity:0.6, pointerEvents:'none' }} />
-      {/* concentric rings */}
-      <div style={{ position:'absolute', inset:15, borderRadius:'50%',
-        border:`1.5px solid ${ringColor}`, opacity:0.5, pointerEvents:'none' }} />
-      <div style={{ position:'absolute', inset:23, borderRadius:'50%',
-        border:`1px solid ${ringColor}`, opacity:0.35, pointerEvents:'none' }} />
-      {/* faint sunburst behind the letter */}
-      <div style={{ position:'absolute', inset:30, borderRadius:'50%',
-        background:`repeating-conic-gradient(from 0deg, ${ringColor} 0deg 3deg, transparent 3deg 9deg)`,
-        WebkitMask: burstMask, mask: burstMask, opacity:0.16, pointerEvents:'none' }} />
-    </>
+    <div style={{ position:'absolute', inset:4, borderRadius:'50%',
+      background:`repeating-conic-gradient(${tickColor} 0deg 2deg, transparent 2deg 5deg)`,
+      WebkitMask: rimMask, mask: rimMask, opacity:0.65, pointerEvents:'none' }} />
   );
 }
 
@@ -120,7 +107,7 @@ function Coin3D({ coinRef, resultLanded }) {
             boxShadow: 'inset 0 -10px 22px rgba(0,0,0,0.35), inset 0 8px 18px rgba(160,216,255,0.4)',
             transform: `translateZ(${COIN_T / 2}px)`,
           }}>
-            <CoinDetail tickColor="rgba(195,228,255,0.9)" ringColor="rgba(165,216,255,0.75)" />
+            <CoinDetail tickColor="rgba(195,228,255,0.9)" />
             <div style={{ position:'absolute', inset:0, borderRadius:'50%',
               background:'radial-gradient(circle at 36% 28%, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.15) 36%, transparent 62%)',
               pointerEvents:'none' }} />
@@ -143,7 +130,7 @@ function Coin3D({ coinRef, resultLanded }) {
             boxShadow: 'inset 0 -10px 22px rgba(0,0,0,0.2), inset 0 8px 18px rgba(255,255,255,0.65)',
             transform: `rotateX(180deg) translateZ(${COIN_T / 2}px)`,
           }}>
-            <CoinDetail tickColor="rgba(105,150,210,0.75)" ringColor="rgba(120,165,225,0.7)" />
+            <CoinDetail tickColor="rgba(105,150,210,0.75)" />
             <div style={{ position:'absolute', inset:0, borderRadius:'50%',
               background:'radial-gradient(circle at 36% 28%, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.25) 36%, transparent 62%)',
               pointerEvents:'none' }} />
