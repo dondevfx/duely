@@ -34,6 +34,22 @@ export function setMuted(m) {
 }
 export function toggleMuted() { setMuted(!muted); return muted; }
 
+// Track every scheduled source so we can hard-stop them (e.g. when the player
+// leaves a game mid-sound). Web Audio sounds are scheduled ahead, so clearing a
+// setTimeout isn't enough — the already-queued oscillators must be stopped.
+const liveNodes = new Set();
+function track(node) {
+  liveNodes.add(node);
+  node.onended = () => liveNodes.delete(node);
+}
+export function stopAllSounds() {
+  for (const n of liveNodes) {
+    try { n.stop(); } catch {}
+    try { n.disconnect(); } catch {}
+  }
+  liveNodes.clear();
+}
+
 // Play a single tone. start/dur in seconds (relative to now).
 function tone(freq, start, dur, { type = 'sine', gain = 0.2, slideTo = null } = {}) {
   const ac = getCtx();
@@ -52,6 +68,7 @@ function tone(freq, start, dur, { type = 'sine', gain = 0.2, slideTo = null } = 
   g.connect(ac.destination);
   osc.start(t0);
   osc.stop(t0 + dur + 0.03);
+  track(osc);
 }
 
 // Short filtered white-noise burst — used for realistic "swish/flick" sounds
@@ -76,6 +93,7 @@ function noiseBurst(dur, { gain = 0.14, filter = 'highpass', freq = 2200, q = nu
   src.connect(biquad); biquad.connect(g); g.connect(ac.destination);
   src.start(t0);
   src.stop(t0 + dur + 0.02);
+  track(src);
 }
 
 // CSS cubic-bezier(x1,y1,x2,y2) sampled at parameter s → [x(time), y(progress)].

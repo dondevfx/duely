@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { playMatchFound, playCountdown, playGo, playCoinFlip, playCoinLand } from '../utils/sound';
+import { playMatchFound, playCountdown, playGo, playCoinFlip, playCoinLand, stopAllSounds } from '../utils/sound';
 import { useSocket } from '../context/SocketContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
@@ -161,6 +161,14 @@ export default function CoinFlipGame() {
   const lastSettingsRef = useRef({ entryFee: 0, currency: 'coins', side: 'heads' });
   const socketRef        = useRef(socket);
   const inActiveMatchRef = useRef(false);
+  const fxTimersRef      = useRef([]); // countdown / result timers, so we can cancel on leave
+
+  // Cancel any pending countdown/result timers and silence any scheduled sounds.
+  function stopCoinFx() {
+    fxTimersRef.current.forEach(clearTimeout);
+    fxTimersRef.current = [];
+    stopAllSounds();
+  }
   const refreshProfileRef = useRef(refreshProfile);
   const profileRef        = useRef(profile);
   useEffect(() => { socketRef.current = socket; }, [socket]);
@@ -174,6 +182,8 @@ export default function CoinFlipGame() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      // Cancel pending countdown/flip timers and silence any scheduled sounds
+      stopCoinFx();
       // Always emit on SPA navigation (logo click, sidebar links, etc.)
       // Server is a no-op if no active room exists for this socket
       if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
@@ -322,10 +332,11 @@ export default function CoinFlipGame() {
         );
         refreshProfile();
       }
-      const t1 = setTimeout(() => { setCountdown(2); playCountdown(); }, 1000);
-      const t2 = setTimeout(() => { setCountdown(1); playCountdown(); }, 2000);
-      const t3 = setTimeout(() => { setCountdown(0); playGo(); setPhase('flipping'); }, 3000);
-      return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+      fxTimersRef.current.push(
+        setTimeout(() => { setCountdown(2); playCountdown(); }, 1000),
+        setTimeout(() => { setCountdown(1); playCountdown(); }, 2000),
+        setTimeout(() => { setCountdown(0); playGo(); setPhase('flipping'); }, 3000),
+      );
     });
 
     socket.on('match_cancelled', ({ message }) => {
@@ -341,8 +352,8 @@ export default function CoinFlipGame() {
       landCoin(data.result);
 
       // After transition completes show label for 2s, then result screen
-      setTimeout(() => { setResultLanded(true); playCoinLand(); }, 4200);
-      setTimeout(() => {
+      fxTimersRef.current.push(setTimeout(() => { setResultLanded(true); playCoinLand(); }, 4200));
+      fxTimersRef.current.push(setTimeout(() => {
         const res = pendingResultRef.current;
         const myId = profileRef.current?.id;
         const isWin = res.winnerId === myId;
@@ -357,7 +368,7 @@ export default function CoinFlipGame() {
         setResultData(res);
         setPhase('result');
         refreshProfile();
-      }, 6200);
+      }, 6200));
     });
 
     socket.on('opponent_disconnected', (data = {}) => {
@@ -454,6 +465,7 @@ export default function CoinFlipGame() {
 
   function leaveQueue() {
     socket?.emit('leave_coin_flip_queue');
+    stopCoinFx();
     setPhase('lobby'); setStatusMsg('');
   }
 
