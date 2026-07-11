@@ -99,9 +99,9 @@ export default function LeftSidebar() {
             <div className="flex items-center gap-3 px-2 py-2">
               <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
                 style={{
-                  backgroundColor: `${profile.profile_color || '#1E90FF'}22`,
-                  border: `1.5px solid ${profile.profile_color || '#1E90FF'}`,
-                  color: profile.profile_color || '#1E90FF',
+                  backgroundColor: `${profile.profile_color || '#1877F2'}22`,
+                  border: `1.5px solid ${profile.profile_color || '#1877F2'}`,
+                  color: profile.profile_color || '#1877F2',
                 }}>
                 {profile.username?.[0]?.toUpperCase()}
               </div>

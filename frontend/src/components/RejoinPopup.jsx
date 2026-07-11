@@ -35,7 +35,7 @@ export default function RejoinPopup({ secondsLeft: initial, onRejoin, onDismiss 
             <circle cx="40" cy="40" r={R} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="6" />
             <circle
               cx="40" cy="40" r={R} fill="none"
-              stroke={secs <= 10 ? '#ef4444' : '#1E90FF'}
+              stroke={secs <= 10 ? '#ef4444' : '#1877F2'}
               strokeWidth="6"
               strokeDasharray={circ}
               strokeDashoffset={circ * (1 - pct)}
@@ -58,7 +58,7 @@ export default function RejoinPopup({ secondsLeft: initial, onRejoin, onDismiss 
           <button
             onClick={onRejoin}
             className="flex-1 px-4 py-3 rounded-xl bg-primary hover:bg-primary/80 text-white font-black text-sm transition-all"
-            style={{ boxShadow: '0 0 20px rgba(30,144,255,0.35)' }}
+            style={{ boxShadow: '0 0 20px rgba(24,119,242,0.35)' }}
           >
             Rejoin Game
           </button>

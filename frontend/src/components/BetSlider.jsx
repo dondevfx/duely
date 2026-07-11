@@ -132,7 +132,7 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
         <div
           ref={thumbRef}
           className="absolute w-6 h-6 rounded-full bg-white border-2 border-primary -translate-x-1/2 pointer-events-none"
-          style={{ left: '0%', boxShadow: '0 2px 12px rgba(30,144,255,0.6)' }}
+          style={{ left: '0%', boxShadow: '0 2px 12px rgba(24,119,242,0.6)' }}
         />
       </div>
 

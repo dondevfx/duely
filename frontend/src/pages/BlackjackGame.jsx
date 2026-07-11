@@ -53,8 +53,8 @@ const CARD_DEAL_CSS = `
   transition: all 0.15s ease;
 }
 .bj-hit-btn:not(:disabled):hover {
-  background: rgba(30,144,255,0.16) !important;
-  border-color: rgba(30,144,255,0.55) !important;
+  background: rgba(24,119,242,0.16) !important;
+  border-color: rgba(24,119,242,0.55) !important;
 }
 .bj-stand-btn:not(:disabled):hover {
   border-color: rgba(255,255,255,0.4) !important;
@@ -755,7 +755,7 @@ export default function BlackjackGame() {
           <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{
               width: 36, height: 36, borderRadius: '50%',
-              background: 'linear-gradient(135deg, #1E90FF, #0066cc)',
+              background: 'linear-gradient(135deg, #1877F2, #0066cc)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 14, fontWeight: 900, color: '#fff',
             }}>
@@ -852,10 +852,10 @@ export default function BlackjackGame() {
                     cursor: stood || bust ? 'not-allowed' : 'pointer',
                     background: stood || bust
                       ? (isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)')
-                      : 'rgba(30,144,255,0.10)',
+                      : 'rgba(24,119,242,0.10)',
                     border: stood || bust
                       ? `1.5px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.07)'}`
-                      : '1.5px solid rgba(30,144,255,0.45)',
+                      : '1.5px solid rgba(24,119,242,0.45)',
                     color: stood || bust ? (isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.25)') : '#4DA3FF',
                   }}
                 >
@@ -923,7 +923,7 @@ export default function BlackjackGame() {
       return (
         <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
           <div className="text-center animate-fade-in">
-            <div className="text-8xl font-black text-primary mb-4" style={{ textShadow: '0 0 40px #1E90FF' }}>
+            <div className="text-8xl font-black text-primary mb-4" style={{ textShadow: '0 0 40px #1877F2' }}>
               {countdown}
             </div>
             <p className="text-muted">Get ready...</p>

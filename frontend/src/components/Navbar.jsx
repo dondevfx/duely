@@ -143,7 +143,7 @@ export default function Navbar() {
           {/* Logo — left-aligned (in flex flow) so a large balance can't overlap it */}
           <div className="relative shrink-0 lg:w-56 flex justify-start pointer-events-auto">
             <Link to="/" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-1.5 pointer-events-auto">
-              <span className="text-2xl lg:text-3xl font-black tracking-tight text-primary" style={{ textShadow: '0 0 22px rgba(30,144,255,0.6)' }}>
+              <span className="text-2xl lg:text-3xl font-black tracking-tight text-primary" style={{ textShadow: '0 0 22px rgba(24,119,242,0.6)' }}>
                 Duely
               </span>
               <span className="w-1.5 h-1.5 lg:w-2 lg:h-2 rounded-full bg-accent animate-pulse" />
@@ -428,9 +428,9 @@ export default function Navbar() {
                   <div className="relative">
                     <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full flex items-center justify-center text-xs lg:text-sm font-bold transition-all"
                       style={{
-                        backgroundColor: `${profile.profile_color || '#1E90FF'}22`,
-                        border: `1.5px solid ${profile.profile_color || '#1E90FF'}`,
-                        color: profile.profile_color || '#1E90FF',
+                        backgroundColor: `${profile.profile_color || '#1877F2'}22`,
+                        border: `1.5px solid ${profile.profile_color || '#1877F2'}`,
+                        color: profile.profile_color || '#1877F2',
                       }}>
                       {profile.username?.[0]?.toUpperCase() ?? '?'}
                     </div>
@@ -532,9 +532,9 @@ export default function Navbar() {
                   <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-surfaceLight mb-2">
                     <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold"
                       style={{
-                        backgroundColor: `${profile.profile_color || '#1E90FF'}22`,
-                        border: `1.5px solid ${profile.profile_color || '#1E90FF'}`,
-                        color: profile.profile_color || '#1E90FF',
+                        backgroundColor: `${profile.profile_color || '#1877F2'}22`,
+                        border: `1.5px solid ${profile.profile_color || '#1877F2'}`,
+                        color: profile.profile_color || '#1877F2',
                       }}>
                       {profile.username?.[0]?.toUpperCase()}
                     </div>
