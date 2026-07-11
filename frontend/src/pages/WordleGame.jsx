@@ -18,7 +18,7 @@ const CLR = {
   absent:  '#2d3748',
   border:  {
     empty:   'rgba(255,255,255,0.15)',
-    active:  '#1E90FF',
+    active:  '#1877F2',
     correct: '#22c55e',
     present: '#f59e0b',
     absent:  '#374151',
@@ -274,8 +274,27 @@ export default function WordleGame() {
     socket.on('private_room_created', ({ code }) => { setPrivateCode(code); setPhase('private_waiting'); });
     socket.on('private_room_error',   ({ message }) => { setStatusMsg(message || 'Room error'); setPhase('lobby'); });
     socket.on('scrabble_queue_left',  () => { setPhase('lobby'); setStatusMsg(''); });
-    socket.on('opponent_disconnected', () => {
+    socket.on('opponent_disconnected', (data = {}) => {
       if (failIntervalRef.current) { clearInterval(failIntervalRef.current); failIntervalRef.current = null; }
+      if (lastModeRef.current === 'solo') return; // no opponent in solo
+      // The server only sends this to the staying (winning) player. Transition
+      // to the result screen so they aren't frozen on the board/countdown.
+      if (data.newWinnerElo != null) eloBeforeRef.current = data.newWinnerElo - 25;
+      setResult({
+        iWon: true,
+        isDraw: false,
+        winnerUsername: data.winnerUsername,
+        loserUsername: data.loserUsername,
+        newWinnerElo: data.newWinnerElo,
+        newLoserElo: data.newLoserElo,
+        balanceChange: data.winnerPayout != null ? { winnerPayout: data.winnerPayout } : undefined,
+        currency: data.currency,
+        entryFee: data.entryFee,
+        disconnected: true,
+      });
+      setPhase('result');
+      refreshProfileRef.current?.();
+      setTimeout(() => refreshProfileRef.current?.(), 2000);
     });
 
     socket.on('wordle_solo_ready', ({ sessionId }) => {
@@ -602,13 +621,16 @@ export default function WordleGame() {
           entryFee={result.entryFee ?? entryFee}
           winnerStreak={result.winnerStreak ?? 0}
           isFirstWin={result.isFirstWin ?? false}
+          disconnected={result.disconnected}
           profile={profile}
           gameLabel="🔤 Word VS"
-          extraRows={[
-            { label: 'The Word', value: result.word },
-            { label: 'Your guesses', value: `${(result.myGuesses || []).length} / ${MAX_GUESSES}` },
-            { label: 'Their guesses', value: `${(result.opponentGuesses || []).length} / ${MAX_GUESSES}` },
-          ]}
+          extraRows={result.disconnected
+            ? [{ label: 'Result', value: 'Opponent forfeited' }]
+            : [
+                { label: 'The Word', value: result.word },
+                { label: 'Your guesses', value: `${(result.myGuesses || []).length} / ${MAX_GUESSES}` },
+                { label: 'Their guesses', value: `${(result.opponentGuesses || []).length} / ${MAX_GUESSES}` },
+              ]}
           onPlayAgain={playAgain}
           onBackToLobby={backToLobby}
         />
@@ -666,9 +688,9 @@ export default function WordleGame() {
           <h2 className="text-2xl font-black text-white mb-2">Private Room</h2>
           <p className="text-muted mb-4 text-sm">Share this code with a friend</p>
           <div className="bg-surface border-2 border-primary rounded-2xl p-8 mb-6 inline-block min-w-[200px]"
-            style={{ boxShadow: '0 0 20px rgba(30,144,255,0.2)' }}>
+            style={{ boxShadow: '0 0 20px rgba(24,119,242,0.2)' }}>
             <div className="text-4xl font-black font-mono tracking-[0.25em] text-primary"
-              style={{ textShadow: '0 0 20px rgba(30,144,255,0.5)' }}>
+              style={{ textShadow: '0 0 20px rgba(24,119,242,0.5)' }}>
               {privateCode}
             </div>
           </div>
@@ -685,7 +707,7 @@ export default function WordleGame() {
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
         <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
         <div className="text-center animate-fade-in">
-          <div className="text-8xl font-black text-primary mb-4" style={{ textShadow: '0 0 40px #1E90FF' }}>
+          <div className="text-8xl font-black text-primary mb-4" style={{ textShadow: '0 0 40px #1877F2' }}>
             {countdown ?? '…'}
           </div>
           <p className="text-muted">Get ready…</p>
