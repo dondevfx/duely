@@ -126,6 +126,15 @@ function Card({ card, faceDown = false, dealIndex = null }) {
   );
 }
 
+// Deals in face-down, then flips face-up when `flipped` becomes true.
+function DealFlipCard({ card, flipped }) {
+  return (
+    <div style={{ flexShrink: 0, animation: 'dealIn 0.5s cubic-bezier(0.22,1,0.36,1) both' }}>
+      <FlipCard card={card} flipped={flipped} flipDelay={0} />
+    </div>
+  );
+}
+
 // Card that flips from face-down to face-up
 function FlipCard({ card, flipped, flipDelay = 0 }) {
   return (
@@ -237,6 +246,8 @@ export default function BlackjackGame() {
   const [stood, setStood] = useState(false);
   const stoodRef = useRef(false);       // true once my turn is fully over (stand/bust)
   const splitDataRef = useRef(null);    // current split state, for use inside socket handlers
+  const [oppFlippedHits, setOppFlippedHits] = useState(0); // opp hit cards that have flipped face-up
+  const oppInitialCountRef = useRef(2);  // length of the opponent's initial (always-visible) hand
   const [bust, setBust] = useState(false);
   const [timeLeft, setTimeLeft] = useState(20);
   const [resultData, setResultData] = useState(null);
@@ -257,9 +268,12 @@ export default function BlackjackGame() {
     stoodRef.current = true;
     const toReveal = oppBufferedRef.current.slice(oppRevealedRef.current);
     oppRevealedRef.current = oppBufferedRef.current.length;
+    // For each hidden card: deal it in face-down, then ~1s later flip it over —
+    // one card at a time (~2s each), like a dealer turning them up.
     toReveal.forEach((card, idx) => {
-      const t = setTimeout(() => setOppHand(prev => [...prev, card]), (idx + 1) * 1000);
-      revealTimersRef.current.push(t);
+      const tDeal = setTimeout(() => setOppHand(prev => [...prev, card]), idx * 2000);
+      const tFlip = setTimeout(() => setOppFlippedHits(f => f + 1), idx * 2000 + 1000);
+      revealTimersRef.current.push(tDeal, tFlip);
     });
   }
   // splitData: { hand1: cards[], score1: n, hand2: cards[], score2: n, activeHand: 1|2 } | null
@@ -283,6 +297,8 @@ export default function BlackjackGame() {
         oppRevealedRef.current = 0;
         stoodRef.current = false;
         revealTimersRef.current.forEach(clearTimeout); revealTimersRef.current = [];
+        oppInitialCountRef.current = (d.opponentHand ?? []).length || 2;
+        setOppFlippedHits(0);
         setMyHand(d.hand);
         setMyScore(d.handScore);
         setOpponentHandSize(d.oppSz);
@@ -360,10 +376,12 @@ export default function BlackjackGame() {
       playCard(); // opponent drew a card
       oppBufferedRef.current.push(card);
       // Keep opponent hit cards HIDDEN until I've finished my turn (stand/bust).
-      // Once I've stood, reveal their hits live.
+      // Once I've stood, deal each new hit in face-down, then flip it after ~1s.
       if (stoodRef.current) {
         oppRevealedRef.current = oppBufferedRef.current.length;
         setOppHand(prev => [...prev, card]);
+        const tFlip = setTimeout(() => setOppFlippedHits(f => f + 1), 1000);
+        revealTimersRef.current.push(tFlip);
       }
     });
 
@@ -602,6 +620,7 @@ export default function BlackjackGame() {
     oppBufferedRef.current = [];
     oppRevealedRef.current = 0;
     stoodRef.current = false;
+    setOppFlippedHits(0);
     revealTimersRef.current.forEach(clearTimeout); revealTimersRef.current = [];
   }
 
@@ -752,8 +771,11 @@ export default function BlackjackGame() {
                 ))
               : oppHand.length > 0
                 ? oppHand.map((c, i) => (
-                    <Card key={`opp-${dealRevision}-${i}`} card={c}
-                      dealIndex={dealRevision > 0 && i < 2 ? i : (i >= 2 ? 0 : null)} />
+                    i < oppInitialCountRef.current
+                      ? <Card key={`opp-${dealRevision}-${i}`} card={c}
+                          dealIndex={dealRevision > 0 ? i : null} />
+                      : <DealFlipCard key={`opp-hit-${i}`} card={c}
+                          flipped={(i - oppInitialCountRef.current) < oppFlippedHits} />
                   ))
                 : Array.from({ length: opponentHandSize }).map((_, i) => (
                     <Card key={i} faceDown dealIndex={dealRevision > 0 ? i : null} />
