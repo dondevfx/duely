@@ -242,8 +242,8 @@ export default function GameLobby({
         {/* Live player count — only show when > 0 */}
         {typeof liveCount === 'number' && liveCount > 0 && (
           <div className="flex items-center gap-1.5 mt-1">
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 6px #4ade80', animation: 'pulse 2s infinite' }} />
-            <span style={{ color: '#4ade80', fontSize: 12, fontWeight: 600 }}>{liveCount} playing</span>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#1250B4', boxShadow: '0 0 6px #1250B4', animation: 'pulse 2s infinite' }} />
+            <span style={{ color: '#1250B4', fontSize: 12, fontWeight: 600 }}>{liveCount} playing</span>
           </div>
         )}
 
@@ -254,8 +254,8 @@ export default function GameLobby({
           if (betLiveCount <= 0) return null;
           return (
             <div className="flex items-center gap-1.5 mt-1">
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 6px #4ade80', animation: 'pulse 2s infinite' }} />
-              <span style={{ color: '#4ade80', fontSize: 12, fontWeight: 600 }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#1250B4', boxShadow: '0 0 6px #1250B4', animation: 'pulse 2s infinite' }} />
+              <span style={{ color: '#1250B4', fontSize: 12, fontWeight: 600 }}>
                 {betLiveCount} at this bet size
               </span>
             </div>

@@ -9,7 +9,7 @@ const MAX_MESSAGES = 100;
 const ADMIN_ID  = import.meta.env.VITE_ADMIN_ID || '';
 const BOT_ID    = 'duely-bot-v1';
 const BOT_NAME  = 'Duely Bot';
-const BOT_COLOR = '#00BFFF';
+const BOT_COLOR = '#1250B4';
 
 const BOT_LINES = [
   "💎 Don't forget your daily spin — up to 50,000 diamonds free every day!",

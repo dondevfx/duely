@@ -3,7 +3,7 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { useSocket } from '../context/SocketContext';
-import { getRank, getDisplayRank } from '../utils/ranks';
+import { getRank, getDisplayRank, isRanked } from '../utils/ranks';
 import { api } from '../utils/api';
 import CoinIcon from './CoinIcon';
 
@@ -146,7 +146,7 @@ export default function Navbar() {
               <span className="text-2xl lg:text-3xl font-black tracking-tight text-primary" style={{ textShadow: '0 0 22px rgba(18,80,180,0.6)' }}>
                 Duely
               </span>
-              <span className="w-1.5 h-1.5 lg:w-2 lg:h-2 rounded-full bg-accent animate-pulse" />
+              <span className="w-1.5 h-1.5 lg:w-2 lg:h-2 rounded-full bg-primary animate-pulse" />
             </Link>
           </div>
 
@@ -513,8 +513,8 @@ export default function Navbar() {
                     <span className="text-xl">{item.icon}</span>
                     <span className="flex-1">{item.label}</span>
                     {count > 0 && (
-                      <span className="text-[10px] bg-success/20 text-success border border-success/30 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1">
-                        <span className="w-1 h-1 rounded-full bg-success inline-block" />
+                      <span className="text-[10px] bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1">
+                        <span className="w-1 h-1 rounded-full bg-primary inline-block" />
                         {count}
                       </span>
                     )}
@@ -540,7 +540,7 @@ export default function Navbar() {
                     </div>
                     <div>
                       <div className="text-sm font-semibold text-white">{profile.username}</div>
-                      <div className="text-xs text-muted">ELO {profile.elo} · {balanceDisplay}</div>
+                      <div className="text-xs text-muted">{isRanked(profile) ? `ELO ${profile.elo}` : 'Unranked'} · {balanceDisplay}</div>
                     </div>
                   </div>
                   <button onClick={handleSignOut}

@@ -35,7 +35,7 @@ module.exports = function authRoutes(supabase) {
     } else {
       ({ data, error } = await supabase
         .from('profiles')
-        .insert({ id: userId, username: username.trim(), wallet_address: wallet_address || null })
+        .insert({ id: userId, username: username.trim(), wallet_address: wallet_address || null, profile_color: '#1250B4' })
         .select()
         .single());
     }
@@ -60,7 +60,7 @@ module.exports = function authRoutes(supabase) {
   });
 
   const VALID_COLORS = new Set([
-    '#1E90FF','#00BFFF','#22c55e','#ef4444','#f97316',
+    '#1250B4','#00BFFF','#22c55e','#ef4444','#f97316',
     '#a855f7','#ec4899','#eab308','#06b6d4','#14b8a6','#f43f5e','#e2e8f0',
   ]);
 

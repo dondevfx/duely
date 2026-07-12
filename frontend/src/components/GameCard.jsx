@@ -12,8 +12,8 @@ export default function GameCard({ title, description, icon, route, available = 
         : 'bg-surface/50 border-surfaceLight/50 opacity-60'}
     `}>
       {liveCount > 0 && (
-        <div className="absolute top-4 right-4 inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-success/10 text-success border border-success/30">
-          <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" style={{ boxShadow: '0 0 4px #4ade80' }} />
+        <div className="absolute top-4 right-4 inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/30">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" style={{ boxShadow: '0 0 4px #1250B4' }} />
           {liveCount} Live
         </div>
       )}

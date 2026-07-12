@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
-import { getRank } from '../utils/ranks';
+import { getDisplayRank, isRanked } from '../utils/ranks';
 
 const GAMES = [
   { icon: '⚡', label: 'Quick Match',  route: '/game/quick-match', live: true },
@@ -39,7 +39,8 @@ const routeToKey = {
 export default function LeftSidebar() {
   const { profile } = useAuth();
   const { playerCounts } = useSocket();
-  const rank = profile ? getRank(profile.elo) : null;
+  const rank = profile ? getDisplayRank(profile) : null;
+  const ranked = profile ? isRanked(profile) : false;
 
   return (
     <aside className="hidden lg:flex fixed left-0 top-14 h-[calc(100vh-56px)] w-60 bg-surface border-r border-border flex-col z-30 overflow-y-auto">
@@ -80,10 +81,10 @@ export default function LeftSidebar() {
               if (count === 0) return null;
               return (
                 <span style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#4ade80', textShadow: '0 0 8px #4ade8066' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#1250B4', textShadow: '0 0 8px #1250B466' }}>
                     {count}
                   </span>
-                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 5px #4ade80', display: 'inline-block' }} />
+                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#1250B4', boxShadow: '0 0 5px #1250B4', display: 'inline-block' }} />
                 </span>
               );
             })()}
@@ -114,7 +115,7 @@ export default function LeftSidebar() {
                     </span>
                   )}
                 </div>
-                {rank && <div className="text-xs text-muted">{rank.icon} {rank.name} · {profile.elo} ELO</div>}
+                {rank && <div className="text-xs text-muted">{rank.icon} {rank.name}{ranked ? ` · ${profile.elo} ELO` : ''}</div>}
               </div>
             </div>
           </div>
