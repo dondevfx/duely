@@ -736,7 +736,7 @@ export default function BlackjackGame() {
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', maxWidth: '100%', paddingBottom: 4, justifyContent: 'center' }}>
             {oppReveal
               ? oppReveal.hand.map((c, i) => (
-                  <FlipCard key={i} card={c} flipped={flippingOpp} flipDelay={i * 0.18} />
+                  <FlipCard key={i} card={c} flipped={flippingOpp} flipDelay={i * 0.42} />
                 ))
               : oppHand.length > 0
                 ? oppHand.map((c, i) => (
