@@ -799,7 +799,7 @@ export default function BlockBlastGame() {
           <h2 className="text-2xl font-bold text-white mb-2">Private Room Created</h2>
           <p className="text-muted mb-6 text-sm">Share this code with a friend to invite them</p>
           <div className="bg-surface border-2 border-primary rounded-2xl p-8 mb-6 shadow-glow inline-block min-w-[200px]">
-            <div className="text-4xl font-black font-mono tracking-[0.25em] text-primary" style={{ textShadow: '0 0 20px rgba(24,119,242,0.5)' }}>
+            <div className="text-4xl font-black font-mono tracking-[0.25em] text-primary" style={{ textShadow: '0 0 20px rgba(21,104,216,0.5)' }}>
               {privateCode}
             </div>
             <button
@@ -828,7 +828,7 @@ export default function BlockBlastGame() {
         <div className="text-center animate-fade-in">
           {countdown > 0 ? (
             <>
-              <div className="text-8xl font-black text-primary mb-4" style={{ textShadow: '0 0 40px #1877F2' }}>
+              <div className="text-8xl font-black text-primary mb-4" style={{ textShadow: '0 0 40px #1568D8' }}>
                 {countdown}
               </div>
               <p className="text-muted">Get ready...</p>
@@ -919,8 +919,8 @@ export default function BlockBlastGame() {
                   width: blastMode ? '100%' : `${energy}%`,
                   background: blastMode
                     ? 'linear-gradient(90deg, #facc15, #f97316)'
-                    : 'linear-gradient(90deg, #1877F2, #00ccff)',
-                  boxShadow: blastMode ? '0 0 12px #facc15' : energy > 70 ? '0 0 8px #1877F2' : 'none',
+                    : 'linear-gradient(90deg, #1568D8, #00ccff)',
+                  boxShadow: blastMode ? '0 0 12px #facc15' : energy > 70 ? '0 0 8px #1568D8' : 'none',
                   animation: blastMode ? 'powerUpPulse 0.5s ease-in-out infinite' : undefined,
                 }}
               />
