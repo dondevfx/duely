@@ -440,8 +440,8 @@ export default function Admin() {
                       background: '#0f172a', color: '#334155', border: '1px solid #1e293b', cursor: 'not-allowed',
                     } : {
                       background: 'linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%)',
-                      color: '#fff', border: '1px solid rgba(19,85,192,0.4)',
-                      boxShadow: '0 0 12px rgba(19,85,192,0.2)',
+                      color: '#fff', border: '1px solid rgba(18,80,180,0.4)',
+                      boxShadow: '0 0 12px rgba(18,80,180,0.2)',
                     }}
                   >
                     {playerEloLoading ? 'Applying…' : 'Apply ELO'}
@@ -507,9 +507,9 @@ export default function Admin() {
                               <div className="flex items-center gap-2">
                                 <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0"
                                   style={{
-                                    backgroundColor: `${tx.profiles?.profile_color || '#1355C0'}22`,
-                                    border: `1.5px solid ${tx.profiles?.profile_color || '#1355C0'}`,
-                                    color: tx.profiles?.profile_color || '#1355C0',
+                                    backgroundColor: `${tx.profiles?.profile_color || '#1250B4'}22`,
+                                    border: `1.5px solid ${tx.profiles?.profile_color || '#1250B4'}`,
+                                    color: tx.profiles?.profile_color || '#1250B4',
                                   }}>
                                   {tx.profiles?.username?.[0]?.toUpperCase() ?? '?'}
                                 </div>
@@ -574,9 +574,9 @@ export default function Admin() {
                             <div className="flex items-center gap-2">
                               <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0"
                                 style={{
-                                  backgroundColor: `${u.profile_color || '#1355C0'}22`,
-                                  border: `1.5px solid ${u.profile_color || '#1355C0'}`,
-                                  color: u.profile_color || '#1355C0',
+                                  backgroundColor: `${u.profile_color || '#1250B4'}22`,
+                                  border: `1.5px solid ${u.profile_color || '#1250B4'}`,
+                                  color: u.profile_color || '#1250B4',
                                 }}>
                                 {u.username?.[0]?.toUpperCase()}
                               </div>

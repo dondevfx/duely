@@ -1074,7 +1074,7 @@ function FriendsPanel({ myId, activeGames }) {
             return (
               <div key={f.id} className="flex items-center gap-2 mb-2 last:mb-0">
                 <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0"
-                  style={{ backgroundColor: `${p?.profile_color || '#1355C0'}22`, border: `1.5px solid ${p?.profile_color || '#1355C0'}`, color: p?.profile_color || '#1355C0' }}>
+                  style={{ backgroundColor: `${p?.profile_color || '#1250B4'}22`, border: `1.5px solid ${p?.profile_color || '#1250B4'}`, color: p?.profile_color || '#1250B4' }}>
                   {(p?.username || '?')[0].toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -1103,7 +1103,7 @@ function FriendsPanel({ myId, activeGames }) {
                   onClick={() => setViewingFriend({ id: p?.id, username: p?.username })}
                 >
                   <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-black hover:ring-2 hover:ring-primary/50 transition-all"
-                    style={{ backgroundColor: `${p?.profile_color || '#1355C0'}22`, border: `1.5px solid ${p?.profile_color || '#1355C0'}`, color: p?.profile_color || '#1355C0' }}>
+                    style={{ backgroundColor: `${p?.profile_color || '#1250B4'}22`, border: `1.5px solid ${p?.profile_color || '#1250B4'}`, color: p?.profile_color || '#1250B4' }}>
                     {(p?.username || '?')[0].toUpperCase()}
                   </div>
                   {game && <div className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-red-500 animate-pulse border border-bg" />}
@@ -1214,7 +1214,7 @@ export default function Profile() {
   const [matchesExpanded, setMatchesExpanded] = useState(false);
 
   const COLORS = [
-    '#1355C0','#00BFFF','#22c55e','#ef4444','#f97316',
+    '#1250B4','#00BFFF','#22c55e','#ef4444','#f97316',
     '#a855f7','#ec4899','#eab308','#06b6d4','#14b8a6','#f43f5e','#e2e8f0',
   ];
 
@@ -1338,10 +1338,10 @@ export default function Profile() {
                 title="Change color"
                 className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-black transition-transform hover:scale-105 active:scale-95"
                 style={{
-                  backgroundColor: `${profile.profile_color || '#1355C0'}22`,
-                  border: `2px solid ${profile.profile_color || '#1355C0'}`,
-                  color: profile.profile_color || '#1355C0',
-                  boxShadow: `0 0 18px ${profile.profile_color || '#1355C0'}66`,
+                  backgroundColor: `${profile.profile_color || '#1250B4'}22`,
+                  border: `2px solid ${profile.profile_color || '#1250B4'}`,
+                  color: profile.profile_color || '#1250B4',
+                  boxShadow: `0 0 18px ${profile.profile_color || '#1250B4'}66`,
                 }}>
                 {profile.username?.[0]?.toUpperCase()}
               </button>
@@ -1373,8 +1373,8 @@ export default function Profile() {
                           className="w-7 h-7 rounded-full border-2 transition-all hover:scale-110 disabled:opacity-50"
                           style={{
                             backgroundColor: c,
-                            borderColor: (profile.profile_color || '#1355C0') === c ? '#fff' : 'transparent',
-                            boxShadow: (profile.profile_color || '#1355C0') === c ? `0 0 8px ${c}` : 'none',
+                            borderColor: (profile.profile_color || '#1250B4') === c ? '#fff' : 'transparent',
+                            boxShadow: (profile.profile_color || '#1250B4') === c ? `0 0 8px ${c}` : 'none',
                           }}
                         />
                       ))}

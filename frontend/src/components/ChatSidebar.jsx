@@ -320,9 +320,9 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
                 <div className="relative shrink-0">
                   <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl font-black"
                     style={{
-                      backgroundColor: `${data.profile_color || '#1355C0'}22`,
-                      border: `3px solid ${data.profile_color || '#1355C0'}`,
-                      color: data.profile_color || '#1355C0',
+                      backgroundColor: `${data.profile_color || '#1250B4'}22`,
+                      border: `3px solid ${data.profile_color || '#1250B4'}`,
+                      color: data.profile_color || '#1250B4',
                     }}>
                     {isBot ? '🤖' : data.username?.[0]?.toUpperCase()}
                   </div>
@@ -657,7 +657,7 @@ export default function ChatSidebar({ open, onToggle }) {
 
             const isOwn       = msg.userId === profile?.id;
             const isMentioned = profile?.username && (msg.mentions || []).includes(profile.username.toLowerCase());
-            const msgColor    = msg.color || '#1355C0';
+            const msgColor    = msg.color || '#1250B4';
 
             return (
               <div key={msg.id} className={`text-sm group ${isOwn ? 'flex flex-col items-end' : 'flex flex-col items-start'}`}>
@@ -786,7 +786,7 @@ export default function ChatSidebar({ open, onToggle }) {
               }
               const isOwn       = msg.userId === profile?.id;
               const isMentioned = profile?.username && (msg.mentions || []).includes(profile.username.toLowerCase());
-              const msgColor    = msg.color || '#1355C0';
+              const msgColor    = msg.color || '#1250B4';
               return (
                 <div key={msg.id} className={`text-sm group ${isOwn ? 'flex flex-col items-end' : 'flex flex-col items-start'}`}>
                   <div className={`flex items-center gap-1.5 mb-0.5 px-1 ${isOwn ? 'flex-row-reverse' : ''}`}>

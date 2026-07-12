@@ -89,7 +89,7 @@ export default function Home() {
               </div>
               <h1 className="text-5xl md:text-7xl font-black text-white mb-6 leading-tight">
                 1v1{' '}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-primary">
                   Duels
                 </span>
               </h1>
