@@ -142,7 +142,7 @@ function FlipCard({ card, flipped, flipDelay = 0 }) {
       <div style={{
         width: '100%', height: '100%',
         transformStyle: 'preserve-3d',
-        transition: `transform 0.55s ${flipDelay}s ease`,
+        transition: `transform 0.4s ${flipDelay}s ease`,
         transform: flipped ? 'rotateY(0deg)' : 'rotateY(180deg)',
       }}>
         {/* Front face (face-up) */}
@@ -461,7 +461,10 @@ export default function BlackjackGame() {
         const oId = Object.keys(data.hands || {}).find(id => id !== profileRef.current?.id);
         return oId ? (data.hands[oId]?.hand?.length ?? 2) : 2;
       })();
-      const revealMs = Math.max(3500, oppCards * 1000 + 1600);
+      // End 1s after the last card finishes flipping (150ms delay + stagger + 0.4s flip).
+      const hits = Math.max(0, oppCards - oppInitialCountRef.current);
+      const lastFlipDone = hits > 0 ? 150 + (hits - 1) * 1000 + 400 : 0;
+      const revealMs = lastFlipDone + 1000;
       setTimeout(() => {
         roomIdRef.current = null;
         setResultData(data);
