@@ -210,7 +210,7 @@ module.exports = function leaderboardRoutes(supabase) {
     }
 
     const sorted = Object.entries(wageredMap)
-      .filter(([id]) => id !== adminId)
+      .filter(([id]) => id !== adminId && !DEMO_IDS.includes(id))
       .sort((a, b) => b[1] - a[1]).slice(0, 500);
     const ids = sorted.map(([id]) => id);
     const { data: profileData } = ids.length
@@ -266,7 +266,7 @@ module.exports = function leaderboardRoutes(supabase) {
     }
 
     const sorted = Object.entries(wageredMap)
-      .filter(([id]) => id !== adminId)
+      .filter(([id]) => id !== adminId && !DEMO_IDS.includes(id))
       .sort((a, b) => b[1] - a[1]).slice(0, 500);
     const ids = sorted.map(([id]) => id);
     const { data: profileData } = ids.length
@@ -329,7 +329,7 @@ module.exports = function leaderboardRoutes(supabase) {
 
       if (error) return res.status(500).json({ error: error.message });
 
-      const filtered = (data || []).filter(r => r.user_id !== adminId);
+      const filtered = (data || []).filter(r => r.user_id !== adminId && !DEMO_IDS.includes(r.user_id));
 
       // Fetch usernames in bulk
       const scoreIds = filtered.map(r => r.user_id);
