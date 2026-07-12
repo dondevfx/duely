@@ -235,6 +235,8 @@ export default function BlackjackGame() {
   const oppBufferedRef = useRef([]);               // opponent hit cards received but not yet revealed
   const oppRevealedRef = useRef(0);                // how many buffered opp cards have been shown
   const [stood, setStood] = useState(false);
+  const stoodRef = useRef(false);       // true once my turn is fully over (stand/bust)
+  const splitDataRef = useRef(null);    // current split state, for use inside socket handlers
   const [bust, setBust] = useState(false);
   const [timeLeft, setTimeLeft] = useState(20);
   const [resultData, setResultData] = useState(null);
@@ -243,6 +245,19 @@ export default function BlackjackGame() {
 
   // Split state
   const [splitData, setSplitData] = useState(null);
+  useEffect(() => { splitDataRef.current = splitData; }, [splitData]);
+
+  // My turn is fully over (stand or bust): reveal all of the opponent's
+  // previously-hidden hit cards so I can now see their full hand + total.
+  function markStood() {
+    setStood(true);
+    stoodRef.current = true;
+    if (oppBufferedRef.current.length > oppRevealedRef.current) {
+      const toReveal = oppBufferedRef.current.slice(oppRevealedRef.current);
+      oppRevealedRef.current = oppBufferedRef.current.length;
+      setOppHand(prev => [...prev, ...toReveal]);
+    }
+  }
   // splitData: { hand1: cards[], score1: n, hand2: cards[], score2: n, activeHand: 1|2 } | null
   const [oppHasSplit, setOppHasSplit] = useState(false);
 
@@ -262,6 +277,7 @@ export default function BlackjackGame() {
         myHitCountRef.current  = 0;
         oppBufferedRef.current = [];
         oppRevealedRef.current = 0;
+        stoodRef.current = false;
         setMyHand(d.hand);
         setMyScore(d.handScore);
         setOpponentHandSize(d.oppSz);
@@ -338,8 +354,9 @@ export default function BlackjackGame() {
     socket.on('bj_opp_card', ({ card }) => {
       playCard(); // opponent drew a card
       oppBufferedRef.current.push(card);
-      // Reveal immediately only if I've already hit at least as many times
-      if (myHitCountRef.current >= oppBufferedRef.current.length) {
+      // Keep opponent hit cards HIDDEN until I've finished my turn (stand/bust).
+      // Once I've stood, reveal their hits live.
+      if (stoodRef.current) {
         oppRevealedRef.current = oppBufferedRef.current.length;
         setOppHand(prev => [...prev, card]);
       }
@@ -348,12 +365,6 @@ export default function BlackjackGame() {
     socket.on('bj_card', ({ hand, score }) => {
       myHitCountRef.current++;
       playCard(); // I drew a card
-      // Reveal one buffered opponent card if available
-      if (oppBufferedRef.current.length > oppRevealedRef.current) {
-        const cardToReveal = oppBufferedRef.current[oppRevealedRef.current];
-        oppRevealedRef.current++;
-        setOppHand(prev => [...prev, cardToReveal]);
-      }
       setNewCardIdx(hand.length - 1);
       setMyHand(hand);
       setMyScore(score);
@@ -369,17 +380,13 @@ export default function BlackjackGame() {
 
     socket.on('bj_bust', ({ score } = {}) => {
       setBust(true);
-      // If no split active or on final hand, mark stood to stop timer
-      // If on split hand1, bj_split_hand2 will arrive and reset bust/stood
-      setSplitData(cur => {
-        const onHand1WithSplit = cur && cur.activeHand === 1;
-        if (!onHand1WithSplit) setStood(true);
-        return cur;
-      });
+      // On hand1 of a split, hand2 continues — don't end the turn (or reveal) yet.
+      const onHand1WithSplit = splitDataRef.current && splitDataRef.current.activeHand === 1;
+      if (!onHand1WithSplit) markStood();
     });
 
     socket.on('bj_stood', () => {
-      setStood(true);
+      markStood();
     });
 
     // Split events
@@ -389,6 +396,7 @@ export default function BlackjackGame() {
       setMyScore(score1);
       setBust(false);
       setStood(false);
+      stoodRef.current = false;
       setNewCardIdx(null);
     });
 
@@ -399,6 +407,7 @@ export default function BlackjackGame() {
       setMyScore(score);
       setBust(false);
       setStood(false);
+      stoodRef.current = false;
       setNewCardIdx(null);
     });
 
@@ -581,6 +590,7 @@ export default function BlackjackGame() {
     myHitCountRef.current  = 0;
     oppBufferedRef.current = [];
     oppRevealedRef.current = 0;
+    stoodRef.current = false;
   }
 
   function playAgain() {
@@ -721,11 +731,6 @@ export default function BlackjackGame() {
                   ? (() => { const s = calcScore(oppHand); return s <= 21 ? <ScoreBadge score={s} isLight={isLight} /> : null; })()
                   : <span style={{ fontSize: 12, color: textMuted }}>{oppHasSplit ? '✂️ Split · ' : ''}{opponentHandSize} cards</span>
               }
-              {!oppReveal && oppBufferedRef.current.length > oppRevealedRef.current && (
-                <span style={{ fontSize: 11, color: textDim, marginLeft: 4 }}>
-                  +{oppBufferedRef.current.length - oppRevealedRef.current} hidden
-                </span>
-              )}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', maxWidth: '100%', paddingBottom: 4, justifyContent: 'center' }}>

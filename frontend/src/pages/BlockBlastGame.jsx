@@ -208,6 +208,7 @@ export default function BlockBlastGame() {
   const blastModeRef = useRef(false);
   const blastTimerRef = useRef(null);
   const keepPlayingTimerRef = useRef(null);
+  const keepPlayingEndRef = useRef(null);
 
   const socketRef        = useRef(socket);
   const refreshProfileRef = useRef(refreshProfile);
@@ -355,11 +356,20 @@ export default function BlockBlastGame() {
       setKeepPlayingSeconds(seconds);
       if (keepPlayingTimerRef.current) clearInterval(keepPlayingTimerRef.current);
       keepPlayingTimerRef.current = setInterval(() => {
-        setKeepPlayingSeconds(s => {
-          if (s <= 1) { clearInterval(keepPlayingTimerRef.current); return 0; }
-          return s - 1;
-        });
+        setKeepPlayingSeconds(s => (s <= 1 ? 0 : s - 1));
       }, 1000);
+      // When the catch-up time is up, submit our final score so the server
+      // resolves the match INSTANTLY (both scores are now in) — no waiting on
+      // the server's separate timer, which could drift a few seconds.
+      if (keepPlayingEndRef.current) clearTimeout(keepPlayingEndRef.current);
+      keepPlayingEndRef.current = setTimeout(() => {
+        if (keepPlayingTimerRef.current) { clearInterval(keepPlayingTimerRef.current); keepPlayingTimerRef.current = null; }
+        setKeepPlayingSeconds(0);
+        const rid = roomIdRef.current;
+        if (rid && socket && !gameOverRef.current) {
+          socket.emit('block_blast_complete', { roomId: rid, score: scoreRef.current });
+        }
+      }, seconds * 1000);
     });
 
     socket.on('block_blast_opponent_score', ({ score: s }) => {
@@ -451,6 +461,7 @@ export default function BlockBlastGame() {
     setKeepPlayingSeconds(0);
     if (blastTimerRef.current) { clearTimeout(blastTimerRef.current); blastTimerRef.current = null; }
     if (keepPlayingTimerRef.current) { clearInterval(keepPlayingTimerRef.current); keepPlayingTimerRef.current = null; }
+    if (keepPlayingEndRef.current) { clearTimeout(keepPlayingEndRef.current); keepPlayingEndRef.current = null; }
 
     // No timer — play until stuck
   }
