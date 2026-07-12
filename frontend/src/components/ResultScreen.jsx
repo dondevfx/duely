@@ -236,7 +236,7 @@ export default function ResultScreen({
               <button
                 onClick={onRematch}
                 className="flex-1 py-3 rounded-xl font-black text-base bg-primary text-white hover:bg-blue-500 transition-all"
-                style={{ boxShadow: '0 0 18px rgba(21,104,216,0.35)' }}
+                style={{ boxShadow: '0 0 18px rgba(19,85,192,0.35)' }}
               >
                 {rematchLabel}
               </button>
@@ -248,7 +248,7 @@ export default function ResultScreen({
                   ? 'flex-1 bg-surface border border-surfaceLight text-white hover:border-primary'
                   : 'w-full bg-primary text-white hover:bg-blue-500'
               }`}
-              style={!onRematch ? { boxShadow: '0 0 18px rgba(21,104,216,0.35)' } : {}}
+              style={!onRematch ? { boxShadow: '0 0 18px rgba(19,85,192,0.35)' } : {}}
             >
               Play Again
             </button>

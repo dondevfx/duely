@@ -18,7 +18,7 @@ const CLR = {
   absent:  '#2d3748',
   border:  {
     empty:   'rgba(255,255,255,0.15)',
-    active:  '#1568D8',
+    active:  '#1355C0',
     correct: '#22c55e',
     present: '#f59e0b',
     absent:  '#374151',
@@ -688,9 +688,9 @@ export default function WordleGame() {
           <h2 className="text-2xl font-black text-white mb-2">Private Room</h2>
           <p className="text-muted mb-4 text-sm">Share this code with a friend</p>
           <div className="bg-surface border-2 border-primary rounded-2xl p-8 mb-6 inline-block min-w-[200px]"
-            style={{ boxShadow: '0 0 20px rgba(21,104,216,0.2)' }}>
+            style={{ boxShadow: '0 0 20px rgba(19,85,192,0.2)' }}>
             <div className="text-4xl font-black font-mono tracking-[0.25em] text-primary"
-              style={{ textShadow: '0 0 20px rgba(21,104,216,0.5)' }}>
+              style={{ textShadow: '0 0 20px rgba(19,85,192,0.5)' }}>
               {privateCode}
             </div>
           </div>
@@ -707,7 +707,7 @@ export default function WordleGame() {
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
         <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
         <div className="text-center animate-fade-in">
-          <div className="text-8xl font-black text-primary mb-4" style={{ textShadow: '0 0 40px #1568D8' }}>
+          <div className="text-8xl font-black text-primary mb-4" style={{ textShadow: '0 0 40px #1355C0' }}>
             {countdown ?? '…'}
           </div>
           <p className="text-muted">Get ready…</p>

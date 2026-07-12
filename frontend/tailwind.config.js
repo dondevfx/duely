@@ -8,7 +8,7 @@ export default {
         surface:      '#0D0D0D',
         surfaceLight: '#1A1A1A',
         border:       '#222222',
-        primary:      '#1568D8',
+        primary:      '#1355C0',
         accent:       '#00BFFF',
         muted:        '#6B7280',
         danger:       '#EF4444',
@@ -20,8 +20,8 @@ export default {
         mono: ['JetBrains Mono', 'monospace'],
       },
       boxShadow: {
-        glow:         '0 0 20px rgba(21,104,216,0.45)',
-        'glow-lg':    '0 0 40px rgba(21,104,216,0.65)',
+        glow:         '0 0 20px rgba(19,85,192,0.45)',
+        'glow-lg':    '0 0 40px rgba(19,85,192,0.65)',
         'glow-accent':'0 0 20px rgba(0,191,255,0.45)',
         'glow-green': '0 0 20px rgba(34,197,94,0.45)',
         'glow-red':   '0 0 20px rgba(239,68,68,0.45)',
@@ -36,8 +36,8 @@ export default {
       },
       keyframes: {
         pulseGlow: {
-          '0%,100%': { boxShadow: '0 0 20px rgba(21,104,216,0.45)' },
-          '50%':     { boxShadow: '0 0 40px rgba(21,104,216,0.9)' },
+          '0%,100%': { boxShadow: '0 0 20px rgba(19,85,192,0.45)' },
+          '50%':     { boxShadow: '0 0 40px rgba(19,85,192,0.9)' },
         },
         fadeIn:        { from: { opacity: 0 }, to: { opacity: 1 } },
         slideUp:       { from: { transform: 'translateY(20px)', opacity: 0 }, to: { transform: 'translateY(0)', opacity: 1 } },

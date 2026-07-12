@@ -13,8 +13,8 @@
   }
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: #0D0D0D; }
-  ::-webkit-scrollbar-thumb { background: #1568D844; border-radius: 2px; }
-  ::-webkit-scrollbar-thumb:hover { background: #1568D8; }
+  ::-webkit-scrollbar-thumb { background: #1355C044; border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: #1355C0; }
 }
 
 /* ── Global game animations ───────────────────────────────── */
@@ -75,7 +75,7 @@ html.light .text-muted { color: #64748b !important; }
 html.light .border-surfaceLight { border-color: #cbd5e1 !important; }
 html.light .border-border { border-color: #d1d5db !important; }
 html.light ::-webkit-scrollbar-track { background: #e2e8f0; }
-html.light ::-webkit-scrollbar-thumb { background: rgba(21,104,216,0.3); }
+html.light ::-webkit-scrollbar-thumb { background: rgba(19,85,192,0.3); }
 html.light input, html.light textarea {
   background-color: #f8fafc !important;
   color: #1e293b !important;

@@ -75,8 +75,8 @@ function Coin3D({ coinRef, resultLanded }) {
     <>
       <style>{`
         @keyframes cf-coin-glow {
-          0%,100% { filter: drop-shadow(0 0 16px rgba(21,104,216,0.65)) drop-shadow(0 10px 30px rgba(0,0,0,0.8)); }
-          50%      { filter: drop-shadow(0 0 34px rgba(21,104,216,1.0))  drop-shadow(0 12px 38px rgba(0,0,0,0.9)); }
+          0%,100% { filter: drop-shadow(0 0 16px rgba(19,85,192,0.65)) drop-shadow(0 10px 30px rgba(0,0,0,0.8)); }
+          50%      { filter: drop-shadow(0 0 34px rgba(19,85,192,1.0))  drop-shadow(0 12px 38px rgba(0,0,0,0.9)); }
         }
       `}</style>
 
@@ -102,7 +102,7 @@ function Coin3D({ coinRef, resultLanded }) {
           {/* translateZ(COIN_T/2) pushes this face forward; visible at rotateX ≈ 0° */}
           <div style={{
             ...faceBase,
-            background: 'radial-gradient(circle at 38% 32%, #a0d8ff 0%, #1568D8 42%, #0050bb 72%, #003088 100%)',
+            background: 'radial-gradient(circle at 38% 32%, #a0d8ff 0%, #1355C0 42%, #0050bb 72%, #003088 100%)',
             border: '4px solid #0066dd',
             boxShadow: 'inset 0 -10px 22px rgba(0,0,0,0.35), inset 0 8px 18px rgba(160,216,255,0.4)',
             transform: `translateZ(${COIN_T / 2}px)`,
@@ -137,7 +137,7 @@ function Coin3D({ coinRef, resultLanded }) {
             <div style={{ position:'absolute', inset:6, borderRadius:'50%',
               border:'1.5px solid rgba(255,255,255,0.65)', pointerEvents:'none' }} />
             <span style={{
-              fontSize: 66, fontWeight: 900, color: '#1568D8', lineHeight: 1,
+              fontSize: 66, fontWeight: 900, color: '#1355C0', lineHeight: 1,
               textShadow: '0 2px 0 rgba(255,255,255,0.7), 0 -1px 0 rgba(30,80,180,0.3)',
               filter: 'drop-shadow(0 3px 5px rgba(0,0,0,0.25))',
               userSelect: 'none',
@@ -562,7 +562,7 @@ export default function CoinFlipGame() {
         {/* Countdown phase */}
         {phase === 'countdown' && (
           <div className="text-center animate-fade-in mb-6">
-            <div className="text-8xl font-black text-primary mb-4" style={{ textShadow: '0 0 40px #1568D8' }}>
+            <div className="text-8xl font-black text-primary mb-4" style={{ textShadow: '0 0 40px #1355C0' }}>
               {countdown}
             </div>
             <p className="text-muted">Get ready…</p>
@@ -582,7 +582,7 @@ export default function CoinFlipGame() {
             {resultLanded && flipResult && (
               <div
                 className="text-3xl font-black text-white capitalize mt-8"
-                style={{ textShadow: '0 0 20px rgba(21,104,216,0.9)', animation: 'none' }}
+                style={{ textShadow: '0 0 20px rgba(19,85,192,0.9)', animation: 'none' }}
               >
                 {flipResult === 'heads' ? '🔵' : '⚪'} {flipResult.toUpperCase()}!
               </div>

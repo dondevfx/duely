@@ -56,7 +56,7 @@ export default function PWAInstallPrompt() {
           transform: 'translateX(-50%)',
           background: '#0d1117',
           borderColor: '#1e293b',
-          boxShadow: '0 0 30px rgba(21,104,216,0.2)',
+          boxShadow: '0 0 30px rgba(19,85,192,0.2)',
           animation: 'slideUp 0.35s ease',
         }}
       >
@@ -85,7 +85,7 @@ export default function PWAInstallPrompt() {
         transform: 'translateX(-50%)',
         background: '#0d1117',
         borderColor: '#1e293b',
-        boxShadow: '0 0 30px rgba(21,104,216,0.2)',
+        boxShadow: '0 0 30px rgba(19,85,192,0.2)',
         animation: 'slideUp 0.35s ease',
       }}
     >
