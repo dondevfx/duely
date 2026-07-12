@@ -118,6 +118,8 @@ function _transitionToHand2(io, supabase, room, socketId) {
 
   // Save completed hand1
   room.completedHand1[socketId] = [...room.hands[socketId]];
+  // Deal hand2's second card now (it was held back until hand1 finished)
+  if (hand2.length < 2) hand2.push(room.deck.pop());
   // Activate hand2
   room.hands[socketId] = hand2;
   delete room.splitHand[socketId];
@@ -267,10 +269,9 @@ function handleBlackjackSplit(io, supabase, roomId, socketId) {
 
   const [card1, card2] = currentHand;
   const newCard1 = room.deck.pop();
-  const newCard2 = room.deck.pop();
 
   const hand1 = [card1, newCard1];
-  const hand2 = [card2, newCard2];
+  const hand2 = [card2]; // hand 2's second card is dealt only once it becomes active
 
   room.hands[socketId] = hand1;
   room.splitHand[socketId] = hand2;

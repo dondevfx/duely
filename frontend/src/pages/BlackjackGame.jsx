@@ -818,66 +818,49 @@ export default function BlackjackGame() {
               />
             </div>
           </div>
-          {/* Split hand display — both hands side by side with smaller cards */}
-          {splitData && (
-            <div style={{ marginBottom: 14, width: '100%', maxWidth: 480 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                {/* Hand 1 */}
-                <div style={{
-                  borderRadius: 12,
-                  border: splitData.activeHand === 1 ? '2px solid #22c55e' : '1.5px solid rgba(255,255,255,0.1)',
-                  padding: '8px 6px',
-                  background: splitData.activeHand === 1 ? 'rgba(34,197,94,0.07)' : 'rgba(255,255,255,0.03)',
-                  opacity: splitData.activeHand === 2 ? 0.65 : 1,
-                }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: splitData.activeHand === 1 ? '#22c55e' : textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, textAlign: 'center' }}>
-                    Hand 1{splitData.activeHand === 1 ? ' — Active' : ' — Done'}
-                  </div>
-                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
-                    {splitData.hand1.map((c, i) => (
-                      <div key={i} style={{ transform: 'scale(0.68)', transformOrigin: 'top center', marginBottom: -Math.round(CARD_H * 0.3) }}>
-                        <CardFace card={c} />
-                      </div>
-                    ))}
-                  </div>
-                  {splitData.score1 != null && (
-                    <div style={{ textAlign: 'center', marginTop: Math.round(CARD_H * 0.3) + 6, fontSize: 12, color: splitData.score1 > 21 ? '#f87171' : textPrimary, fontWeight: 700 }}>
-                      {splitData.score1 > 21 ? `Bust (${splitData.score1})` : splitData.score1}
+          {/* Player hand(s). When split: two hands side by side, same card style,
+              active one highlighted — play one at a time. */}
+          {splitData ? (
+            <div style={{ display: 'flex', gap: 14, justifyContent: 'center', alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 16, width: '100%' }}>
+              {[1, 2].map(hn => {
+                const active = splitData.activeHand === hn;
+                const hand   = hn === 1 ? splitData.hand1 : splitData.hand2;
+                const score  = hn === 1 ? splitData.score1 : splitData.score2;
+                return (
+                  <div key={hn} style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+                    padding: '10px 14px', borderRadius: 14,
+                    border: active ? '2px solid #22c55e' : '1.5px solid rgba(255,255,255,0.08)',
+                    background: active ? 'rgba(34,197,94,0.06)' : 'transparent',
+                    opacity: active ? 1 : 0.45,
+                    transition: 'opacity 0.2s, border-color 0.2s',
+                  }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', color: active ? '#22c55e' : textMuted }}>
+                      Hand {hn}
                     </div>
-                  )}
-                </div>
-                {/* Hand 2 */}
-                <div style={{
-                  borderRadius: 12,
-                  border: splitData.activeHand === 2 ? '2px solid #22c55e' : '1.5px solid rgba(255,255,255,0.1)',
-                  padding: '8px 6px',
-                  background: splitData.activeHand === 2 ? 'rgba(34,197,94,0.07)' : 'rgba(255,255,255,0.03)',
-                  opacity: splitData.activeHand === 1 ? 0.65 : 1,
-                }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: splitData.activeHand === 2 ? '#22c55e' : textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, textAlign: 'center' }}>
-                    Hand 2{splitData.activeHand === 2 ? ' — Active' : ' — Waiting'}
+                    <div style={{ display: 'flex', gap: 5, justifyContent: 'center' }}>
+                      {(hand || []).map((c, i) => (
+                        <div key={i} style={{ transform: 'scale(0.82)', transformOrigin: 'center', margin: '0 -5px' }}>
+                          <CardFace card={c} />
+                        </div>
+                      ))}
+                    </div>
+                    {score != null && <ScoreBadge score={score} bust={score > 21} isLight={isLight} />}
                   </div>
-                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
-                    {splitData.hand2.map((c, i) => (
-                      <div key={i} style={{ transform: 'scale(0.68)', transformOrigin: 'top center', marginBottom: -Math.round(CARD_H * 0.3) }}>
-                        <CardFace card={c} />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', maxWidth: '100%', paddingBottom: 4, justifyContent: 'center', marginBottom: 16 }}>
+              {(rd ? (myReveal?.hand ?? myHand) : myHand).map((c, i) => (
+                <Card
+                  key={`${dealRevision}-${i}`}
+                  card={c}
+                  dealIndex={dealRevision > 0 && i < 2 ? i : (i === newCardIdx ? 0 : null)}
+                />
+              ))}
             </div>
           )}
-
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', maxWidth: '100%', paddingBottom: 4, justifyContent: 'center', marginBottom: 16 }}>
-            {(rd ? (myReveal?.hand ?? myHand) : myHand).map((c, i) => (
-              <Card
-                key={`${dealRevision}-${i}`}
-                card={c}
-                dealIndex={dealRevision > 0 && i < 2 ? i : (i === newCardIdx ? 0 : null)}
-              />
-            ))}
-          </div>
 
           {/* Draw result banner */}
           {phase === 'reveal' && rd?.isDraw && (
