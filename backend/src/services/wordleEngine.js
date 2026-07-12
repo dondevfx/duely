@@ -167,6 +167,8 @@ function _makeRoom(roomId, p1, p2) {
     failTimer:   null,
     settled:     false,
     startedAt:   null,
+    // Demo account vs bot: demo always wins (bot never solves first).
+    demoWin:     (p1.isBot || p2.isBot) && [p1, p2].some(p => p.isDemo && !p.isBot),
   };
 }
 
@@ -190,7 +192,8 @@ function addToWordleQueue(player) {
 
 function removeFromWordleQueue(socketId) {
   const i = queue.findIndex(p => p.socketId === socketId);
-  if (i !== -1) queue.splice(i, 1);
+  if (i !== -1) { queue.splice(i, 1); return true; }
+  return false;
 }
 
 function createDirectWordleRoom(p1, p2) {
@@ -311,6 +314,13 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
     if (sc1 > sc2) { winnerPlayer = p1; loserPlayer = p2; }
     else if (sc2 > sc1) { winnerPlayer = p2; loserPlayer = p1; }
     // else draw — winnerPlayer stays null
+  }
+
+  // Demo always wins vs the bot — force the demo player as winner if the bot
+  // somehow solved first or the greens tiebreaker didn't favor the demo.
+  if (room.demoWin) {
+    const demoP = room.players.find(p => p.isDemo && !p.isBot);
+    if (demoP) { winnerPlayer = demoP; loserPlayer = room.players.find(p => p !== demoP); }
   }
 
   const isDraw = !winnerPlayer;
@@ -497,7 +507,13 @@ async function scheduleBotWordleMove(io, supabase, roomId, botSocketId) {
     const ps = fresh.pstate[botSocketId];
     if (!ps || ps.finished) return;
 
-    const guess = guessNum === 0 ? BOT_OPENER : (candidates[Math.floor(Math.random() * Math.min(candidates.length, 5))] || candidates[0] || BOT_OPENER);
+    let guess = guessNum === 0 ? BOT_OPENER : (candidates[Math.floor(Math.random() * Math.min(candidates.length, 5))] || candidates[0] || BOT_OPENER);
+    // Demo always wins: never let the bot play the winning word — it stays a
+    // little behind, guessing near-misses until the demo solves it.
+    if (fresh.demoWin && guess === fresh.word) {
+      const alt = candidates.find(c => c !== fresh.word) || ANSWERS.find(w => w !== fresh.word);
+      guess = alt || guess;
+    }
     const feedback = evaluateGuess(fresh.word, guess);
     history.push({ guess, feedback });
 

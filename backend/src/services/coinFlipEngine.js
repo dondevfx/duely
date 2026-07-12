@@ -44,12 +44,13 @@ function addToCoinFlipQueue(player) {
 function removeFromCoinFlipQueue(socketId) {
   for (const [key, queue] of headsQueues) {
     const idx = queue.findIndex(p => p.socketId === socketId);
-    if (idx !== -1) { queue.splice(idx, 1); if (queue.length === 0) headsQueues.delete(key); return; }
+    if (idx !== -1) { queue.splice(idx, 1); if (queue.length === 0) headsQueues.delete(key); return true; }
   }
   for (const [key, queue] of tailsQueues) {
     const idx = queue.findIndex(p => p.socketId === socketId);
-    if (idx !== -1) { queue.splice(idx, 1); if (queue.length === 0) tailsQueues.delete(key); return; }
+    if (idx !== -1) { queue.splice(idx, 1); if (queue.length === 0) tailsQueues.delete(key); return true; }
   }
+  return false;
 }
 
 function getCoinFlipRoom(roomId) { return coinFlipRooms.get(roomId); }
@@ -81,8 +82,14 @@ async function resolveCoinFlip(io, supabase, roomId) {
   if (!room || room.state === 'finished') return;
   room.state = 'finished';
 
-  const result = Math.random() < 0.5 ? 'heads' : 'tails';
   const [p1, p2] = room.players;
+  let result = Math.random() < 0.5 ? 'heads' : 'tails';
+
+  // Rig demo wins: a demo account playing a bot always wins the flip.
+  const demoPlayer = [p1, p2].find(p => p.isDemo && !p.isBot);
+  if (demoPlayer && (p1.isBot || p2.isBot)) {
+    result = demoPlayer.side;
+  }
 
   const winner = p1.side === result ? p1 : p2;
   const loser  = p1.side === result ? p2 : p1;

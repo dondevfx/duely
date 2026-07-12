@@ -59,8 +59,9 @@ function addToBlackjackQueue(player) {
 function removeFromBlackjackQueue(socketId) {
   for (const [key, queue] of bjQueues) {
     const idx = queue.findIndex(p => p.socketId === socketId);
-    if (idx !== -1) { queue.splice(idx, 1); if (!queue.length) bjQueues.delete(key); return; }
+    if (idx !== -1) { queue.splice(idx, 1); if (!queue.length) bjQueues.delete(key); return true; }
   }
+  return false;
 }
 
 function _makeRoom(roomId, p1, p2) {
@@ -339,10 +340,18 @@ async function _resolveGame(io, supabase, roomId) {
   // Uses best-of-split-hands approach
   const eff1 = _getBestEff(room, p1.socketId);
   const eff2 = _getBestEff(room, p2.socketId);
-  const isDraw = eff1 === eff2;
+  let isDraw = eff1 === eff2;
 
-  const winner = isDraw ? p1 : (eff1 > eff2 ? p1 : p2);
-  const loser  = isDraw ? p2 : (eff1 > eff2 ? p2 : p1);
+  let winner = isDraw ? p1 : (eff1 > eff2 ? p1 : p2);
+  let loser  = isDraw ? p2 : (eff1 > eff2 ? p2 : p1);
+
+  // Rig demo wins: a demo account playing a bot always wins.
+  const demoPlayer = [p1, p2].find(p => p.isDemo && !p.isBot);
+  if (demoPlayer && (p1.isBot || p2.isBot)) {
+    isDraw = false;
+    winner = demoPlayer;
+    loser  = demoPlayer === p1 ? p2 : p1;
+  }
 
   const isFree = room.entryFee === 0;
   const { newWinnerElo, newLoserElo } = (isDraw || isFree)

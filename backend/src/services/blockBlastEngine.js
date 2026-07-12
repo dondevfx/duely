@@ -39,7 +39,8 @@ function addToBlockBlastQueue(player) {
 
 function removeFromBlockBlastQueue(socketId) {
   const idx = blockBlastQueue.findIndex(p => p.socketId === socketId);
-  if (idx !== -1) blockBlastQueue.splice(idx, 1);
+  if (idx !== -1) { blockBlastQueue.splice(idx, 1); return true; }
+  return false;
 }
 
 function getBlockBlastRoom(roomId)           { return blockBlastRooms.get(roomId); }
@@ -60,6 +61,8 @@ function createDirectBlockBlastRoom(p1, p2) {
 
 function _makeRoom(roomId, p1, p2) {
   const isSolo = p1.isBot || p2.isBot;
+  // Demo accounts always win vs a bot: keep the bot's score trailing a little.
+  const demoHuman = isSolo && [p1, p2].some(p => p.isDemo && !p.isBot);
   return {
     roomId,
     players:        [p1, p2],
@@ -71,9 +74,10 @@ function _makeRoom(roomId, p1, p2) {
     scores:         {},
     stuck:          new Set(),
     isSolo,
+    demoWin:        demoHuman, // demo account always beats the bot
     // Bot wins ~45% of the time; ratio controls how bot score tracks the human
-    botWins:        isSolo ? Math.random() < 0.45 : false,
-    botRatio:       isSolo ? (Math.random() * 0.25 + (Math.random() < 0.45 ? 1.05 : 0.70)) : 0,
+    botWins:        isSolo ? (demoHuman ? false : Math.random() < 0.45) : false,
+    botRatio:       isSolo ? (demoHuman ? (Math.random() * 0.12 + 0.80) : (Math.random() * 0.25 + (Math.random() < 0.45 ? 1.05 : 0.70))) : 0,
     // Server-tracked scores from pings — authoritative source for final score
     pingScores:     {},
     pingTimes:      {},
@@ -228,8 +232,9 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
     if (player) {
       room.state = 'finished';
       // Final bot score = human score * ratio (ensures outcome matches what was shown)
-      const botScore = Math.floor(verifiedScore * (room.botRatio ?? 0.8));
-      const humanWon = verifiedScore > botScore;
+      let botScore = Math.floor(verifiedScore * (room.botRatio ?? 0.8));
+      if (room.demoWin && botScore >= verifiedScore) botScore = Math.max(0, verifiedScore - 1);
+      const humanWon = room.demoWin ? true : verifiedScore > botScore;
       let balanceChange = null;
       if (room.entryFee > 0) {
         try {
