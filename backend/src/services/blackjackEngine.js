@@ -64,6 +64,13 @@ function removeFromBlackjackQueue(socketId) {
   return false;
 }
 
+// Pull a specific card out of the deck (removing it) so rigged hands don't
+// duplicate cards the deck can still deal on a hit. Falls back to the top card.
+function _takeCard(deck, pred) {
+  const i = deck.findIndex(pred);
+  return i !== -1 ? deck.splice(i, 1)[0] : deck.pop();
+}
+
 function _makeRoom(roomId, p1, p2) {
   const deck = _makeDeck();
   const dealerHand = [deck.pop(), deck.pop()];
@@ -71,6 +78,17 @@ function _makeRoom(roomId, p1, p2) {
     [p1.socketId]: [deck.pop(), deck.pop()],
     [p2.socketId]: [deck.pop(), deck.pop()],
   };
+
+  // Demo account vs bot: deal the demo a natural 21 and the bot a pat 19, so the
+  // demo wins on the actual cards (not just at settlement). Cards are pulled from
+  // the deck so hits never draw duplicates.
+  const demo = [p1, p2].find(p => p.isDemo && !p.isBot);
+  const bot  = [p1, p2].find(p => p.isBot);
+  if (demo && bot) {
+    hands[demo.socketId] = [_takeCard(deck, c => c.value === 'A'), _takeCard(deck, c => c.value === 'K')]; // 21
+    hands[bot.socketId]  = [_takeCard(deck, c => c.value === '10'), _takeCard(deck, c => c.value === '9')]; // 19 (bot stands)
+  }
+
   return {
     roomId, players: [p1, p2],
     entryFee: p1.entryFee, currency: p1.currency,
