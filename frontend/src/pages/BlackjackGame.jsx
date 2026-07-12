@@ -247,6 +247,11 @@ export default function BlackjackGame() {
   const stoodRef = useRef(false);       // true once my turn is fully over (stand/bust)
   const splitDataRef = useRef(null);    // current split state, for use inside socket handlers
   const [oppFlippedHits, setOppFlippedHits] = useState(0); // opp hit cards that have flipped face-up
+  const oppFlippedHitsRef = useRef(0);   // mirror for reading inside socket handlers
+  useEffect(() => { oppFlippedHitsRef.current = oppFlippedHits; }, [oppFlippedHits]);
+  // Count of opponent cards already face-up when the reveal phase begins — frozen
+  // so cards shown during play don't re-flip when we switch to the reveal render.
+  const [oppRevealBase, setOppRevealBase] = useState(0);
   const oppInitialCountRef = useRef(2);  // length of the opponent's initial (always-visible) hand
   const [bust, setBust] = useState(false);
   const [timeLeft, setTimeLeft] = useState(20);
@@ -299,6 +304,8 @@ export default function BlackjackGame() {
         revealTimersRef.current.forEach(clearTimeout); revealTimersRef.current = [];
         oppInitialCountRef.current = (d.opponentHand ?? []).length || 2;
         setOppFlippedHits(0);
+        oppFlippedHitsRef.current = 0;
+        setOppRevealBase(0);
         setMyHand(d.hand);
         setMyScore(d.handScore);
         setOpponentHandSize(d.oppSz);
@@ -454,15 +461,20 @@ export default function BlackjackGame() {
         );
       }
       refreshProfile();
-      // Brief pause then flip opponent cards, staggered ~1s each. Size the
-      // window to the opponent's hand so the last card fully reveals.
-      setTimeout(() => setFlippingOpp(true), 150);
+      // Cards already revealed during play must stay face-up — cancel any pending
+      // during-play flip timers and freeze how many opp cards are already showing.
+      revealTimersRef.current.forEach(clearTimeout); revealTimersRef.current = [];
+      const base = oppInitialCountRef.current + oppFlippedHitsRef.current;
+      setOppRevealBase(base);
       const oppCards = (() => {
         const oId = Object.keys(data.hands || {}).find(id => id !== profileRef.current?.id);
         return oId ? (data.hands[oId]?.hand?.length ?? 2) : 2;
       })();
+      // Only the still-hidden cards (beyond `base`) need flipping now.
+      const hits = Math.max(0, oppCards - base);
+      // Brief pause then flip the remaining opponent cards, staggered ~1s each.
+      if (hits > 0) setTimeout(() => setFlippingOpp(true), 150);
       // End 1s after the last card finishes flipping (150ms delay + stagger + 0.4s flip).
-      const hits = Math.max(0, oppCards - oppInitialCountRef.current);
       const lastFlipDone = hits > 0 ? 150 + (hits - 1) * 1000 + 400 : 0;
       const revealMs = lastFlipDone + 1000;
       setTimeout(() => {
@@ -608,6 +620,41 @@ export default function BlackjackGame() {
   function stand() { if (stood || !roomId) return; socket?.emit('bj_stand', { roomId }); }
   function split() { if (stood || !roomId) return; socket?.emit('bj_split', { roomId }); }
 
+  // HIT / STAND button pair — reused for normal play and under the active split hand.
+  function actionButtons() {
+    const off = stood || bust;
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%' }}>
+        <button
+          className="bj-action-btn bj-hit-btn"
+          onClick={hit}
+          disabled={off}
+          style={{
+            cursor: off ? 'not-allowed' : 'pointer',
+            background: off ? (isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)') : 'rgba(18,80,180,0.10)',
+            border: off ? `1.5px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.07)'}` : '1.5px solid rgba(18,80,180,0.45)',
+            color: off ? (isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.25)') : '#4DA3FF',
+          }}
+        >
+          HIT
+        </button>
+        <button
+          className="bj-action-btn bj-stand-btn"
+          onClick={stand}
+          disabled={off}
+          style={{
+            cursor: off ? 'not-allowed' : 'pointer',
+            background: 'transparent',
+            border: off ? `1.5px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.07)'}` : `1.5px solid ${isLight ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.2)'}`,
+            color: off ? (isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.25)') : textPrimary,
+          }}
+        >
+          STAND
+        </button>
+      </div>
+    );
+  }
+
   const canSplit = !stood && !bust && !splitData &&
     myHand.length === 2 && myHand[0]?.value === myHand[1]?.value;
 
@@ -624,6 +671,8 @@ export default function BlackjackGame() {
     oppRevealedRef.current = 0;
     stoodRef.current = false;
     setOppFlippedHits(0);
+    oppFlippedHitsRef.current = 0;
+    setOppRevealBase(0);
     revealTimersRef.current.forEach(clearTimeout); revealTimersRef.current = [];
   }
 
@@ -770,9 +819,11 @@ export default function BlackjackGame() {
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', maxWidth: '100%', paddingBottom: 4, justifyContent: 'center' }}>
             {oppReveal
               ? oppReveal.hand.map((c, i) => (
-                  i < oppInitialCountRef.current
+                  // Cards already face-up during play stay static; only the still-hidden
+                  // ones (beyond the frozen baseline) flip now.
+                  i < oppRevealBase
                     ? <Card key={`oppr-${i}`} card={c} />
-                    : <FlipCard key={`oppr-${i}`} card={c} flipped={flippingOpp} flipDelay={(i - oppInitialCountRef.current) * 1} />
+                    : <FlipCard key={`oppr-${i}`} card={c} flipped={flippingOpp} flipDelay={(i - oppRevealBase) * 1} />
                 ))
               : oppHand.length > 0
                 ? oppHand.map((c, i) => (
@@ -821,22 +872,23 @@ export default function BlackjackGame() {
           {/* Player hand(s). When split: two hands side by side, same card style,
               active one highlighted — play one at a time. */}
           {splitData ? (
-            <div style={{ display: 'flex', gap: 14, justifyContent: 'center', alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 16, width: '100%' }}>
+            <div style={{ display: 'flex', gap: IS_MOBILE_SCREEN ? 0 : 28, justifyContent: 'center', alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 16, width: '100%' }}>
               {[1, 2].map(hn => {
                 const active = splitData.activeHand === hn;
+                // Mobile: only show one hand at a time — the active hand. Hand 2
+                // appears once the player finishes hand 1.
+                if (IS_MOBILE_SCREEN && !active) return null;
                 const hand   = hn === 1 ? splitData.hand1 : splitData.hand2;
                 const score  = hn === 1 ? splitData.score1 : splitData.score2;
+                const done   = hn < splitData.activeHand;
                 return (
                   <div key={hn} style={{
                     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-                    padding: '10px 14px', borderRadius: 14,
-                    border: active ? '2px solid #22c55e' : '1.5px solid rgba(255,255,255,0.08)',
-                    background: active ? 'rgba(34,197,94,0.06)' : 'transparent',
-                    opacity: active ? 1 : 0.45,
-                    transition: 'opacity 0.2s, border-color 0.2s',
+                    opacity: (active || IS_MOBILE_SCREEN) ? 1 : 0.5,
+                    transition: 'opacity 0.2s',
                   }}>
                     <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', color: active ? '#22c55e' : textMuted }}>
-                      Hand {hn}
+                      Hand {hn}{active ? ' · Active' : done ? ' · Done' : ''}
                     </div>
                     <div style={{ display: 'flex', gap: 5, justifyContent: 'center' }}>
                       {(hand || []).map((c, i) => (
@@ -846,6 +898,12 @@ export default function BlackjackGame() {
                       ))}
                     </div>
                     {score != null && <ScoreBadge score={score} bust={score > 21} isLight={isLight} />}
+                    {/* HIT / STAND live under the hand they act on */}
+                    {active && phase === 'playing' && (
+                      <div style={{ width: '100%', maxWidth: 220, marginTop: 4 }}>
+                        {actionButtons()}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -867,43 +925,11 @@ export default function BlackjackGame() {
             <div style={{ marginBottom: 16, fontSize: 18, fontWeight: 900, color: '#fbbf24' }}>🤝 Draw!</div>
           )}
 
-          {/* HIT / STAND / SPLIT */}
-          {phase === 'playing' && (
+          {/* HIT / STAND / SPLIT — for normal (non-split) play. During a split the
+              buttons live under the active hand instead. */}
+          {phase === 'playing' && !splitData && (
             <div style={{ width: '100%', maxWidth: 360, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <button
-                  className="bj-action-btn bj-hit-btn"
-                  onClick={hit}
-                  disabled={stood || bust}
-                  style={{
-                    cursor: stood || bust ? 'not-allowed' : 'pointer',
-                    background: stood || bust
-                      ? (isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)')
-                      : 'rgba(18,80,180,0.10)',
-                    border: stood || bust
-                      ? `1.5px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.07)'}`
-                      : '1.5px solid rgba(18,80,180,0.45)',
-                    color: stood || bust ? (isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.25)') : '#4DA3FF',
-                  }}
-                >
-                  HIT
-                </button>
-                <button
-                  className="bj-action-btn bj-stand-btn"
-                  onClick={stand}
-                  disabled={stood || bust}
-                  style={{
-                    cursor: stood || bust ? 'not-allowed' : 'pointer',
-                    background: 'transparent',
-                    border: stood || bust
-                      ? `1.5px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.07)'}`
-                      : `1.5px solid ${isLight ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.2)'}`,
-                    color: stood || bust ? (isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.25)') : textPrimary,
-                  }}
-                >
-                  STAND
-                </button>
-              </div>
+              {actionButtons()}
               {/* SPLIT button — only shown when eligible */}
               {canSplit && (
                 <button
