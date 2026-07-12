@@ -247,16 +247,20 @@ export default function BlackjackGame() {
   const [splitData, setSplitData] = useState(null);
   useEffect(() => { splitDataRef.current = splitData; }, [splitData]);
 
-  // My turn is fully over (stand or bust): reveal all of the opponent's
-  // previously-hidden hit cards so I can now see their full hand + total.
+  const revealTimersRef = useRef([]); // staggered opponent-card reveal timers
+
+  // My turn is fully over (stand or bust): reveal the opponent's previously
+  // hidden hit cards — dealt out one at a time (~1s each) so it isn't an
+  // instant pop.
   function markStood() {
     setStood(true);
     stoodRef.current = true;
-    if (oppBufferedRef.current.length > oppRevealedRef.current) {
-      const toReveal = oppBufferedRef.current.slice(oppRevealedRef.current);
-      oppRevealedRef.current = oppBufferedRef.current.length;
-      setOppHand(prev => [...prev, ...toReveal]);
-    }
+    const toReveal = oppBufferedRef.current.slice(oppRevealedRef.current);
+    oppRevealedRef.current = oppBufferedRef.current.length;
+    toReveal.forEach((card, idx) => {
+      const t = setTimeout(() => setOppHand(prev => [...prev, card]), (idx + 1) * 1000);
+      revealTimersRef.current.push(t);
+    });
   }
   // splitData: { hand1: cards[], score1: n, hand2: cards[], score2: n, activeHand: 1|2 } | null
   const [oppHasSplit, setOppHasSplit] = useState(false);
@@ -278,6 +282,7 @@ export default function BlackjackGame() {
         oppBufferedRef.current = [];
         oppRevealedRef.current = 0;
         stoodRef.current = false;
+        revealTimersRef.current.forEach(clearTimeout); revealTimersRef.current = [];
         setMyHand(d.hand);
         setMyScore(d.handScore);
         setOpponentHandSize(d.oppSz);
@@ -431,13 +436,19 @@ export default function BlackjackGame() {
         );
       }
       refreshProfile();
-      // Brief pause then flip opponent cards
+      // Brief pause then flip opponent cards, staggered ~1s each. Size the
+      // window to the opponent's hand so the last card fully reveals.
       setTimeout(() => setFlippingOpp(true), 150);
+      const oppCards = (() => {
+        const oId = Object.keys(data.hands || {}).find(id => id !== profileRef.current?.id);
+        return oId ? (data.hands[oId]?.hand?.length ?? 2) : 2;
+      })();
+      const revealMs = Math.max(3500, oppCards * 1000 + 1600);
       setTimeout(() => {
         roomIdRef.current = null;
         setResultData(data);
         setPhase('result');
-      }, 3500);
+      }, revealMs);
     });
 
     socket.on('opponent_disconnected', (data = {}) => {
@@ -591,6 +602,7 @@ export default function BlackjackGame() {
     oppBufferedRef.current = [];
     oppRevealedRef.current = 0;
     stoodRef.current = false;
+    revealTimersRef.current.forEach(clearTimeout); revealTimersRef.current = [];
   }
 
   function playAgain() {
