@@ -55,7 +55,7 @@ export default function MatchTicker() {
   const card = (item, i) => (
     <div
       key={item.id}
-      className={`flex flex-col items-center justify-center gap-2.5 sm:gap-1 lg:gap-1.5 py-6 sm:py-2 lg:py-3 px-1.5 sm:px-0.5 bg-surface border rounded-xl sm:rounded-lg lg:rounded-xl overflow-hidden min-w-0${
+      className={`flex flex-col items-center justify-center gap-2.5 sm:gap-1 lg:gap-1.5 py-6 sm:py-2 lg:py-3 px-1.5 sm:px-0.5 bg-surface border border-primary/50 rounded-xl sm:rounded-lg lg:rounded-xl overflow-hidden min-w-0${
         i === 0 && item.id === latestIdRef.current ? ' animate-pop-in' : ''
       }`}
     >

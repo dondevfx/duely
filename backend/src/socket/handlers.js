@@ -913,13 +913,27 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         forfeited = true;
         break;
       }
-      // No active room found — a bot/queue handler may be mid-await on its DB query (before room
-      // creation). Only mark a pending forfeit if that specific handler set _startingGame, so we
-      // never false-positive on a lobby exit followed by a different game starting within 5s.
-      if (!forfeited && socket._startingGame) {
-        socket._pendingForfeitGame = socket._startingGame;
-        if (socket._pendingForfeitGameTimer) clearTimeout(socket._pendingForfeitGameTimer);
-        socket._pendingForfeitGameTimer = setTimeout(() => { socket._pendingForfeitGame = null; }, 8000);
+      // No active room found — the player may be waiting in a queue. SPA navigation
+      // keeps the socket connected (no 'disconnect' fires), so without this they'd
+      // stay queued and later get matched as a no-show "ghost" — freezing/robbing
+      // their opponent. Drop them from every queue and release the queue lock.
+      if (!forfeited) {
+        removeFromWordleQueue(socket.id);
+        removeFromCoinFlipQueue(socket.id);
+        removeFromBlackjackQueue(socket.id);
+        removeFromBlockBlastQueue(socket.id);
+        unlockUser(authenticatedUser.userId);
+        userQueues.delete(authenticatedUser.userId);
+        io.emit('queue_entry_removed', { id: socket.id });
+
+        // A bot/queue handler may be mid-await on its DB query (before room creation).
+        // Only mark a pending forfeit if that specific handler set _startingGame, so we
+        // never false-positive on a lobby exit followed by a different game starting.
+        if (socket._startingGame) {
+          socket._pendingForfeitGame = socket._startingGame;
+          if (socket._pendingForfeitGameTimer) clearTimeout(socket._pendingForfeitGameTimer);
+          socket._pendingForfeitGameTimer = setTimeout(() => { socket._pendingForfeitGame = null; }, 8000);
+        }
       }
     });
 
