@@ -93,6 +93,26 @@ function _dealTwoTo(deck, target) {
   return [first, second];
 }
 
+// Rigged hit card for a demo player: climbs toward 20 or 21 without busting, so
+// the demo can be dealt anything and hit its way to a winning hand realistically.
+function _riggedDemoHitCard(deck, hand) {
+  const s = _handScore(hand);
+  const safeMax = 21 - s;                 // biggest value we can add without busting
+  if (safeMax <= 0) return _takeCard(deck, () => true); // already 21 (shouldn't hit); rig covers
+  const target = Math.random() < 0.4 ? 20 : 21;         // aim for 20 sometimes, 21 mostly
+  let add = Math.min(target - s, safeMax, 11);
+  if (add <= 0) add = Math.min(safeMax, 11);            // already past target — just stay safe
+  // Ace covers an add of 1 (soft-reduces) or 11 (soft).
+  if (add === 1 || add === 11) {
+    return _takeCard(deck, c => c.value === 'A')
+        || _takeCard(deck, c => _cardVal(c) <= safeMax);
+  }
+  // add 2..10: a hard card of exactly that value lands us on the target.
+  return _takeCard(deck, c => _cardVal(c) === add && c.value !== 'A')
+      || _takeCard(deck, c => _cardVal(c) <= safeMax && c.value !== 'A')
+      || _takeCard(deck, c => _cardVal(c) <= safeMax);
+}
+
 function _makeRoom(roomId, p1, p2) {
   const deck = _makeDeck();
   const dealerHand = [deck.pop(), deck.pop()];
@@ -101,25 +121,23 @@ function _makeRoom(roomId, p1, p2) {
     [p2.socketId]: [deck.pop(), deck.pop()],
   };
 
-  // Demo account vs bot: the demo always wins, but with realistic-looking cards.
-  // Deal the demo a random strong hand (18–21), and set the bot up to lose either
-  // by busting or by standing on a lower total. Cards are pulled from the deck so
-  // hits never draw duplicates.
+  // Demo account vs bot: the demo always wins, but it plays out realistically.
+  // The demo keeps its normal random deal; its HIT cards are rigged to climb
+  // toward 20/21 without busting (see handleBlackjackHit / _riggedDemoHitCard).
+  // The bot is set up to lose — it either busts or stands on a low total (17–18).
   const demo = [p1, p2].find(p => p.isDemo && !p.isBot);
   const bot  = [p1, p2].find(p => p.isBot);
   let botForceBust = false;
-  if (demo && bot) {
-    const demoTarget = 18 + Math.floor(Math.random() * 4); // 18..21
-    hands[demo.socketId] = _dealTwoTo(deck, demoTarget);
+  const demoRig = !!(demo && bot);
+  if (demoRig) {
     if (Math.random() < 0.5) {
       // Bot busts: start it at 13–16 so dealer rules make it hit, then the hit
       // is forced to a ten to bust it (see _botAction).
       hands[bot.socketId] = _dealTwoTo(deck, 13 + Math.floor(Math.random() * 4)); // 13..16
       botForceBust = true;
     } else {
-      // Bot stands lower: a pat 17..(demoTarget-1) — dealer stands, demo wins.
-      const hi = demoTarget - 1; // >= 17
-      hands[bot.socketId] = _dealTwoTo(deck, 17 + Math.floor(Math.random() * (hi - 17 + 1)));
+      // Bot stands low: a pat 17 or 18 — dealer stands, the demo's 20/21 beats it.
+      hands[bot.socketId] = _dealTwoTo(deck, 17 + Math.floor(Math.random() * 2)); // 17..18
     }
   }
 
@@ -131,6 +149,8 @@ function _makeRoom(roomId, p1, p2) {
     stood: {},
     busted: {},
     botForceBust, // demo game: bot's next hit is forced to bust it
+    demoRig,      // demo game: demo's hit cards are rigged toward 20/21
+    demoSocketId: demoRig ? demo.socketId : null,
     // Split support:
     splitHand: {},        // { [socketId]: cards[] } — pending hand2 (before player switches to it)
     completedHand1: {},   // { [socketId]: cards[] } — hand1 after player transitions to hand2
@@ -261,7 +281,10 @@ function handleBlackjackHit(io, supabase, roomId, socketId) {
   if (!room || room.state !== 'active') return;
   if (room.stood[socketId] || room.busted[socketId]) return;
 
-  const card = room.deck.pop();
+  // Demo game: rig the demo's hit cards so it climbs toward 20/21 without busting.
+  const card = (room.demoRig && socketId === room.demoSocketId)
+    ? _riggedDemoHitCard(room.deck, room.hands[socketId])
+    : room.deck.pop();
   room.hands[socketId].push(card);
   const score = _handScore(room.hands[socketId]);
 
