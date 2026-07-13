@@ -71,6 +71,28 @@ function _takeCard(deck, pred) {
   return i !== -1 ? deck.splice(i, 1)[0] : deck.pop();
 }
 
+const _TEN_FACES = ['10', 'J', 'Q', 'K'];
+
+// Build a two-card hand from the deck summing to `target` (13–21), using a
+// ten-value card + the complement. Faces are varied and never form a splittable
+// pair, so rigged demo hands look like ordinary deals.
+function _dealTwoTo(deck, target) {
+  const need = target - 10; // 3..11
+  const firstFace = _TEN_FACES[Math.floor(Math.random() * _TEN_FACES.length)];
+  const first = _takeCard(deck, c => c.value === firstFace) || _takeCard(deck, c => _cardVal(c) === 10);
+  let second;
+  if (need === 11) {
+    second = _takeCard(deck, c => c.value === 'A');
+  } else if (need === 10) {
+    const others = _TEN_FACES.filter(f => f !== first.value);
+    const otherFace = others[Math.floor(Math.random() * others.length)];
+    second = _takeCard(deck, c => c.value === otherFace) || _takeCard(deck, c => _cardVal(c) === 10 && c.value !== first.value);
+  } else {
+    second = _takeCard(deck, c => c.value === String(need));
+  }
+  return [first, second];
+}
+
 function _makeRoom(roomId, p1, p2) {
   const deck = _makeDeck();
   const dealerHand = [deck.pop(), deck.pop()];
@@ -79,14 +101,26 @@ function _makeRoom(roomId, p1, p2) {
     [p2.socketId]: [deck.pop(), deck.pop()],
   };
 
-  // Demo account vs bot: deal the demo a natural 21 and the bot a pat 19, so the
-  // demo wins on the actual cards (not just at settlement). Cards are pulled from
-  // the deck so hits never draw duplicates.
+  // Demo account vs bot: the demo always wins, but with realistic-looking cards.
+  // Deal the demo a random strong hand (18–21), and set the bot up to lose either
+  // by busting or by standing on a lower total. Cards are pulled from the deck so
+  // hits never draw duplicates.
   const demo = [p1, p2].find(p => p.isDemo && !p.isBot);
   const bot  = [p1, p2].find(p => p.isBot);
+  let botForceBust = false;
   if (demo && bot) {
-    hands[demo.socketId] = [_takeCard(deck, c => c.value === 'A'), _takeCard(deck, c => c.value === 'K')]; // 21
-    hands[bot.socketId]  = [_takeCard(deck, c => c.value === '10'), _takeCard(deck, c => c.value === '9')]; // 19 (bot stands)
+    const demoTarget = 18 + Math.floor(Math.random() * 4); // 18..21
+    hands[demo.socketId] = _dealTwoTo(deck, demoTarget);
+    if (Math.random() < 0.5) {
+      // Bot busts: start it at 13–16 so dealer rules make it hit, then the hit
+      // is forced to a ten to bust it (see _botAction).
+      hands[bot.socketId] = _dealTwoTo(deck, 13 + Math.floor(Math.random() * 4)); // 13..16
+      botForceBust = true;
+    } else {
+      // Bot stands lower: a pat 17..(demoTarget-1) — dealer stands, demo wins.
+      const hi = demoTarget - 1; // >= 17
+      hands[bot.socketId] = _dealTwoTo(deck, 17 + Math.floor(Math.random() * (hi - 17 + 1)));
+    }
   }
 
   return {
@@ -96,6 +130,7 @@ function _makeRoom(roomId, p1, p2) {
     deck, dealerHand, hands,
     stood: {},
     busted: {},
+    botForceBust, // demo game: bot's next hit is forced to bust it
     // Split support:
     splitHand: {},        // { [socketId]: cards[] } — pending hand2 (before player switches to it)
     completedHand1: {},   // { [socketId]: cards[] } — hand1 after player transitions to hand2
@@ -200,7 +235,10 @@ function _botAction(io, supabase, roomId, botSocketId) {
   const hand = room.hands[botSocketId];
   const score = _handScore(hand);
   if (score < 17) {
-    const newCard = room.deck.pop();
+    // Demo game rigged for a bot bust: force the hit to a ten so the bot busts.
+    const newCard = room.botForceBust
+      ? (_takeCard(room.deck, c => _cardVal(c) === 10) || room.deck.pop())
+      : room.deck.pop();
     room.hands[botSocketId].push(newCard);
     _emitBotCardToHuman(io, room, botSocketId, newCard);
     if (_handScore(room.hands[botSocketId]) > 21) {
