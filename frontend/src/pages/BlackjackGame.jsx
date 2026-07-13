@@ -7,6 +7,7 @@ import { useCurrency } from '../context/CurrencyContext';
 import { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
 import BetSlider from '../components/BetSlider';
 import ResultScreen from '../components/ResultScreen';
+import GameErrorBoundary from '../components/GameErrorBoundary';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
@@ -180,7 +181,7 @@ function ScoreBadge({ score, bust, stood, isLight = false }) {
   );
 }
 
-export default function BlackjackGame() {
+function BlackjackGame() {
   const ready = usePageReady();
   const navigate = useNavigate();
   const location = useLocation();
@@ -621,8 +622,12 @@ export default function BlackjackGame() {
   function split() { if (stood || !roomId) return; socket?.emit('bj_split', { roomId }); }
 
   // HIT / STAND button pair — reused for normal play and under the active split hand.
+  // isLight/textPrimary are computed here (not read from the render block) so this
+  // works no matter where it's called from.
   function actionButtons() {
     const off = stood || bust;
+    const isLight = document.documentElement.classList.contains('light');
+    const textPrimary = isLight ? '#111111' : '#ffffff';
     return (
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%' }}>
         <button
@@ -1112,5 +1117,13 @@ export default function BlackjackGame() {
         {statusMsg && <p className="text-center text-sm text-warning mt-3">{statusMsg}</p>}
       </div>
     </div>
+  );
+}
+
+export default function BlackjackGameWithBoundary(props) {
+  return (
+    <GameErrorBoundary>
+      <BlackjackGame {...props} />
+    </GameErrorBoundary>
   );
 }
