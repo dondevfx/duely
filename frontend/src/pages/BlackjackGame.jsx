@@ -263,6 +263,8 @@ function BlackjackGame() {
   // Split state
   const [splitData, setSplitData] = useState(null);
   useEffect(() => { splitDataRef.current = splitData; }, [splitData]);
+  // True while hand 1's final outcome is on screen, before switching to hand 2.
+  const [splitPending, setSplitPending] = useState(false);
 
   const revealTimersRef = useRef([]); // staggered opponent-card reveal timers
 
@@ -312,7 +314,7 @@ function BlackjackGame() {
         setOpponentHandSize(d.oppSz);
         setOppHand(d.opponentHand ?? []);
         setStood(false); setBust(false); setFlippingOpp(false);
-        setNewCardIdx(null); setSplitData(null); setOppHasSplit(false);
+        setNewCardIdx(null); setSplitData(null); setSplitPending(false); setOppHasSplit(false);
         setDealRevision(r => r + 1);
         prevHandLenRef.current = d.hand.length;
         setPhase('playing');
@@ -432,14 +434,22 @@ function BlackjackGame() {
     });
 
     socket.on('bj_split_hand2', ({ hand, score }) => {
-      playCard();
-      setSplitData(d => d ? { ...d, hand2: hand, score2: score, activeHand: 2 } : d);
-      setMyHand(hand);
-      setMyScore(score);
-      setBust(false);
-      setStood(false);
-      stoodRef.current = false;
-      setNewCardIdx(null);
+      // Keep hand 1's final card/outcome on screen for a beat, then switch to
+      // hand 2 — otherwise a hit that ends hand 1 (21 or bust) jumps away before
+      // the player sees the result.
+      setSplitPending(true);
+      const t = setTimeout(() => {
+        playCard();
+        setSplitData(d => d ? { ...d, hand2: hand, score2: score, activeHand: 2 } : d);
+        setMyHand(hand);
+        setMyScore(score);
+        setBust(false);
+        setStood(false);
+        stoodRef.current = false;
+        setNewCardIdx(null);
+        setSplitPending(false);
+      }, 1200);
+      revealTimersRef.current.push(t);
     });
 
     socket.on('bj_opp_split', () => {
@@ -669,7 +679,7 @@ function BlackjackGame() {
     setOppHand([]);
     setStood(false); setBust(false); setTimeLeft(20);
     setFlippingOpp(false); setNewCardIdx(null);
-    setSplitData(null); setOppHasSplit(false);
+    setSplitData(null); setSplitPending(false); setOppHasSplit(false);
     prevHandLenRef.current = 0;
     myHitCountRef.current  = 0;
     oppBufferedRef.current = [];
@@ -904,10 +914,15 @@ function BlackjackGame() {
                     </div>
                     {score != null && <ScoreBadge score={score} bust={score > 21} isLight={isLight} />}
                     {/* HIT / STAND live under the hand they act on */}
-                    {active && phase === 'playing' && (
-                      <div style={{ width: '100%', maxWidth: 220, marginTop: 4 }}>
+                    {active && phase === 'playing' && !splitPending && (
+                      <div style={{ width: '100%', maxWidth: 340, marginTop: 4 }}>
                         {actionButtons()}
                       </div>
+                    )}
+                    {active && phase === 'playing' && splitPending && (
+                      <p style={{ marginTop: 8, fontSize: 12, color: textMuted, fontWeight: 700 }}>
+                        {score > 21 ? '💥 Bust' : `✅ ${score}`} — moving to Hand 2…
+                      </p>
                     )}
                   </div>
                 );
