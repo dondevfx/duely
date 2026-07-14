@@ -92,7 +92,7 @@ module.exports = function rewardsRoutes(supabase) {
       const col = COL_NAME(tier);
       const { data, error } = await supabase
         .from('profiles')
-        .select(`elo, diamonds, ${col}`)
+        .select('elo')
         .eq('id', req.user.id)
         .single();
 
@@ -105,21 +105,22 @@ module.exports = function rewardsRoutes(supabase) {
         return res.status(403).json({ error: `Reach ${TIER_MIN_ELO[tier]} ELO to spin the ${tier} wheel` });
       }
 
-      // Check cooldown
-      const lastSpin = data?.[col] ? new Date(data[col]).getTime() : 0;
-      if (Date.now() - lastSpin < COOLDOWN_MS) {
-        const nextSpinAt = new Date(lastSpin + COOLDOWN_MS).toISOString();
-        return res.status(400).json({ error: 'Already spun this wheel today', nextSpinAt });
-      }
-
-      // Stamp cooldown BEFORE crediting
+      // Atomic cooldown claim: stamp only if the cooldown has elapsed. The WHERE
+      // guard + row lock serialize concurrent requests, closing the
+      // read-check-then-stamp race that let a wheel be double-spun.
       const now = new Date();
-      const { error: stampErr } = await supabase
+      const threshold = new Date(Date.now() - COOLDOWN_MS).toISOString();
+      const { data: claimed, error: stampErr } = await supabase
         .from('profiles')
         .update({ [col]: now.toISOString() })
-        .eq('id', req.user.id);
+        .eq('id', req.user.id)
+        .or(`${col}.is.null,${col}.lt.${threshold}`)
+        .select('id');
 
       if (stampErr) return res.status(500).json({ error: stampErr.message });
+      if (!claimed || claimed.length === 0) {
+        return res.status(400).json({ error: 'Already spun this wheel today' });
+      }
 
       // Roll prize
       const prize = rollPrize(tier);

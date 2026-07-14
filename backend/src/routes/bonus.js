@@ -78,28 +78,26 @@ module.exports = function bonusRoutes(supabase) {
   });
 
   router.post('/diamond-claim', requireAuth, async (req, res) => {
-    const { data: prof, error: readErr } = await supabase
-      .from('profiles').select('last_diamond_bonus').eq('id', req.user.id).single();
-    if (readErr) return res.status(404).json({ error: 'Profile not found' });
-
-    const prevStamp = prof.last_diamond_bonus;
-    const last = prevStamp ? new Date(prevStamp).getTime() : 0;
-    if (Date.now() - last < DIAMOND_COOLDOWN_MS) {
+    // Atomic claim: only stamp the cooldown if it has actually elapsed. The
+    // WHERE guard + Postgres row lock serialize concurrent requests, so exactly
+    // one can win — closing the read-check-then-stamp race that let two
+    // simultaneous requests both pass the cooldown and double-credit.
+    const threshold = new Date(Date.now() - DIAMOND_COOLDOWN_MS).toISOString();
+    const { data: claimed, error: stampErr } = await supabase
+      .from('profiles')
+      .update({ last_diamond_bonus: new Date().toISOString() })
+      .eq('id', req.user.id)
+      .or(`last_diamond_bonus.is.null,last_diamond_bonus.lt.${threshold}`)
+      .select('id');
+    if (stampErr) return res.status(500).json({ error: stampErr.message });
+    if (!claimed || claimed.length === 0) {
       return res.status(400).json({ error: 'Already claimed' });
     }
 
-    // Stamp with Node's own clock (not the DB's) before crediting, so the
-    // cooldown anchor and the countdown displayed to the client are always
-    // measured against the same clock — a few seconds of drift between the
-    // app server and Postgres was otherwise showing up as "5m 5s remaining".
-    const { error: stampErr } = await supabase
-      .from('profiles').update({ last_diamond_bonus: new Date().toISOString() }).eq('id', req.user.id);
-    if (stampErr) return res.status(500).json({ error: stampErr.message });
-
     const { error: credErr } = await supabase.rpc('credit_diamonds', { user_id: req.user.id, amount: DIAMOND_BONUS });
     if (credErr) {
-      // Roll the stamp back so the user isn't penalized for our failure
-      await supabase.from('profiles').update({ last_diamond_bonus: prevStamp }).eq('id', req.user.id).then().catch(() => {});
+      // Credit failed — clear the stamp so the user can retry (they got nothing).
+      await supabase.from('profiles').update({ last_diamond_bonus: null }).eq('id', req.user.id).then().catch(() => {});
       return res.status(500).json({ error: credErr.message });
     }
 
@@ -134,15 +132,18 @@ module.exports = function bonusRoutes(supabase) {
 
   router.post('/spin', requireAuth, async (req, res) => {
     try {
-      const data = await getSpinProfile(req.user.id);
-      const last = data?.last_spin_claimed ? new Date(data.last_spin_claimed).getTime() : 0;
-      if (Date.now() - last < SPIN_COOLDOWN_MS)
-        return res.status(400).json({ error: 'Already spun today — come back tomorrow!' });
-
-      // Stamp the cooldown before crediting — prevents double-spin on retry
-      const { error: stampErr } = await supabase
-        .from('profiles').update({ last_spin_claimed: new Date().toISOString() }).eq('id', req.user.id);
+      // Atomic claim: stamp only if the cooldown has elapsed (row-lock serializes
+      // concurrent requests), closing the read-check-then-stamp double-spin race.
+      const threshold = new Date(Date.now() - SPIN_COOLDOWN_MS).toISOString();
+      const { data: claimed, error: stampErr } = await supabase
+        .from('profiles')
+        .update({ last_spin_claimed: new Date().toISOString() })
+        .eq('id', req.user.id)
+        .or(`last_spin_claimed.is.null,last_spin_claimed.lt.${threshold}`)
+        .select('id');
       if (stampErr) return res.status(500).json({ error: stampErr.message });
+      if (!claimed || claimed.length === 0)
+        return res.status(400).json({ error: 'Already spun today — come back tomorrow!' });
 
       const prize = rollSpinPrize();
 

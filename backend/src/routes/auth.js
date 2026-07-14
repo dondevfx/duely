@@ -2,6 +2,8 @@ const { Router } = require('express');
 const { requireAuth } = require('../middleware/auth');
 const { isDemo, DEMO_IDS } = require('../services/demoAccounts');
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 module.exports = function authRoutes(supabase) {
   const router = Router();
 
@@ -98,6 +100,7 @@ module.exports = function authRoutes(supabase) {
   // Public profile (for chat popup) — returns rank + total_wagered
   router.get('/public/:userId', requireAuth, async (req, res) => {
     const { userId } = req.params;
+    if (!UUID_RE.test(userId)) return res.status(400).json({ error: 'Invalid user id' });
 
     const { data: profile } = await supabase
       .from('profiles')
@@ -162,8 +165,16 @@ module.exports = function authRoutes(supabase) {
   // Coin balance history (reconstructed from transactions). ?days=7|30|90 (default 90)
   router.get('/coin-history/:userId', requireAuth, async (req, res) => {
     const { userId } = req.params;
+    if (!UUID_RE.test(userId)) return res.status(400).json({ error: 'Invalid user id' });
     const DAYS = Math.min(90, Math.max(1, parseInt(req.query.days) || 90));
     const startDate = new Date(Date.now() - DAYS * 24 * 60 * 60 * 1000);
+
+    // Respect the private-profile flag: another user's balance history is only
+    // visible if it's your own or they haven't marked their profile private.
+    if (userId !== req.user.id) {
+      const { data: target } = await supabase.from('profiles').select('is_private').eq('id', userId).single();
+      if (target?.is_private) return res.status(403).json({ error: 'This profile is private' });
+    }
 
     const [{ data: prof }, { data: txs }] = await Promise.all([
       supabase.from('profiles').select('c_coins').eq('id', userId).single(),
@@ -251,7 +262,7 @@ module.exports = function authRoutes(supabase) {
   router.post('/friend-request-by-id', requireAuth, async (req, res) => {
     const myId = req.user.id;
     const { userId } = req.body;
-    if (!userId) return res.status(400).json({ error: 'userId required' });
+    if (!userId || !UUID_RE.test(userId)) return res.status(400).json({ error: 'userId required' });
     if (userId === myId) return res.status(400).json({ error: 'Cannot friend yourself' });
     if (userId === ADMIN_ID || isDemo(userId)) return res.status(404).json({ error: 'User not found' });
     const { data: existing } = await supabase.from('friends').select('id,status')

@@ -77,11 +77,15 @@ module.exports = function webhookRoutes(supabase) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
 
-      // Idempotency — don't process the same Cryptomus transaction twice
+      // Idempotency — don't process the same Cryptomus transaction twice.
+      // The deposit row stores the SimpleSwap exchangeId in tx_hash, so we key
+      // dedup on the Cryptomus uuid saved in extra_id (below). Previously this
+      // matched on tx_hash, which never held the uuid, so a webhook retry would
+      // re-process — creating a duplicate swap + payout.
       const { data: dup } = await supabase
         .from('transactions')
         .select('id')
-        .eq('tx_hash', uuid)
+        .eq('extra_id', uuid)
         .maybeSingle();
       if (dup) {
         console.log(`[cryptomus webhook] uuid=${uuid} already processed — skipping`);
@@ -121,6 +125,7 @@ module.exports = function webhookRoutes(supabase) {
         crypto_amount: netCrypto,
         crypto_symbol: payer_currency,
         tx_hash:       swap.exchangeId,
+        extra_id:      uuid,   // Cryptomus uuid — used for webhook idempotency
         status:        'converting',
       });
 
