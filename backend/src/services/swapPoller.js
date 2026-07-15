@@ -72,9 +72,14 @@ async function poll(exchangeId, userId, startedAt, creditUser) {
     console.log(`[swapPoller] exchange ${exchangeId} status=${result.status} amountTo=${result.amountTo} creditUser=${creditUser}`);
 
     if (result.status === 'finished') {
-      const OUR_FEE    = 0.005; // 0.5% platform fee
-      const usdcRaw    = parseFloat(result.amountTo); // exact USDC that arrived at our address
-      const usdcCredit = creditUser ? Math.floor(usdcRaw * (1 - OUR_FEE) * 100) / 100 : 0;
+      const OUR_FEE        = 0.001; // 0.1% platform fee
+      const MIN_CREDIT_USD = 3.00;  // don't credit deposits that net under $3 in USDC
+      const usdcRaw        = parseFloat(result.amountTo); // exact USDC that arrived at our address
+      // Credit the exact received amount minus the 0.1% fee, but only if it clears
+      // the $3 floor — no "platform keeps" band, players get their money above it.
+      const usdcCredit = (creditUser && usdcRaw >= MIN_CREDIT_USD)
+        ? Math.floor(usdcRaw * (1 - OUR_FEE) * 100) / 100
+        : 0;
 
       if (creditUser && usdcCredit > 0) {
         // Atomically CLAIM the deposit first by flipping converting→confirmed.

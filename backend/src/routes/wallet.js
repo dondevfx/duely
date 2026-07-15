@@ -31,11 +31,12 @@ const MIN_WITHDRAWAL = 10;   // fallback
 // Coins accepted for deposit (Plisio supports all of these)
 const DEPOSIT_COINS = new Set(['btc','eth','sol','ltc','trx','doge','bnb','usdc']);
 
-// Per-coin deposit minimums shown in UI
-// (actual processing has a lower buffer — see blockchainMonitor)
+// Per-coin deposit minimums shown in UI (must match the frontend coin grid).
+// Actual crediting is more generous — anything that nets >= $3 in USDC is
+// credited (see MIN_CREDIT_USD in blockchainMonitor / swapPoller).
 const DEPOSIT_MINS = {
-  sol:     2,   // Jupiter on-chain swap
-  usdc:    2,   // direct credit
+  sol:     5,   // Jupiter on-chain swap
+  usdc:    5,   // direct credit
   default: 10,  // ChangeNow coins (BTC, ETH, BNB, LTC, TRX, DOGE)
 };
 

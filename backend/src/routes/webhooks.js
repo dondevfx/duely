@@ -9,7 +9,7 @@ const { watch } = require('../services/swapPoller');
 const OUR_USDC_ADDRESS = process.env.USDC_SPL_ADDRESS;
 
 // Minimum estimated USD value to bother converting (filters dust / spam)
-const MIN_USD = 4.50;
+const MIN_USD = 3.00; // credit floor — matches MIN_CREDIT_USD in blockchainMonitor/swapPoller
 
 // Map Cryptomus currency+network back to our internal coin id
 function toCoinId(currency, network) {

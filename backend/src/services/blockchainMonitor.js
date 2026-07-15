@@ -21,14 +21,11 @@ const { swapSolToUsdc }     = require('./jupiterService');
 
 const POLL_INTERVAL_MS      = 45_000;
 const OUR_FEE               = 0.001; // 0.1% platform fee on all deposits
-// USDC: show $5 min in UI, process anything >= $4.00 (buffer for slight underpayment / fees)
-const USDC_MIN_USD          = 4.00;
-// Non-SOL (BTC/ETH/etc): show $10 min in UI
-//   < $7  → hard reject (too small, not worth ChangeNow fees)
-//   $7–$9.99 → forward to ChangeNow, platform keeps USDC (buffer for slight underpayment)
-//   $10+  → forward to ChangeNow, credit user
-const NON_SOL_HARD_MIN      = 7;
-const NON_SOL_CREDIT_MIN    = 10;
+// The UI shows a $5 min (SOL/USDC) and $10 min (other coins), but we credit
+// generously: any deposit that nets at least MIN_CREDIT_USD in USDC (after the
+// swap + network fees) is credited its exact received value minus the 0.1% fee.
+// Only deposits worth under $3 are not credited.
+const MIN_CREDIT_USD        = 3.00;
 
 // CoinGecko IDs for price lookups
 const COINGECKO_IDS = {
@@ -347,8 +344,8 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
 
   // ── USDC: credit directly, no swap needed — apply 0.1% fee ──────────────────
   if (coin === 'usdc') {
-    if (amount < USDC_MIN_USD) {
-      console.warn(`[monitor] USDC $${amount.toFixed(2)} below $${USDC_MIN_USD} minimum — skipping ${txHash}`);
+    if (amount < MIN_CREDIT_USD) {
+      console.warn(`[monitor] USDC $${amount.toFixed(2)} below $${MIN_CREDIT_USD} minimum — skipping ${txHash}`);
       _seenTxs.add(txHash);
       return;
     }
@@ -426,10 +423,9 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     // Credit decision based on the ACTUAL USDC received from the swap, not the
     // CoinGecko estimate. (On the Jupiter-failure fallback above, usdcReceived is
     // set to the price estimate, so that rare path still uses the estimate.)
-    const creditUser = usdcReceived >= 4.00;
+    const creditUser = usdcReceived >= MIN_CREDIT_USD;
 
-    // Credit user with exact USDC received minus 0.5%, only if above threshold
-    const OUR_FEE  = 0.005;
+    // Credit user with exact USDC received minus the 0.1% platform fee.
     const credited = creditUser ? Math.floor(usdcReceived * (1 - OUR_FEE) * 100) / 100 : 0;
 
     if (creditUser && credited > 0) {
@@ -438,7 +434,7 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
       gameEvents.emit('deposit_credited', { userId, amount: credited, currency: 'coins' });
       console.log(`[monitor] ✓ SOL credited $${credited} to user ${userId} ($${usdcReceived} USDC received, 0.1% fee)`);
     } else {
-      console.log(`[monitor] SOL — swapped ${usdcReceived} USDC (below $4.00), no user credit`);
+      console.log(`[monitor] SOL — swapped ${usdcReceived} USDC (below $${MIN_CREDIT_USD}), no user credit`);
     }
 
     await supabase.from('transactions')
@@ -449,16 +445,16 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
   }
 
   // ── Non-SOL, non-USDC: forward to ChangeNow, swapPoller credits exact USDC received ─
-  // < $7        → hard reject (not worth ChangeNow fees)
-  // $7 – $9.99  → forward to ChangeNow, platform keeps USDC (buffer for slight underpayment)
-  // $10+        → forward to ChangeNow, credit user exact USDC received − 0.1% fee
-  if (estimatedUsd < NON_SOL_HARD_MIN) {
-    console.warn(`[monitor] non-SOL $${estimatedUsd.toFixed(2)} below $${NON_SOL_HARD_MIN} hard min — skipping ${txHash}`);
+  // Forward anything worth at least MIN_CREDIT_USD; swapPoller then credits the
+  // exact USDC that arrives (minus the 0.1% fee) as long as it's >= MIN_CREDIT_USD.
+  // No "platform keeps" band — players always get their money above the floor.
+  if (estimatedUsd < MIN_CREDIT_USD) {
+    console.warn(`[monitor] non-SOL $${estimatedUsd.toFixed(2)} below $${MIN_CREDIT_USD} min — skipping ${txHash}`);
     _seenTxs.add(txHash);
     return;
   }
 
-  const creditUser = estimatedUsd >= NON_SOL_CREDIT_MIN;
+  const creditUser = true; // credit is gated on the ACTUAL received USDC in swapPoller
 
   if (!usdcAddress) { console.error('[monitor] USDC_SPL_ADDRESS not set'); return; }
   const { privKey } = getAddress(userId, coin);
