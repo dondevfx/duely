@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
@@ -120,13 +120,22 @@ export default function Wallet() {
   const [witMfaCode, setWitMfaCode]     = useState('');
   const [hasMfa, setHasMfa]             = useState(false);
   const [transactions, setTransactions] = useState([]);
+  const pollRef = useRef(null); // deposit balance-poll interval
 
   useEffect(() => {
     api.get('/wallet/transactions?limit=50').then(setTransactions).catch(() => {});
     supabase.auth.mfa.listFactors()
       .then(({ data }) => setHasMfa(data?.totp?.some(f => f.status === 'verified') ?? false))
       .catch(() => {});
+    // Stop any deposit poll when the page unmounts so it doesn't keep hitting the
+    // API and setting state on an unmounted component.
+    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
   }, []);
+
+  function stopPolling() {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    setDepPolling(false);
+  }
 
   // ── Get deposit address ───────────────────────────────────────────────
   async function handleGetAddress() {
@@ -146,17 +155,17 @@ export default function Wallet() {
   }
 
   function startPolling() {
+    stopPolling(); // clear any prior interval so they never stack
     setDepPolling(true);
     const startBalance = profile?.c_coins ?? 0;
     let attempts = 0;
-    const interval = setInterval(async () => {
+    pollRef.current = setInterval(async () => {
       attempts++;
-      if (attempts > 120) { clearInterval(interval); setDepPolling(false); return; }
+      if (attempts > 120) { stopPolling(); return; }
       try {
         const { c_coins } = await api.get('/wallet/balance');
         if (c_coins > startBalance) {
-          clearInterval(interval);
-          setDepPolling(false);
+          stopPolling();
           setDepMsg({ type: 'success', text: `+${fmt(c_coins - startBalance)} coins received! Balance updated.` });
           refreshProfile();
           api.get('/wallet/transactions?limit=50').then(setTransactions).catch(() => {});
@@ -253,7 +262,7 @@ export default function Wallet() {
               <CoinGrid
                 coins={COINS}
                 selected={depCoin}
-                onSelect={c => { setDepCoin(c); setDepAddress(null); setDepMsg(null); setDepPolling(false); }}
+                onSelect={c => { setDepCoin(c); setDepAddress(null); setDepMsg(null); stopPolling(); }}
                 showMin
               />
             </div>
@@ -330,7 +339,7 @@ export default function Wallet() {
                 )}
 
                 <button
-                  onClick={() => { setDepAddress(null); setDepPolling(false); }}
+                  onClick={() => { setDepAddress(null); stopPolling(); }}
                   className="w-full text-xs text-muted hover:text-white transition-colors text-center pt-1"
                 >
                   Use a different coin
