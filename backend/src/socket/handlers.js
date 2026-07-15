@@ -49,6 +49,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
   // Returns true if user is in a queue OR in an active match (lock held until settlement)
   const inMatchOrQueue = (uid) => userQueues.has(uid) || isLocked(uid);
   const chatBanned = new Set(); // userId → banned from chat
+  const lastChatAt = new Map(); // userId → last chat message timestamp (flood control)
+  const CHAT_MIN_INTERVAL_MS = 750;
 
   // ── Short disconnect buffer to survive mobile browser backgrounding ───
   // Delays forfeit by DISCONNECT_GRACE_MS so the socket has time to
@@ -181,6 +183,10 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       }
       const trimmed = (message || '').toString().trim().slice(0, 150);
       if (!trimmed) return;
+      // Flood control — drop messages sent faster than one per CHAT_MIN_INTERVAL_MS.
+      const nowMs = Date.now();
+      if (nowMs - (lastChatAt.get(authenticatedUser.userId) || 0) < CHAT_MIN_INTERVAL_MS) return;
+      lastChatAt.set(authenticatedUser.userId, nowMs);
       const mentions = [];
       const mentionRe = /@(\w+)/g;
       let mMatch;
