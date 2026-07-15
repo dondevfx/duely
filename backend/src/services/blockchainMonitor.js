@@ -377,8 +377,11 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
 
   // ── SOL: swap via Jupiter, credit exact USDC received minus 0.1% ─────────────
   if (coin === 'sol') {
-    const netUsd     = netAmount * priceUsd;
-    const creditUser = netUsd >= 4.00;   // under $4.00 → platform keeps, no user credit
+    // netUsd is a CoinGecko price estimate — used only for logging and the
+    // Jupiter-failure fallback. The real credit decision is made AFTER the swap
+    // from the actual USDC received (see below), so a price-API blip can't cause
+    // a real deposit to be swapped but left uncredited.
+    const netUsd = netAmount * priceUsd;
 
     if (!usdcAddress) { console.error('[monitor] USDC_SPL_ADDRESS not set'); return; }
     const { privKey } = getAddress(userId, coin);
@@ -420,6 +423,11 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
       }
     }
 
+    // Credit decision based on the ACTUAL USDC received from the swap, not the
+    // CoinGecko estimate. (On the Jupiter-failure fallback above, usdcReceived is
+    // set to the price estimate, so that rare path still uses the estimate.)
+    const creditUser = usdcReceived >= 4.00;
+
     // Credit user with exact USDC received minus 0.5%, only if above threshold
     const OUR_FEE  = 0.005;
     const credited = creditUser ? Math.floor(usdcReceived * (1 - OUR_FEE) * 100) / 100 : 0;
@@ -430,7 +438,7 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
       gameEvents.emit('deposit_credited', { userId, amount: credited, currency: 'coins' });
       console.log(`[monitor] ✓ SOL credited $${credited} to user ${userId} ($${usdcReceived} USDC received, 0.1% fee)`);
     } else {
-      console.log(`[monitor] SOL $${netUsd.toFixed(2)} below $1.50 — swapped ${usdcReceived} USDC, no user credit`);
+      console.log(`[monitor] SOL — swapped ${usdcReceived} USDC (below $4.00), no user credit`);
     }
 
     await supabase.from('transactions')
