@@ -16,9 +16,12 @@ async function apiFetch(path, options = {}) {
     ...options.headers,
   };
   const res = await fetch(`${BASE}${path}`, { ...options, headers });
-  const data = await res.json();
+  // Tolerate non-JSON responses (proxy/CDN 502s, timeouts, empty bodies) so the
+  // user sees a clean error instead of "Unexpected token < in JSON".
+  let data = {};
+  try { data = await res.json(); } catch { data = {}; }
   if (!res.ok) {
-    const err = new Error(data.error || 'Request failed');
+    const err = new Error(data.error || `Request failed (${res.status})`);
     err.status = res.status;
     throw err;
   }
@@ -29,4 +32,5 @@ export const api = {
   get: (path) => apiFetch(path),
   post: (path, body) => apiFetch(path, { method: 'POST', body: JSON.stringify(body) }),
   patch: (path, body) => apiFetch(path, { method: 'PATCH', body: JSON.stringify(body) }),
+  delete: (path) => apiFetch(path, { method: 'DELETE' }),
 };

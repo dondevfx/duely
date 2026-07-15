@@ -50,6 +50,7 @@ import NotifyToast from './components/NotifyToast';
 import ReconnectOverlay from './components/ReconnectOverlay';
 import AgeToSModal, { useTosAccepted } from './components/AgeToSModal';
 import SaveLoginPrompt from './components/SaveLoginPrompt';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function ProtectedRoute({ children }) {
   const { session, loading, mfaPending } = useAuth();
@@ -120,6 +121,7 @@ function Shell() {
       {/* Main content always interactive */}
       <main className={`absolute top-14 bottom-0 left-0 right-0 overflow-y-auto transition-[left,right] duration-300 lg:left-56 ${chatOpen ? 'lg:right-80' : 'lg:right-0'}`}>
         <div className={isGamePage ? '' : 'tv-scale'}>
+        <ErrorBoundary resetKey={location.pathname}>
         <Routes>
           <Route path="/"                  element={<Home />} />
           <Route path="/leaderboard"        element={<Leaderboard />} />
@@ -143,6 +145,7 @@ function Shell() {
           <Route path="/admin"              element={<ProtectedRoute><Admin /></ProtectedRoute>} />
           <Route path="*"                   element={<Navigate to="/" replace />} />
         </Routes>
+        </ErrorBoundary>
         </div>
       </main>
       <ForfeitToast />
