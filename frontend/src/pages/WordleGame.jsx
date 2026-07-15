@@ -217,6 +217,10 @@ export default function WordleGame() {
   useEffect(() => {
     return () => {
       if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
+      // Clear any running countdowns so they don't tick / setState after unmount.
+      if (failIntervalRef.current) { clearInterval(failIntervalRef.current); failIntervalRef.current = null; }
+      soloCdTimersRef.current.forEach(clearTimeout);
+      soloCdTimersRef.current = [];
     };
   }, []);
 
