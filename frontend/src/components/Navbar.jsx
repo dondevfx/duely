@@ -233,9 +233,6 @@ export default function Navbar() {
                               <span className="text-base">⚡</span>
                               <span className="text-sm font-semibold text-white">Instant</span>
                             </div>
-                            <span className="font-mono text-sm font-black text-white whitespace-nowrap flex items-center gap-1">
-                              {Math.floor(rakebackData.instant ?? 0)} <CoinIcon size="0.9em" />
-                            </span>
                           </div>
                           <button
                             onClick={() => handleRakebackClaim('instant')}
@@ -257,9 +254,6 @@ export default function Navbar() {
                               <span className="text-base">⏱️</span>
                               <span className="text-sm font-semibold text-white">Daily</span>
                             </div>
-                            <span className="font-mono text-sm font-black text-white whitespace-nowrap flex items-center gap-1">
-                              {Math.floor(rakebackData.daily ?? 0)} <CoinIcon size="0.9em" />
-                            </span>
                           </div>
                           <button
                             onClick={() => handleRakebackClaim('daily')}
@@ -281,9 +275,6 @@ export default function Navbar() {
                               <span className="text-base">📆</span>
                               <span className="text-sm font-semibold text-white">Weekly</span>
                             </div>
-                            <span className="font-mono text-sm font-black text-white whitespace-nowrap flex items-center gap-1">
-                              {Math.floor(rakebackData.weekly ?? 0)} <CoinIcon size="0.9em" />
-                            </span>
                           </div>
                           <button
                             onClick={() => handleRakebackClaim('weekly')}
@@ -389,14 +380,13 @@ export default function Navbar() {
                           { key: 'instant', label: 'Instant', icon: '⚡', amount: rakebackData.instant ?? 0, claimable: rakebackData.instantClaimable ?? false, countdown: rakebackCountdowns.instant },
                           { key: 'daily',   label: 'Daily',   icon: '⏱️', amount: rakebackData.daily   ?? 0, claimable: rakebackData.dailyClaimable,             countdown: rakebackCountdowns.daily },
                           { key: 'weekly',  label: 'Weekly',  icon: '📆', amount: rakebackData.weekly  ?? 0, claimable: rakebackData.weeklyClaimable,             countdown: rakebackCountdowns.weekly },
-                        ].map(({ key, label, icon, amount, claimable, countdown }) => (
+                        ].map(({ key, label, icon, claimable, countdown }) => (
                           <div key={key} className="rounded-xl border border-border bg-bg p-3">
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-2">
                                 <span className="text-base">{icon}</span>
                                 <span className="text-sm font-semibold text-white">{label}</span>
                               </div>
-                              <span className="font-mono text-sm font-black text-white flex items-center gap-1">{Math.floor(amount)} <CoinIcon size="0.9em" /></span>
                             </div>
                             <button
                               onClick={() => handleRakebackClaim(key)}
