@@ -34,7 +34,7 @@ const { createBotPlayer } = require('../services/botService');
 const { isDemo: isDemoAccount, randomFunnyName } = require('../services/demoAccounts');
 const {
   settleMatch, settleMatchDiamonds, forfeitSettleDiamonds, forfeitSettleCoins,
-  deductCoins, deductDiamonds, deductMatchFees, creditDiamonds,
+  deductCoins, deductDiamonds, deductMatchFees, creditDiamonds, creditCoins,
   settleBotMatch,
 } = require('../services/walletService');
 const { lockUser, unlockUser, isLocked } = require('../services/lockService');
@@ -1274,7 +1274,19 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           currency,
         });
       } else {
-        // Both disconnected — refund both (unlock only, no coins moved)
+        // Both players dropped within the reconnect grace window — no game was
+        // played and there is no winner, so refund each their entry fee (it was
+        // deducted at match start). Previously this only unlocked, silently
+        // keeping both fees.
+        try {
+          if (currency === 'diamonds') {
+            await creditDiamonds(supabase, stayer.userId, fee);
+            await creditDiamonds(supabase, leaver.userId, fee);
+          } else {
+            await creditCoins(supabase, stayer.userId, fee);
+            await creditCoins(supabase, leaver.userId, fee);
+          }
+        } catch (e) { console.error('[forfeit] double-disconnect refund failed:', e.message); }
         unlockUser(stayer.userId);
         unlockUser(leaver.userId);
       }
