@@ -100,7 +100,7 @@ function TxRow({ tx }) {
 // ── Main component ────────────────────────────────────────────────────
 export default function Wallet() {
   const ready = usePageReady();
-  const { profile, session, refreshProfile } = useAuth();
+  const { profile, session, refreshProfile, verifyMfaStepUp } = useAuth();
 
   // Deposit state
   const [depCoin, setDepCoin]       = useState(COINS[0]);
@@ -192,12 +192,9 @@ export default function Wallet() {
     setWitMsg(null);
     try {
       if (hasMfa) {
-        const { data: factors } = await supabase.auth.mfa.listFactors();
-        const factor = factors?.totp?.find(f => f.status === 'verified');
-        if (factor) {
-          const { error: mfaErr } = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.id, code: witMfaCode });
-          if (mfaErr) throw new Error('Invalid authenticator code.');
-        }
+        // Elevate the session to AAL2 and propagate the fresh token, so the
+        // backend (which now requires aal2 for MFA accounts) accepts the payout.
+        await verifyMfaStepUp(witMfaCode);
       }
       const data = await api.post('/wallet/withdraw', {
         amountUsd: parseFloat(witAmountUsd),

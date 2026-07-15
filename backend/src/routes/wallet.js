@@ -49,6 +49,16 @@ function validateMemo(val) {
   return /^[a-zA-Z0-9_.\-]{1,64}$/.test(String(val).trim());
 }
 
+// Read the AAL (authenticator assurance level) claim from a Bearer token.
+// 'aal2' means the session passed an MFA challenge; 'aal1' means password-only.
+function tokenAal(authHeader) {
+  try {
+    const token = (authHeader || '').replace(/^Bearer\s+/i, '');
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+    return payload.aal || null;
+  } catch { return null; }
+}
+
 async function getLastWithdrawal(supabase, userId) {
   const { data } = await supabase
     .from('transactions')
@@ -119,6 +129,23 @@ module.exports = function walletRoutes(supabase, io) {
     if (isDemo(req.user.id)) return res.status(403).json({ error: 'Demo accounts cannot withdraw.' });
     if (!req.user.email_confirmed_at) {
       return res.status(403).json({ error: 'Please verify your email before withdrawing.' });
+    }
+
+    // MFA step-up enforcement: if the account has a verified authenticator, the
+    // withdrawal must come from an MFA-elevated (aal2) session. Without this the
+    // client-side MFA prompt is bypassable — a stolen aal1 token could withdraw
+    // directly via the API. Fails open on lookup error (defense-in-depth; the
+    // JWT auth is still required) so a transient error can't hard-block payouts.
+    try {
+      if (tokenAal(req.headers.authorization) !== 'aal2') {
+        const { data: u } = await supabase.auth.admin.getUserById(req.user.id);
+        const hasMfa = (u?.user?.factors || []).some(f => f.status === 'verified');
+        if (hasMfa) {
+          return res.status(403).json({ error: 'Verify with your authenticator app to withdraw.', mfaRequired: true });
+        }
+      }
+    } catch (e) {
+      console.error('[withdraw] MFA/aal check error (allowing):', e.message);
     }
     if (isLocked(req.user.id)) {
       return res.status(400).json({ error: 'Cannot withdraw while in a queue or active match' });

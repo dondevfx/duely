@@ -315,6 +315,30 @@ export function AuthProvider({ children }) {
     return true;
   }
 
+  // Step an already-signed-in session up to AAL2 for a sensitive action (e.g.
+  // withdrawal). Same setSession→verify→getSession→apply flow as completeMfaLogin,
+  // so the fresh AAL2 token becomes the app's active token and reaches the API.
+  async function verifyMfaStepUp(code) {
+    const current = getCurrentSession();
+    if (!current) throw new Error('Session expired — please sign in again.');
+    const { error: setErr } = await supabase.auth.setSession({
+      access_token: current.access_token,
+      refresh_token: current.refresh_token,
+    });
+    if (setErr) throw setErr;
+    const { data: factors } = await supabase.auth.mfa.listFactors();
+    const factor = factors?.totp?.find(f => f.status === 'verified');
+    if (!factor) throw new Error('No authenticator found on this account.');
+    const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.id, code });
+    if (error) throw new Error('Invalid authenticator code.');
+    const { data: { session: fresh } } = await supabase.auth.getSession();
+    if (fresh) {
+      _applySession(fresh);
+      if (localStorage.getItem(SAVE_LOGIN_KEY)) persistTokens(fresh.access_token, fresh.refresh_token);
+    }
+    return true;
+  }
+
   async function signOut() {
     _clearRefreshTimer();
     const current = getCurrentSession();
@@ -349,7 +373,7 @@ export function AuthProvider({ children }) {
       session, profile, loading,
       mfaPending, mfaFactorId,
       showSaveLogin, setShowSaveLogin,
-      signUp, signIn, signOut, refreshProfile, updateProfile, completeMfaLogin,
+      signUp, signIn, signOut, refreshProfile, updateProfile, completeMfaLogin, verifyMfaStepUp,
     }}>
       {children}
     </AuthContext.Provider>
