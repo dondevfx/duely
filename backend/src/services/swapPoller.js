@@ -77,16 +77,36 @@ async function poll(exchangeId, userId, startedAt, creditUser) {
       const usdcCredit = creditUser ? Math.floor(usdcRaw * (1 - OUR_FEE) * 100) / 100 : 0;
 
       if (creditUser && usdcCredit > 0) {
-        await creditCoins(supabaseRef, userId, usdcCredit);
-        await recordDeposit(supabaseRef, userId, usdcCredit, 'crypto');
-        await supabaseRef
+        // Atomically CLAIM the deposit first by flipping converting→confirmed.
+        // Only the poll that actually flips the row (1 affected) proceeds to
+        // credit — so a restart-resume or double-poll of an already-processed
+        // exchange can never credit twice (which would mint money).
+        const { data: claimed } = await supabaseRef
           .from('transactions')
           .update({ status: 'confirmed', amount_c: usdcCredit })
           .eq('tx_hash', exchangeId)
-          .eq('status', 'converting');
+          .eq('status', 'converting')
+          .select('id');
 
-        console.log(`[swapPoller] ✓ credited $${usdcCredit} to user ${userId} (received $${usdcRaw} USDC, 0.5% fee, exchange ${exchangeId})`);
-        gameEvents.emit('deposit_credited', { userId, amount: usdcCredit, currency: 'coins' });
+        if (claimed && claimed.length > 0) {
+          try {
+            await creditCoins(supabaseRef, userId, usdcCredit);
+          } catch (creditErr) {
+            // Credit failed — roll the claim back to 'converting' so a later
+            // poll retries. No money credited, no money lost.
+            await supabaseRef.from('transactions')
+              .update({ status: 'converting' })
+              .eq('tx_hash', exchangeId).eq('status', 'confirmed')
+              .then().catch(() => {});
+            throw creditErr; // outer catch reschedules the poll
+          }
+          // Credit succeeded — the rest is best-effort bookkeeping.
+          await recordDeposit(supabaseRef, userId, usdcCredit, 'crypto').catch(() => {});
+          console.log(`[swapPoller] ✓ credited $${usdcCredit} to user ${userId} (received $${usdcRaw} USDC, 0.5% fee, exchange ${exchangeId})`);
+          gameEvents.emit('deposit_credited', { userId, amount: usdcCredit, currency: 'coins' });
+        } else {
+          console.log(`[swapPoller] exchange ${exchangeId} already credited — skipping duplicate`);
+        }
       } else {
         // $7–$9.99 buffer band — platform keeps USDC, no user credit
         await supabaseRef

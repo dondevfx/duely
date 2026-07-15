@@ -353,12 +353,20 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
       return;
     }
     const credited = Math.floor(amount * (1 - OUR_FEE) * 100) / 100;
-    await creditCoins(supabase, userId, credited);
-    await recordDeposit(supabase, userId, credited, 'crypto');
-    await supabase.from('transactions').insert({
+    // Record the deposit row BEFORE crediting. The idempotency check above keys
+    // on tx_hash, so if we credited first and crashed before inserting, a restart
+    // would re-credit the same deposit (minting money). Recording first flips the
+    // only failure window to a recorded-but-uncredited row (safe, reconcilable).
+    const { error: recErr } = await supabase.from('transactions').insert({
       user_id: userId, type: 'deposit', amount_c: credited,
       crypto_amount: amount, crypto_symbol: 'USDC', tx_hash: txHash, status: 'confirmed',
     });
+    if (recErr) {
+      console.error(`[monitor] USDC record insert failed for ${txHash} — NOT crediting to avoid a double:`, recErr.message);
+      return; // don't add to _seenTxs — allow a clean retry next poll
+    }
+    await creditCoins(supabase, userId, credited);
+    await recordDeposit(supabase, userId, credited, 'crypto');
     console.log(`[monitor] USDC deposit — received $${amount}, credited $${credited} (0.1% fee) to user ${userId}`);
     gameEvents.emit('deposit_credited', { userId, amount: credited, currency: 'coins' });
     _seenTxs.add(txHash);
