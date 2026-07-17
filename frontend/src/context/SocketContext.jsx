@@ -24,7 +24,17 @@ export function SocketProvider({ children }) {
   }
 
   useEffect(() => {
-    const socket = io(SOCKET_URL, { autoConnect: true, transports: ['websocket'] });
+    // timeout 8s (not the 20s default) + fast reconnection so a cold-started /
+    // waking server is picked up within a couple seconds instead of the user
+    // staring at "connecting" for a full 20s. Polling is kept as a fallback for
+    // networks where the WebSocket upgrade is slow or blocked.
+    const socket = io(SOCKET_URL, {
+      autoConnect: true,
+      transports: ['websocket', 'polling'],
+      timeout: 8000,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 3000,
+    });
     socketRef.current = socket;
 
     socket.on('connect', () => {
