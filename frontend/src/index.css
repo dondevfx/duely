@@ -103,9 +103,9 @@ html.light .hover\:bg-surfaceLight:hover { background-color: #cdd4e0 !important;
 @media (min-width: 1900px) and (min-resolution: 1.5dppx) {
   .tv-scale { zoom: 0.85; }
 }
-@media (min-width: 2560px) {
-  .tv-scale { zoom: 0.8; }
-}
+/* 1440p (2560px, standard-DPI) desktop monitors render at native 100% — they
+   were previously shrunk to 0.8 and looked zoomed out. Only genuinely huge /
+   native-4K-width displays are scaled down. */
 @media (min-width: 3400px) {
   .tv-scale { zoom: 0.7; }
 }
