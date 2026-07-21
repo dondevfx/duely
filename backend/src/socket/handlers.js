@@ -52,6 +52,56 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
   const lastChatAt = new Map(); // userId → last chat message timestamp (flood control)
   const CHAT_MIN_INTERVAL_MS = 750;
 
+  // ── Friend game invites ───────────────────────────────────────────────
+  const pendingInvites = new Map();     // inviteId → invite record
+  const INVITE_TTL_MS      = 45_000;    // popup lifetime once actually shown
+  const INVITE_MAX_HOLD_MS = 5 * 60_000; // max time to hold a deferred (in-game) invite
+
+  const _socketsForUser = (userId) => {
+    const out = [];
+    for (const [, s] of io.sockets.sockets) if (s._authenticatedUserId === userId) out.push(s);
+    return out;
+  };
+  const _isUserOnline = (userId) => _socketsForUser(userId).length > 0;
+  const _isUserInGame = (userId) => _socketsForUser(userId).some(s =>
+    getRoomBySocket(s.id) || getBlockBlastRoomBySocket(s.id) || getWordleRoomBySocket(s.id) ||
+    getCoinFlipRoomBySocket(s.id) || getBlackjackRoomBySocket(s.id)
+  );
+
+  function _cleanupInvite(inviteId) {
+    const inv = pendingInvites.get(inviteId);
+    if (!inv) return null;
+    if (inv.timer) { clearTimeout(inv.timer); inv.timer = null; }
+    pendingInvites.delete(inviteId);
+    return inv;
+  }
+  // Send the invite popup to the invitee and start its visible-lifetime timer.
+  function _deliverInvite(inviteId) {
+    const inv = pendingInvites.get(inviteId);
+    if (!inv) return;
+    inv.deferred = false;
+    if (inv.timer) clearTimeout(inv.timer);
+    for (const s of _socketsForUser(inv.toUserId)) {
+      s.emit('game_invite', {
+        inviteId: inv.inviteId, code: inv.code, fromUsername: inv.fromUsername,
+        gameType: inv.gameType, entryFee: inv.entryFee, currency: inv.currency,
+      });
+    }
+    inv.timer = setTimeout(() => _expireInvite(inviteId, 'expired'), INVITE_TTL_MS);
+  }
+  // Free the room + unlock the inviter, pull the popup, notify both sides.
+  function _expireInvite(inviteId, reason) {
+    const inv = _cleanupInvite(inviteId);
+    if (!inv) return;
+    const room = pendingPrivateRooms.get(inv.code);
+    if (room && room.p1.userId === inv.fromUserId) {
+      pendingPrivateRooms.delete(inv.code);
+      if (inv.entryFee > 0) unlockUser(inv.fromUserId);
+    }
+    for (const s of _socketsForUser(inv.toUserId)) s.emit('invite_cancelled', { inviteId });
+    for (const s of _socketsForUser(inv.fromUserId)) s.emit('invite_expired', { inviteId, reason });
+  }
+
   // ── Short disconnect buffer to survive mobile browser backgrounding ───
   // Delays forfeit by DISCONNECT_GRACE_MS so the socket has time to
   // auto-reconnect. If reconnected, we silently update the player's socketId
@@ -119,6 +169,19 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     for (const sid of socketIds) {
       if (socketGameMap[sid]) {
         decrementCount(socketGameMap[sid], sid);
+      }
+    }
+    // A player just left a match — deliver any invites that were held while they
+    // were in a game (they only pop up once you're out of a game).
+    const freedUsers = new Set();
+    for (const sid of socketIds || []) {
+      const s = io.sockets.sockets.get(sid);
+      if (s?._authenticatedUserId) freedUsers.add(s._authenticatedUserId);
+    }
+    for (const uid of freedUsers) {
+      if (_isUserInGame(uid)) continue; // still in another match
+      for (const [iid, inv] of pendingInvites) {
+        if (inv.toUserId === uid && inv.deferred) _deliverInvite(iid);
       }
     }
   });
@@ -482,9 +545,91 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         if (room.p1.socketId === socket.id) {
           pendingPrivateRooms.delete(code);
           if ((room.p1.entryFee || 0) > 0) unlockUser(authenticatedUser.userId);
+          // Pull back any invite tied to this room so the friend's popup vanishes.
+          for (const [iid, inv] of pendingInvites) {
+            if (inv.code === code) {
+              _cleanupInvite(iid);
+              for (const s of _socketsForUser(inv.toUserId)) s.emit('invite_cancelled', { inviteId: iid });
+            }
+          }
           break;
         }
       }
+    });
+
+    // ── Friend game invite: create a private room and ping a friend directly ──
+    socket.on('invite_friend', async ({ friendId, gameType, entryFee = 0, currency = 'coins' }) => {
+      if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      const fromId = authenticatedUser.userId;
+      const fail = (message) => socket.emit('invite_failed', { message });
+      if (!friendId || friendId === fromId) return fail("You can't invite yourself.");
+      if (!['blackjack', 'coin-flip', 'scrabble', 'blockBlast'].includes(gameType)) return fail('Invalid game.');
+      if (!isValidFee(entryFee, currency)) return fail('Invalid entry fee.');
+      if (inMatchOrQueue(fromId)) return fail('Finish your current game first.');
+      if (!_isUserOnline(friendId)) return fail('That friend is offline.');
+
+      // Must be accepted friends.
+      const { data: fr } = await supabase.from('friends').select('id')
+        .or(`and(requester_id.eq.${fromId},addressee_id.eq.${friendId}),and(requester_id.eq.${friendId},addressee_id.eq.${fromId})`)
+        .eq('status', 'accepted').maybeSingle();
+      if (!fr) return fail('You can only invite friends.');
+
+      const { data: fp } = await supabase.from('profiles').select('username,invites_enabled').eq('id', friendId).single();
+      if (fp && fp.invites_enabled === false) return fail(`${fp.username || 'That player'} isn't accepting invites.`);
+
+      // Dedupe — one pending invite per (inviter → friend).
+      for (const inv of pendingInvites.values()) {
+        if (inv.fromUserId === fromId && inv.toUserId === friendId) return fail('You already invited them.');
+      }
+
+      if (entryFee > 0) {
+        const { data: me } = await supabase.from('profiles').select('c_coins,diamonds').eq('id', fromId).single();
+        if (currency === 'diamonds' && (me?.diamonds || 0) < entryFee) return fail('Insufficient diamonds.');
+        if (currency !== 'diamonds' && (me?.c_coins || 0) < entryFee) return fail('Insufficient C Coins.');
+        lockUser(fromId);
+      }
+
+      let code; do { code = _genPrivateCode(); } while (pendingPrivateRooms.has(code));
+      const p1 = { socketId: socket.id, userId: fromId, username: authenticatedUser.username, elo: authenticatedUser.elo, entryFee, currency, side: 'heads' };
+      pendingPrivateRooms.set(code, { gameType, p1, createdAt: Date.now() });
+
+      const inviteId = 'inv_' + uuidv4();
+      pendingInvites.set(inviteId, {
+        inviteId, code, fromUserId: fromId, fromUsername: authenticatedUser.username,
+        toUserId: friendId, gameType, entryFee, currency, createdAt: Date.now(), timer: null, deferred: false,
+      });
+
+      // Inviter moves to the waiting screen.
+      socket.emit('invite_sent', { inviteId, code, friendUsername: fp?.username || 'your friend', gameType, entryFee, currency });
+
+      // Deliver now, or hold until the friend leaves their current game.
+      if (_isUserInGame(friendId)) {
+        const inv = pendingInvites.get(inviteId);
+        inv.deferred = true;
+        inv.timer = setTimeout(() => _expireInvite(inviteId, 'timeout'), INVITE_MAX_HOLD_MS);
+      } else {
+        _deliverInvite(inviteId);
+      }
+    });
+
+    socket.on('invite_decline', ({ inviteId }) => {
+      if (!authenticatedUser) return;
+      const inv = pendingInvites.get(inviteId);
+      if (!inv || inv.toUserId !== authenticatedUser.userId) return;
+      _cleanupInvite(inviteId);
+      const room = pendingPrivateRooms.get(inv.code);
+      if (room && room.p1.userId === inv.fromUserId) {
+        pendingPrivateRooms.delete(inv.code);
+        if (inv.entryFee > 0) unlockUser(inv.fromUserId);
+      }
+      for (const s of _socketsForUser(inv.fromUserId)) s.emit('invite_declined', { inviteId, byUsername: authenticatedUser.username });
+    });
+
+    // Which of the given users are currently connected (for the invite friend list).
+    socket.on('check_online', ({ userIds }) => {
+      if (!authenticatedUser || !Array.isArray(userIds)) return;
+      const online = userIds.filter(id => _isUserOnline(id));
+      socket.emit('online_status', { online });
     });
 
     socket.on('join_private_room', async ({ gameType, code }) => {
@@ -509,6 +654,10 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       const { data: profile2 } = await supabase.from('profiles').select('elo,username').eq('id', authenticatedUser.userId).single();
 
       pendingPrivateRooms.delete(key);
+      // Joining consumes any invite tied to this room (both players are matched now).
+      for (const [iid, inv] of pendingInvites) {
+        if (inv.code === key) _cleanupInvite(iid);
+      }
       const p1 = pending.p1;
       const p2 = { socketId: socket.id, userId: authenticatedUser.userId, username: profile2.username, elo: profile2.elo, entryFee, currency };
 
@@ -1107,6 +1256,15 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           pendingPrivateRooms.delete(code);
           if ((room.p1.entryFee || 0) > 0) unlockUser(room.p1.userId);
           break;
+        }
+      }
+      // Inviter disconnected — cancel their outstanding invites and pull the popup.
+      if (authenticatedUser) {
+        for (const [iid, inv] of pendingInvites) {
+          if (inv.fromUserId === authenticatedUser.userId) {
+            _cleanupInvite(iid);
+            for (const s of _socketsForUser(inv.toUserId)) s.emit('invite_cancelled', { inviteId: iid });
+          }
         }
       }
       // Decrement player count if socket was tracked for a game

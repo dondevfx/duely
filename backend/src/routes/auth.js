@@ -68,8 +68,9 @@ module.exports = function authRoutes(supabase) {
 
   // Update username, wallet address, profile color, or privacy setting
   router.patch('/me', requireAuth, async (req, res) => {
-    const { username, wallet_address, profile_color, is_private } = req.body;
+    const { username, wallet_address, profile_color, is_private, invites_enabled } = req.body;
     const updates = {};
+    if (invites_enabled !== undefined) updates.invites_enabled = !!invites_enabled;
     if (username) {
       const u = username.trim();
       if (u.length < 3 || u.length > 20) return res.status(400).json({ error: 'Username must be 3–20 characters' });
