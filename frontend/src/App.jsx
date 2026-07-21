@@ -51,6 +51,7 @@ import ReconnectOverlay from './components/ReconnectOverlay';
 import AgeToSModal, { useTosAccepted } from './components/AgeToSModal';
 import SaveLoginPrompt from './components/SaveLoginPrompt';
 import ErrorBoundary from './components/ErrorBoundary';
+import InviteToasts from './components/InviteToasts';
 
 function ProtectedRoute({ children }) {
   const { session, loading, mfaPending } = useAuth();
@@ -149,6 +150,7 @@ function Shell() {
         </div>
       </main>
       <ForfeitToast />
+      <InviteToasts />
       <ReconnectOverlay />
       {tosPending && <AgeToSModal onAccept={() => setTosAccepted(true)} />}
       {showSaveLogin && <SaveLoginPrompt onDone={() => setShowSaveLogin(false)} />}

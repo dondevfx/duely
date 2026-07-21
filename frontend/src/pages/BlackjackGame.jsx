@@ -9,6 +9,7 @@ import BetSlider from '../components/BetSlider';
 import ResultScreen from '../components/ResultScreen';
 import GameErrorBoundary from '../components/GameErrorBoundary';
 import GlowButton from '../components/GlowButton';
+import CreateRoomModal from '../components/CreateRoomModal';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
 
@@ -230,6 +231,7 @@ function BlackjackGame() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [privateCode, setPrivateCode] = useState('');
   const [privateMode, setPrivateMode] = useState(null);
+  const [invitedFriend, setInvitedFriend] = useState(null); // waiting on a friend invite
   const [joinCode, setJoinCode] = useState('');
   const [entryFee, setEntryFee] = useState(() => location.state?.entryFee ?? (betCurrency === 'diamonds' ? DIAMOND_FEES[0] : COIN_FEES[0]));
   const [statusMsg, setStatusMsg] = useState('');
@@ -529,7 +531,18 @@ function BlackjackGame() {
     });
 
     socket.on('private_room_created', ({ code }) => {
-      setPrivateCode(code); setPhase('private_waiting');
+      setPrivateCode(code); setInvitedFriend(null); setPhase('private_waiting');
+    });
+
+    // Friend invite sent → wait for them to accept.
+    socket.on('invite_sent', ({ friendUsername }) => {
+      setPrivateCode(''); setInvitedFriend(friendUsername || 'your friend'); setPrivateMode(null); setStatusMsg(''); setPhase('private_waiting');
+    });
+    socket.on('invite_declined', ({ byUsername }) => {
+      setInvitedFriend(null); setStatusMsg(`${byUsername || 'They'} declined your invite.`); setPhase('lobby');
+    });
+    socket.on('invite_expired', () => {
+      setInvitedFriend(null); setStatusMsg('Invite expired — no response.'); setPhase('lobby');
     });
 
     socket.on('private_room_error', ({ message }) => {
@@ -550,6 +563,7 @@ function BlackjackGame() {
       socket.off('bj_result');
       socket.off('opponent_disconnected');
       socket.off('private_room_created'); socket.off('private_room_error');
+      socket.off('invite_sent'); socket.off('invite_declined'); socket.off('invite_expired');
       socket.off('error');
     };
   }, [socket]);
@@ -579,6 +593,15 @@ function BlackjackGame() {
       socket.emit('join_bj_queue', { entryFee: fee, currency: cur });
       setPhase('queue');
     }, 300);
+  }, [socket, authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-join a private room when arriving from an accepted friend invite.
+  useEffect(() => {
+    if (!location.state?.autoJoin || !location.state?.joinCode) return;
+    if (!socket || !authenticated || !session) return;
+    const code = location.state.joinCode;
+    window.history.replaceState({}, ''); // don't re-join on refresh/re-render
+    setTimeout(() => joinPrivate(code), 300);
   }, [socket, authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function joinQueue() {
@@ -624,7 +647,7 @@ function BlackjackGame() {
 
   function cancelPrivate() {
     socket?.emit('cancel_private_room');
-    setPhase('lobby'); setPrivateCode(''); setStatusMsg('');
+    setPhase('lobby'); setPrivateCode(''); setInvitedFriend(null); setStatusMsg('');
   }
 
   function hit() { if (stood || !roomId) return; socket?.emit('bj_hit', { roomId }); }
@@ -1022,14 +1045,24 @@ function BlackjackGame() {
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
         <div className="w-full max-w-md text-center animate-fade-in">
           <div className="text-5xl mb-4">🔒</div>
-          <h2 className="text-2xl font-black text-white mb-2">Private Room</h2>
-          <p className="text-muted mb-4 text-sm">Share this code with your friend</p>
-          <div className="bg-surface border-2 border-primary rounded-2xl p-8 mb-6 inline-block min-w-[200px]">
-            <div className="text-4xl font-black font-mono tracking-[0.25em] text-primary">
-              {privateCode}
-            </div>
-          </div>
-          <p className="text-muted text-sm mb-6">Waiting for opponent to join…</p>
+          {invitedFriend ? (
+            <>
+              <h2 className="text-2xl font-black text-white mb-2">Invite Sent</h2>
+              <div className="w-14 h-14 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto my-6" />
+              <p className="text-muted text-sm mb-6">Waiting for <span className="text-white font-bold">{invitedFriend}</span> to accept…</p>
+            </>
+          ) : (
+            <>
+              <h2 className="text-2xl font-black text-white mb-2">Private Room</h2>
+              <p className="text-muted mb-4 text-sm">Share this code with your friend</p>
+              <div className="bg-surface border-2 border-primary rounded-2xl p-8 mb-6 inline-block min-w-[200px]">
+                <div className="text-4xl font-black font-mono tracking-[0.25em] text-primary">
+                  {privateCode}
+                </div>
+              </div>
+              <p className="text-muted text-sm mb-6">Waiting for opponent to join…</p>
+            </>
+          )}
           <button onClick={cancelPrivate} className="text-sm text-danger hover:text-red-400 transition-colors">Cancel</button>
         </div>
       </div>
@@ -1104,15 +1137,14 @@ function BlackjackGame() {
               🔗 Join Room
             </button>
           </div>
-          {privateMode === 'create' && (
-            <div className="bg-surface border border-border rounded-xl p-3">
-              <p className="text-xs text-muted mb-3">Create a private room — share the code with a friend.</p>
-              <div className="flex gap-2">
-                <GlowButton onClick={() => { setPrivateMode(null); createPrivate(); }} variant="primary" className="flex-1" disabled={!authenticated}>Create &amp; Get Code</GlowButton>
-                <button onClick={() => setPrivateMode(null)} className="px-4 rounded-lg border border-border text-muted hover:text-white text-xs transition-all">Cancel</button>
-              </div>
-            </div>
-          )}
+          <CreateRoomModal
+            open={privateMode === 'create'}
+            onClose={() => setPrivateMode(null)}
+            gameType="blackjack"
+            entryFee={entryFee}
+            currency={betCurrency}
+            onCreateCode={createPrivate}
+          />
           {privateMode === 'join' && (
             <div className="bg-surface border border-border rounded-xl p-3">
               <p className="text-xs text-muted mb-3">Enter the 6-character room code your friend shared.</p>
