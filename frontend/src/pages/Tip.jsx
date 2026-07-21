@@ -5,6 +5,7 @@ import { api } from '../utils/api';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
+import { fmtCoins, fmtDiamonds, fmtExact } from '../utils/format';
 
 const COIN_AMOUNTS    = [1, 5, 10, 25, 50, 100];
 const DIAMOND_AMOUNTS = [50, 100, 250, 500, 1000];
@@ -99,12 +100,12 @@ export default function Tip() {
 
         {/* Balance */}
         {profile && (
-          <div className="bg-surface border border-border rounded-xl px-4 py-3 mb-6 flex items-center justify-between">
-            <span className="text-sm text-muted">Your {isDiamonds ? 'diamonds' : 'balance'}</span>
-            <span className="font-mono font-black text-white">
+          <div className="bg-surface border border-border rounded-xl px-4 py-3 mb-6 flex items-center justify-between gap-3">
+            <span className="text-sm text-muted shrink-0">Your {isDiamonds ? 'diamonds' : 'balance'}</span>
+            <span className="font-mono font-black text-white min-w-0 overflow-hidden" title={isDiamonds ? `${fmtExact(profile.diamonds, true)} diamonds` : `${fmtExact(profile.c_coins)} coins`}>
               {isDiamonds
-                ? <>{(profile.diamonds ?? 0).toLocaleString()} <span className="text-sm">💎</span></>
-                : <span className="inline-flex items-center gap-1">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'} <CoinIcon size="0.85em" /></span>
+                ? <span className="inline-flex items-center gap-1 max-w-full"><span className="truncate min-w-0">{fmtDiamonds(profile.diamonds)}</span> <span className="text-sm">💎</span></span>
+                : <span className="inline-flex items-center gap-1 max-w-full"><span className="truncate min-w-0">{fmtCoins(profile.c_coins)}</span> <CoinIcon size="0.85em" /></span>
               }
             </span>
           </div>

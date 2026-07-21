@@ -6,6 +6,7 @@ import MatchTicker from '../components/MatchTicker';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import CoinIcon from '../components/CoinIcon';
+import { fmtCoins, fmtExact } from '../utils/format';
 
 const GAMES = [
   {
@@ -135,13 +136,18 @@ export default function Home() {
         <section className="max-w-7xl mx-auto px-4 mb-10">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { label: 'Balance', value: <span className="inline-flex items-center gap-1">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'} <CoinIcon size="0.85em" /></span> },
+              { label: 'Balance', value: (
+                <span className="inline-flex items-center gap-1 max-w-full" title={`${fmtExact(profile.c_coins)} coins`}>
+                  <span className="truncate min-w-0">{fmtCoins(profile.c_coins)}</span>
+                  <CoinIcon size="0.85em" />
+                </span>
+              ) },
               { label: 'ELO', value: profile.elo ?? 1000 },
               { label: 'Wins', value: profile.wins ?? 0 },
               { label: 'Losses', value: profile.losses ?? 0 },
             ].map(stat => (
-              <div key={stat.label} className="bg-surface border border-surfaceLight rounded-xl p-4 text-center">
-                <div className="text-2xl font-black text-white font-mono">{stat.value}</div>
+              <div key={stat.label} className="bg-surface border border-surfaceLight rounded-xl p-4 text-center overflow-hidden">
+                <div className="text-2xl font-black text-white font-mono overflow-hidden">{stat.value}</div>
                 <div className="text-xs text-muted mt-1">{stat.label}</div>
               </div>
             ))}

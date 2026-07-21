@@ -6,6 +6,7 @@ import { useSocket } from '../context/SocketContext';
 import { getRank, getDisplayRank, isRanked } from '../utils/ranks';
 import { api } from '../utils/api';
 import CoinIcon from './CoinIcon';
+import { fmtCoins, fmtDiamonds } from '../utils/format';
 
 const NAV_LINKS = [
   { icon: '🏠', label: 'Home',        to: '/' },
@@ -119,8 +120,8 @@ export default function Navbar() {
 
   const isDiamonds = displayCurrency === 'diamonds';
   const balanceDisplay = isDiamonds
-    ? `${(profile?.diamonds ?? 0).toLocaleString()} 💎`
-    : profile?.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00';
+    ? `${fmtDiamonds(profile?.diamonds)} 💎`
+    : fmtCoins(profile?.c_coins);
 
   return (
     <>
@@ -163,13 +164,13 @@ export default function Navbar() {
                     <>
                       <span className="relative -top-px">💎</span>
                       <span className="text-sm font-black text-white font-mono">
-                        {(profile.diamonds ?? 0).toLocaleString()}
+                        {fmtDiamonds(profile.diamonds)}
                       </span>
                     </>
                   ) : (
                     <>
                       <CoinIcon size="1.1em" />
-                      <span className="text-sm font-black text-white font-mono">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</span>
+                      <span className="text-sm font-black text-white font-mono">{fmtCoins(profile.c_coins)}</span>
                     </>
                   )}
                   <span className="text-muted text-xs">▾</span>
@@ -183,7 +184,7 @@ export default function Navbar() {
                         <CoinIcon size="1em" />
                         <div className="flex flex-col items-start min-w-0">
                           <span className="font-medium text-xs">Coins</span>
-                          <span className="font-mono font-bold text-white text-sm leading-tight">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</span>
+                          <span className="font-mono font-bold text-white text-sm leading-tight">{fmtCoins(profile.c_coins)}</span>
                         </div>
                       </button>
                       <button onClick={() => { setDisplayCurrency('diamonds'); setDropdownOpen(false); }}
@@ -191,7 +192,7 @@ export default function Navbar() {
                         <span className="relative -top-px">💎</span>
                         <div className="flex flex-col items-start min-w-0">
                           <span className="font-medium text-xs">Diamonds</span>
-                          <span className="font-mono font-bold text-white text-sm leading-tight">{(profile.diamonds ?? 0).toLocaleString()}</span>
+                          <span className="font-mono font-bold text-white text-sm leading-tight">{fmtDiamonds(profile.diamonds)}</span>
                         </div>
                       </button>
                     </div>
@@ -312,7 +313,7 @@ export default function Navbar() {
                   className="flex items-center gap-0.5 px-2 py-1 bg-black border border-primary/30 rounded-full font-bold text-white transition-all"
                   style={{ fontSize: 11 }}
                 >
-                  <span className="font-mono">{isDiamonds ? (profile.diamonds ?? 0).toLocaleString() : (profile.c_coins ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="font-mono">{isDiamonds ? fmtDiamonds(profile.diamonds) : fmtCoins(profile.c_coins)}</span>
                   {isDiamonds ? <span>💎</span> : <CoinIcon size="0.9em" />}
                   <span className="text-muted" style={{ fontSize: 9 }}>▾</span>
                 </button>
@@ -324,7 +325,7 @@ export default function Navbar() {
                         <CoinIcon size="1em" />
                         <div className="flex flex-col items-start min-w-0">
                           <span className="font-medium">Coins</span>
-                          <span className="font-mono font-bold text-white leading-tight">{profile.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</span>
+                          <span className="font-mono font-bold text-white leading-tight">{fmtCoins(profile.c_coins)}</span>
                         </div>
                       </button>
                       <button onClick={() => { setDisplayCurrency('diamonds'); setMobileCurrencyOpen(false); }}
@@ -332,7 +333,7 @@ export default function Navbar() {
                         <span>💎</span>
                         <div className="flex flex-col items-start min-w-0">
                           <span className="font-medium">Diamonds</span>
-                          <span className="font-mono font-bold text-white leading-tight">{(profile.diamonds ?? 0).toLocaleString()}</span>
+                          <span className="font-mono font-bold text-white leading-tight">{fmtDiamonds(profile.diamonds)}</span>
                         </div>
                       </button>
                     </div>

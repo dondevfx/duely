@@ -6,6 +6,7 @@ import { supabase } from '../utils/supabase';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
+import { fmtCoins, fmtExact } from '../utils/format';
 
 // ── Supported deposit coins ───────────────────────────────────────────
 const COINS = [
@@ -239,13 +240,13 @@ export default function Wallet() {
         {/* ── Balance card ────────────────────────────────────────────── */}
         <div className="bg-gradient-to-br from-primary/20 to-accent/10 border border-primary/30 rounded-2xl p-6 mb-6">
           <div className="text-sm text-muted mb-1">Coin Balance</div>
-          <div className="text-5xl font-black text-white font-mono mb-1">
-            <span className="inline-flex items-center gap-2">
-              {fmt(profile?.c_coins)}
+          <div className="text-4xl sm:text-5xl font-black text-white font-mono mb-1 overflow-hidden">
+            <span className="flex items-center gap-2 max-w-full" title={`${fmtExact(profile?.c_coins)} coins`}>
+              <span className="truncate min-w-0">{fmtCoins(profile?.c_coins)}</span>
               <CoinIcon size="1.1em" />
             </span>
           </div>
-          <div className="text-sm text-muted">≈ ${fmt(profile?.c_coins)} USD</div>
+          <div className="text-sm text-muted truncate">≈ ${fmtCoins(profile?.c_coins)} USD</div>
         </div>
 
         {/* ── Deposit ──────────────────────────────────────────────────── */}
@@ -382,7 +383,7 @@ export default function Wallet() {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-xs text-muted">Amount (USD) — <span className="text-success font-semibold">min ${getWithdrawMin(witCoin.id)}</span></label>
-                <span className="text-xs text-muted">Balance: <span className="text-white font-bold inline-flex items-center gap-0.5">{fmt(profile?.c_coins)} <CoinIcon size="0.75em" /></span></span>
+                <span className="text-xs text-muted shrink-0">Balance: <span className="text-white font-bold inline-flex items-center gap-0.5" title={`${fmtExact(profile?.c_coins)} coins`}>{fmtCoins(profile?.c_coins)} <CoinIcon size="0.75em" /></span></span>
               </div>
               <input
                 type="number" min={getWithdrawMin(witCoin.id)} max={profile?.c_coins ?? 0} step="1"
