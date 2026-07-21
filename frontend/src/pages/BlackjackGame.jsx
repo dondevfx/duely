@@ -10,6 +10,7 @@ import ResultScreen from '../components/ResultScreen';
 import GameErrorBoundary from '../components/GameErrorBoundary';
 import GlowButton from '../components/GlowButton';
 import CreateRoomModal from '../components/CreateRoomModal';
+import JoinRoomModal from '../components/JoinRoomModal';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
 
@@ -1145,19 +1146,12 @@ function BlackjackGame() {
             currency={betCurrency}
             onCreateCode={createPrivate}
           />
-          {privateMode === 'join' && (
-            <div className="bg-surface border border-border rounded-xl p-3">
-              <p className="text-xs text-muted mb-3">Enter the 6-character room code your friend shared.</p>
-              <div className="flex gap-2">
-                <input value={joinCode}
-                  onChange={e => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
-                  placeholder="ABC123"
-                  className="flex-1 bg-surfaceLight border border-border rounded-lg px-3 py-2 text-white font-mono text-base tracking-[0.2em] focus:outline-none focus:border-primary text-center" />
-                <GlowButton onClick={() => { joinPrivate(joinCode); setPrivateMode(null); setJoinCode(''); }} variant="primary" className="px-4" disabled={!authenticated || joinCode.length < 4}>Join</GlowButton>
-                <button onClick={() => { setPrivateMode(null); setJoinCode(''); }} className="px-3 rounded-lg border border-border text-muted hover:text-white text-xs">✕</button>
-              </div>
-            </div>
-          )}
+          <JoinRoomModal
+            open={privateMode === 'join'}
+            onClose={() => setPrivateMode(null)}
+            onJoin={(code) => joinPrivate(code)}
+            authenticated={authenticated}
+          />
 
         </div>
 

@@ -5,6 +5,7 @@ import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import CoinIcon from './CoinIcon';
 import CreateRoomModal from './CreateRoomModal';
+import JoinRoomModal from './JoinRoomModal';
 
 export const COIN_FEES    = [1, 5, 10];
 export const DIAMOND_FEES = [500, 5000, 50000];
@@ -347,33 +348,12 @@ export default function GameLobby({
               onCreateCode={() => onCreatePrivate(entryFee, betCurrency)}
             />
 
-            {privateMode === 'join' && (
-              <div className="bg-surface border border-border rounded-xl p-3 animate-slide-down">
-                <p className="text-xs text-muted mb-3">Enter the 6-character room code your friend shared.</p>
-                <div className="flex gap-2">
-                  <input
-                    value={joinCode}
-                    onChange={e => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
-                    placeholder="ABC123"
-                    className="flex-1 bg-surfaceLight border border-border rounded-lg px-3 py-2 text-white font-mono text-base tracking-[0.2em] focus:outline-none focus:border-primary text-center"
-                  />
-                  <GlowButton
-                    onClick={() => { onJoinPrivate(joinCode); setPrivateMode(null); setJoinCode(''); }}
-                    variant="primary"
-                    className="px-4"
-                    disabled={!authenticated || joinCode.length < 4}
-                  >
-                    Join
-                  </GlowButton>
-                  <button
-                    onClick={() => { setPrivateMode(null); setJoinCode(''); }}
-                    className="px-3 rounded-lg border border-border text-muted hover:text-white text-xs"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-            )}
+            <JoinRoomModal
+              open={privateMode === 'join'}
+              onClose={() => setPrivateMode(null)}
+              onJoin={(code) => onJoinPrivate(code)}
+              authenticated={authenticated}
+            />
           </>
         )}
       </div>
