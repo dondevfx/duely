@@ -232,6 +232,8 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
   const [showLang, setShowLang]  = useState(false);
   const [showVerify, setShowVerify] = useState(false);
   const [isPrivate, setIsPrivate]   = useState(profile?.is_private || false);
+  const [invitesEnabled, setInvitesEnabled] = useState(profile?.invites_enabled !== false);
+  const [savingInvites, setSavingInvites] = useState(false);
   const [savingPrivate, setSavingPrivate] = useState(false);
   const [verifyName, setVerifyName]   = useState('');
   const [verifyAddr, setVerifyAddr]   = useState('');
@@ -331,6 +333,20 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
       setIsPrivate(!next);
     } finally {
       setSavingPrivate(false);
+    }
+  }
+
+  async function toggleInvites() {
+    const next = !invitesEnabled;
+    setInvitesEnabled(next);
+    setSavingInvites(true);
+    try {
+      await api.patch('/auth/me', { invites_enabled: next });
+      await refreshProfile();
+    } catch {
+      setInvitesEnabled(!next);
+    } finally {
+      setSavingInvites(false);
     }
   }
 
@@ -485,6 +501,26 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
               </button>
             </div>
             {isPrivate && <p className="text-xs text-warning mt-1">You are invisible on leaderboards. You can still receive tips.</p>}
+          </div>
+
+          <div className="h-px bg-surfaceLight mb-5" />
+
+          {/* Game invites */}
+          <div className="mb-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-bold text-white">Game Invites</div>
+                <div className="text-xs text-muted">Let friends invite you to private matches</div>
+              </div>
+              <button
+                onClick={toggleInvites}
+                disabled={savingInvites}
+                className={`relative w-12 h-6 rounded-full transition-colors duration-200 focus:outline-none disabled:opacity-50 ${invitesEnabled ? 'bg-primary' : 'bg-surfaceLight border border-border'}`}
+              >
+                <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${invitesEnabled ? 'translate-x-6' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+            {!invitesEnabled && <p className="text-xs text-warning mt-1">Friends can't invite you to games right now.</p>}
           </div>
 
           <div className="h-px bg-surfaceLight mb-5" />
