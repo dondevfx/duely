@@ -100,6 +100,13 @@ html.light .hover\:bg-surfaceLight:hover { background-color: #cdd4e0 !important;
    4K TVs render at ~1920 CSS px but with devicePixelRatio ≥ 2, so we can
    target them without affecting standard 1080p (1×) monitors. Genuinely
    large-width displays (2560px+, native 4K) are scaled by width. */
+/* 1080p-class desktops (~1920px wide, standard-DPI) — nudge content down a
+   touch so it isn't slightly too big. 1440p (2560px) is above this range and
+   stays at native 100%. The high-DPI rule below is ordered after so real 4K
+   (scaled) displays still win with their own value. */
+@media (min-width: 1800px) and (max-width: 2200px) {
+  .tv-scale { zoom: 0.92; }
+}
 @media (min-width: 1900px) and (min-resolution: 1.5dppx) {
   .tv-scale { zoom: 0.85; }
 }
