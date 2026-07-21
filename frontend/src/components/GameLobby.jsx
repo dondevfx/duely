@@ -4,6 +4,7 @@ import GlowButton from './GlowButton';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import CoinIcon from './CoinIcon';
+import CreateRoomModal from './CreateRoomModal';
 
 export const COIN_FEES    = [1, 5, 10];
 export const DIAMOND_FEES = [500, 5000, 50000];
@@ -337,29 +338,14 @@ export default function GameLobby({
               </button>
             </div>
 
-            {privateMode === 'create' && (
-              <div className="bg-surface border border-border rounded-xl p-3 animate-slide-down">
-                <p className="text-xs text-muted mb-3">
-                  Create a private room — your entry fee setting applies. Share the code with a friend.
-                </p>
-                <div className="flex gap-2">
-                  <GlowButton
-                    onClick={() => { setPrivateMode(null); onCreatePrivate(entryFee, betCurrency); }}
-                    variant="primary"
-                    className="flex-1"
-                    disabled={!authenticated}
-                  >
-                    Create &amp; Get Code
-                  </GlowButton>
-                  <button
-                    onClick={() => setPrivateMode(null)}
-                    className="px-4 rounded-lg border border-border text-muted hover:text-white text-xs transition-all"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
+            <CreateRoomModal
+              open={privateMode === 'create'}
+              onClose={() => setPrivateMode(null)}
+              gameType={gameType}
+              entryFee={entryFee}
+              currency={betCurrency}
+              onCreateCode={() => onCreatePrivate(entryFee, betCurrency)}
+            />
 
             {privateMode === 'join' && (
               <div className="bg-surface border border-border rounded-xl p-3 animate-slide-down">

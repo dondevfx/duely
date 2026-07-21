@@ -179,6 +179,7 @@ export default function WordleGame() {
   const [opponent,    setOpponent]    = useState(null);
   const [countdown,   setCountdown]   = useState(null);
   const [privateCode, setPrivateCode] = useState('');
+  const [invitedFriend, setInvitedFriend] = useState(null);
   const [statusMsg,   setStatusMsg]   = useState('');
   const lastModeRef   = useRef('pvp'); // 'pvp' | 'solo' | 'private'
   const lastSettingsRef = useRef({ entryFee: 0, currency: betCurrency });
@@ -275,7 +276,10 @@ export default function WordleGame() {
       setTimeout(() => refreshProfileRef.current?.(), 2000);
     });
 
-    socket.on('private_room_created', ({ code }) => { setPrivateCode(code); setPhase('private_waiting'); });
+    socket.on('private_room_created', ({ code }) => { setPrivateCode(code); setInvitedFriend(null); setPhase('private_waiting'); });
+    socket.on('invite_sent', ({ friendUsername }) => { setPrivateCode(''); setInvitedFriend(friendUsername || 'your friend'); setStatusMsg(''); setPhase('private_waiting'); });
+    socket.on('invite_declined', ({ byUsername }) => { setInvitedFriend(null); setStatusMsg(`${byUsername || 'They'} declined your invite.`); setPhase('lobby'); });
+    socket.on('invite_expired', () => { setInvitedFriend(null); setStatusMsg('Invite expired — no response.'); setPhase('lobby'); });
     socket.on('private_room_error',   ({ message }) => { setStatusMsg(message || 'Room error'); setPhase('lobby'); });
     socket.on('scrabble_queue_left',  () => { setPhase('lobby'); setStatusMsg(''); });
     socket.on('opponent_disconnected', (data = {}) => {
@@ -331,6 +335,7 @@ export default function WordleGame() {
       ['scrabble_match_found','scrabble_countdown','match_cancelled','wordle_start',
        'wordle_guess_result','wordle_error','wordle_opponent_progress','wordle_opponent_failed',
        'wordle_result','private_room_created','private_room_error','scrabble_queue_left',
+       'invite_sent','invite_declined','invite_expired',
        'opponent_disconnected','wordle_solo_ready','wordle_solo_settled','wordle_solo_error',
        'wordle_solo_guess_result',
       ].forEach(e => socket.off(e));
@@ -349,6 +354,17 @@ export default function WordleGame() {
     lastModeRef.current = 'pvp';
     socket.emit('join_scrabble_queue', { entryFee: fee, currency: cur });
     setPhase('queue');
+  }, [socket, authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-join a private room from an accepted friend invite.
+  const _autoJoinFired = useRef(false);
+  useEffect(() => {
+    if (!location.state?.autoJoin || !location.state?.joinCode || _autoJoinFired.current) return;
+    if (!authenticated || !socket) return;
+    _autoJoinFired.current = true;
+    const code = location.state.joinCode;
+    window.history.replaceState({}, '');
+    setTimeout(() => joinPrivate(code), 300);
   }, [socket, authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -462,7 +478,7 @@ export default function WordleGame() {
 
   function cancelPrivate() {
     socket.emit('cancel_private_room');
-    setPhase('lobby'); setPrivateCode(''); setStatusMsg('');
+    setPhase('lobby'); setPrivateCode(''); setInvitedFriend(null); setStatusMsg('');
   }
 
   function backToLobby() {
@@ -689,16 +705,26 @@ export default function WordleGame() {
         <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
         <div className="w-full max-w-md text-center animate-fade-in">
           <div className="text-5xl mb-4">🔒</div>
-          <h2 className="text-2xl font-black text-white mb-2">Private Room</h2>
-          <p className="text-muted mb-4 text-sm">Share this code with a friend</p>
-          <div className="bg-surface border-2 border-primary rounded-2xl p-8 mb-6 inline-block min-w-[200px]"
-            style={{ boxShadow: '0 0 20px rgba(18,80,180,0.2)' }}>
-            <div className="text-4xl font-black font-mono tracking-[0.25em] text-primary"
-              style={{ textShadow: '0 0 20px rgba(18,80,180,0.5)' }}>
-              {privateCode}
-            </div>
-          </div>
-          <p className="text-muted text-sm mb-6">Waiting for opponent to join…</p>
+          {invitedFriend ? (
+            <>
+              <h2 className="text-2xl font-black text-white mb-2">Invite Sent</h2>
+              <div className="w-14 h-14 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto my-6" />
+              <p className="text-muted text-sm mb-6">Waiting for <span className="text-white font-bold">{invitedFriend}</span> to accept…</p>
+            </>
+          ) : (
+            <>
+              <h2 className="text-2xl font-black text-white mb-2">Private Room</h2>
+              <p className="text-muted mb-4 text-sm">Share this code with a friend</p>
+              <div className="bg-surface border-2 border-primary rounded-2xl p-8 mb-6 inline-block min-w-[200px]"
+                style={{ boxShadow: '0 0 20px rgba(18,80,180,0.2)' }}>
+                <div className="text-4xl font-black font-mono tracking-[0.25em] text-primary"
+                  style={{ textShadow: '0 0 20px rgba(18,80,180,0.5)' }}>
+                  {privateCode}
+                </div>
+              </div>
+              <p className="text-muted text-sm mb-6">Waiting for opponent to join…</p>
+            </>
+          )}
           <GlowButton variant="ghost" onClick={cancelPrivate}>Cancel</GlowButton>
         </div>
       </div>

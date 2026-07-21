@@ -159,6 +159,7 @@ export default function BlockBlastGame() {
   const [result, setResult]           = useState(null);
   const [statusMsg, setStatusMsg]     = useState('');
   const [privateCode, setPrivateCode] = useState('');
+  const [invitedFriend, setInvitedFriend] = useState(null);
   const [isSolo, setIsSolo]           = useState(false);
 
   // Responsive cell size
@@ -411,9 +412,12 @@ export default function BlockBlastGame() {
     });
 
     socket.on('private_room_created', ({ code }) => {
-      setPrivateCode(code);
+      setPrivateCode(code); setInvitedFriend(null);
       setPhase('private_waiting');
     });
+    socket.on('invite_sent', ({ friendUsername }) => { setPrivateCode(''); setInvitedFriend(friendUsername || 'your friend'); setStatusMsg(''); setPhase('private_waiting'); });
+    socket.on('invite_declined', ({ byUsername }) => { setInvitedFriend(null); setStatusMsg(`${byUsername || 'They'} declined your invite.`); setPhase('lobby'); });
+    socket.on('invite_expired', () => { setInvitedFriend(null); setStatusMsg('Invite expired — no response.'); setPhase('lobby'); });
 
     return () => {
       socket.emit('leave_game');
@@ -428,6 +432,7 @@ export default function BlockBlastGame() {
       socket.off('block_blast_opponent_score');
       socket.off('opponent_disconnected');
       socket.off('private_room_created');
+      socket.off('invite_sent'); socket.off('invite_declined'); socket.off('invite_expired');
     };
   }, [socket]);
 
@@ -688,7 +693,7 @@ export default function BlockBlastGame() {
   }
   function cancelPrivate() {
     socket.emit('cancel_private_room');
-    setPhase('lobby'); setPrivateCode(''); setStatusMsg('');
+    setPhase('lobby'); setPrivateCode(''); setInvitedFriend(null); setStatusMsg('');
   }
   function requestRematch() {
     socket.emit('block_blast_rematch_request', { roomId });
@@ -711,6 +716,17 @@ export default function BlockBlastGame() {
     if (!location.state?.autoQueue || _randomQueueFired.current || !authenticated || !socket) return;
     _randomQueueFired.current = true;
     joinQueue();
+  }, [socket, authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-join a private room from an accepted friend invite.
+  const _autoJoinFired = useRef(false);
+  useEffect(() => {
+    if (!location.state?.autoJoin || !location.state?.joinCode || _autoJoinFired.current) return;
+    if (!authenticated || !socket) return;
+    _autoJoinFired.current = true;
+    const code = location.state.joinCode;
+    window.history.replaceState({}, '');
+    setTimeout(() => joinPrivate(code), 300);
   }, [socket, authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -807,20 +823,30 @@ export default function BlockBlastGame() {
       {phase === 'private_waiting' && (
         <div className="text-center animate-fade-in">
           <div className="text-5xl mb-4">🔒</div>
-          <h2 className="text-2xl font-bold text-white mb-2">Private Room Created</h2>
-          <p className="text-muted mb-6 text-sm">Share this code with a friend to invite them</p>
-          <div className="bg-surface border-2 border-primary rounded-2xl p-8 mb-6 shadow-glow inline-block min-w-[200px]">
-            <div className="text-4xl font-black font-mono tracking-[0.25em] text-primary" style={{ textShadow: '0 0 20px rgba(18,80,180,0.5)' }}>
-              {privateCode}
-            </div>
-            <button
-              onClick={() => navigator.clipboard.writeText(privateCode)}
-              className="text-xs text-muted hover:text-primary mt-3 block mx-auto transition-colors"
-            >
-              📋 Copy to clipboard
-            </button>
-          </div>
-          <p className="text-muted text-sm animate-pulse mb-6">Waiting for opponent to join...</p>
+          {invitedFriend ? (
+            <>
+              <h2 className="text-2xl font-bold text-white mb-2">Invite Sent</h2>
+              <div className="w-14 h-14 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto my-6" />
+              <p className="text-muted text-sm mb-6">Waiting for <span className="text-white font-bold">{invitedFriend}</span> to accept…</p>
+            </>
+          ) : (
+            <>
+              <h2 className="text-2xl font-bold text-white mb-2">Private Room Created</h2>
+              <p className="text-muted mb-6 text-sm">Share this code with a friend to invite them</p>
+              <div className="bg-surface border-2 border-primary rounded-2xl p-8 mb-6 shadow-glow inline-block min-w-[200px]">
+                <div className="text-4xl font-black font-mono tracking-[0.25em] text-primary" style={{ textShadow: '0 0 20px rgba(18,80,180,0.5)' }}>
+                  {privateCode}
+                </div>
+                <button
+                  onClick={() => navigator.clipboard.writeText(privateCode)}
+                  className="text-xs text-muted hover:text-primary mt-3 block mx-auto transition-colors"
+                >
+                  📋 Copy to clipboard
+                </button>
+              </div>
+              <p className="text-muted text-sm animate-pulse mb-6">Waiting for opponent to join...</p>
+            </>
+          )}
           <GlowButton variant="ghost" onClick={cancelPrivate} className="border border-border">Cancel</GlowButton>
         </div>
       )}
