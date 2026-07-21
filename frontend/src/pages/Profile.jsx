@@ -1042,31 +1042,9 @@ function FriendsPanel({ myId, activeGames }) {
         )}
       </button>
 
-      {/* Add friend by username */}
-      <div className="flex gap-2 mb-3 overflow-hidden">
-        <input
-          value={addInput}
-          onChange={e => setAddInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && sendRequest()}
-          placeholder="Search by username…"
-          maxLength={20}
-          className="flex-1 min-w-0 bg-bg border border-surfaceLight rounded-xl px-3 py-2 text-xs text-white placeholder-muted focus:outline-none focus:border-primary"
-        />
-        <button
-          onClick={sendRequest}
-          disabled={adding || !addInput.trim()}
-          className="shrink-0 px-3 py-2 bg-primary text-white text-xs font-bold rounded-xl hover:bg-blue-500 disabled:opacity-40 transition-all"
-        >
-          {adding ? '…' : 'Add'}
-        </button>
-      </div>
-      {addMsg && (
-        <p className={`text-xs mb-3 font-medium ${addMsg.ok ? 'text-success' : 'text-danger'}`}>{addMsg.text}</p>
-      )}
-
-      {/* Requests panel (shown when button clicked) */}
+      {/* Requests panel — pops up directly under the Friend Requests button */}
       {showRequests && (
-        <div className="mb-4 bg-bg rounded-xl p-3">
+        <div className="mb-3 bg-bg rounded-xl p-3">
           {pendingIn.length === 0 ? (
             <p className="text-xs text-muted text-center py-2">No pending requests</p>
           ) : pendingIn.map(f => {
@@ -1087,6 +1065,28 @@ function FriendsPanel({ myId, activeGames }) {
             );
           })}
         </div>
+      )}
+
+      {/* Add friend by username */}
+      <div className="flex gap-2 mb-3 overflow-hidden">
+        <input
+          value={addInput}
+          onChange={e => setAddInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && sendRequest()}
+          placeholder="Search by username…"
+          maxLength={20}
+          className="flex-1 min-w-0 bg-bg border border-surfaceLight rounded-xl px-3 py-2 text-xs text-white placeholder-muted focus:outline-none focus:border-primary"
+        />
+        <button
+          onClick={sendRequest}
+          disabled={adding || !addInput.trim()}
+          className="shrink-0 px-3 py-2 bg-primary text-white text-xs font-bold rounded-xl hover:bg-blue-500 disabled:opacity-40 transition-all"
+        >
+          {adding ? '…' : 'Add'}
+        </button>
+      </div>
+      {addMsg && (
+        <p className={`text-xs mb-3 font-medium ${addMsg.ok ? 'text-success' : 'text-danger'}`}>{addMsg.text}</p>
       )}
 
       {/* Friends list */}
