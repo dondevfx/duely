@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { api } from '../utils/api';
+import { fmtCoins, fmtExact } from '../utils/format';
 import { supabase } from '../utils/supabase';
 import QRCode from 'react-qr-code';
 import GlowButton from '../components/GlowButton';
@@ -1506,10 +1507,10 @@ export default function Profile() {
               { label: 'Leaderboard', value: extraStats.rank ? `#${extraStats.rank}` : '-', color: 'text-accent' },
               { label: 'Wins', value: profile.wins, color: 'text-success' },
               { label: 'Losses', value: profile.losses, color: 'text-danger' },
-              { label: 'Wagered', value: `${fmt(extraStats.total_wagered)} coins`, color: 'text-white' },
+              { label: 'Wagered', value: `${fmtCoins(extraStats.total_wagered)} coins`, title: `${fmtExact(extraStats.total_wagered)} coins wagered`, color: 'text-white' },
             ].map(s => (
-              <div key={s.label} className="bg-bg rounded-xl p-3 text-center">
-                <div className={`text-xl font-black ${s.color}`}>{s.value}</div>
+              <div key={s.label} className="bg-bg rounded-xl p-3 text-center overflow-hidden">
+                <div className={`text-xl font-black ${s.color} truncate`} title={s.title}>{s.value}</div>
                 <div className="text-xs text-muted mt-0.5">{s.label}</div>
               </div>
             ))}
