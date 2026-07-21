@@ -325,7 +325,7 @@ export default function GameLobby({
                     : 'border-border text-muted hover:border-primary hover:text-white bg-surface'
                 }`}
               >
-                🔒 Create Room
+                🔒 Create Game
               </button>
               <button
                 onClick={() => setPrivateMode(privateMode === 'join' ? null : 'join')}
@@ -335,7 +335,7 @@ export default function GameLobby({
                     : 'border-border text-muted hover:border-primary hover:text-white bg-surface'
                 }`}
               >
-                🔗 Join Room
+                🔗 Join Game
               </button>
             </div>
 

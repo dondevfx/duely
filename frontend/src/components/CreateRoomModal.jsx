@@ -60,7 +60,7 @@ export default function CreateRoomModal({ open, onClose, gameType, entryFee = 0,
       <div className="bg-surface border border-border rounded-2xl p-5 w-full max-w-sm animate-slide-up" onClick={e => e.stopPropagation()}>
         {view === 'main' ? (
           <>
-            <div className="text-lg font-black text-white mb-1">🔒 Create a Room</div>
+            <div className="text-lg font-black text-white mb-1">🔒 Create a Game</div>
             <p className="text-xs text-muted mb-4">Play a private match with a friend.</p>
             <div className="flex flex-col gap-2.5">
               <GlowButton variant="primary" className="w-full" onClick={() => { onCreateCode?.(); onClose(); }}>
