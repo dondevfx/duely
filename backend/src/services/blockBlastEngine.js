@@ -1,5 +1,6 @@
 ﻿const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
+const { unlockUser } = require('./lockService');
 const { v4: uuidv4 } = require('uuid');
 const { updateHighscore } = require('./highscoreService');
 const MAX_SCORE = 15_000_000;
@@ -236,7 +237,10 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
       if (room.demoWin && botScore >= verifiedScore) botScore = Math.max(0, verifiedScore - 1);
       const humanWon = room.demoWin ? true : verifiedScore > botScore;
       let balanceChange = null;
-      if (room.entryFee > 0) {
+      if (room.entryFee > 0 && !room.feesDeducted) {
+        console.error(`[blockBlastEngine] CRITICAL: solo room ${roomId} settled without feesDeducted — no payout issued`);
+        unlockUser(player.userId);
+      } else if (room.entryFee > 0) {
         try {
           balanceChange = await settleBotMatch(supabase, player.userId, room.entryFee, room.currency || 'coins', humanWon, { game: 'Block Burst' });
         } catch (e) { console.error('[blockBlastEngine] solo settle:', e.message); }
@@ -329,7 +333,10 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
 
   // Settle wallet immediately so payout is accurate in the result
   let balanceChange = null;
-  if (supabase && room.entryFee > 0) {
+  if (supabase && room.entryFee > 0 && !room.feesDeducted) {
+    console.error(`[blockBlastEngine] CRITICAL: room ${roomId} settled without feesDeducted — no payout issued`);
+    unlockUser(winner.userId); unlockUser(loser.userId);
+  } else if (supabase && room.entryFee > 0) {
     try {
       const _hasBot = winner.isBot || loser.isBot;
       if (_hasBot) {

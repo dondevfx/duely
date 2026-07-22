@@ -1,6 +1,7 @@
 const { v4: uuidv4 } = require('uuid');
 const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
+const { unlockUser } = require('./lockService');
 const gameEvents = require('./gameEvents');
 
 const SUITS = ['♠', '♥', '♦', '♣'];
@@ -438,7 +439,11 @@ async function _resolveGame(io, supabase, roomId) {
     : calculateNewRatings(winner.elo, loser.elo);
 
   let balanceChange = null;
-  if (supabase && room.entryFee > 0) {
+  if (supabase && room.entryFee > 0 && !room.feesDeducted) {
+    // Defensive: never settle a paid match whose fees were never taken.
+    console.error(`[blackjackEngine] CRITICAL: room ${roomId} reached settlement without feesDeducted — no payout issued`);
+    unlockUser(p1.userId); unlockUser(p2.userId);
+  } else if (supabase && room.entryFee > 0) {
     try {
       const hasBot = winner.isBot || loser.isBot || p1.isBot || p2.isBot;
       if (hasBot) {

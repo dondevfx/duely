@@ -1,6 +1,7 @@
 const { v4: uuidv4 } = require('uuid');
 const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
+const { unlockUser } = require('./lockService');
 const gameEvents = require('./gameEvents');
 
 // Queues: headsQueue / tailsQueue keyed by `${entryFee}:${currency}`
@@ -100,7 +101,14 @@ async function resolveCoinFlip(io, supabase, roomId) {
     : calculateNewRatings(winner.elo, loser.elo);
 
   let balanceChange = null;
-  if (supabase && room.entryFee > 0) {
+  if (supabase && room.entryFee > 0 && !room.feesDeducted) {
+    // Defensive: never pay out a paid match whose entry fees were never taken —
+    // that would mint a payout from nothing. This can't happen today (feesDeducted
+    // is set synchronously after a successful deduct), but the guard makes it
+    // impossible for any future code path to do so.
+    console.error(`[coinFlipEngine] CRITICAL: room ${roomId} reached settlement without feesDeducted — no payout issued`);
+    unlockUser(winner.userId); unlockUser(loser.userId);
+  } else if (supabase && room.entryFee > 0) {
     try {
       if (winner.isBot || loser.isBot) {
         const humanId = winner.isBot ? loser.userId : winner.userId;

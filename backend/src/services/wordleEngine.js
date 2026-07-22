@@ -2,6 +2,7 @@ const { v4: uuidv4 } = require('uuid');
 const { isValidWord } = require('./wordValidator');
 const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
+const { unlockUser } = require('./lockService');
 const { updateHighscore } = require('./highscoreService');
 const gameEvents = require('./gameEvents');
 
@@ -347,7 +348,10 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
       newLoserElo   = ratings.newLoserElo;
     }
 
-    if (fee > 0 && supabase && winner && loser) {
+    if (fee > 0 && supabase && winner && loser && !room.feesDeducted) {
+      console.error(`[wordle] CRITICAL: room ${room.roomId} settled without feesDeducted — no payout issued`);
+      unlockUser(winner.userId); unlockUser(loser.userId);
+    } else if (fee > 0 && supabase && winner && loser) {
       try {
         if (hasBot && human) {
           const humanWon = winner && !winner.isBot;
