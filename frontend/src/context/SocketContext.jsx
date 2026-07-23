@@ -5,6 +5,10 @@ import { getCurrentSession, readSessionFromStorage, onSessionChange } from '../u
 const SocketContext = createContext(null);
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 
+// Master switch for the live player-count badges ("X playing", "X Live",
+// "X at this bet size"). Set to true to show them everywhere again.
+const SHOW_LIVE_COUNTS = false;
+
 export function SocketProvider({ children }) {
   const socketRef = useRef(null);
   const [connected, setConnected] = useState(false);
@@ -51,8 +55,12 @@ export function SocketProvider({ children }) {
       setAuthenticated(false);
     });
 
-    socket.on('player_counts', ({ counts }) => setPlayerCounts(counts));
-    socket.on('bet_counts', ({ counts }) => setBetCounts(counts));
+    // Live player counts are hidden site-wide for now. Every "X playing / X Live /
+    // X at this bet size" badge reads from these two maps and only renders when the
+    // count is > 0 — so feeding them empty hides them all without removing any
+    // display code. Flip SHOW_LIVE_COUNTS back to true to bring them all back.
+    socket.on('player_counts', ({ counts }) => setPlayerCounts(SHOW_LIVE_COUNTS ? counts : {}));
+    socket.on('bet_counts', ({ counts }) => setBetCounts(SHOW_LIVE_COUNTS ? counts : {}));
 
     socket.on('queue_entry_added', (entry) => {
       setQueueEntries(prev => {
