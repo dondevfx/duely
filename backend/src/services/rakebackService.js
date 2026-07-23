@@ -14,11 +14,12 @@
  *     ADD COLUMN IF NOT EXISTS rakeback_weekly_at timestamptz DEFAULT NULL;
  */
 
-async function creditRakeback(supabase, player1Id, player2Id, prizePool, currency = 'coins') {
+async function creditRakeback(supabase, player1Id, player2Id, prizePool, currency = 'coins', perPlayerPct = 0.0025) {
   // Rakeback only applies to coin games — diamonds are engagement currency only
   if (currency !== 'coins') return;
-  // 0.25% per player of prize pool (0.5% total across both players)
-  const perPlayer = Math.round(prizePool * 0.0025 * 10000) / 10000; // 4 decimal places
+  // Default 0.25% per player of prize pool (0.5% total). Coin flip passes 0.002
+  // (0.4% total) to fit its lower 2% rake.
+  const perPlayer = Math.round(prizePool * perPlayerPct * 10000) / 10000; // 4 decimal places
   if (perPlayer <= 0) return;
   // Split evenly across the three rakeback buckets
   const share = Math.round((perPlayer / 3) * 10000) / 10000;

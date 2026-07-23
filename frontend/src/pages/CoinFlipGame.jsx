@@ -307,7 +307,7 @@ export default function CoinFlipGame() {
 
   const payoutAmt = isDiamonds
     ? `${(entryFee * 2).toLocaleString()}`
-    : `${(entryFee * 2 * 0.95) % 1 === 0 ? (entryFee * 2 * 0.95).toLocaleString() : (entryFee * 2 * 0.95).toFixed(2)}`;
+    : `${(entryFee * 2 * 0.98) % 1 === 0 ? (entryFee * 2 * 0.98).toLocaleString() : (entryFee * 2 * 0.98).toFixed(2)}`;
   const payout = <span className="inline-flex items-center gap-1">{payoutAmt} {currLabel}</span>;
 
   useEffect(() => {

@@ -1,5 +1,5 @@
 const { unlockUser } = require('./lockService');
-const { resolveAffiliates, payAffiliatesCoins, payAffiliatesDiamonds } = require('./affiliateService');
+const { resolveAffiliates, payAffiliatesCoins, payCodesCoinFlip, payAffiliatesDiamonds } = require('./affiliateService');
 const { creditRakeback } = require('./rakebackService');
 const { isDemo } = require('./demoAccounts');
 const PLATFORM_FEE_PERCENT = 0.05;
@@ -126,6 +126,47 @@ async function settleMatch(supabase, winnerId, loserId, entryFee, meta = {}) {
       { user_id: winnerId, type: 'match_win',  amount_c: payout, status: 'confirmed', notes: matchNote(meta.game, meta.loserUsername) },
       { user_id: loserId,  type: 'match_loss', amount_c: fee,    status: 'confirmed', notes: matchNote(meta.game, meta.winnerUsername) },
     ]).then().catch(e => console.error('[tx] coin match insert failed:', e.message));
+
+    return { winnerPayout: payout };
+  } finally {
+    unlockUser(winnerId);
+    unlockUser(loserId);
+  }
+}
+
+// Coin Flip settlement — 2% total rake (winner gets 98% of the pot), split:
+// rakeback 0.4% + code 0.1% (capped, any code type) + admin 1.5% (1.6% when no
+// code). Winner payout is a flat 98% regardless of referrals. Used for both a
+// normal resolve and a forfeit (both are winner-takes-pot).
+async function settleCoinFlip(supabase, winnerId, loserId, entryFee, meta = {}) {
+  const adminId = process.env.ADMIN_USER_ID;
+  try {
+    const fee = parseFloat(entryFee);
+    if (fee <= 0) return { winnerPayout: 0 };
+    const prizePool = parseFloat((fee * 2).toFixed(4));
+    const payout    = parseFloat((prizePool * 0.98).toFixed(4)); // 2% rake
+
+    const { error: creditErr } = await supabase.rpc('credit_coins', { user_id: winnerId, amount: payout });
+    if (creditErr) throw creditErr;
+
+    if (adminId && !isDemo(winnerId) && !isDemo(loserId)) {
+      const { owner1, owner2 } = await resolveAffiliates(supabase, winnerId, loserId)
+        .catch(() => ({ owner1: null, owner2: null }));
+      const { platformFee } = await payCodesCoinFlip(supabase, owner1, owner2, prizePool)
+        .catch(() => ({ platformFee: 0.016 }));
+      const adminFeeAmount = parseFloat((prizePool * platformFee).toFixed(4));
+      await supabase.rpc('credit_fee_balance', { user_id: adminId, amount: adminFeeAmount })
+        .then(({ error: e }) => { if (e) console.error('[admin-fee] CF credit_fee_balance failed:', e.message); })
+        .catch(err => console.error('[admin-fee] CF credit_fee_balance threw:', err.message));
+    }
+
+    // Rakeback — 0.4% of pool (0.2% per player)
+    await creditRakeback(supabase, winnerId, loserId, prizePool, 'coins', 0.002).catch(() => {});
+
+    supabase.from('transactions').insert([
+      { user_id: winnerId, type: 'match_win',  amount_c: payout, status: 'confirmed', notes: matchNote(meta.game, meta.loserUsername) },
+      { user_id: loserId,  type: 'match_loss', amount_c: fee,    status: 'confirmed', notes: matchNote(meta.game, meta.winnerUsername) },
+    ]).then().catch(e => console.error('[tx] coin flip match insert failed:', e.message));
 
     return { winnerPayout: payout };
   } finally {
@@ -403,6 +444,7 @@ module.exports = {
   deductCoins,
   deductMatchFees,
   settleMatch,
+  settleCoinFlip,
   getDiamondBalance,
   creditDiamonds,
   deductDiamonds,

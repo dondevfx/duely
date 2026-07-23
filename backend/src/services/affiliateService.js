@@ -97,6 +97,32 @@ async function payAffiliatesCoins(supabase, owner1, owner2, prizePool) {
   return { platformFee: isCreator ? PLATFORM_FEE_WITH_CREATOR : PLATFORM_FEE_WITH_AFF }; // 3.5% or 4.0%
 }
 
+// ── Coin Flip fee profile (2% total rake) ──────────────────────────────────
+// Rakeback 0.4% + codes 0.1% (max, any code type) + admin 1.5% = 2.0%.
+// With no code the 0.1% rolls into admin (1.6%), so the winner's payout is a flat
+// 98% of the pool regardless of referrals.
+const CF_CODE_PCT          = 0.001; // 0.1% total to code owner(s), capped
+const CF_ADMIN_NO_CODE     = 0.016; // 1.6% to admin when no code (absorbs the 0.1%)
+const CF_ADMIN_WITH_CODE   = 0.015; // 1.5% to admin when a code is present
+
+// Pays code owner(s) a flat 0.1% of the pool (split evenly if two), returns the
+// admin platform fee. Any code — affiliate or creator — is capped at 0.1% here.
+async function payCodesCoinFlip(supabase, owner1, owner2, prizePool) {
+  const pool = parseFloat(prizePool);
+  const uniqueOwners = [...new Set([owner1, owner2].filter(Boolean))];
+  if (uniqueOwners.length === 0 || pool <= 0) {
+    return { platformFee: CF_ADMIN_NO_CODE }; // 1.6%
+  }
+  const perOwner = parseFloat((pool * CF_CODE_PCT / uniqueOwners.length).toFixed(4));
+  await Promise.all(
+    uniqueOwners.map(owner_id =>
+      supabase.rpc('credit_affiliate_c', { owner_id, amount: perOwner })
+        .then().catch(e => console.error('[affiliate] CF credit failed:', e.message))
+    )
+  );
+  return { platformFee: CF_ADMIN_WITH_CODE }; // 1.5%
+}
+
 async function payAffiliatesDiamonds() {
   // Diamond matches do not pay affiliate earnings — affiliates earn coins only
   return { platformFee: PLATFORM_FEE_NO_AFF };
@@ -106,6 +132,7 @@ module.exports = {
   validateCode,
   resolveAffiliates,
   payAffiliatesCoins,
+  payCodesCoinFlip,
   payAffiliatesDiamonds,
   PLATFORM_FEE_NO_AFF,
   PLATFORM_FEE_WITH_AFF,

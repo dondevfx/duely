@@ -33,7 +33,7 @@ const { checkSocketClickRate, cleanupSocket } = require('../middleware/rateLimit
 const { createBotPlayer } = require('../services/botService');
 const { isDemo: isDemoAccount, randomFunnyName } = require('../services/demoAccounts');
 const {
-  settleMatch, settleMatchDiamonds, forfeitSettleDiamonds, forfeitSettleCoins,
+  settleMatch, settleCoinFlip, settleMatchDiamonds, forfeitSettleDiamonds, forfeitSettleCoins,
   deductCoins, deductDiamonds, deductMatchFees, creditDiamonds, creditCoins,
   settleBotMatch,
 } = require('../services/walletService');
@@ -1394,11 +1394,14 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
             console.error('[forfeit] elo update failed:', eloErr.message);
           }
 
-          // ── Wallet settlement — mirrors normal match: both pay, winner gets 95% (coins) or 100% (diamonds) ──
+          // ── Wallet settlement — mirrors normal match: both pay, winner gets the
+          // pot minus rake. Coin flip uses its own 2% rake; other coin games 5%.
           const adminId = process.env.ADMIN_USER_ID;
           const result = currency === 'diamonds'
             ? await forfeitSettleDiamonds(supabase, stayer.userId, leaver.userId, fee)
-            : await forfeitSettleCoins(supabase, stayer.userId, leaver.userId, fee, adminId);
+            : gameType === 'coin_flip'
+              ? await settleCoinFlip(supabase, stayer.userId, leaver.userId, fee, { game: 'Coin Flip', winnerUsername: stayer.username, loserUsername: leaver.username })
+              : await forfeitSettleCoins(supabase, stayer.userId, leaver.userId, fee, adminId);
           winnerPayout = result.winnerPayout ?? 0;
 
           // ── Rakeback (coins only, same as normal match) ───────────────

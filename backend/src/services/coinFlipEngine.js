@@ -1,6 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
-const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
+const { settleMatch, settleCoinFlip, settleMatchDiamonds, settleBotMatch } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const gameEvents = require('./gameEvents');
 
@@ -117,7 +117,7 @@ async function resolveCoinFlip(io, supabase, roomId) {
         const meta = { game: 'Coin Flip', winnerUsername: winner.username, loserUsername: loser.username };
         balanceChange = room.currency === 'diamonds'
           ? await settleMatchDiamonds(supabase, winner.userId, loser.userId, room.entryFee, meta)
-          : await settleMatch(supabase, winner.userId, loser.userId, room.entryFee, meta);
+          : await settleCoinFlip(supabase, winner.userId, loser.userId, room.entryFee, meta); // 2% rake
       }
     } catch (e) { console.error('[coinFlipEngine] settle:', e.message); }
   }
