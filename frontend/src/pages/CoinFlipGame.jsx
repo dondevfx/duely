@@ -635,7 +635,7 @@ export default function CoinFlipGame() {
                   <button onClick={() => switchCurrency('diamonds')} className={`px-4 py-2 rounded text-sm font-bold transition-all ${isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}>💎 Diamonds</button>
                 </div>
               </div>
-              <BetSlider fees={fees} entryFee={entryFee} setEntryFee={setEntryFee} currLabel={currLabel} isDiamonds={isDiamonds} />
+              <BetSlider fees={fees} entryFee={entryFee} setEntryFee={setEntryFee} currLabel={currLabel} isDiamonds={isDiamonds} payoutMult={0.98} />
               {(playerCounts?.['coin-flip'] ?? 0) > 0 && (
                 <div className="flex items-center gap-1.5 mt-3">
                   <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#1250B4', boxShadow: '0 0 6px #1250B4' }} />

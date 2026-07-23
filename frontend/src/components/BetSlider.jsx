@@ -6,13 +6,13 @@ function fmtFee(fee) {
   return `${fee}`;
 }
 
-function calcPayout(fee, isDiamonds) {
+function calcPayout(fee, isDiamonds, payoutMult = 0.95) {
   if (isDiamonds) return (fee * 2).toLocaleString();
-  const p = fee * 2 * 0.95;
+  const p = fee * 2 * payoutMult;
   return p % 1 === 0 ? p.toLocaleString() : p.toFixed(2);
 }
 
-function applySliderDOM(rawIdx, fees, isDiamonds, thumb, fill, display, payout) {
+function applySliderDOM(rawIdx, fees, isDiamonds, thumb, fill, display, payout, payoutMult = 0.95) {
   const maxIdx = fees.length - 1;
   const clamped = Math.max(0, Math.min(maxIdx, rawIdx));
   const pct = maxIdx > 0 ? (clamped / maxIdx) * 100 : 0;
@@ -20,7 +20,7 @@ function applySliderDOM(rawIdx, fees, isDiamonds, thumb, fill, display, payout) 
   if (thumb)   thumb.style.left    = `${pct}%`;
   if (fill)    fill.style.width    = `${pct}%`;
   if (display) display.textContent = fmtFee(fee);
-  if (payout)  payout.textContent  = fee > 0 ? `+${calcPayout(fee, isDiamonds)}` : '';
+  if (payout)  payout.textContent  = fee > 0 ? `+${calcPayout(fee, isDiamonds, payoutMult)}` : '';
 }
 
 /**
@@ -32,23 +32,24 @@ function applySliderDOM(rawIdx, fees, isDiamonds, thumb, fill, display, payout) 
  *   currLabel   ReactNode  — coin icon or '💎' to show next to amount
  *   isDiamonds  bool       — controls payout formula (2x vs 1.9x)
  */
-export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDiamonds = false }) {
+export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDiamonds = false, payoutMult = 0.95 }) {
   const trackRef   = useRef(null);
   const thumbRef   = useRef(null);
   const fillRef    = useRef(null);
   const displayRef = useRef(null);
   const payoutRef  = useRef(null);
-  const dragRef    = useRef({ active: false, fees, setEntryFee, isDiamonds });
+  const dragRef    = useRef({ active: false, fees, setEntryFee, isDiamonds, payoutMult });
 
   dragRef.current.fees        = fees;
   dragRef.current.setEntryFee = setEntryFee;
   dragRef.current.isDiamonds  = isDiamonds;
+  dragRef.current.payoutMult  = payoutMult;
 
   // Sync DOM when entryFee / fees / isDiamonds changes externally
   useEffect(() => {
     const idx = Math.max(0, fees.indexOf(entryFee));
-    applySliderDOM(idx, fees, isDiamonds, thumbRef.current, fillRef.current, displayRef.current, payoutRef.current);
-  }, [fees, entryFee, isDiamonds]); // eslint-disable-line react-hooks/exhaustive-deps
+    applySliderDOM(idx, fees, isDiamonds, thumbRef.current, fillRef.current, displayRef.current, payoutRef.current, payoutMult);
+  }, [fees, entryFee, isDiamonds, payoutMult]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Attach native pointer events once — smooth on mouse and touch
   useEffect(() => {
@@ -63,7 +64,7 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
 
     function apply(raw) {
       applySliderDOM(raw, dragRef.current.fees, dragRef.current.isDiamonds,
-        thumbRef.current, fillRef.current, displayRef.current, payoutRef.current);
+        thumbRef.current, fillRef.current, displayRef.current, payoutRef.current, dragRef.current.payoutMult);
     }
 
     function onDown(e) {
@@ -141,7 +142,7 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
         <div className="mt-4 text-center">
           <div className="text-xs text-muted uppercase tracking-widest mb-1 font-semibold">Win Payout</div>
           <div className="text-3xl font-black text-success inline-flex items-center gap-1" style={{ textShadow: '0 0 16px rgba(34,197,94,0.4)' }}>
-            <span ref={payoutRef}>{entryFee > 0 ? `+${calcPayout(entryFee, isDiamonds)}` : ''}</span>
+            <span ref={payoutRef}>{entryFee > 0 ? `+${calcPayout(entryFee, isDiamonds, payoutMult)}` : ''}</span>
             {' '}{currLabel}
           </div>
         </div>
