@@ -14,9 +14,14 @@
  *     ADD COLUMN IF NOT EXISTS rakeback_weekly_at timestamptz DEFAULT NULL;
  */
 
+const { isDemo } = require('./demoAccounts');
+
 async function creditRakeback(supabase, player1Id, player2Id, prizePool, currency = 'coins', perPlayerPct = 0.0025) {
   // Rakeback only applies to coin games — diamonds are engagement currency only
   if (currency !== 'coins') return;
+  // Demo matches show the fee taken (winner still gets the reduced payout) but
+  // must not credit anything real — skip rakeback entirely for demo accounts.
+  if (isDemo(player1Id) || isDemo(player2Id)) return;
   // Default 0.25% per player of prize pool (0.5% total). Coin flip passes 0.002
   // (0.4% total) to fit its lower 2% rake.
   const perPlayer = Math.round(prizePool * perPlayerPct * 10000) / 10000; // 4 decimal places
