@@ -231,7 +231,9 @@ async function settleMatchDiamonds(supabase, winnerId, loserId, entryFee, meta =
 // Bot match settlement: entry fee already deducted upfront by handler.
 // On win: credit back 2x entry fee * 0.95 (payout).
 // On loss: nothing (fee was already taken).
-async function settleBotMatch(supabase, humanUserId, entryFee, currency, humanWon, meta = {}) {
+// coinPayoutMult: 0.95 default (5% house edge). Coin flip passes 0.98 (2%) so a
+// bot flip pays the same as a PvP flip for every account type.
+async function settleBotMatch(supabase, humanUserId, entryFee, currency, humanWon, meta = {}, coinPayoutMult = 0.95) {
   const note = matchNote(meta.game, 'Bot');
   if (!humanWon) {
     if (parseFloat(entryFee) > 0) {
@@ -253,7 +255,7 @@ async function settleBotMatch(supabase, humanUserId, entryFee, currency, humanWo
     }).then().catch(e => console.error('[tx] bot win insert failed:', e.message));
     return { winnerPayout: payout };
   } else {
-    const payout = parseFloat((entryFee * 2 * 0.95).toFixed(4));
+    const payout = parseFloat((entryFee * 2 * coinPayoutMult).toFixed(4));
     await creditCoins(supabase, humanUserId, payout);
     supabase.from('transactions').insert({
       user_id: humanUserId, type: 'match_win', amount_c: payout, status: 'confirmed', notes: note,
