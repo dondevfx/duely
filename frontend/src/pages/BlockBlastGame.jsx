@@ -10,7 +10,7 @@ import ResultScreen from '../components/ResultScreen';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
 
-const COIN_FEES    = [0.5, 1, 2, 5, 10, 25];
+const COIN_FEES    = [1, 5, 10, 25, 50, 100];
 const DIAMOND_FEES = [50, 100, 250, 500, 1000, 50000];
 
 const GRID         = 8;

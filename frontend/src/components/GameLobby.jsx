@@ -7,7 +7,7 @@ import CoinIcon from './CoinIcon';
 import CreateRoomModal from './CreateRoomModal';
 import JoinRoomModal from './JoinRoomModal';
 
-export const COIN_FEES    = [1, 5, 10];
+export const COIN_FEES    = [1, 5, 10, 25, 50, 100];
 export const DIAMOND_FEES = [500, 5000, 50000];
 
 function fmtFee(fee) {
