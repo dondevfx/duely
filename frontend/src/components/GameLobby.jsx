@@ -274,6 +274,12 @@ export default function GameLobby({
 
       {/* ── Action Buttons ── */}
       <div className="flex flex-col gap-3">
+        {!session ? (
+          <GlowButton onClick={() => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4">
+            🔒 Login to Play
+          </GlowButton>
+        ) : (
+        <>
         <GlowButton
           onClick={session ? onQueue : () => navigate('/login')}
           variant="primary"
@@ -355,6 +361,8 @@ export default function GameLobby({
               authenticated={authenticated}
             />
           </>
+        )}
+        </>
         )}
       </div>
 

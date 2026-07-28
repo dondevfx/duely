@@ -1106,6 +1106,12 @@ function BlackjackGame() {
         </div>
 
         <div className="flex flex-col gap-3">
+          {!session ? (
+            <GlowButton onClick={() => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4">
+              🔒 Login to Play
+            </GlowButton>
+          ) : (
+          <>
           {!isDiamonds && (
             <GlowButton onClick={session ? joinQueue : () => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4" disabled={session && (!authenticated || insufficient)}>
               {!session ? '🔒 Login to Play' : 'Find Opponent'}
@@ -1152,7 +1158,8 @@ function BlackjackGame() {
             onJoin={(code) => joinPrivate(code)}
             authenticated={authenticated}
           />
-
+          </>
+          )}
         </div>
 
         {statusMsg && <p className="text-center text-sm text-warning mt-3">{statusMsg}</p>}

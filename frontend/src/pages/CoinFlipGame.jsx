@@ -667,6 +667,12 @@ export default function CoinFlipGame() {
             </div>
 
             <div className="flex flex-col gap-3">
+              {!session ? (
+                <GlowButton onClick={() => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4">
+                  🔒 Login to Play
+                </GlowButton>
+              ) : (
+              <>
               <GlowButton onClick={joinQueue} variant="primary" size="lg" className="w-full text-lg py-4" disabled={session && (!authenticated || insufficient)}>
                 {!session ? '🔒 Login to Play' : `Find Opponent (${side === 'heads' ? '🔵 Heads' : '⚪ Tails'})`}
               </GlowButton>
@@ -704,6 +710,8 @@ export default function CoinFlipGame() {
                     authenticated={authenticated}
                   />
                 </>
+              </>
+              )}
             </div>
           </>
         )}
