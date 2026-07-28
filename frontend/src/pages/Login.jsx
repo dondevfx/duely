@@ -2,6 +2,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
+import { supabase } from '../utils/supabase';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
 
@@ -29,6 +30,29 @@ export default function Login() {
   }, [mfaPending, mfaFactorId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [mfaCode, setMfaCode] = useState('');
   const [mfaLoading, setMfaLoading] = useState(false);
+
+  // Forgot-password flow
+  const [forgotMode, setForgotMode]     = useState(false);
+  const [resetSent, setResetSent]       = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+
+  async function handleForgot(e) {
+    e.preventDefault();
+    if (!email.trim()) return setError('Enter your email address first.');
+    setResetLoading(true);
+    setError(null);
+    try {
+      const { error: resetErr } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (resetErr) throw resetErr;
+      setResetSent(true);
+    } catch (err) {
+      setError(err.message || 'Failed to send reset email. Try again.');
+    } finally {
+      setResetLoading(false);
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -207,6 +231,42 @@ export default function Login() {
         </div>
 
         <div className="bg-surface border border-surfaceLight rounded-2xl p-6">
+          {forgotMode ? (
+            resetSent ? (
+              <div className="text-center py-4">
+                <div className="text-4xl mb-3">📧</div>
+                <p className="text-white font-semibold">Check your email</p>
+                <p className="text-muted text-sm mt-1">We sent a password reset link to <span className="text-white">{email}</span>. Open it to set a new password.</p>
+                <button type="button" onClick={() => { setForgotMode(false); setResetSent(false); setError(null); }} className="mt-5 text-primary text-sm hover:underline">
+                  Back to sign in
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgot} className="flex flex-col gap-4">
+                <p className="text-sm text-muted">Enter your email and we'll send you a link to reset your password.</p>
+                <div>
+                  <label className="block text-sm text-muted mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    required
+                    autoFocus
+                    className="w-full bg-bg border border-surfaceLight rounded-lg px-4 py-3 text-base text-white placeholder-muted focus:outline-none focus:border-primary transition-colors"
+                    placeholder="you@example.com"
+                  />
+                </div>
+                {error && <p className="text-danger text-sm">{error}</p>}
+                <GlowButton type="submit" disabled={resetLoading} variant="primary" size="lg" className="w-full">
+                  {resetLoading ? 'Sending…' : 'Send Reset Link'}
+                </GlowButton>
+                <button type="button" onClick={() => { setForgotMode(false); setError(null); }} className="text-xs text-muted hover:text-white text-center">
+                  Back to sign in
+                </button>
+              </form>
+            )
+          ) : (
+          <>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div>
               <label className="block text-sm text-muted mb-1">Email</label>
@@ -238,6 +298,14 @@ export default function Login() {
             </GlowButton>
           </form>
 
+          <button
+            type="button"
+            onClick={() => { setForgotMode(true); setError(null); }}
+            className="block w-full text-center text-xs text-primary hover:underline mt-3"
+          >
+            Forgot password?
+          </button>
+
           <div className="mt-4 pt-4 border-t border-surfaceLight">
             <p className="text-center text-sm text-muted mb-3">Don't have an account?</p>
             <Link
@@ -247,6 +315,8 @@ export default function Login() {
               Create Account
             </Link>
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>
