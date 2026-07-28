@@ -318,7 +318,7 @@ export default function GameLobby({
           <>
             <div className="grid grid-cols-2 gap-2">
               <button
-                onClick={() => setPrivateMode(privateMode === 'create' ? null : 'create')}
+                onClick={() => { if (!session) return navigate('/login'); setPrivateMode(privateMode === 'create' ? null : 'create'); }}
                 className={`py-4 rounded-xl text-base font-semibold border transition-all ${
                   privateMode === 'create'
                     ? 'border-primary text-primary bg-primary/10'
@@ -328,7 +328,7 @@ export default function GameLobby({
                 🔒 Create Game
               </button>
               <button
-                onClick={() => setPrivateMode(privateMode === 'join' ? null : 'join')}
+                onClick={() => { if (!session) return navigate('/login'); setPrivateMode(privateMode === 'join' ? null : 'join'); }}
                 className={`py-4 rounded-xl text-base font-semibold border transition-all ${
                   privateMode === 'join'
                     ? 'border-primary text-primary bg-primary/10'

@@ -680,11 +680,11 @@ export default function CoinFlipGame() {
               </GlowButton>
               <>
                   <div className="grid grid-cols-2 gap-3">
-                    <button onClick={() => setPrivateMode(privateMode === 'create' ? null : 'create')}
+                    <button onClick={() => { if (!session) return navigate('/login'); setPrivateMode(privateMode === 'create' ? null : 'create'); }}
                       className={`py-4 rounded-xl text-base font-semibold border transition-all ${privateMode === 'create' ? 'border-primary text-primary bg-primary/10' : 'border-border text-muted hover:border-primary hover:text-white bg-surface'}`}>
                       🔒 Create Game
                     </button>
-                    <button onClick={() => setPrivateMode(privateMode === 'join' ? null : 'join')}
+                    <button onClick={() => { if (!session) return navigate('/login'); setPrivateMode(privateMode === 'join' ? null : 'join'); }}
                       className={`py-4 rounded-xl text-base font-semibold border transition-all ${privateMode === 'join' ? 'border-primary text-primary bg-primary/10' : 'border-border text-muted hover:border-primary hover:text-white bg-surface'}`}>
                       🔗 Join Game
                     </button>
