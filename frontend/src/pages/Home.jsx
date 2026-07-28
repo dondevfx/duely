@@ -96,7 +96,7 @@ export default function Home() {
               </h1>
               <p className="text-xl text-muted max-w-2xl mx-auto lg:mx-0 mb-10">
                 Challenge opponents in real-time skill-based games. Wager{' '}
-                <span className="text-accent font-semibold inline-flex items-center gap-1"><CoinIcon size="1em" /> Coins</span>, climb the leaderboard,
+                <span className="text-primary font-semibold whitespace-nowrap"><CoinIcon size="1em" /> Coins</span>, climb the leaderboard,
                 and prove you're the best.
               </p>
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4">
