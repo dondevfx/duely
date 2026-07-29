@@ -290,61 +290,46 @@ export default function GameLobby({
           {session ? 'Find Opponent' : '🔒 Login to Play'}
         </GlowButton>
 
-        {/* Diamond-only bet vs bot — only visible when diamonds are selected */}
-        {onBot && isDiamonds && entryFee > 0 && (
+        {/* ── Challenge a Friend (link or direct invite) ── */}
+        {session && onCreatePrivate && (
           <GlowButton
-            onClick={session ? onBot : () => navigate('/login')}
+            onClick={() => setPrivateMode('create')}
             variant="ghost"
             size="lg"
-            className="w-full text-lg py-4 border border-border hover:border-accent"
-            disabled={session && insufficient}
+            className="w-full text-lg py-4 border border-border hover:border-primary"
           >
-            {session ? `🤖 Bet vs Bot — ${fmtFee(entryFee)} 💎` : '🔒 Login to Play'}
+            🎮 Challenge a Friend
           </GlowButton>
         )}
 
-        {/* Free play — always available */}
-        {onBotFree && (() => {
-          const label = botLabel || '🎮 Play Free vs Bot';
-          return (
-            <GlowButton
-              onClick={session ? onBotFree : () => navigate('/login')}
-              variant="ghost"
-              size="lg"
-              className="w-full text-lg py-4 border border-border hover:border-border"
-              disabled={false}
-            >
-              {session ? label : '🔒 Login to Play'}
-            </GlowButton>
-          );
-        })()}
+        {/* Secondary options as quiet text links — no button clutter */}
+        {session && (onBot || onBotFree || onCreatePrivate) && (
+          <div className="flex items-center justify-center gap-3 text-sm text-muted pt-1">
+            {onBot && isDiamonds && entryFee > 0 && (
+              <>
+                <button onClick={onBot} disabled={insufficient} className="hover:text-white transition-colors disabled:opacity-40">
+                  Bet vs Bot — {fmtFee(entryFee)} 💎
+                </button>
+                <span className="opacity-40">·</span>
+              </>
+            )}
+            {onBotFree && (
+              <button onClick={onBotFree} className="hover:text-white transition-colors">
+                {botLabel || 'Play vs Bot'}
+              </button>
+            )}
+            {onBotFree && onCreatePrivate && <span className="opacity-40">·</span>}
+            {onCreatePrivate && (
+              <button onClick={() => setPrivateMode('join')} className="hover:text-white transition-colors">
+                Have a code?
+              </button>
+            )}
+          </div>
+        )}
 
-        {/* ── Private Match ── */}
+        {/* ── Private Match modals ── */}
         {onCreatePrivate && (
           <>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => { if (!session) return navigate('/login'); setPrivateMode(privateMode === 'create' ? null : 'create'); }}
-                className={`py-4 rounded-xl text-base font-semibold border transition-all ${
-                  privateMode === 'create'
-                    ? 'border-primary text-primary bg-primary/10'
-                    : 'border-border text-muted hover:border-primary hover:text-white bg-surface'
-                }`}
-              >
-                🔒 Create Game
-              </button>
-              <button
-                onClick={() => { if (!session) return navigate('/login'); setPrivateMode(privateMode === 'join' ? null : 'join'); }}
-                className={`py-4 rounded-xl text-base font-semibold border transition-all ${
-                  privateMode === 'join'
-                    ? 'border-primary text-primary bg-primary/10'
-                    : 'border-border text-muted hover:border-primary hover:text-white bg-surface'
-                }`}
-              >
-                🔗 Join Game
-              </button>
-            </div>
-
             <CreateRoomModal
               open={privateMode === 'create'}
               onClose={() => setPrivateMode(null)}

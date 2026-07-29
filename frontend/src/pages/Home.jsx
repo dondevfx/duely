@@ -101,7 +101,7 @@ export default function Home() {
               </p>
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4">
                 <Link
-                  to="/game/quick-match"
+                  to="/games"
                   className="px-8 py-4 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl shadow-glow hover:shadow-glow-lg transition-all text-lg"
                 >
                   ⚡ Play Now

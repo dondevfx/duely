@@ -28,6 +28,8 @@ import Navbar from './components/Navbar';
 import LeftSidebar from './components/LeftSidebar';
 import ChatSidebar from './components/ChatSidebar';
 import Home from './pages/Home';
+import Games from './pages/Games';
+import ChallengeJoin from './pages/ChallengeJoin';
 import Leaderboard from './pages/Leaderboard';
 import Profile from './pages/Profile';
 import Wallet from './pages/Wallet';
@@ -125,6 +127,8 @@ function Shell() {
         <ErrorBoundary resetKey={location.pathname}>
         <Routes>
           <Route path="/"                  element={<Home />} />
+          <Route path="/games"              element={<Games />} />
+          <Route path="/challenge/:gameType/:code" element={<ChallengeJoin />} />
           <Route path="/leaderboard"        element={<Leaderboard />} />
           <Route path="/login"              element={<Login />} />
           <Route path="/signup"             element={<Signup />} />

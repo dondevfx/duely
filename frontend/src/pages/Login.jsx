@@ -3,8 +3,28 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
 import { supabase } from '../utils/supabase';
+import { PENDING_CHALLENGE_KEY } from './ChallengeJoin';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
+
+// If the user arrived from a shared challenge link, resume it after login.
+const GAME_ROUTES = {
+  blackjack:   '/game/blackjack',
+  'coin-flip': '/game/coin-flip',
+  scrabble:    '/game/word-vs',
+  blockBlast:  '/game/block-blast',
+};
+function pendingChallengeTarget() {
+  try {
+    const raw = sessionStorage.getItem(PENDING_CHALLENGE_KEY);
+    if (!raw) return null;
+    const { gameType, code } = JSON.parse(raw);
+    const route = GAME_ROUTES[gameType];
+    if (!route || !code) return null;
+    sessionStorage.removeItem(PENDING_CHALLENGE_KEY);
+    return { route, state: { joinCode: code, autoJoin: true } };
+  } catch { return null; }
+}
 
 export default function Login() {
   const ready = usePageReady();
@@ -70,10 +90,10 @@ export default function Login() {
         if (sessionStorage.getItem('rd_pending_username')) {
           setNeedsUsername(true);
         } else {
-          navigate('/');
+          { const t = pendingChallengeTarget(); if (t) navigate(t.route, { state: t.state }); else navigate('/'); }
         }
       } else {
-        navigate('/');
+        { const t = pendingChallengeTarget(); if (t) navigate(t.route, { state: t.state }); else navigate('/'); }
       }
     } catch (err) {
       setError(err.message);
@@ -90,7 +110,7 @@ export default function Login() {
     try {
       await completeMfaLogin(mfaState.factorId, mfaCode);
       // MFA passed — navigate regardless of profile fetch result
-      navigate('/');
+      { const t = pendingChallengeTarget(); if (t) navigate(t.route, { state: t.state }); else navigate('/'); }
     } catch (err) {
       console.error('[MFA verify error]', err);
       const msg = String(err?.message || err?.error_description || err || '').toLowerCase();
@@ -123,7 +143,7 @@ export default function Login() {
     try {
       await api.post('/auth/profile', { username: username.trim() });
       await refreshProfile();
-      navigate('/');
+      { const t = pendingChallengeTarget(); if (t) navigate(t.route, { state: t.state }); else navigate('/'); }
     } catch (err) {
       setError(err.message || 'Failed to create profile. Try a different username.');
     } finally {
@@ -296,6 +316,14 @@ export default function Login() {
             <GlowButton type="submit" disabled={loading} variant="primary" size="lg" className="w-full">
               {loading ? 'Signing in...' : 'Sign In'}
             </GlowButton>
+
+            <button
+              type="button"
+              onClick={() => { setForgotMode(true); setError(null); }}
+              className="text-xs text-muted hover:text-primary transition-colors"
+            >
+              Forgot password?
+            </button>
           </form>
 
           <button

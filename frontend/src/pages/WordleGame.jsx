@@ -7,6 +7,7 @@ import { useCurrency } from '../context/CurrencyContext';
 import GameLobby, { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
 import GlowButton from '../components/GlowButton';
 import ResultScreen from '../components/ResultScreen';
+import ChallengeLinkBox from '../components/ChallengeLinkBox';
 
 const MAX_GUESSES = 6;
 const WORD_LENGTH = 5;
@@ -713,15 +714,8 @@ export default function WordleGame() {
             </>
           ) : (
             <>
-              <h2 className="text-2xl font-black text-white mb-2">Private Room</h2>
-              <p className="text-muted mb-4 text-sm">Share this code with a friend</p>
-              <div className="bg-surface border-2 border-primary rounded-2xl p-8 mb-6 inline-block min-w-[200px]"
-                style={{ boxShadow: '0 0 20px rgba(18,80,180,0.2)' }}>
-                <div className="text-4xl font-black font-mono tracking-[0.25em] text-primary"
-                  style={{ textShadow: '0 0 20px rgba(18,80,180,0.5)' }}>
-                  {privateCode}
-                </div>
-              </div>
+              <h2 className="text-2xl font-black text-white mb-2">Challenge Ready</h2>
+              <ChallengeLinkBox code={privateCode} gameType="scrabble" />
               <p className="text-muted text-sm mb-6">Waiting for opponent to join…</p>
             </>
           )}

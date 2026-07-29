@@ -10,19 +10,18 @@ import GlowButton from './GlowButton';
 export default function CreateRoomModal({ open, onClose, gameType, entryFee = 0, currency = 'coins', onCreateCode }) {
   const { socket } = useSocket();
   const { profile } = useAuth();
-  const [view, setView] = useState('main'); // 'main' | 'friends'
   const [friends, setFriends] = useState([]);
   const [online, setOnline] = useState([]);
   const [invitedId, setInvitedId] = useState(null);
   const [err, setErr] = useState('');
 
   useEffect(() => {
-    if (!open) { setView('main'); setInvitedId(null); setErr(''); }
+    if (!open) { setInvitedId(null); setErr(''); }
   }, [open]);
 
-  // Load accepted friends + their online status when the friends view opens.
+  // Load accepted friends + their online status whenever the modal opens.
   useEffect(() => {
-    if (!open || view !== 'friends') return;
+    if (!open) return;
     api.get('/auth/friends').then(list => {
       const accepted = (list || []).filter(f => f.status === 'accepted');
       const fr = accepted
@@ -31,7 +30,7 @@ export default function CreateRoomModal({ open, onClose, gameType, entryFee = 0,
       setFriends(fr);
       if (socket && fr.length) socket.emit('check_online', { userIds: fr.map(f => f.id) });
     }).catch(() => setFriends([]));
-  }, [open, view, socket, profile?.id]);
+  }, [open, socket, profile?.id]);
 
   useEffect(() => {
     if (!socket) return;
@@ -55,43 +54,26 @@ export default function CreateRoomModal({ open, onClose, gameType, entryFee = 0,
     // The page's `invite_sent` listener closes this modal and shows the waiting screen.
   }
 
+  const onlineFriends = friends.filter(f => online.includes(f.id));
+
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="bg-surface border border-border rounded-2xl p-5 w-full max-w-sm animate-slide-up" onClick={e => e.stopPropagation()}>
-        {view === 'main' ? (
+        <div className="text-lg font-black text-white mb-1">🎮 Challenge a Friend</div>
+        <p className="text-xs text-muted mb-4">Get a link to send anyone — they tap it and join your game.</p>
+
+        {err && <p className="text-danger text-xs mb-2 font-medium">{err}</p>}
+
+        <GlowButton variant="primary" className="w-full" onClick={() => { onCreateCode?.(); onClose(); }}>
+          🔗 Get Challenge Link
+        </GlowButton>
+
+        {/* Online friends — one tap to invite directly */}
+        {onlineFriends.length > 0 && (
           <>
-            <div className="text-lg font-black text-white mb-1">🔒 Create a Game</div>
-            <p className="text-xs text-muted mb-4">Play a private match with a friend.</p>
-            <div className="flex flex-col gap-2.5">
-              <GlowButton variant="primary" className="w-full" onClick={() => { onCreateCode?.(); onClose(); }}>
-                Create &amp; Get Code
-              </GlowButton>
-              <button
-                onClick={() => setView('friends')}
-                className="w-full py-3 rounded-xl text-sm font-bold border border-border bg-surfaceLight text-white hover:border-primary transition-all"
-              >
-                👥 Invite Friend
-              </button>
-              <button
-                onClick={onClose}
-                className="w-full py-2.5 rounded-xl text-sm font-semibold text-muted hover:text-white transition-all"
-              >
-                Exit
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-lg font-black text-white">Invite a Friend</div>
-              <button onClick={() => setView('main')} className="text-xs text-muted hover:text-white">← Back</button>
-            </div>
-            {err && <p className="text-danger text-xs mb-2 font-medium">{err}</p>}
-            <div className="max-h-72 overflow-y-auto flex flex-col gap-1.5 -mr-1 pr-1">
-              {friends.length === 0 && (
-                <p className="text-muted text-xs text-center py-6">No friends yet. Add some on your profile!</p>
-              )}
-              {friends.map(f => {
+            <p className="text-[11px] text-muted uppercase tracking-wider font-bold mt-5 mb-2">Or invite an online friend</p>
+            <div className="max-h-56 overflow-y-auto flex flex-col gap-1.5 -mr-1 pr-1">
+              {onlineFriends.map(f => {
                 const isOnline = online.includes(f.id);
                 const invited = invitedId === f.id;
                 const disabled = !isOnline || !canAfford || invited;
@@ -122,6 +104,13 @@ export default function CreateRoomModal({ open, onClose, gameType, entryFee = 0,
             </div>
           </>
         )}
+
+        <button
+          onClick={onClose}
+          className="w-full mt-4 py-2.5 rounded-xl text-sm font-semibold text-muted hover:text-white transition-all"
+        >
+          Exit
+        </button>
       </div>
     </div>
   );

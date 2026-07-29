@@ -11,6 +11,7 @@ import GameErrorBoundary from '../components/GameErrorBoundary';
 import GlowButton from '../components/GlowButton';
 import CreateRoomModal from '../components/CreateRoomModal';
 import JoinRoomModal from '../components/JoinRoomModal';
+import ChallengeLinkBox from '../components/ChallengeLinkBox';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
 
@@ -1054,13 +1055,8 @@ function BlackjackGame() {
             </>
           ) : (
             <>
-              <h2 className="text-2xl font-black text-white mb-2">Private Room</h2>
-              <p className="text-muted mb-4 text-sm">Share this code with your friend</p>
-              <div className="bg-surface border-2 border-primary rounded-2xl p-8 mb-6 inline-block min-w-[200px]">
-                <div className="text-4xl font-black font-mono tracking-[0.25em] text-primary">
-                  {privateCode}
-                </div>
-              </div>
+              <h2 className="text-2xl font-black text-white mb-2">Challenge Ready</h2>
+              <ChallengeLinkBox code={privateCode} gameType="blackjack" />
               <p className="text-muted text-sm mb-6">Waiting for opponent to join…</p>
             </>
           )}
@@ -1124,26 +1120,32 @@ function BlackjackGame() {
             </GlowButton>
           )}
 
-          {isDiamonds && (
-            <GlowButton onClick={session ? () => playVsBot(false) : () => navigate('/login')} variant="ghost" size="lg" className="w-full text-lg py-4 border border-border hover:border-primary" disabled={session && (!authenticated || insufficient)}>
-              {!session ? '🔒 Login to Play' : `🤖 Bet vs Bot — ${fmtFee(entryFee)} 💎`}
+          {session && (
+            <GlowButton onClick={() => setPrivateMode('create')} variant="ghost" size="lg" className="w-full text-lg py-4 border border-border hover:border-primary">
+              🎮 Challenge a Friend
             </GlowButton>
           )}
 
-          <GlowButton onClick={session ? () => playVsBot(true) : () => navigate('/login')} variant="ghost" size="lg" className="w-full text-lg py-4 border border-border hover:border-accent" disabled={session && !authenticated}>
-            {!session ? '🔒 Login to Play' : '🎮 Play Free vs Bot'}
-          </GlowButton>
-
-          <div className="grid grid-cols-2 gap-3">
-            <button onClick={() => { if (!session) return navigate('/login'); setPrivateMode(privateMode === 'create' ? null : 'create'); }}
-              className={`py-4 rounded-xl text-base font-semibold border transition-all ${privateMode === 'create' ? 'border-primary text-primary bg-primary/10' : 'border-border text-muted hover:border-primary hover:text-white bg-surface'}`}>
-              🔒 Create Game
-            </button>
-            <button onClick={() => { if (!session) return navigate('/login'); setPrivateMode(privateMode === 'join' ? null : 'join'); }}
-              className={`py-4 rounded-xl text-base font-semibold border transition-all ${privateMode === 'join' ? 'border-primary text-primary bg-primary/10' : 'border-border text-muted hover:border-primary hover:text-white bg-surface'}`}>
-              🔗 Join Game
-            </button>
-          </div>
+          {/* Secondary options as quiet text links — no button clutter */}
+          {session && (
+            <div className="flex items-center justify-center gap-3 text-sm text-muted pt-1">
+              {isDiamonds && (
+                <>
+                  <button onClick={() => playVsBot(false)} disabled={!authenticated || insufficient} className="hover:text-white transition-colors disabled:opacity-40">
+                    Bet vs Bot — {fmtFee(entryFee)} 💎
+                  </button>
+                  <span className="opacity-40">·</span>
+                </>
+              )}
+              <button onClick={() => playVsBot(true)} disabled={!authenticated} className="hover:text-white transition-colors disabled:opacity-40">
+                Play vs Bot
+              </button>
+              <span className="opacity-40">·</span>
+              <button onClick={() => setPrivateMode('join')} className="hover:text-white transition-colors">
+                Have a code?
+              </button>
+            </div>
+          )}
           <CreateRoomModal
             open={privateMode === 'create'}
             onClose={() => setPrivateMode(null)}

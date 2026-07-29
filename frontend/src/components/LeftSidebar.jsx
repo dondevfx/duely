@@ -13,6 +13,7 @@ const GAMES = [
 
 const NAV = [
   { icon: '🏠', label: 'Home',         route: '/' },
+  { icon: '🎮', label: 'Games',         route: '/games' },
   { icon: '🎡', label: 'Rewards',       route: '/rewards' },
   { icon: '👤', label: 'Profile',       route: '/profile' },
   { icon: '🏆', label: 'Leaderboard',   route: '/leaderboard' },

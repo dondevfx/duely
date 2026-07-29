@@ -7,6 +7,7 @@ import { useCurrency } from '../context/CurrencyContext';
 import GlowButton from '../components/GlowButton';
 import GameLobby from '../components/GameLobby';
 import ResultScreen from '../components/ResultScreen';
+import ChallengeLinkBox from '../components/ChallengeLinkBox';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
 
@@ -831,19 +832,8 @@ export default function BlockBlastGame() {
             </>
           ) : (
             <>
-              <h2 className="text-2xl font-bold text-white mb-2">Private Room Created</h2>
-              <p className="text-muted mb-6 text-sm">Share this code with a friend to invite them</p>
-              <div className="bg-surface border-2 border-primary rounded-2xl p-8 mb-6 shadow-glow inline-block min-w-[200px]">
-                <div className="text-4xl font-black font-mono tracking-[0.25em] text-primary" style={{ textShadow: '0 0 20px rgba(18,80,180,0.5)' }}>
-                  {privateCode}
-                </div>
-                <button
-                  onClick={() => navigator.clipboard.writeText(privateCode)}
-                  className="text-xs text-muted hover:text-primary mt-3 block mx-auto transition-colors"
-                >
-                  📋 Copy to clipboard
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold text-white mb-2">Challenge Ready</h2>
+              <ChallengeLinkBox code={privateCode} gameType="blockBlast" />
               <p className="text-muted text-sm animate-pulse mb-6">Waiting for opponent to join...</p>
             </>
           )}
