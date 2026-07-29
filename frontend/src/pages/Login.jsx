@@ -316,14 +316,6 @@ export default function Login() {
             <GlowButton type="submit" disabled={loading} variant="primary" size="lg" className="w-full">
               {loading ? 'Signing in...' : 'Sign In'}
             </GlowButton>
-
-            <button
-              type="button"
-              onClick={() => { setForgotMode(true); setError(null); }}
-              className="text-xs text-muted hover:text-primary transition-colors"
-            >
-              Forgot password?
-            </button>
           </form>
 
           <button

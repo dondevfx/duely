@@ -126,12 +126,6 @@ export default function Signup() {
             </GlowButton>
           </form>
 
-          <div className="mt-4 p-3 bg-success/10 border border-success/30 rounded-lg">
-            <p className="text-xs text-success text-center">
-              💎 Claim 250 free Diamonds every 5 minutes
-            </p>
-          </div>
-
           <p className="text-center text-sm text-muted mt-4">
             Have an account?{' '}
             <Link to="/login" className="text-primary hover:text-accent transition-colors font-medium">
