@@ -7,6 +7,11 @@ import CoinIcon from './CoinIcon';
 import CreateRoomModal from './CreateRoomModal';
 import JoinRoomModal from './JoinRoomModal';
 
+// Small secondary buttons under the two primary actions on every betting screen.
+export const SMALL_BTN =
+  'px-3 py-2 rounded-lg text-xs font-bold border border-border bg-surface text-muted ' +
+  'hover:border-primary hover:text-white transition-all disabled:opacity-40 disabled:hover:border-border';
+
 export const COIN_FEES    = [1, 5, 10, 25, 50, 100];
 export const DIAMOND_FEES = [500, 5000, 50000];
 
@@ -302,25 +307,22 @@ export default function GameLobby({
           </GlowButton>
         )}
 
-        {/* Secondary options as quiet text links — no button clutter */}
+        {/* Secondary options — small buttons, still visible but not competing
+            with the two primary actions above. */}
         {session && (onBot || onBotFree || onCreatePrivate) && (
-          <div className="flex items-center justify-center gap-3 text-sm text-muted pt-1">
+          <div className="flex items-center justify-center gap-2 pt-1">
             {onBot && isDiamonds && entryFee > 0 && (
-              <>
-                <button onClick={onBot} disabled={insufficient} className="hover:text-white transition-colors disabled:opacity-40">
-                  Bet vs Bot — {fmtFee(entryFee)} 💎
-                </button>
-                <span className="opacity-40">·</span>
-              </>
+              <button onClick={onBot} disabled={insufficient} className={SMALL_BTN}>
+                Bet vs Bot — {fmtFee(entryFee)} 💎
+              </button>
             )}
             {onBotFree && (
-              <button onClick={onBotFree} className="hover:text-white transition-colors">
+              <button onClick={onBotFree} className={SMALL_BTN}>
                 {botLabel || 'Play vs Bot'}
               </button>
             )}
-            {onBotFree && onCreatePrivate && <span className="opacity-40">·</span>}
             {onCreatePrivate && (
-              <button onClick={() => setPrivateMode('join')} className="hover:text-white transition-colors">
+              <button onClick={() => setPrivateMode('join')} className={SMALL_BTN}>
                 Have a code?
               </button>
             )}

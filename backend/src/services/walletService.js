@@ -2,7 +2,17 @@ const { unlockUser } = require('./lockService');
 const { resolveAffiliates, payAffiliatesCoins, payCodesCoinFlip, payAffiliatesDiamonds } = require('./affiliateService');
 const { creditRakeback } = require('./rakebackService');
 const { isDemo } = require('./demoAccounts');
+const gameEvents = require('./gameEvents');
+const { openEscrow, closeEscrow } = require('./escrowService');
 const PLATFORM_FEE_PERCENT = 0.05;
+
+// Tell the client its balance moved so the UI updates live without a refresh.
+// Bridged to the user's socket(s) in socket/handlers.js.
+function notifyBalance(...userIds) {
+  for (const userId of userIds) {
+    if (userId) gameEvents.emit('balance_changed', { userId });
+  }
+}
 
 const MAX_SINGLE_AMOUNT   = 10000;  // $10,000 hard cap per transaction
 const MIN_TIP_COINS       = 0.01;
@@ -49,6 +59,7 @@ async function creditCoins(supabase, userId, amount) {
     amount:  parseFloat(amount),
   });
   if (error) throw error;
+  notifyBalance(userId);
 }
 
 // Deduct coins — DB throws 'Insufficient balance' if not enough funds.
@@ -59,6 +70,7 @@ async function deductCoins(supabase, userId, amount) {
     amount:  parseFloat(amount),
   });
   if (error) throw error;
+  notifyBalance(userId);
 }
 
 // Deduct match entry fee from both players at match start, BEFORE notifying clients.
@@ -85,6 +97,10 @@ async function deductMatchFees(supabase, p1Id, p2Id, entryFee, currency) {
       throw new Error(e2.message || 'Opponent has insufficient balance');
     }
   }
+  notifyBalance(p1Id, p2Id);
+  // Crash safety: record that both players have paid in. Cleared on settle;
+  // refunded on boot if the process died mid-match. Never blocks the match.
+  openEscrow(supabase, p1Id, p2Id, fee, currency).catch(() => {});
 }
 
 // Builds the "notes" shown on a match transaction, e.g. "Coin Flip vs Alice".
@@ -131,6 +147,8 @@ async function settleMatch(supabase, winnerId, loserId, entryFee, meta = {}) {
   } finally {
     unlockUser(winnerId);
     unlockUser(loserId);
+    notifyBalance(winnerId, loserId);
+    closeEscrow(supabase, winnerId, loserId).catch(() => {});
   }
 }
 
@@ -172,6 +190,8 @@ async function settleCoinFlip(supabase, winnerId, loserId, entryFee, meta = {}) 
   } finally {
     unlockUser(winnerId);
     unlockUser(loserId);
+    notifyBalance(winnerId, loserId);
+    closeEscrow(supabase, winnerId, loserId).catch(() => {});
   }
 }
 
@@ -190,6 +210,7 @@ async function creditDiamonds(supabase, userId, amount) {
     amount:  Math.floor(amount),
   });
   if (error) throw error;
+  notifyBalance(userId);
 }
 
 async function deductDiamonds(supabase, userId, amount) {
@@ -198,6 +219,7 @@ async function deductDiamonds(supabase, userId, amount) {
     amount:  Math.floor(amount),
   });
   if (error) throw error;
+  notifyBalance(userId);
 }
 
 // Diamond match settlement — fees already deducted at match start, just credit winner 2x.
@@ -225,6 +247,8 @@ async function settleMatchDiamonds(supabase, winnerId, loserId, entryFee, meta =
   } finally {
     unlockUser(winnerId);
     unlockUser(loserId);
+    notifyBalance(winnerId, loserId);
+    closeEscrow(supabase, winnerId, loserId).catch(() => {});
   }
 }
 
@@ -337,6 +361,8 @@ async function forfeitSettleDiamonds(supabase, winnerId, loserId, entryFee) {
   } finally {
     unlockUser(winnerId);
     unlockUser(loserId);
+    notifyBalance(winnerId, loserId);
+    closeEscrow(supabase, winnerId, loserId).catch(() => {});
   }
 }
 
@@ -371,6 +397,8 @@ async function forfeitSettleCoins(supabase, winnerId, loserId, entryFee, adminId
   } finally {
     unlockUser(winnerId);
     unlockUser(loserId);
+    notifyBalance(winnerId, loserId);
+    closeEscrow(supabase, winnerId, loserId).catch(() => {});
   }
 }
 
@@ -411,6 +439,8 @@ async function settleDrawMatch(supabase, p1Id, p2Id, entryFee) {
   const totalPlatformFee = parseFloat((prizePool * platformFeePercent).toFixed(4));
   unlockUser(p1Id);
   unlockUser(p2Id);
+  notifyBalance(p1Id, p2Id);
+  closeEscrow(supabase, p1Id, p2Id).catch(() => {});
   return { winnerPayout: refund, fee: totalPlatformFee };
 }
 
@@ -430,6 +460,8 @@ async function settleDrawMatchDiamonds(supabase, p1Id, p2Id, entryFee) {
 
   unlockUser(p1Id);
   unlockUser(p2Id);
+  notifyBalance(p1Id, p2Id);
+  closeEscrow(supabase, p1Id, p2Id).catch(() => {});
   return { winnerPayout: fee, fee: 0 };
 }
 

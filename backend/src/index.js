@@ -108,6 +108,12 @@ swapPoller.init(supabase);
 blockchainMonitor.init(supabase);
 tickerService.init(io, supabase);
 
+// Refund any match that was interrupted by the previous process exiting —
+// entry fees were taken but the in-memory room died, so nobody was ever paid.
+require('./services/escrowService').refundAbandonedEscrows(supabase).catch(e =>
+  console.error('[escrow] startup sweep error:', e.message)
+);
+
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`React Duel backend running on port ${PORT}`);

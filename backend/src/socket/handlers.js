@@ -196,6 +196,14 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     }
   });
 
+  // Any balance movement (match settle, entry fee, tip, deposit, withdrawal,
+  // refund) → tell that user's client so the displayed balance updates live.
+  gameEvents.on('balance_changed', ({ userId }) => {
+    for (const [, sock] of io.sockets.sockets) {
+      if (sock._authenticatedUserId === userId) sock.emit('balance_changed');
+    }
+  });
+
   function _genPrivateCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let c = '';

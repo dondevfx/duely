@@ -54,6 +54,7 @@ import AgeToSModal, { useTosAccepted } from './components/AgeToSModal';
 import SaveLoginPrompt from './components/SaveLoginPrompt';
 import ErrorBoundary from './components/ErrorBoundary';
 import InviteToasts from './components/InviteToasts';
+import BalanceSync from './components/BalanceSync';
 
 function ProtectedRoute({ children }) {
   const { session, loading, mfaPending } = useAuth();
@@ -170,6 +171,7 @@ export default function App() {
           <WalletProvider>
             <CurrencyProvider>
               <NotifyToast />
+              <BalanceSync />
               <Shell />
             </CurrencyProvider>
           </WalletProvider>

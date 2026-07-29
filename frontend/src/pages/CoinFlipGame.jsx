@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { playMatchFound, playCountdown, playGo, playCoinFlip, playCoinLand, stopAllSounds } from '../utils/sound';
 import { useSocket } from '../context/SocketContext';
 import { useCurrency } from '../context/CurrencyContext';
-import { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
+import { COIN_FEES, DIAMOND_FEES, SMALL_BTN } from '../components/GameLobby';
 import BetSlider from '../components/BetSlider';
 import ResultScreen from '../components/ResultScreen';
 import GlowButton from '../components/GlowButton';
@@ -681,21 +681,17 @@ export default function CoinFlipGame() {
                 🎮 Challenge a Friend
               </GlowButton>
               <>
-                  {/* Secondary options as quiet text links — no button clutter */}
-                  <div className="flex items-center justify-center gap-3 text-sm text-muted pt-1">
+                  {/* Secondary options — small buttons, still visible but not competing */}
+                  <div className="flex items-center justify-center gap-2 pt-1">
                     {isDiamonds && (
-                      <>
-                        <button onClick={() => playVsBot(false)} disabled={!authenticated || insufficient} className="hover:text-white transition-colors disabled:opacity-40">
-                          Bet vs Bot — {fmtFee(entryFee)} 💎
-                        </button>
-                        <span className="opacity-40">·</span>
-                      </>
+                      <button onClick={() => playVsBot(false)} disabled={!authenticated || insufficient} className={SMALL_BTN}>
+                        Bet vs Bot — {fmtFee(entryFee)} 💎
+                      </button>
                     )}
-                    <button onClick={() => playVsBot(true)} disabled={!authenticated} className="hover:text-white transition-colors disabled:opacity-40">
+                    <button onClick={() => playVsBot(true)} disabled={!authenticated} className={SMALL_BTN}>
                       Play vs Bot
                     </button>
-                    <span className="opacity-40">·</span>
-                    <button onClick={() => setPrivateMode('join')} className="hover:text-white transition-colors">
+                    <button onClick={() => setPrivateMode('join')} className={SMALL_BTN}>
                       Have a code?
                     </button>
                   </div>
