@@ -78,10 +78,10 @@ export default function Home() {
   const { playerCounts } = useSocket();
 
   return (
-    <div className="min-h-screen bg-bg pt-2 md:pt-16">
-      {/* Hero — tight on mobile, roomy on desktop (was ~120px of stacked
-          top padding on every screen size) */}
-      <section className="relative pt-3 md:pt-14 pb-10 px-4 overflow-hidden">
+    <div className="min-h-screen bg-bg pt-4 md:pt-16">
+      {/* Hero — a little breathing room on mobile (~40px), roomy on desktop
+          (was ~120px of stacked top padding on every screen size) */}
+      <section className="relative pt-6 md:pt-14 pb-10 px-4 overflow-hidden">
         <div className="relative max-w-7xl mx-auto">
           <div className="flex flex-col lg:flex-row items-center justify-between gap-6 lg:gap-12">
             <div className="flex-1 text-center lg:text-left">
