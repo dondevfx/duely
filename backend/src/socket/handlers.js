@@ -63,10 +63,35 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     return out;
   };
   const _isUserOnline = (userId) => _socketsForUser(userId).length > 0;
-  const _isUserInGame = (userId) => _socketsForUser(userId).some(s =>
-    getRoomBySocket(s.id) || getBlockBlastRoomBySocket(s.id) || getWordleRoomBySocket(s.id) ||
-    getCoinFlipRoomBySocket(s.id) || getBlackjackRoomBySocket(s.id)
-  );
+  // A room that has already settled (player is sitting on the victory/loss
+  // screen) does NOT count as being in a game — otherwise invites stay deferred
+  // and never pop up until they navigate away.
+  const _activeRoomFor = (sid) => {
+    const found = getRoomBySocket(sid) || getBlockBlastRoomBySocket(sid) || getWordleRoomBySocket(sid) ||
+                  getCoinFlipRoomBySocket(sid) || getBlackjackRoomBySocket(sid);
+    if (!found) return null;
+    const room = found.room || found;
+    if (!room) return null;
+    if (room.state === 'finished' || room.settled) return null;
+    return found;
+  };
+  const _isUserInGame = (userId) => _socketsForUser(userId).some(s => !!_activeRoomFor(s.id));
+
+  // Cancel any private room this socket is hosting, plus the invite tied to it.
+  // Called whenever the host leaves the page/disconnects — without this the room
+  // stays open and the invitee can still drag the departed host into a match.
+  function _cancelHostedRooms(socketId, userId) {
+    for (const [code, room] of [...pendingPrivateRooms]) {
+      if (room.p1.socketId !== socketId) continue;
+      pendingPrivateRooms.delete(code);
+      if ((room.p1.entryFee || 0) > 0) unlockUser(room.p1.userId || userId);
+      for (const [iid, inv] of [...pendingInvites]) {
+        if (inv.code !== code) continue;
+        _cleanupInvite(iid);
+        for (const s of _socketsForUser(inv.toUserId)) s.emit('invite_cancelled', { inviteId: iid });
+      }
+    }
+  }
 
   function _cleanupInvite(inviteId) {
     const inv = pendingInvites.get(inviteId);
@@ -79,6 +104,10 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
   function _deliverInvite(inviteId) {
     const inv = pendingInvites.get(inviteId);
     if (!inv) return;
+    // Nobody to deliver to (they went offline since the invite was created) —
+    // tear the room down so it can't be joined later and the host isn't left
+    // waiting on a match that will never come.
+    if (!_isUserOnline(inv.toUserId)) { _expireInvite(inviteId, 'unavailable'); return; }
     inv.deferred = false;
     if (inv.timer) clearTimeout(inv.timer);
     for (const s of _socketsForUser(inv.toUserId)) {
@@ -1145,6 +1174,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // Removes socket from every queue and clears the userQueues lock so they can
     // join a new queue immediately without getting "Already in a queue".
     socket.on('leave_all_queues', () => {
+      _cancelHostedRooms(socket.id, authenticatedUser?.userId);
       removeFromBlockBlastQueue(socket.id);
       removeFromWordleQueue(socket.id);
       removeFromCoinFlipQueue(socket.id);
@@ -1163,6 +1193,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ── Player forfeit: explicitly called when a player navigates away mid-match ──
     socket.on('player_forfeit', async () => {
       if (!authenticatedUser) return;
+      _cancelHostedRooms(socket.id, authenticatedUser.userId);
       const roomLookups = [
         [getRoomBySocket,           deleteRoom,           'reaction'],
         [getBlockBlastRoomBySocket, deleteBlockBlastRoom, 'blockBlast'],
@@ -1259,13 +1290,9 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     socket.on('disconnect', async () => {
       if (authenticatedUser) { unlockUser(authenticatedUser.userId); userQueues.delete(authenticatedUser.userId); }
       cleanupSocket(socket.id);
-      for (const [code, room] of pendingPrivateRooms) {
-        if (room.p1.socketId === socket.id) {
-          pendingPrivateRooms.delete(code);
-          if ((room.p1.entryFee || 0) > 0) unlockUser(room.p1.userId);
-          break;
-        }
-      }
+      // Close every room this socket was hosting (not just the first) and pull
+      // back the invites tied to them.
+      _cancelHostedRooms(socket.id, authenticatedUser?.userId);
       // Inviter disconnected — cancel their outstanding invites and pull the popup.
       if (authenticatedUser) {
         for (const [iid, inv] of pendingInvites) {
