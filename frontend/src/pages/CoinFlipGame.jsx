@@ -682,18 +682,21 @@ export default function CoinFlipGame() {
               </GlowButton>
               <>
                   {/* Secondary options — small buttons, still visible but not competing */}
-                  <div className="flex items-center justify-center gap-2 pt-1">
+                  <div className="flex flex-col gap-2 pt-1">
+                    {/* Diamond bet-vs-bot gets its own full-width row — too long to share */}
                     {isDiamonds && (
                       <button onClick={() => playVsBot(false)} disabled={!authenticated || insufficient} className={SMALL_BTN}>
                         Bet vs Bot — {fmtFee(entryFee)} 💎
                       </button>
                     )}
-                    <button onClick={() => playVsBot(true)} disabled={!authenticated} className={SMALL_BTN}>
-                      Play vs Bot
-                    </button>
-                    <button onClick={() => setPrivateMode('join')} className={SMALL_BTN}>
-                      Join Game
-                    </button>
+                    <div className="flex gap-2">
+                      <button onClick={() => playVsBot(true)} disabled={!authenticated} className={SMALL_BTN}>
+                        Play vs Bot
+                      </button>
+                      <button onClick={() => setPrivateMode('join')} className={SMALL_BTN}>
+                        Join Game
+                      </button>
+                    </div>
                   </div>
                   <CreateRoomModal
                     open={privateMode === 'create'}

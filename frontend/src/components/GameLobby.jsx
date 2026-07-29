@@ -9,7 +9,7 @@ import JoinRoomModal from './JoinRoomModal';
 
 // Small secondary buttons under the two primary actions on every betting screen.
 export const SMALL_BTN =
-  'flex-1 px-4 py-3 rounded-xl text-sm font-bold border border-border bg-surface text-muted ' +
+  'flex-1 px-4 py-3 rounded-xl text-sm font-bold whitespace-nowrap border border-border bg-surface text-muted ' +
   'hover:border-primary hover:text-white transition-all disabled:opacity-40 disabled:hover:border-border';
 
 export const COIN_FEES    = [1, 5, 10, 25, 50, 100];
@@ -310,22 +310,26 @@ export default function GameLobby({
         {/* Secondary options — small buttons, still visible but not competing
             with the two primary actions above. */}
         {session && (onBot || onBotFree || onCreatePrivate) && (
-          <div className="flex items-center justify-center gap-2 pt-1">
+          <div className="flex flex-col gap-2 pt-1">
+            {/* Diamond bet-vs-bot gets its own full-width row — the label is too
+                long to share a row with the other two. */}
             {onBot && isDiamonds && entryFee > 0 && (
               <button onClick={onBot} disabled={insufficient} className={SMALL_BTN}>
                 Bet vs Bot — {fmtFee(entryFee)} 💎
               </button>
             )}
-            {onBotFree && (
-              <button onClick={onBotFree} className={SMALL_BTN}>
-                {botLabel || 'Play vs Bot'}
-              </button>
-            )}
-            {onCreatePrivate && (
-              <button onClick={() => setPrivateMode('join')} className={SMALL_BTN}>
-                Join Game
-              </button>
-            )}
+            <div className="flex gap-2">
+              {onBotFree && (
+                <button onClick={onBotFree} className={SMALL_BTN}>
+                  {botLabel || 'Play vs Bot'}
+                </button>
+              )}
+              {onCreatePrivate && (
+                <button onClick={() => setPrivateMode('join')} className={SMALL_BTN}>
+                  Join Game
+                </button>
+              )}
+            </div>
           </div>
         )}
 
