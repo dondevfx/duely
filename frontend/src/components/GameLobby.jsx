@@ -9,7 +9,7 @@ import JoinRoomModal from './JoinRoomModal';
 
 // Small secondary buttons under the two primary actions on every betting screen.
 export const SMALL_BTN =
-  'px-3 py-2 rounded-lg text-xs font-bold border border-border bg-surface text-muted ' +
+  'flex-1 px-4 py-3 rounded-xl text-sm font-bold border border-border bg-surface text-muted ' +
   'hover:border-primary hover:text-white transition-all disabled:opacity-40 disabled:hover:border-border';
 
 export const COIN_FEES    = [1, 5, 10, 25, 50, 100];
@@ -323,7 +323,7 @@ export default function GameLobby({
             )}
             {onCreatePrivate && (
               <button onClick={() => setPrivateMode('join')} className={SMALL_BTN}>
-                Have a code?
+                Join Game
               </button>
             )}
           </div>

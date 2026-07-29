@@ -692,7 +692,7 @@ export default function CoinFlipGame() {
                       Play vs Bot
                     </button>
                     <button onClick={() => setPrivateMode('join')} className={SMALL_BTN}>
-                      Have a code?
+                      Join Game
                     </button>
                   </div>
                   <CreateRoomModal
