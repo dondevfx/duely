@@ -160,9 +160,12 @@ export default function Wallet() {
     setDepPolling(true);
     const startBalance = profile?.c_coins ?? 0;
     let attempts = 0;
+    // 20s (not 10s) and capped at 45 polls (~15 min) — the deposit toast pushes
+    // the balance over the socket anyway, so this is just a fallback and doesn't
+    // need to burn the API rate-limit budget.
     pollRef.current = setInterval(async () => {
       attempts++;
-      if (attempts > 120) { stopPolling(); return; }
+      if (attempts > 45) { stopPolling(); return; }
       try {
         const { c_coins } = await api.get('/wallet/balance');
         if (c_coins > startBalance) {
@@ -172,7 +175,7 @@ export default function Wallet() {
           api.get('/wallet/transactions?limit=50').then(setTransactions).catch(() => {});
         }
       } catch {}
-    }, 10000);
+    }, 20000);
   }
 
   function copyAddr(text) {
