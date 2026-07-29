@@ -78,23 +78,24 @@ export default function Home() {
   const { playerCounts } = useSocket();
 
   return (
-    <div className="min-h-screen bg-bg pt-16">
-      {/* Hero */}
-      <section className="relative pt-14 pb-10 px-4 overflow-hidden">
+    <div className="min-h-screen bg-bg pt-2 md:pt-16">
+      {/* Hero — tight on mobile, roomy on desktop (was ~120px of stacked
+          top padding on every screen size) */}
+      <section className="relative pt-3 md:pt-14 pb-10 px-4 overflow-hidden">
         <div className="relative max-w-7xl mx-auto">
-          <div className="flex flex-col lg:flex-row items-center justify-between gap-12">
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-6 lg:gap-12">
             <div className="flex-1 text-center lg:text-left">
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 border border-primary/30 rounded-full text-primary text-sm font-medium mb-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 border border-primary/30 rounded-full text-primary text-sm font-medium mb-3 md:mb-6">
                 <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
                 Live — Play Now
               </div>
-              <h1 className="text-5xl md:text-7xl font-black text-white mb-6 leading-tight">
+              <h1 className="text-5xl md:text-7xl font-black text-white mb-4 md:mb-6 leading-tight">
                 1v1{' '}
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-primary">
                   Duels
                 </span>
               </h1>
-              <p className="text-xl text-muted max-w-2xl mx-auto lg:mx-0 mb-10">
+              <p className="text-xl text-muted max-w-2xl mx-auto lg:mx-0 mb-6 md:mb-10">
                 Challenge opponents in real-time skill-based games. Wager{' '}
                 <span className="text-primary font-semibold whitespace-nowrap"><CoinIcon size="1em" /> Coins</span>, climb the leaderboard,
                 and prove you're the best.
