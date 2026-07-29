@@ -39,6 +39,7 @@ import QuickMatch from './pages/QuickMatch';
 import WordleGame from './pages/WordleGame';
 import CoinFlipGame from './pages/CoinFlipGame';
 import BlackjackGame from './pages/BlackjackGame';
+import CarDashGame from './pages/CarDashGame';
 import Transactions from './pages/Transactions';
 import Rewards from './pages/Rewards';
 import Login from './pages/Login';
@@ -141,6 +142,7 @@ function Shell() {
           <Route path="/game/scrabble"      element={<WordleGame />} />
           <Route path="/game/coin-flip"     element={<CoinFlipGame />} />
           <Route path="/game/blackjack"     element={<BlackjackGame />} />
+          <Route path="/game/car-dash"      element={<CarDashGame />} />
           <Route path="/game/word-vs"       element={<WordleGame />} />
           <Route path="/spectate/:gameId"   element={<SpectateView />} />
           <Route path="/game/random"        element={<Navigate to="/game/quick-match" replace />} />

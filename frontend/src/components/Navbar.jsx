@@ -24,6 +24,7 @@ const GAME_LINKS = [
   { icon: '🟡', label: 'Coin Flip',   to: '/game/coin-flip',   countKey: 'coin-flip' },
   { icon: '🔤', label: 'Word VS',     to: '/game/scrabble',    countKey: 'scrabble' },
   { icon: '🃏', label: 'Blackjack',   to: '/game/blackjack',   countKey: 'blackjack' },
+  { icon: '🚗', label: 'Highway Dash', to: '/game/car-dash',  countKey: 'car-dash' },
 ];
 
 

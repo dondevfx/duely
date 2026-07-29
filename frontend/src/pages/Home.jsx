@@ -41,6 +41,14 @@ const GAMES = [
     countKey: 'scrabble',
   },
   {
+    title: 'Highway Dash',
+    description: 'Weave through highway traffic at full speed. Both players face the exact same road — whoever survives longest takes the pot.',
+    icon: '🚗',
+    route: '/game/car-dash',
+    available: true,
+    countKey: 'car-dash',
+  },
+  {
     title: 'Blackjack',
     description: 'Get closer to 21 than your opponent. Both players act simultaneously — no waiting.',
     icon: '🃏',
