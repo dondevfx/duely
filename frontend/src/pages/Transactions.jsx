@@ -10,7 +10,7 @@ const FILTERS = [
   { key: 'withdrawal', label: 'Withdrawals' },
   { key: 'match_win',  label: 'Match Wins' },
   { key: 'match_loss', label: 'Match Losses' },
-  { key: 'coins',      label: '🪙 Coins' },
+  { key: 'coins',      label: <span className="inline-flex items-center gap-1"><CoinIcon size="0.9em" /> Coins</span>, text: 'Coins' },
   { key: 'diamonds',   label: '💎 Diamonds' },
   { key: 'tip',        label: 'Tips' },
 ];
@@ -222,7 +222,7 @@ export default function Transactions() {
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
               <CoinIcon size="2.5rem" />
               <p className="text-white font-bold text-lg">
-                {activeFilter === 'all' ? 'No transactions yet' : `No ${FILTERS.find(f => f.key === activeFilter)?.label ?? ''} found`}
+                {activeFilter === 'all' ? 'No transactions yet' : `No ${(() => { const f = FILTERS.find(x => x.key === activeFilter); return f?.text ?? (typeof f?.label === 'string' ? f.label : ''); })()} found`}
               </p>
               <p className="text-muted text-sm max-w-xs">
                 {activeFilter === 'all'
