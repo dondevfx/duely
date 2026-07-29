@@ -10,6 +10,7 @@ import { fmtCoins, fmtDiamonds } from '../utils/format';
 
 const NAV_LINKS = [
   { icon: '🏠', label: 'Home',        to: '/' },
+  { icon: '🎮', label: 'Games',       to: '/games' },
   { icon: '🎡', label: 'Rewards',     to: '/rewards' },
   { icon: '👤', label: 'Profile',     to: '/profile' },
   { icon: '🏆', label: 'Leaderboard', to: '/leaderboard' },
