@@ -30,16 +30,16 @@ const PLAYER_YF    = 0.78;   // player screen position (fraction of height)
 const SPAWN_Y      = 730;
 const DESPAWN_Y    = -280;
 
-const SPD_START    = 500;    // u/s
+const SPD_START    = 585;    // u/s
 const SPD_MAX      = 1150;
-const RAMP_S       = 62;     // seconds to reach max speed
+const RAMP_S       = 48;     // seconds to reach max speed
 // Past RAMP_S the run keeps escalating instead of flat-lining.
 const OD_S         = 70;     // seconds per unit of "overdrive"
 const OD_MAX       = 1.8;
 const OD_SPEED     = 300;    // extra u/s at full overdrive
 const OD_CLOSE     = 170;    // extra closing speed at full overdrive
-const CLOSE_MIN    = 185;    // closing speed floor (u/s)
-const CLOSE_MAX    = 520;    // closing speed at full difficulty
+const CLOSE_MIN    = 225;    // closing speed floor (u/s)
+const CLOSE_MAX    = 565;    // closing speed at full difficulty
 const VISUAL_SCROLL = 1.0;   // road MUST scroll with the world or it slides under the cars
 
 const PTS_DIST     = 0.06;
@@ -118,24 +118,6 @@ function shade(hex, amt) {
   return `rgb(${c(((n >> 16) & 255) + amt)},${c(((n >> 8) & 255) + amt)},${c((n & 255) + amt)})`;
 }
 
-// Tapered car silhouette, front = up.
-function bodyPath(g, w, h, noseT, tailT, r) {
-  const nw = w * noseT, tw = w * tailT;
-  g.beginPath();
-  g.moveTo(w / 2 - nw / 2 + r, 0);
-  g.lineTo(w / 2 + nw / 2 - r, 0);
-  g.quadraticCurveTo(w / 2 + nw / 2, 0, w / 2 + nw / 2 + (w - nw) / 2 * 0.9, h * 0.16);
-  g.lineTo(w, h * 0.3);
-  g.lineTo(w, h - r - (w - tw) / 2 * 0.4);
-  g.quadraticCurveTo(w, h, w / 2 + tw / 2, h);
-  g.lineTo(w / 2 - tw / 2, h);
-  g.quadraticCurveTo(0, h, 0, h - r - (w - tw) / 2 * 0.4);
-  g.lineTo(0, h * 0.3);
-  g.lineTo(w / 2 - nw / 2 - (w - nw) / 2 * 0.9, h * 0.16);
-  g.quadraticCurveTo(w / 2 - nw / 2, 0, w / 2 - nw / 2 + r, 0);
-  g.closePath();
-}
-
 // Baked glow disc (runtime bloom without shadowBlur)
 function bakeGlow(hex, r) {
   const n = parseInt(hex.slice(1), 16);
@@ -166,145 +148,178 @@ function bakeSoftShadow(w, h) {
   });
 }
 
-// ── Traffic vehicle sprite (top-down, front = up) ───────────────────────────
+// -- Traffic vehicle sprite ------------------------------------------------
+// House style: graphite hulls with hard chamfered geometry and a single bold
+// livery wrap, lit by the road's neon (cool rim on the left, warm bounce on the
+// right). Colour identifies a vehicle at a glance without turning the highway
+// into a rainbow -- they read as one fleet, clearly distinct from the player's
+// glowing blue Interceptor.
 function bakeVehicle(kind, paint, wpx, lpx) {
-  const P = 8; // padding for mirrors
+  const P = 9;
   return bake(wpx + P * 2, lpx + P * 2, (g) => {
     g.translate(P, P);
     const w = wpx, h = lpx;
-    const spec = { sedan: [0.62, 0.86], suv: [0.74, 0.9], pickup: [0.72, 0.9], sports: [0.52, 0.8], van: [0.8, 0.92], semi: [0.85, 0.95] }[kind];
-    const [noseT, tailT] = spec;
 
-    // Wheels first (peek out at the sides)
-    g.fillStyle = '#0B0D11';
-    const ww = w * 0.09, wh = h * 0.14;
-    const wy1 = h * (kind === 'semi' ? 0.1 : 0.16), wy2 = h * (kind === 'semi' ? 0.78 : 0.7);
-    for (const wy of [wy1, wy2]) {
-      rr(g, -ww * 0.4, wy, ww, wh, ww * 0.4); g.fill();
-      rr(g, w - ww * 0.6, wy, ww, wh, ww * 0.4); g.fill();
-    }
-    if (kind === 'semi') {
-      for (const wy of [h * 0.62, h * 0.9]) {
-        rr(g, -ww * 0.4, wy, ww, wh * 0.8, ww * 0.4); g.fill();
-        rr(g, w - ww * 0.6, wy, ww, wh * 0.8, ww * 0.4); g.fill();
-      }
+    const HULL_HI = '#3A414D', HULL = '#262C36', HULL_LO = '#151A21';
+    // Chamfered, angular hull -- corners are cut, never rounded.
+    const hull = (x, y, ww, hh, cut) => {
+      g.beginPath();
+      g.moveTo(x + cut, y);
+      g.lineTo(x + ww - cut, y);
+      g.lineTo(x + ww, y + cut);
+      g.lineTo(x + ww, y + hh - cut);
+      g.lineTo(x + ww - cut, y + hh);
+      g.lineTo(x + cut, y + hh);
+      g.lineTo(x, y + hh - cut);
+      g.lineTo(x, y + cut);
+      g.closePath();
+    };
+
+    // Wheels
+    g.fillStyle = '#0A0C10';
+    const tw = w * 0.085, th = h * 0.13;
+    const axles = kind === 'semi' ? [h * 0.08, h * 0.6, h * 0.86] : [h * 0.15, h * 0.7];
+    for (const wy of axles) {
+      g.fillRect(-tw * 0.35, wy, tw, th);
+      g.fillRect(w - tw * 0.65, wy, tw, th);
     }
 
     if (kind === 'semi') {
-      // Cab
-      const cabH = h * 0.24;
-      const grad = g.createLinearGradient(0, 0, w, 0);
-      grad.addColorStop(0, shade(paint, -38));
-      grad.addColorStop(0.35, shade(paint, 14));
-      grad.addColorStop(0.65, paint);
-      grad.addColorStop(1, shade(paint, -46));
-      g.fillStyle = grad;
-      rr(g, w * 0.04, 0, w * 0.92, cabH, w * 0.12); g.fill();
-      g.fillStyle = shade(paint, -18);
-      rr(g, w * 0.12, cabH * 0.55, w * 0.76, cabH * 0.5, w * 0.1); g.fill();
-      g.fillStyle = '#0D1522';
-      rr(g, w * 0.14, cabH * 0.16, w * 0.72, cabH * 0.34, 3); g.fill();
-      g.fillStyle = 'rgba(159,220,255,0.16)';
-      g.beginPath(); g.moveTo(w * 0.18, cabH * 0.16); g.lineTo(w * 0.4, cabH * 0.16); g.lineTo(w * 0.28, cabH * 0.5); g.lineTo(w * 0.14, cabH * 0.5); g.closePath(); g.fill();
-      // Trailer
-      const ty = cabH + h * 0.03;
+      // Tractor unit
+      const cabH = h * 0.23;
+      const cg = g.createLinearGradient(0, 0, w, 0);
+      cg.addColorStop(0, HULL_LO); cg.addColorStop(0.3, HULL_HI); cg.addColorStop(0.62, HULL); cg.addColorStop(1, '#0F131A');
+      g.fillStyle = cg;
+      hull(w * 0.03, 0, w * 0.94, cabH, w * 0.16); g.fill();
+      g.fillStyle = paint;
+      g.fillRect(w * 0.03, cabH * 0.62, w * 0.94, cabH * 0.16);
+      g.fillStyle = '#080C14';
+      g.fillRect(w * 0.14, cabH * 0.18, w * 0.72, cabH * 0.3);
+      g.fillStyle = 'rgba(0,191,255,0.18)';
+      g.fillRect(w * 0.14, cabH * 0.18, w * 0.3, cabH * 0.3);
+      g.fillStyle = '#4A525F';
+      g.fillRect(w * 0.06, cabH * 0.05, w * 0.05, cabH * 0.5);
+      g.fillRect(w * 0.89, cabH * 0.05, w * 0.05, cabH * 0.5);
+
+      // Trailer: dark panel with a single livery spine
+      const ty = cabH + h * 0.025;
       const tg = g.createLinearGradient(0, 0, w, 0);
-      tg.addColorStop(0, '#8E96A2'); tg.addColorStop(0.4, '#C9CFD8'); tg.addColorStop(0.65, '#B7BEC9'); tg.addColorStop(1, '#7C8492');
+      tg.addColorStop(0, '#12161D'); tg.addColorStop(0.32, '#2E353F'); tg.addColorStop(0.62, '#222831'); tg.addColorStop(1, '#0D1116');
       g.fillStyle = tg;
-      rr(g, 0, ty, w, h - ty, w * 0.06); g.fill();
-      g.strokeStyle = 'rgba(30,36,46,0.35)'; g.lineWidth = 1;
-      for (let i = 1; i <= 9; i++) {
+      hull(0, ty, w, h - ty, w * 0.1); g.fill();
+      g.strokeStyle = 'rgba(0,0,0,0.4)'; g.lineWidth = 1;
+      for (let i = 1; i < 10; i++) {
         const yy = ty + (h - ty) * (i / 10);
-        g.beginPath(); g.moveTo(w * 0.03, yy); g.lineTo(w * 0.97, yy); g.stroke();
+        g.beginPath(); g.moveTo(w * 0.05, yy); g.lineTo(w * 0.95, yy); g.stroke();
       }
-      g.fillStyle = 'rgba(18,80,180,0.85)';
-      g.fillRect(0, ty + (h - ty) * 0.42, w, (h - ty) * 0.1);
-      g.strokeStyle = 'rgba(20,24,30,0.5)';
-      g.beginPath(); g.moveTo(w / 2, h - (h - ty) * 0.12); g.lineTo(w / 2, h); g.stroke();
+      g.fillStyle = paint;
+      g.fillRect(w * 0.42, ty + (h - ty) * 0.06, w * 0.16, (h - ty) * 0.88);
+      g.fillStyle = 'rgba(255,255,255,0.07)';
+      g.fillRect(w * 0.42, ty + (h - ty) * 0.06, w * 0.04, (h - ty) * 0.88);
     } else {
-      // Body
-      const grad = g.createLinearGradient(0, 0, w, 0);
-      grad.addColorStop(0, shade(paint, -40));
-      grad.addColorStop(0.32, shade(paint, 12));
-      grad.addColorStop(0.55, paint);
-      grad.addColorStop(1, shade(paint, -50));
-      g.fillStyle = grad;
-      bodyPath(g, w, h, noseT, tailT, w * 0.1); g.fill();
-      const lg = g.createLinearGradient(0, 0, 0, h);
-      lg.addColorStop(0, 'rgba(255,255,255,0.13)');
-      lg.addColorStop(0.35, 'rgba(255,255,255,0)');
-      lg.addColorStop(1, 'rgba(0,0,0,0.22)');
-      g.fillStyle = lg;
-      bodyPath(g, w, h, noseT, tailT, w * 0.1); g.fill();
-      g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 1.4;
-      bodyPath(g, w, h, noseT, tailT, w * 0.1); g.stroke();
+      const isLow = kind === 'sports';
+      const isTall = kind === 'van';
+      const cut = w * (isLow ? 0.3 : 0.22);
 
-      // panel seams
-      g.strokeStyle = 'rgba(0,0,0,0.16)'; g.lineWidth = 1;
-      g.beginPath(); g.moveTo(w * 0.1, h * 0.22); g.lineTo(w * 0.9, h * 0.22); g.stroke();
-      g.beginPath(); g.moveTo(w * 0.08, h * 0.8); g.lineTo(w * 0.92, h * 0.8); g.stroke();
-      g.beginPath(); g.moveTo(w * 0.16, h * 0.3); g.lineTo(w * 0.16, h * 0.72); g.stroke();
-      g.beginPath(); g.moveTo(w * 0.84, h * 0.3); g.lineTo(w * 0.84, h * 0.72); g.stroke();
+      const bg = g.createLinearGradient(0, 0, w, 0);
+      bg.addColorStop(0, HULL_LO);
+      bg.addColorStop(0.26, HULL_HI);
+      bg.addColorStop(0.58, HULL);
+      bg.addColorStop(1, '#0E121A');
+      g.fillStyle = bg;
+      hull(0, 0, w, h, cut); g.fill();
 
-      // glasshouse
-      const gx = w * 0.16, gw = w * 0.68;
-      const wsY = h * (kind === 'van' ? 0.14 : 0.26), wsH = h * 0.14;
-      g.fillStyle = '#0D1522';
-      rr(g, gx, wsY, gw, wsH, w * 0.06); g.fill();
-      const rwY = h * (kind === 'van' ? 0.86 : kind === 'sports' ? 0.62 : 0.66);
-      if (kind !== 'pickup') { rr(g, gx + gw * 0.06, rwY, gw * 0.88, h * 0.1, w * 0.05); g.fill(); }
-      g.fillStyle = shade(paint, kind === 'sports' ? -6 : -12);
-      rr(g, gx + gw * 0.05, wsY + wsH + 1, gw * 0.9, Math.max(2, rwY - wsY - wsH - 2), w * 0.05); g.fill();
-      // glass reflection streak
+      const fg = g.createLinearGradient(0, 0, 0, h);
+      fg.addColorStop(0, 'rgba(255,255,255,0.1)');
+      fg.addColorStop(0.4, 'rgba(255,255,255,0)');
+      fg.addColorStop(1, 'rgba(0,0,0,0.35)');
+      g.fillStyle = fg;
+      hull(0, 0, w, h, cut); g.fill();
+
+      // Livery wrap -- a single angular flash down the flank
       g.save();
-      rr(g, gx, wsY, gw, wsH, w * 0.06); g.clip();
-      g.fillStyle = 'rgba(159,220,255,0.2)';
-      g.beginPath(); g.moveTo(gx, wsY + wsH); g.lineTo(gx + gw * 0.34, wsY); g.lineTo(gx + gw * 0.52, wsY); g.lineTo(gx + gw * 0.16, wsY + wsH); g.closePath(); g.fill();
+      hull(0, 0, w, h, cut); g.clip();
+      g.fillStyle = paint;
+      g.beginPath();
+      g.moveTo(0, h * 0.30);
+      g.lineTo(w, h * 0.22);
+      g.lineTo(w, h * 0.36);
+      g.lineTo(0, h * 0.44);
+      g.closePath(); g.fill();
+      g.globalAlpha = 0.55;
+      g.beginPath();
+      g.moveTo(0, h * 0.50);
+      g.lineTo(w, h * 0.42);
+      g.lineTo(w, h * 0.47);
+      g.lineTo(0, h * 0.55);
+      g.closePath(); g.fill();
+      g.globalAlpha = 1;
+
+      // Canopy: one dark glass mass rather than separate windows
+      const cy0 = h * (isTall ? 0.12 : isLow ? 0.30 : 0.24);
+      const cy1 = h * (isTall ? 0.80 : isLow ? 0.64 : 0.70);
+      g.fillStyle = '#070B12';
+      g.beginPath();
+      g.moveTo(w * 0.5, cy0);
+      g.lineTo(w * 0.86, cy0 + (cy1 - cy0) * 0.22);
+      g.lineTo(w * 0.82, cy1);
+      g.lineTo(w * 0.18, cy1);
+      g.lineTo(w * 0.14, cy0 + (cy1 - cy0) * 0.22);
+      g.closePath(); g.fill();
+      g.fillStyle = 'rgba(0,191,255,0.2)';
+      g.beginPath();
+      g.moveTo(w * 0.18, cy1);
+      g.lineTo(w * 0.44, cy0 + (cy1 - cy0) * 0.1);
+      g.lineTo(w * 0.56, cy0 + (cy1 - cy0) * 0.12);
+      g.lineTo(w * 0.3, cy1);
+      g.closePath(); g.fill();
       g.restore();
 
-      // mirrors
-      g.fillStyle = shade(paint, -20);
-      rr(g, -w * 0.05, wsY + wsH * 0.4, w * 0.08, h * 0.045, 2); g.fill();
-      rr(g, w * 0.97, wsY + wsH * 0.4, w * 0.08, h * 0.045, 2); g.fill();
+      // Environment rim light: cool from the LED strip, warm bounce opposite
+      g.strokeStyle = 'rgba(0,191,255,0.5)'; g.lineWidth = 1.4;
+      g.beginPath(); g.moveTo(w * 0.02, h * 0.2); g.lineTo(w * 0.02, h * 0.82); g.stroke();
+      g.strokeStyle = 'rgba(255,190,120,0.16)';
+      g.beginPath(); g.moveTo(w * 0.98, h * 0.2); g.lineTo(w * 0.98, h * 0.82); g.stroke();
+      g.strokeStyle = 'rgba(0,0,0,0.55)'; g.lineWidth = 1.2;
+      hull(0, 0, w, h, cut); g.stroke();
 
-      // type extras
-      if (kind === 'suv') {
-        g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 2;
-        g.beginPath(); g.moveTo(gx + gw * 0.16, wsY + wsH + 3); g.lineTo(gx + gw * 0.16, rwY - 3); g.stroke();
-        g.beginPath(); g.moveTo(gx + gw * 0.84, wsY + wsH + 3); g.lineTo(gx + gw * 0.84, rwY - 3); g.stroke();
-      } else if (kind === 'pickup') {
-        g.fillStyle = shade(paint, -34);
-        rr(g, w * 0.12, h * 0.52, w * 0.76, h * 0.4, w * 0.05); g.fill();
-        g.fillStyle = 'rgba(0,0,0,0.35)';
-        rr(g, w * 0.15, h * 0.55, w * 0.7, h * 0.34, w * 0.04); g.fill();
-        g.strokeStyle = 'rgba(255,255,255,0.06)'; g.lineWidth = 1;
-        for (let i = 1; i < 5; i++) { const yy = h * 0.55 + h * 0.34 * (i / 5); g.beginPath(); g.moveTo(w * 0.16, yy); g.lineTo(w * 0.84, yy); g.stroke(); }
+      // Type silhouette cues
+      if (kind === 'pickup') {
+        g.fillStyle = '#0B0F15';
+        g.fillRect(w * 0.1, h * 0.6, w * 0.8, h * 0.32);
+        g.strokeStyle = 'rgba(255,255,255,0.05)'; g.lineWidth = 1;
+        for (let i = 1; i < 4; i++) { const yy = h * 0.6 + h * 0.32 * (i / 4); g.beginPath(); g.moveTo(w * 0.12, yy); g.lineTo(w * 0.88, yy); g.stroke(); }
       } else if (kind === 'sports') {
-        g.fillStyle = shade(paint, -26);
-        rr(g, w * 0.06, h * 0.88, w * 0.88, h * 0.06, 3); g.fill();
-        g.fillStyle = 'rgba(255,255,255,0.1)';
-        g.fillRect(w * 0.46, h * 0.05, w * 0.08, h * 0.16);
-        g.strokeStyle = 'rgba(0,0,0,0.3)';
-        for (let i = 0; i < 3; i++) { const yy = h * 0.74 + i * h * 0.035; g.beginPath(); g.moveTo(w * 0.3, yy); g.lineTo(w * 0.7, yy); g.stroke(); }
+        g.fillStyle = '#1A1F28';
+        g.fillRect(w * 0.02, h * 0.9, w * 0.96, h * 0.05);
+        g.fillStyle = paint;
+        g.fillRect(w * 0.46, h * 0.02, w * 0.08, h * 0.18);
+      } else if (kind === 'suv') {
+        g.fillStyle = '#39414E';
+        g.fillRect(w * 0.16, h * 0.16, w * 0.03, h * 0.62);
+        g.fillRect(w * 0.81, h * 0.16, w * 0.03, h * 0.62);
       } else if (kind === 'van') {
-        g.fillStyle = 'rgba(0,0,0,0.18)';
-        g.beginPath(); g.arc(w * 0.3, h * 0.4, w * 0.05, 0, 6.283); g.fill();
-        g.beginPath(); g.arc(w * 0.7, h * 0.4, w * 0.05, 0, 6.283); g.fill();
+        g.fillStyle = 'rgba(255,255,255,0.05)';
+        g.fillRect(w * 0.1, h * 0.84, w * 0.8, h * 0.03);
       }
 
-      // specular streak
-      g.fillStyle = 'rgba(255,255,255,0.07)';
-      g.beginPath(); g.moveTo(w * 0.3, 0); g.lineTo(w * 0.38, 0); g.lineTo(w * 0.3, h); g.lineTo(w * 0.22, h); g.closePath(); g.fill();
+      g.fillStyle = '#39414E';
+      g.fillRect(-w * 0.05, h * 0.26, w * 0.07, h * 0.035);
+      g.fillRect(w * 0.98, h * 0.26, w * 0.07, h * 0.035);
     }
 
-    // headlight housings + taillight strips (baked dim; runtime adds glow)
-    g.fillStyle = 'rgba(240,248,255,0.85)';
-    const hw = w * 0.16, hh = Math.max(2, lpx * 0.025);
-    rr(g, w * 0.08, 1, hw, hh, 2); g.fill();
-    rr(g, w * 0.76, 1, hw, hh, 2); g.fill();
-    g.fillStyle = 'rgba(255,60,48,0.9)';
-    rr(g, w * 0.07, h - hh - 1, hw, hh, 2); g.fill();
-    rr(g, w * 0.77, h - hh - 1, hw, hh, 2); g.fill();
+    // Lights: headlight slits (front) + signature full-width tail bar (rear)
+    g.fillStyle = 'rgba(226,240,255,0.9)';
+    const hw = w * 0.2, hh = Math.max(2, h * 0.02);
+    g.fillRect(w * 0.06, 0, hw, hh);
+    g.fillRect(w * 0.74, 0, hw, hh);
+    const bh = Math.max(2.4, h * 0.028);
+    g.fillStyle = 'rgba(255,45,35,0.28)';
+    g.fillRect(w * 0.04, h - bh * 2.1, w * 0.92, bh * 2.1);
+    g.fillStyle = '#FF3B2F';
+    g.fillRect(w * 0.04, h - bh, w * 0.92, bh);
+    g.fillStyle = 'rgba(255,255,255,0.5)';
+    g.fillRect(w * 0.44, h - bh, w * 0.12, bh);
   });
 }
 
@@ -650,11 +665,10 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
           v.addColorStop(1, 'rgba(0,191,255,0.5)');
           g.fillStyle = v; g.fillRect(0, 0, W, H);
         }),
+        // Off-road area is the site background (pure black) so the game blends
+        // into the page on wide screens instead of showing a grey letterbox.
         terrain: bake(W, H, (g) => {
-          const t = g.createLinearGradient(0, 0, 0, H);
-          t.addColorStop(0, '#05070C');
-          t.addColorStop(1, '#020308');
-          g.fillStyle = t; g.fillRect(0, 0, W, H);
+          g.fillStyle = '#000000'; g.fillRect(0, 0, W, H);
         }),
       };
     }
@@ -678,7 +692,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       simT: 0, dist: 0, speed: SPD_START, score: 0,
       laneX: LANE_U * 1.5, laneVel: 0, targetLane: 1, queued: null,
       corridor: 2,
-      waveIn: 0.9, waveN: 0,
+      waveIn: 0.55, waveN: 0,
       changeCooldown: 0,
       combo: 0, comboT: -9,
       flash: 0, shake: 0, scorePop: 0,
@@ -718,7 +732,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     // Touch = swipe. You go the way you swipe, and a long swipe can cross more
     // than one lane. The gesture fires as soon as it passes the threshold rather
     // than waiting for release, so it feels immediate.
-    const sw = { active: false, id: null, startX: 0, lastX: 0, moved: false };
+    const sw = { active: false, id: null, startX: 0, fired: false };
     const swipeMin = () => Math.max(26, canvas.clientWidth * 0.055);
 
     const onPointerDown = (e) => {
@@ -729,17 +743,16 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       if (!S.dead && Math.hypot(x - pb.x, y - pb.y) < PAUSE_R + 10) { togglePause(); return; }
       if (S.paused) { togglePause(); return; }
       sw.active = true; sw.id = e.pointerId;
-      sw.startX = x; sw.lastX = x; sw.moved = false;
+      sw.startX = x; sw.fired = false;
       if (canvas.setPointerCapture) { try { canvas.setPointerCapture(e.pointerId); } catch { /* noop */ } }
     };
     const onPointerMove = (e) => {
-      if (!sw.active || e.pointerId !== sw.id) return;
+      if (!sw.active || sw.fired || e.pointerId !== sw.id) return;
       const r = canvas.getBoundingClientRect();
-      const x = e.clientX - r.left;
-      const min = swipeMin();
-      // Each additional `min` of travel steps one more lane.
-      while (x - sw.lastX >= min) { move(1); sw.lastX += min; sw.moved = true; }
-      while (sw.lastX - x >= min) { move(-1); sw.lastX -= min; sw.moved = true; }
+      const dx = (e.clientX - r.left) - sw.startX;
+      // Exactly ONE lane per swipe, however far the finger travels. Lift and
+      // swipe again to move another lane.
+      if (Math.abs(dx) >= swipeMin()) { move(dx > 0 ? 1 : -1); sw.fired = true; }
     };
     const onPointerUp = (e) => {
       if (!sw.active || e.pointerId !== sw.id) return;
@@ -775,7 +788,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       const step = rand();
       S.corridor = clamp(S.corridor + (step < 0.36 ? -1 : step < 0.72 ? 1 : 0), 0, LANES - 1);
 
-      const maxBlock = S.simT < 16 ? 1 : S.simT < 38 ? 2 : 3;
+      const maxBlock = S.simT < 9 ? 1 : S.simT < 24 ? 2 : 3;
       let n = 1 + Math.floor(rand() * maxBlock);
       if (S.waveN % 6 === 0) n = Math.max(1, n - 1); // breathing pocket
 
@@ -798,9 +811,9 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         c.near = false; c.brake = rand() < 0.16;
         c.sig = 0; c.sigDir = 0; c.changing = 0;
         // pre-rolled lane change — deterministic, fires only well ahead of the player
-        c.changeAt = (S.simT > 18 && kind !== 'semi' && rand() < 0.16 + d * 0.2 + over() * 0.12) ? S.simT + 0.8 + rand() * 2.2 : -1;
+        c.changeAt = (S.simT > 11 && kind !== 'semi' && rand() < 0.18 + d * 0.22 + over() * 0.12) ? S.simT + 0.8 + rand() * 2.0 : -1;
       }
-      S.waveIn = Math.max(0.3, (1.42 - d * 0.8 - over() * 0.16) + rand() * Math.max(0.16, 0.72 - d * 0.3 - over() * 0.12));
+      S.waveIn = Math.max(0.28, (1.16 - d * 0.72 - over() * 0.16) + rand() * Math.max(0.14, 0.6 - d * 0.28 - over() * 0.1));
     }
 
     // ── FX helpers ──
@@ -1425,7 +1438,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
   }, [seed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="relative w-full" style={{ height: 'calc(100dvh - 56px)', background: '#05060A' }}>
+    <div className="relative w-full" style={{ height: 'calc(100dvh - 56px)', background: '#000000' }}>
       <canvas ref={canvasRef} className="w-full h-full block touch-none select-none" style={{ cursor: 'pointer' }} />
     </div>
   );
