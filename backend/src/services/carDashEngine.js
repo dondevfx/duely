@@ -109,21 +109,18 @@ async function startCarDashCountdown(io, supabase, roomId) {
   fresh.startedAt = Date.now();
   io.to(roomId).emit('car_dash_start', { seed: fresh.seed });
 
-  // Solo: drive the bot's progress bar, then crash it at its target time.
-  if (fresh.isSolo && !fresh.demoWin) {
+  // Solo / bot: the bot just trails the player's progress and never crashes on
+  // its own — the run ends the moment the PLAYER crashes, and the player always
+  // wins (see handleCarDashCrash). This applies to bot AND demo accounts.
+  if (fresh.isSolo) {
     const human = fresh.players.find(p => !p.isBot);
     const tick = setInterval(() => {
       const r = getCarDashRoom(roomId);
       if (!r || r.state !== 'active') { clearInterval(tick); return; }
       const elapsed = Date.now() - r.startedAt;
-      r.progress[_botKey(r)] = Math.min(elapsed, r.botTargetMs);
-      if (human) io.to(human.socketId).emit('car_dash_opponent_progress', { ms: r.progress[_botKey(r)] });
-      if (elapsed >= r.botTargetMs) {
-        clearInterval(tick);
-        r.times[_botKey(r)] = r.botTargetMs;
-        if (human) io.to(human.socketId).emit('car_dash_opponent_crashed', { ms: r.botTargetMs });
-        _maybeResolve(io, supabase, roomId);
-      }
+      const trail = Math.max(0, Math.floor(elapsed * 0.85));
+      r.progress[_botKey(r)] = trail;
+      if (human) io.to(human.socketId).emit('car_dash_opponent_progress', { ms: trail });
     }, 250);
     fresh.botTimers.push(tick);
   }
@@ -159,6 +156,16 @@ async function handleCarDashCrash(io, supabase, roomId, socketId, claimedScore) 
   if (opp && !opp.isBot) io.to(opp.socketId).emit('car_dash_opponent_crashed', { ms: survived });
   io.to(socketId).emit('car_dash_crashed', { ms: survived });
 
+  // Solo / bot: end immediately with the player ahead — no waiting on a bot.
+  if (room.isSolo && !room.players.find(p => p.socketId === socketId)?.isBot) {
+    (room.botTimers || []).forEach(t => clearInterval(t));
+    room.botTimers = [];
+    room.times[_botKey(room)]  = Math.max(0, Math.floor(survived * 0.85) - 200);
+    room.scores[_botKey(room)] = Math.max(0, Math.floor((room.scores[socketId] || 0) * 0.85) - 10);
+    await _resolveFromTimes(io, supabase, roomId);
+    return;
+  }
+
   await _maybeResolve(io, supabase, roomId);
 }
 
@@ -184,19 +191,20 @@ async function _resolveFromTimes(io, supabase, roomId) {
   // A bot has no client, so give it a believable score for the time it drove
   // (distance + survival, no near-miss bonuses).
   const bot = room.players.find(p => p.isBot);
-  if (bot) {
+  if (bot && room.scores[_botKey(room)] == null) {
     const bt = timeOf(bot);
     room.scores[_botKey(room)] = Math.floor((bt / 1000) * 50);
   }
 
-  // Demo vs bot: pin the bot just behind on BOTH time and score so the demo wins.
-  if (room.demoWin) {
-    const demo = room.players.find(p => p.isDemo && !p.isBot);
-    if (demo && bot) {
-      const dT = room.times[demo.socketId] ?? 0;
-      const dS = room.scores[demo.socketId] ?? 0;
-      room.times[_botKey(room)]  = Math.max(0, Math.floor(dT * 0.85) - 200);
-      room.scores[_botKey(room)] = Math.max(0, Math.floor(dS * 0.85) - 10);
+  // Any solo/bot room (including demo accounts): pin the bot just behind on BOTH
+  // time and score so the human always wins.
+  if (room.isSolo && bot) {
+    const human = room.players.find(p => !p.isBot);
+    if (human) {
+      const hT = room.times[human.socketId] ?? room.progress[human.socketId] ?? 0;
+      const hS = room.scores[human.socketId] ?? 0;
+      room.times[_botKey(room)]  = Math.max(0, Math.floor(hT * 0.85) - 200);
+      room.scores[_botKey(room)] = Math.max(0, Math.floor(hS * 0.85) - 10);
     }
   }
 

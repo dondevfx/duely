@@ -25,7 +25,7 @@ import { isMuted } from '../utils/sound';
 // ── World tuning (units: 1 lane = 100u, sedan ≈ 95u long) ───────────────────
 const LANES        = 4;
 const LANE_U       = 100;
-const VIEW_AHEAD   = 640;    // world units visible above the player — fixed on all devices
+const VIEW_AHEAD   = 700;    // world units visible above the player — fixed on all devices
 const PLAYER_YF    = 0.78;   // player screen position (fraction of height)
 const SPAWN_Y      = 730;
 const DESPAWN_Y    = -280;
@@ -42,7 +42,8 @@ const PTS_TIME     = 8;
 const PTS_NEAR     = 75;
 
 const FREEZE_S     = 0.15;
-const REPORT_S     = 1.15;   // seconds after crash before reporting up
+const REPORT_S     = 0.55;   // report as soon as the crash FX has read
+const OVERLAY_S    = 1.05;   // only show GAME OVER if we're still here (i.e. waiting)
 
 const HIT_FORGIVE  = 0.88;   // hitbox forgiveness factor
 
@@ -50,14 +51,18 @@ const HIT_FORGIVE  = 0.88;   // hitbox forgiveness factor
 const CYAN  = '#00BFFF';
 const ICE   = '#9FDCFF';
 
+// Sizes are in world units and drive BOTH the sprite and the hitbox, so art and
+// collision can never drift apart.
 const VEHICLES = {
-  sedan:  { len: 95,  wid: 62, close: 1.00, weight: 26 },
-  suv:    { len: 106, wid: 68, close: 1.05, weight: 20 },
-  pickup: { len: 112, wid: 66, close: 1.05, weight: 14 },
-  sports: { len: 88,  wid: 60, close: 0.78, weight: 14 },
-  van:    { len: 126, wid: 70, close: 1.12, weight: 14 },
-  semi:   { len: 205, wid: 78, close: 1.22, weight: 8  },
+  sedan:  { len: 81,  wid: 53, close: 1.00, weight: 26 },
+  suv:    { len: 90,  wid: 58, close: 1.05, weight: 20 },
+  pickup: { len: 95,  wid: 56, close: 1.05, weight: 14 },
+  sports: { len: 75,  wid: 51, close: 0.78, weight: 14 },
+  van:    { len: 107, wid: 60, close: 1.12, weight: 14 },
+  semi:   { len: 174, wid: 66, close: 1.22, weight: 8  },
 };
+const PLAYER_W_U = 56;   // player world width  (sprite + hitbox)
+const PLAYER_L_U = 117;  // player world length (sprite + hitbox)
 const VKEYS = Object.keys(VEHICLES);
 const VTOTAL = VKEYS.reduce((a, k) => a + VEHICLES[k].weight, 0);
 
@@ -600,7 +605,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     function bakeAll() {
       const bakeRand = makePRNG(1234567); // art randomness — stable, never gameplay
       const vs = {};
-      const playerW = laneW * 0.78, playerL = 138 * u2p;
+      const playerW = PLAYER_W_U * u2p, playerL = PLAYER_L_U * u2p;
       sprites = {
         vs,
         vkey(kind, paint) {
@@ -626,12 +631,12 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         vignette: bake(W, H, (g) => {
           const v = g.createRadialGradient(W / 2, H * 0.58, Math.min(W, H) * 0.36, W / 2, H * 0.58, Math.max(W, H) * 0.8);
           v.addColorStop(0, 'rgba(0,0,0,0)');
-          v.addColorStop(1, 'rgba(2,4,10,0.62)');
+          v.addColorStop(1, 'rgba(2,4,10,0.42)');
           g.fillStyle = v; g.fillRect(0, 0, W, H);
           const grade = g.createLinearGradient(0, 0, 0, H);
           grade.addColorStop(0, 'rgba(6,20,40,0.2)');
           grade.addColorStop(0.5, 'rgba(0,0,0,0)');
-          grade.addColorStop(1, 'rgba(0,0,6,0.26)');
+          grade.addColorStop(1, 'rgba(0,0,6,0.16)');
           g.fillStyle = grade; g.fillRect(0, 0, W, H);
         }),
         edgeFlash: bake(W, H, (g) => {
@@ -854,7 +859,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
 
       // traffic
       S.changeCooldown -= dt;
-      const pw = 74 * HIT_FORGIVE, pl = 138 * HIT_FORGIVE;
+      const pw = PLAYER_W_U * HIT_FORGIVE, pl = PLAYER_L_U * HIT_FORGIVE;
       for (const c of cars) {
         if (!c.on) continue;
         c.y -= (S.speed - c.spd) * dt;
@@ -960,7 +965,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       ctx.restore();
 
       if (S.tunnelA > 0.01) {
-        ctx.fillStyle = `rgba(1,2,6,${S.tunnelA * 0.34})`;
+        ctx.fillStyle = `rgba(1,2,6,${S.tunnelA * 0.10})`;
         ctx.fillRect(0, 0, W, H);
       }
       if (S.flash > 0.01) {
@@ -1027,14 +1032,14 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         const bandH = 150 * u2p;
         const g = ctx.createLinearGradient(0, sy - bandH / 2, 0, sy + bandH / 2);
         g.addColorStop(0, 'rgba(0,0,0,0)');
-        g.addColorStop(0.25, 'rgba(0,0,0,0.42)');
-        g.addColorStop(0.75, 'rgba(0,0,0,0.42)');
+        g.addColorStop(0.25, 'rgba(0,0,0,0.16)');
+        g.addColorStop(0.75, 'rgba(0,0,0,0.16)');
         g.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = g;
         ctx.fillRect(0, sy - bandH / 2, W, bandH);
       }
       if (S.tunnelA > 0.01) {
-        ctx.fillStyle = `rgba(4,6,10,${S.tunnelA * 0.9})`;
+        ctx.fillStyle = `rgba(4,6,10,${S.tunnelA * 0.45})`;
         ctx.fillRect(0, 0, roadX - laneW * 0.06, H);
         ctx.fillRect(roadX + roadW + laneW * 0.06, 0, W - roadX - roadW, H);
         const gap = 190 * u2p;
@@ -1294,8 +1299,8 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       }
 
       // game-over overlay before values are returned
-      if (S.dead && S.deadT > 0.55) {
-        const a = clamp((S.deadT - 0.55) / 0.4, 0, 1);
+      if (S.dead && S.deadT > OVERLAY_S) {
+        const a = clamp((S.deadT - OVERLAY_S) / 0.35, 0, 1);
         ctx.globalAlpha = a;
         const g = ctx.createLinearGradient(0, H * 0.28, 0, H * 0.74);
         g.addColorStop(0, 'rgba(2,3,8,0)');
