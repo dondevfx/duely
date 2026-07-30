@@ -699,20 +699,20 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     });
 
     // Live progress for the opponent bar — server clamps to real elapsed time.
-    socket.on('car_dash_progress', ({ roomId, ms }) => {
+    socket.on('car_dash_progress', ({ roomId, ms, score }) => {
       if (!authenticatedUser) return;
       const room = getCarDashRoom(roomId);
       if (!room || room.state !== 'active') return;
-      const verified = trackCarDashProgress(roomId, socket.id, ms);
+      const verified = trackCarDashProgress(roomId, socket.id, ms, score);
       if (verified === null) return;
       const opp = room.players.find(p => p.socketId !== socket.id);
       if (opp && !opp.isBot) io.to(opp.socketId).emit('car_dash_opponent_progress', { ms: verified });
     });
 
     // Client reports a crash; the SERVER decides how long they survived.
-    socket.on('car_dash_crash', ({ roomId }) => {
+    socket.on('car_dash_crash', ({ roomId, score }) => {
       if (!authenticatedUser) return;
-      handleCarDashCrash(io, supabase, roomId, socket.id);
+      handleCarDashCrash(io, supabase, roomId, socket.id, score);
     });
 
     // ════════════════════════════════════════════════════════════════

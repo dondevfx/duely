@@ -1,7 +1,8 @@
 /**
  * carDashEngine.js — "Highway Dash"
  *
- * Both players drive the same seeded traffic; whoever survives longest wins.
+ * Both players drive the same seeded traffic; the highest SCORE wins (survival
+ * time breaks a tie).
  *
  * Anti-cheat: the score IS survival time, and the SERVER measures it. The client
  * only reports "I crashed" — the server timestamps it against the match start,
@@ -17,6 +18,10 @@ const gameEvents = require('./gameEvents');
 const { v4: uuidv4 } = require('uuid');
 
 const MAX_RUN_MS = 15 * 60_000; // sanity ceiling — no run is 15 minutes
+// Anti-cheat: score is client-computed, so it is capped against server-measured
+// elapsed time. Ceiling mirrors the client formula (distance + time + a generous
+// near-miss rate) plus headroom, so honest runs are never clipped.
+const maxScoreFor = (ms) => Math.floor((ms / 1000) * 380 + 500);
 const GAME_NAME  = 'Highway Dash';
 
 const carDashRooms = new Map();
@@ -77,6 +82,8 @@ function _makeRoom(roomId, p1, p2) {
     startedAt: null,
     // survival times (ms) — server-authoritative, set when a player crashes
     times: {},
+    // scores (capped against elapsed time)
+    scores: {},
     // last live progress ping per player, for the opponent bar
     progress: {},
     isSolo,
@@ -128,23 +135,25 @@ const _botKey = (room) => {
 };
 
 // ── Live progress (clamped to wall clock — can't be inflated) ────────────────
-function trackCarDashProgress(roomId, socketId, claimedMs) {
+function trackCarDashProgress(roomId, socketId, claimedMs, claimedScore) {
   const room = getCarDashRoom(roomId);
   if (!room || room.state !== 'active' || !room.startedAt) return null;
   const elapsed = Date.now() - room.startedAt;
   const ms = Math.max(0, Math.min(Number(claimedMs) || 0, elapsed, MAX_RUN_MS));
   room.progress[socketId] = ms;
+  room.scores[socketId] = Math.max(0, Math.min(Number(claimedScore) || 0, maxScoreFor(elapsed)));
   return ms;
 }
 
 // ── Crash — the server decides how long they actually survived ───────────────
-async function handleCarDashCrash(io, supabase, roomId, socketId) {
+async function handleCarDashCrash(io, supabase, roomId, socketId, claimedScore) {
   const room = getCarDashRoom(roomId);
   if (!room || room.state !== 'active' || !room.startedAt) return;
   if (room.times[socketId] != null) return; // already crashed
   const survived = Math.min(Date.now() - room.startedAt, MAX_RUN_MS);
   room.times[socketId] = survived;
   room.progress[socketId] = survived;
+  room.scores[socketId] = Math.max(0, Math.min(Number(claimedScore) || 0, maxScoreFor(survived)));
 
   const opp = room.players.find(p => p.socketId !== socketId);
   if (opp && !opp.isBot) io.to(opp.socketId).emit('car_dash_opponent_crashed', { ms: survived });
@@ -169,24 +178,37 @@ async function _resolveFromTimes(io, supabase, roomId) {
   const [p1, p2] = room.players;
   const key = (p) => p.isBot ? _botKey(room) : p.socketId;
 
-  let t1 = room.times[key(p1)] ?? room.progress[key(p1)] ?? 0;
-  let t2 = room.times[key(p2)] ?? room.progress[key(p2)] ?? 0;
+  const timeOf  = (p) => room.times[key(p)]  ?? room.progress[key(p)] ?? 0;
+  const scoreOf = (p) => room.scores[key(p)] ?? 0;
 
-  // Demo vs bot: pin the bot just behind so the demo always wins.
+  // A bot has no client, so give it a believable score for the time it drove
+  // (distance + survival, no near-miss bonuses).
+  const bot = room.players.find(p => p.isBot);
+  if (bot) {
+    const bt = timeOf(bot);
+    room.scores[_botKey(room)] = Math.floor((bt / 1000) * 50);
+  }
+
+  // Demo vs bot: pin the bot just behind on BOTH time and score so the demo wins.
   if (room.demoWin) {
     const demo = room.players.find(p => p.isDemo && !p.isBot);
-    const bot  = room.players.find(p => p.isBot);
     if (demo && bot) {
-      const demoT = room.times[demo.socketId] ?? 0;
-      const botT  = Math.max(0, Math.floor(demoT * 0.85) - 200);
-      room.times[_botKey(room)] = botT;
-      if (demo === p1) { t1 = demoT; t2 = botT; } else { t2 = demoT; t1 = botT; }
+      const dT = room.times[demo.socketId] ?? 0;
+      const dS = room.scores[demo.socketId] ?? 0;
+      room.times[_botKey(room)]  = Math.max(0, Math.floor(dT * 0.85) - 200);
+      room.scores[_botKey(room)] = Math.max(0, Math.floor(dS * 0.85) - 10);
     }
   }
 
-  const winner = t1 >= t2 ? p1 : p2;
-  const loser  = t1 >= t2 ? p2 : p1;
-  await _resolve(io, supabase, roomId, winner, loser, Math.max(t1, t2), Math.min(t1, t2));
+  // Highest SCORE wins; survival time breaks a tie.
+  const s1 = scoreOf(p1), s2 = scoreOf(p2);
+  const t1 = timeOf(p1),  t2 = timeOf(p2);
+  const p1Wins = s1 !== s2 ? s1 > s2 : t1 >= t2;
+  const winner = p1Wins ? p1 : p2;
+  const loser  = p1Wins ? p2 : p1;
+  await _resolve(io, supabase, roomId, winner, loser,
+    p1Wins ? t1 : t2, p1Wins ? t2 : t1,
+    p1Wins ? s1 : s2, p1Wins ? s2 : s1);
 }
 
 // Opponent left / timed out — whoever has the better time takes it.
@@ -196,7 +218,7 @@ async function forceResolveCarDash(io, supabase, roomId) {
   await _resolveFromTimes(io, supabase, roomId);
 }
 
-async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs) {
+async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, winnerScore = 0, loserScore = 0) {
   const room = getCarDashRoom(roomId);
   if (!room || room.state === 'finished') return;
   room.state = 'finished';
@@ -233,6 +255,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs) 
     winnerUsername: winner.username, loserUsername: loser.username,
     newWinnerElo, newLoserElo, balanceChange,
     winnerMs, loserMs,
+    winnerScore, loserScore,
     currency: room.currency || 'coins',
     entryFee: room.entryFee || 0,
   });
@@ -253,8 +276,8 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs) 
       try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch {}
     }
     // Highscore is stored in seconds survived
-    if (!winner.isBot) await updateHighscore(supabase, winner.userId, 'carDash', Math.floor(winnerMs / 1000)).catch(() => {});
-    if (!loser.isBot)  await updateHighscore(supabase, loser.userId,  'carDash', Math.floor(loserMs / 1000)).catch(() => {});
+    if (!winner.isBot) await updateHighscore(supabase, winner.userId, 'carDash', winnerScore).catch(() => {});
+    if (!loser.isBot)  await updateHighscore(supabase, loser.userId,  'carDash', loserScore).catch(() => {});
     try {
       const cur = room.currency || 'coins';
       await supabase.from('matches').insert({

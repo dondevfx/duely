@@ -38,6 +38,7 @@ export default function CarDashGame() {
   const [result, setResult] = useState(null);
 
   const roomIdRef = useRef(null);
+  const crashedRef = useRef(false);
   const socketRef = useRef(socket);
   const eloBeforeRef = useRef(profile?.elo ?? 1000);
   useEffect(() => { socketRef.current = socket; }, [socket]);
@@ -61,7 +62,7 @@ export default function CarDashGame() {
       roomIdRef.current = rid;
       setRoomId(rid);
       setOpponent(opp);
-      setMyMs(0); setOppMs(0); setOppCrashed(false); setCrashed(false); setResult(null);
+      setMyMs(0); setOppMs(0); setOppCrashed(false); setCrashed(false); setResult(null); crashedRef.current = false;
       setPhase('queue');
       playMatchFound();
       if ((fee ?? 0) > 0) {
@@ -125,20 +126,21 @@ export default function CarDashGame() {
   function createPrivate(fee, cur) { socket?.emit('create_private_room', { gameType: 'carDash', entryFee: fee, currency: cur }); }
   function joinPrivate(code)       { socket?.emit('join_private_room', { gameType: 'carDash', code }); }
 
-  // Gameplay callbacks from the canvas
-  const onProgress = (ms) => {
+  // Gameplay callbacks from the canvas — the run reports score + time survived.
+  const onProgress = (score, ms) => {
     setMyMs(ms);
-    if (roomIdRef.current) socket?.emit('car_dash_progress', { roomId: roomIdRef.current, ms });
+    if (roomIdRef.current) socket?.emit('car_dash_progress', { roomId: roomIdRef.current, ms, score });
   };
-  const onCrash = () => {
-    if (crashed) return;
+  const onCrash = (score, ms) => {
+    if (crashedRef.current) return;
+    crashedRef.current = true;
     setCrashed(true);
-    if (roomIdRef.current) socket?.emit('car_dash_crash', { roomId: roomIdRef.current });
+    if (roomIdRef.current) socket?.emit('car_dash_crash', { roomId: roomIdRef.current, score, ms });
   };
 
   function reset() {
     setPhase('lobby'); setResult(null); setSeed(null);
-    setMyMs(0); setOppMs(0); setCrashed(false); setOppCrashed(false); setStatusMsg('');
+    setMyMs(0); setOppMs(0); setCrashed(false); setOppCrashed(false); setStatusMsg(''); crashedRef.current = false;
   }
 
   // ── Result ──
@@ -173,11 +175,6 @@ export default function CarDashGame() {
     return (
       <HighwayCanvas
         seed={seed}
-        myMs={myMs}
-        oppMs={oppMs}
-        oppCrashed={oppCrashed}
-        crashed={crashed}
-        opponentName={opponent?.username || 'Opponent'}
         onProgress={onProgress}
         onCrash={onCrash}
       />
