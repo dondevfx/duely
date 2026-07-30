@@ -715,14 +715,36 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       else if (k === 'ArrowRight' || k === 'd' || k === 'D') { audio?.resume(); move(1); e.preventDefault(); }
       else if (k === 'p' || k === 'P' || k === 'Escape') togglePause();
     };
-    const onPointer = (e) => {
+    // Touch = swipe. You go the way you swipe, and a long swipe can cross more
+    // than one lane. The gesture fires as soon as it passes the threshold rather
+    // than waiting for release, so it feels immediate.
+    const sw = { active: false, id: null, startX: 0, lastX: 0, moved: false };
+    const swipeMin = () => Math.max(26, canvas.clientWidth * 0.055);
+
+    const onPointerDown = (e) => {
       audio?.resume();
       const r = canvas.getBoundingClientRect();
       const x = e.clientX - r.left, y = e.clientY - r.top;
       const pb = pauseBtn();
-      if (!S.dead && Math.hypot(x - pb.x, y - pb.y) < PAUSE_R + 8) { togglePause(); return; }
+      if (!S.dead && Math.hypot(x - pb.x, y - pb.y) < PAUSE_R + 10) { togglePause(); return; }
       if (S.paused) { togglePause(); return; }
-      move(x < r.width / 2 ? -1 : 1);
+      sw.active = true; sw.id = e.pointerId;
+      sw.startX = x; sw.lastX = x; sw.moved = false;
+      if (canvas.setPointerCapture) { try { canvas.setPointerCapture(e.pointerId); } catch { /* noop */ } }
+    };
+    const onPointerMove = (e) => {
+      if (!sw.active || e.pointerId !== sw.id) return;
+      const r = canvas.getBoundingClientRect();
+      const x = e.clientX - r.left;
+      const min = swipeMin();
+      // Each additional `min` of travel steps one more lane.
+      while (x - sw.lastX >= min) { move(1); sw.lastX += min; sw.moved = true; }
+      while (sw.lastX - x >= min) { move(-1); sw.lastX -= min; sw.moved = true; }
+    };
+    const onPointerUp = (e) => {
+      if (!sw.active || e.pointerId !== sw.id) return;
+      sw.active = false; sw.id = null;
+      if (canvas.releasePointerCapture) { try { canvas.releasePointerCapture(e.pointerId); } catch { /* noop */ } }
     };
     function togglePause() {
       if (S.dead) return;
@@ -730,7 +752,10 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       if (S.paused) audio?.duck(); else audio?.setSpeed(diff());
     }
     window.addEventListener('keydown', onKey);
-    canvas.addEventListener('pointerdown', onPointer);
+    canvas.addEventListener('pointerdown', onPointerDown);
+    canvas.addEventListener('pointermove', onPointerMove);
+    canvas.addEventListener('pointerup', onPointerUp);
+    canvas.addEventListener('pointercancel', onPointerUp);
 
     // ── Spawning: snaking corridor — deterministic AND always survivable ──
     function pick() {
@@ -952,8 +977,8 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
 
       const shx = S.shake ? (frand() - 0.5) * 16 * S.shake : 0;
       const shy = S.shake ? (frand() - 0.5) * 12 * S.shake : 0;
-      const tilt = clamp(S.laneVel * 0.000035, -0.02, 0.02);
-      const camX = -(S.laneX - LANE_U * LANES / 2) * u2p * 0.05;
+      const tilt = clamp(S.laneVel * 0.000014, -0.009, 0.009);
+      const camX = -(S.laneX - LANE_U * LANES / 2) * u2p * 0.022;
 
       ctx.save();
       ctx.translate(W / 2 + shx + camX, H + shy);
@@ -1312,7 +1337,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         ctx.fillStyle = 'rgba(5,8,14,0.6)';
         rr(ctx, W / 2 - 108, H - 40, 216, 24, 12); ctx.fill();
         ctx.fillStyle = ICE;
-        ctx.fillText('← → / A D  ·  tap left / right side', W / 2, H - 24);
+        ctx.fillText('← → / A D  ·  swipe to change lanes', W / 2, H - 24);
         ctx.globalAlpha = 1;
       }
 
@@ -1391,7 +1416,10 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       clearTimeout(resizeT);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('keydown', onKey);
-      canvas.removeEventListener('pointerdown', onPointer);
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('pointermove', onPointerMove);
+      canvas.removeEventListener('pointerup', onPointerUp);
+      canvas.removeEventListener('pointercancel', onPointerUp);
       audio?.stop();
     };
   }, [seed]); // eslint-disable-line react-hooks/exhaustive-deps
