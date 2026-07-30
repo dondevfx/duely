@@ -9,7 +9,7 @@ const GAMES = [
   { icon: '🟡', label: 'Coin Flip',    route: '/game/coin-flip',   live: true },
   { icon: '🔤', label: 'Word VS',       route: '/game/scrabble',    live: true },
   { icon: '🃏', label: 'Blackjack',    route: '/game/blackjack',   live: true },
-  { icon: '🚗', label: 'Highway Dash', route: '/game/car-dash',    live: true },
+  { icon: '🚗', label: 'Rush Hour', route: '/game/car-dash',    live: true },
 ];
 
 const NAV = [

@@ -31,7 +31,7 @@ const GAMES = [
     countKey: 'scrabble',
   },
   {
-    title: 'Highway Dash',
+    title: 'Rush Hour',
     description: 'Dodge traffic at full speed. Same road for both — longest run wins.',
     icon: '🚗',
     route: '/game/car-dash',

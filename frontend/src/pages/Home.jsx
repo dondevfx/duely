@@ -41,7 +41,7 @@ const GAMES = [
     countKey: 'scrabble',
   },
   {
-    title: 'Highway Dash',
+    title: 'Rush Hour',
     description: 'Weave through highway traffic at full speed. Both players face the exact same road — whoever survives longest takes the pot.',
     icon: '🚗',
     route: '/game/car-dash',

@@ -33,9 +33,14 @@ const DESPAWN_Y    = -280;
 const SPD_START    = 500;    // u/s
 const SPD_MAX      = 1150;
 const RAMP_S       = 62;     // seconds to reach max speed
+// Past RAMP_S the run keeps escalating instead of flat-lining.
+const OD_S         = 70;     // seconds per unit of "overdrive"
+const OD_MAX       = 1.8;
+const OD_SPEED     = 300;    // extra u/s at full overdrive
+const OD_CLOSE     = 170;    // extra closing speed at full overdrive
 const CLOSE_MIN    = 185;    // closing speed floor (u/s)
 const CLOSE_MAX    = 520;    // closing speed at full difficulty
-const VISUAL_SCROLL = 1.28;  // road texture scrolls faster than the world = speed feel
+const VISUAL_SCROLL = 1.0;   // road MUST scroll with the world or it slides under the cars
 
 const PTS_DIST     = 0.06;
 const PTS_TIME     = 8;
@@ -686,6 +691,8 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     };
 
     const diff = () => smooth(clamp(S.simT / RAMP_S, 0, 1));
+    // Overdrive keeps speed, density and aggression climbing after the ramp.
+    const over = () => clamp((S.simT - RAMP_S) / OD_S, 0, OD_MAX);
     const laneCenter = (l) => (l + 0.5) * LANE_U;
 
     // ── Input ──
@@ -753,7 +760,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         const j = Math.floor(rand() * (i + 1));
         [lanes[i], lanes[j]] = [lanes[j], lanes[i]];
       }
-      const closing = CLOSE_MIN + (CLOSE_MAX - CLOSE_MIN) * d;
+      const closing = CLOSE_MIN + (CLOSE_MAX - CLOSE_MIN) * d + over() * OD_CLOSE;
       for (const l of lanes.slice(0, n)) {
         if (laneHeadway(l) < closing * 0.95 + 190) continue; // deterministic headway guard
         const c = take(cars); if (!c) continue;
@@ -766,9 +773,9 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         c.near = false; c.brake = rand() < 0.16;
         c.sig = 0; c.sigDir = 0; c.changing = 0;
         // pre-rolled lane change — deterministic, fires only well ahead of the player
-        c.changeAt = (S.simT > 18 && kind !== 'semi' && rand() < 0.16 + d * 0.2) ? S.simT + 0.8 + rand() * 2.2 : -1;
+        c.changeAt = (S.simT > 18 && kind !== 'semi' && rand() < 0.16 + d * 0.2 + over() * 0.12) ? S.simT + 0.8 + rand() * 2.2 : -1;
       }
-      S.waveIn = (1.42 - d * 0.8) + rand() * (0.72 - d * 0.3);
+      S.waveIn = Math.max(0.3, (1.42 - d * 0.8 - over() * 0.16) + rand() * Math.max(0.16, 0.72 - d * 0.3 - over() * 0.12));
     }
 
     // ── FX helpers ──
@@ -806,7 +813,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     function update(dt) {
       S.simT += dt;
       const d = diff();
-      S.speed = SPD_START + (SPD_MAX - SPD_START) * d;
+      S.speed = SPD_START + (SPD_MAX - SPD_START) * d + over() * OD_SPEED;
       S.dist += S.speed * dt;
       S.score += S.speed * dt * PTS_DIST + dt * PTS_TIME;
       S.goT += dt; S.hintT += dt;
@@ -874,7 +881,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
             if (!o.on || o === c) continue;
             if (Math.round(o.laneF) === target && Math.abs(o.y - c.y) < 240) { ok = false; break; }
           }
-          if (ok) { c.sig = 0.42; c.sigDir = dir; c.changing = -1; S.changeCooldown = 1.1; }
+          if (ok) { c.sig = 0.42; c.sigDir = dir; c.changing = -1; S.changeCooldown = Math.max(0.45, 1.1 - over() * 0.35); }
           c.changeAt = -1;
         }
         if (c.changing === -1) {
@@ -1018,6 +1025,30 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       const tileH = sp.road.height;
       const off = (S.dist * VISUAL_SCROLL * u2p) % tileH;
       for (let y = -tileH + off; y < H + tileH; y += tileH) ctx.drawImage(sp.road, roadX, y);
+      // Vertical motion blur over the asphalt — sells speed without desyncing
+      // the road from the traffic.
+      const spd01 = clamp((S.speed - SPD_START) / (SPD_MAX + OD_SPEED - SPD_START), 0, 1);
+      if (spd01 > 0.15) {
+        ctx.globalAlpha = (spd01 - 0.15) * 0.5;
+        const bl = ctx.createLinearGradient(0, 0, 0, H);
+        bl.addColorStop(0, 'rgba(150,200,255,0.05)');
+        bl.addColorStop(0.55, 'rgba(255,255,255,0.02)');
+        bl.addColorStop(1, 'rgba(150,200,255,0.07)');
+        ctx.fillStyle = bl;
+        ctx.fillRect(roadX, 0, roadW, H);
+        // streaked highlights racing down the lane lines
+        ctx.strokeStyle = `rgba(226,240,255,${0.05 + spd01 * 0.1})`;
+        ctx.lineWidth = 1;
+        const sp2 = (S.dist * u2p) % 220;
+        for (let i = 0; i < LANES; i++) {
+          const x = roadX + laneW * (i + 0.5);
+          for (let y = -220 + sp2; y < H; y += 220) {
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 60 + spd01 * 130); ctx.stroke();
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+
       // traveling LED pulse on the edge strips
       const pulseY = H - ((S.simT * 900) % (H + 200));
       ctx.globalAlpha = 0.5;

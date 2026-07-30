@@ -40,8 +40,10 @@ export default function CarDashGame() {
   const roomIdRef = useRef(null);
   const crashedRef = useRef(false);
   const socketRef = useRef(socket);
+  const profileRef = useRef(profile);
   const eloBeforeRef = useRef(profile?.elo ?? 1000);
   useEffect(() => { socketRef.current = socket; }, [socket]);
+  useEffect(() => { profileRef.current = profile; }, [profile]);
 
   const isDiamonds = betCurrency === 'diamonds';
   const balance = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
@@ -88,6 +90,11 @@ export default function CarDashGame() {
     socket.on('car_dash_result', (data) => {
       if (!roomIdRef.current) return;
       roomIdRef.current = null;
+      // Derive pre-match ELO from the server values so the delta is exact
+      const iWon = data.winnerId === profileRef.current?.id;
+      if (data.newWinnerElo != null) {
+        eloBeforeRef.current = iWon ? data.newWinnerElo - 25 : data.newLoserElo + 25;
+      }
       setResult(data);
       setPhase('result');
       refreshProfile();
@@ -154,7 +161,7 @@ export default function CarDashGame() {
           loserUsername={result.loserUsername}
           newWinnerElo={result.newWinnerElo}
           newLoserElo={result.newLoserElo}
-          eloBefore={eloBeforeRef.current}
+          eloBeforeRef={eloBeforeRef}
           balanceChange={result.balanceChange}
           currency={result.currency}
           entryFee={result.entryFee}
@@ -212,7 +219,7 @@ export default function CarDashGame() {
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}
     >
       <GameLobby
-        title="🚗 Highway Dash"
+        title="🚗 Rush Hour"
         description="Weave through traffic at full speed. Both players get the exact same road — whoever survives the longest wins."
         controls="← → or A/D to change lanes · swipe or tap the sides on mobile"
         betCurrency={betCurrency} setBetCurrency={setBetCurrency}

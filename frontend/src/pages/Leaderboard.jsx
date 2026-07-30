@@ -23,6 +23,7 @@ const TABS = [
 
 const GAME_LEADERBOARDS = [
   { id: 'blockBlast',    label: 'Block Burst',  icon: '🟦', scoreLabel: 'Score' },
+  { id: 'carDash',       label: 'Rush Hour',    icon: '🚗', scoreLabel: 'Score', showTime: true },
   { id: 'scrabble',      label: 'Word VS',      icon: '🔤', scoreLabel: 'Wins'  },
   { id: 'coinFlip',      label: 'Coin Flip',    icon: '🟡', scoreLabel: 'Wins'  },
   { id: 'blackjack',     label: 'Blackjack',    icon: '🃏', scoreLabel: 'Wins'  },
@@ -221,7 +222,8 @@ export default function Leaderboard() {
                   <div className="bg-surface border border-surfaceLight rounded-2xl overflow-hidden">
                     <div className="grid grid-cols-10 px-3 sm:px-5 py-3 text-xs text-muted font-semibold uppercase tracking-wider border-b border-surfaceLight">
                       <span className="col-span-1">Rank</span>
-                      <span className="col-span-6">Player</span>
+                      <span className={gameMeta?.showTime ? 'col-span-4' : 'col-span-6'}>Player</span>
+                      {gameMeta?.showTime && <span className="col-span-2 text-right">Time</span>}
                       <span className="col-span-3 text-right">{gameMeta?.scoreLabel}</span>
                     </div>
 
@@ -239,7 +241,7 @@ export default function Leaderboard() {
                           <span className="col-span-1 flex items-center">
                             <RankBadge rank={player.rank} />
                           </span>
-                          <span className="col-span-6 flex items-center gap-1.5 sm:gap-2 min-w-0">
+                          <span className={`${gameMeta?.showTime ? 'col-span-4' : 'col-span-6'} flex items-center gap-1.5 sm:gap-2 min-w-0`}>
                             <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-xs font-bold text-primary shrink-0">
                               {player.username?.[0]?.toUpperCase()}
                             </div>
@@ -253,6 +255,11 @@ export default function Leaderboard() {
                               </span>
                             )}
                           </span>
+                          {gameMeta?.showTime && (
+                            <span className="col-span-2 text-right font-mono text-xs sm:text-sm text-muted">
+                              {player.ms != null ? (player.ms / 1000).toFixed(1) + 's' : '—'}
+                            </span>
+                          )}
                           <span className="col-span-3 text-right font-mono font-bold text-sm text-accent">
                             {Number(player.score).toLocaleString()}
                           </span>

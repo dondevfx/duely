@@ -1,5 +1,5 @@
 /**
- * carDashEngine.js — "Highway Dash"
+ * carDashEngine.js — "Rush Hour"
  *
  * Both players drive the same seeded traffic; the highest SCORE wins (survival
  * time breaks a tie).
@@ -13,7 +13,7 @@
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
-const { updateHighscore } = require('./highscoreService');
+const { updateHighscorePair } = require('./highscoreService');
 const gameEvents = require('./gameEvents');
 const { v4: uuidv4 } = require('uuid');
 
@@ -22,7 +22,7 @@ const MAX_RUN_MS = 15 * 60_000; // sanity ceiling — no run is 15 minutes
 // elapsed time. Ceiling mirrors the client formula (distance + time + a generous
 // near-miss rate) plus headroom, so honest runs are never clipped.
 const maxScoreFor = (ms) => Math.floor((ms / 1000) * 380 + 500);
-const GAME_NAME  = 'Highway Dash';
+const GAME_NAME  = 'Rush Hour';
 
 const carDashRooms = new Map();
 const carDashQueue = [];
@@ -284,8 +284,8 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
       try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch {}
     }
     // Highscore is stored in seconds survived
-    if (!winner.isBot) await updateHighscore(supabase, winner.userId, 'carDash', winnerScore).catch(() => {});
-    if (!loser.isBot)  await updateHighscore(supabase, loser.userId,  'carDash', loserScore).catch(() => {});
+    if (!winner.isBot) await updateHighscorePair(supabase, winner.userId, 'carDash', winnerScore, 'carDashMs', winnerMs).catch(() => {});
+    if (!loser.isBot)  await updateHighscorePair(supabase, loser.userId,  'carDash', loserScore, 'carDashMs', loserMs).catch(() => {});
     try {
       const cur = room.currency || 'coins';
       await supabase.from('matches').insert({

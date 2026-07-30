@@ -304,7 +304,9 @@ module.exports = function leaderboardRoutes(supabase) {
 
   // Game-specific highscore leaderboard
   // Score-based games use game_highscores; all others use wins from matches table
-  const SCORE_GAMES = new Set(['blockBlast', 'tetris', 'snake', 'galaga', 'asteroids', 'piano', 'twoFortyEight', 'clickRace']);
+  const SCORE_GAMES = new Set(['blockBlast', 'carDash', 'tetris', 'snake', 'galaga', 'asteroids', 'piano', 'twoFortyEight', 'clickRace']);
+  // Games that also surface a companion stat (stored as its own game_type row)
+  const COMPANION_STAT = { carDash: 'carDashMs' };
 
   // Frontend game-type IDs → DB game_type values (highscores table uses different keys than matches)
   const GAME_TYPE_MAP = {
@@ -338,11 +340,24 @@ module.exports = function leaderboardRoutes(supabase) {
         : { data: [] };
       const scoreProfileMap = Object.fromEntries((scoreProfiles || []).map(p => [p.id, p.username]));
 
+      // Pull the companion stat (e.g. Rush Hour survival time) for these users
+      let companionMap = {};
+      const companionType = COMPANION_STAT[gameType];
+      if (companionType && scoreIds.length) {
+        const { data: comp } = await supabase
+          .from('game_highscores')
+          .select('user_id, score')
+          .eq('game_type', companionType)
+          .in('user_id', scoreIds);
+        companionMap = Object.fromEntries((comp || []).map(c => [c.user_id, c.score]));
+      }
+
       const players = filtered.map((r, i) => ({
           rank: i + 1,
           id: r.user_id,
           username: scoreProfileMap[r.user_id] ?? 'Unknown',
           score: r.score,
+          ...(companionType ? { ms: companionMap[r.user_id] ?? null } : {}),
         }));
 
       let userRank = null;
