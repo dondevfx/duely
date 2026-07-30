@@ -234,9 +234,14 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
   room.botTimers = [];
 
   const isFree = (room.entryFee || 0) === 0;
-  const { newWinnerElo, newLoserElo } = isFree
-    ? { newWinnerElo: winner.elo, newLoserElo: loser.elo }
-    : calculateNewRatings(winner.elo, loser.elo);
+  // ELO / W-L only count when there's something at stake or a real opponent:
+  // a paid match (any opponent) or PvP. A free run against a bot is practice
+  // and must never move your rating.
+  const vsBot = !!(winner.isBot || loser.isBot);
+  const ranked = !isFree || !vsBot;
+  const { newWinnerElo, newLoserElo } = ranked
+    ? calculateNewRatings(winner.elo, loser.elo)
+    : { newWinnerElo: null, newLoserElo: null };
 
   let balanceChange = null;
   if (supabase && room.entryFee > 0 && !room.feesDeducted) {
@@ -271,7 +276,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
   // Fire-and-forget bookkeeping
   Promise.resolve().then(async () => {
     if (!supabase) return;
-    if (!isFree && !winner.isBot) {
+    if (ranked && !winner.isBot) {
       try { await applyEloUpdate(supabase, winner.userId, newWinnerElo, true); } catch {}
       try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch {}
       try { await updateStreaks(supabase, winner.userId, null); } catch {}
@@ -279,7 +284,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
     if (!loser.isBot) {
       try { await supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId); } catch {}
     }
-    if (!isFree && !loser.isBot) {
+    if (ranked && !loser.isBot) {
       try { await applyEloUpdate(supabase, loser.userId, newLoserElo, true); } catch {}
       try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch {}
     }

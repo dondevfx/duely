@@ -697,7 +697,6 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       combo: 0, comboT: -9,
       flash: 0, shake: 0, scorePop: 0,
       dead: false, deadT: 0, reported: false,
-      paused: false,
       lastPing: 0,
       goT: 0, hintT: 0,
       event: null, eventY: 0, nextEventAt: 6 + rand() * 4, tunnelUntil: -1, tunnelA: 0,
@@ -710,11 +709,8 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     const laneCenter = (l) => (l + 0.5) * LANE_U;
 
     // ── Input ──
-    const PAUSE_R = 17;
-    const pauseBtn = () => ({ x: W / 2, y: 30 });
-
     function move(dir) {
-      if (S.dead || S.paused) return;
+      if (S.dead) return;
       const cur = S.targetLane;
       const nxt = clamp(cur + dir, 0, LANES - 1);
       if (nxt === cur) return;
@@ -727,7 +723,6 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       const k = e.key;
       if (k === 'ArrowLeft' || k === 'a' || k === 'A') { audio?.resume(); move(-1); e.preventDefault(); }
       else if (k === 'ArrowRight' || k === 'd' || k === 'D') { audio?.resume(); move(1); e.preventDefault(); }
-      else if (k === 'p' || k === 'P' || k === 'Escape') togglePause();
     };
     // Touch = swipe. You go the way you swipe, and a long swipe can cross more
     // than one lane. The gesture fires as soon as it passes the threshold rather
@@ -738,10 +733,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     const onPointerDown = (e) => {
       audio?.resume();
       const r = canvas.getBoundingClientRect();
-      const x = e.clientX - r.left, y = e.clientY - r.top;
-      const pb = pauseBtn();
-      if (!S.dead && Math.hypot(x - pb.x, y - pb.y) < PAUSE_R + 10) { togglePause(); return; }
-      if (S.paused) { togglePause(); return; }
+      const x = e.clientX - r.left;
       sw.active = true; sw.id = e.pointerId;
       sw.startX = x; sw.fired = false;
       if (canvas.setPointerCapture) { try { canvas.setPointerCapture(e.pointerId); } catch { /* noop */ } }
@@ -759,11 +751,6 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       sw.active = false; sw.id = null;
       if (canvas.releasePointerCapture) { try { canvas.releasePointerCapture(e.pointerId); } catch { /* noop */ } }
     };
-    function togglePause() {
-      if (S.dead) return;
-      S.paused = !S.paused;
-      if (S.paused) audio?.duck(); else audio?.setSpeed(diff());
-    }
     window.addEventListener('keydown', onKey);
     canvas.addEventListener('pointerdown', onPointerDown);
     canvas.addEventListener('pointermove', onPointerMove);
@@ -1019,7 +1006,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         ctx.globalAlpha = 1;
       }
       const d = diff();
-      if (d > 0.35 && !S.dead && !S.paused) {
+      if (d > 0.35 && !S.dead) {
         ctx.strokeStyle = `rgba(159,220,255,${(d - 0.35) * 0.3})`;
         ctx.lineWidth = 1.6;
         for (let i = 0; i < 8; i++) {
@@ -1307,24 +1294,6 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       ctx.fillStyle = 'rgba(159,220,255,0.75)';
       ctx.fillText('TIME', W - 19, 58);
 
-      // small pause button
-      if (!S.dead) {
-        const pb = pauseBtn();
-        ctx.fillStyle = 'rgba(5,8,14,0.55)';
-        ctx.beginPath(); ctx.arc(pb.x, pb.y, PAUSE_R, 0, 6.283); ctx.fill();
-        ctx.strokeStyle = 'rgba(0,191,255,0.4)'; ctx.lineWidth = 1.2;
-        ctx.beginPath(); ctx.arc(pb.x, pb.y, PAUSE_R, 0, 6.283); ctx.stroke();
-        ctx.fillStyle = 'rgba(242,248,255,0.9)';
-        if (S.paused) {
-          ctx.beginPath();
-          ctx.moveTo(pb.x - 4, pb.y - 6); ctx.lineTo(pb.x + 7, pb.y); ctx.lineTo(pb.x - 4, pb.y + 6);
-          ctx.closePath(); ctx.fill();
-        } else {
-          ctx.fillRect(pb.x - 5.5, pb.y - 6, 3.6, 12);
-          ctx.fillRect(pb.x + 2, pb.y - 6, 3.6, 12);
-        }
-      }
-
       // GO! flash
       if (S.goT < 0.75 && !S.dead) {
         const a = S.goT < 0.5 ? 1 : 1 - (S.goT - 0.5) / 0.25;
@@ -1352,19 +1321,6 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         ctx.fillStyle = ICE;
         ctx.fillText('← → / A D  ·  swipe to change lanes', W / 2, H - 24);
         ctx.globalAlpha = 1;
-      }
-
-      // paused overlay
-      if (S.paused && !S.dead) {
-        ctx.fillStyle = 'rgba(2,4,8,0.62)';
-        ctx.fillRect(0, 0, W, H);
-        ctx.textAlign = 'center';
-        ctx.font = '900 30px Inter, system-ui, sans-serif';
-        ctx.fillStyle = '#F2F8FF';
-        ctx.fillText('PAUSED', W / 2, H * 0.44);
-        ctx.font = '700 13px Inter, system-ui, sans-serif';
-        ctx.fillStyle = 'rgba(159,220,255,0.8)';
-        ctx.fillText('tap anywhere to resume', W / 2, H * 0.44 + 28);
       }
 
       // game-over overlay before values are returned
@@ -1405,8 +1361,6 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       let dt = (now - last) / 1000;
       last = now;
       dt = Math.min(dt, 1 / 30);
-
-      if (S.paused) { render(now); return; }
 
       if (!S.dead) {
         update(dt);
