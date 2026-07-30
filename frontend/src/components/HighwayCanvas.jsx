@@ -27,7 +27,7 @@ const LANES        = 4;
 const LANE_U       = 100;
 const VIEW_AHEAD   = 700;    // world units visible above the player — fixed on all devices
 const PLAYER_YF    = 0.78;   // player screen position (fraction of height)
-const SPAWN_Y      = 730;
+const SPAWN_Y      = 880;    // > VIEW_AHEAD + longest vehicle, so nothing pops in
 const DESPAWN_Y    = -280;
 
 const SPD_START    = 585;    // u/s
@@ -622,6 +622,10 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       bakeAll();
     }
 
+    // Site theme — the off-road surround must match the page behind it.
+    // Checked per frame so switching theme applies without a re-bake.
+    const isLight = () => document.documentElement.classList.contains('light');
+
     function bakeAll() {
       const bakeRand = makePRNG(1234567); // art randomness — stable, never gameplay
       const vs = {};
@@ -665,11 +669,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
           v.addColorStop(1, 'rgba(0,191,255,0.5)');
           g.fillStyle = v; g.fillRect(0, 0, W, H);
         }),
-        // Off-road area is the site background (pure black) so the game blends
-        // into the page on wide screens instead of showing a grey letterbox.
-        terrain: bake(W, H, (g) => {
-          g.fillStyle = '#000000'; g.fillRect(0, 0, W, H);
-        }),
+
       };
     }
     layout();
@@ -973,7 +973,10 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
 
     function render(nowMs) {
       const sp = sprites;
-      ctx.drawImage(sp.terrain, 0, 0);
+      // Off-road surround = the site background behind the canvas.
+      const light = isLight();
+      ctx.fillStyle = light ? '#f0f4f8' : '#000000';
+      ctx.fillRect(0, 0, W, H);
 
       const shx = S.shake ? (frand() - 0.5) * 16 * S.shake : 0;
       const shy = S.shake ? (frand() - 0.5) * 12 * S.shake : 0;
@@ -1017,7 +1020,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
           ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 30 + t * 90); ctx.stroke();
         }
       }
-      ctx.drawImage(sp.vignette, 0, 0);
+      if (!light) ctx.drawImage(sp.vignette, 0, 0); // a dark vignette would muddy light mode
       drawHUD(nowMs);
     }
 
@@ -1389,7 +1392,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
   }, [seed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="relative w-full" style={{ height: 'calc(100dvh - 56px)', background: '#000000' }}>
+    <div className="relative w-full bg-bg" style={{ height: 'calc(100dvh - 56px)' }}>
       <canvas ref={canvasRef} className="w-full h-full block touch-none select-none" style={{ cursor: 'pointer' }} />
     </div>
   );

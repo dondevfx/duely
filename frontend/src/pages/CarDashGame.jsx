@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { useCurrency } from '../context/CurrencyContext';
 import GameLobby from '../components/GameLobby';
+import GlowButton from '../components/GlowButton';
 import ResultScreen from '../components/ResultScreen';
 import { usePageReady } from '../hooks/usePageReady';
 import { playMatchFound, playCountdown, playGo } from '../utils/sound';
@@ -39,6 +40,8 @@ export default function CarDashGame() {
 
   const roomIdRef = useRef(null);
   const crashedRef = useRef(false);
+  const lastModeRef = useRef(null); // 'pvp' | 'bot_paid' | 'bot_free'
+  const lastSettingsRef = useRef({ entryFee: 0, currency: 'coins' });
   const socketRef = useRef(socket);
   const profileRef = useRef(profile);
   const eloBeforeRef = useRef(profile?.elo ?? 1000);
@@ -123,13 +126,23 @@ export default function CarDashGame() {
 
   function joinQueue() {
     eloBeforeRef.current = profile?.elo ?? 1000;
+    lastModeRef.current = 'pvp';
+    lastSettingsRef.current = { entryFee, currency: betCurrency };
     setStatusMsg('');
     setPhase('queue');
     socket?.emit('join_car_dash_queue', { entryFee, currency: betCurrency });
   }
   function leaveQueue() { socket?.emit('leave_car_dash_queue'); setPhase('lobby'); setStatusMsg(''); }
-  function playVsBot()     { socket?.emit('play_car_dash_vs_bot', { entryFee, currency: betCurrency }); }
-  function playVsBotFree() { socket?.emit('play_car_dash_vs_bot', { entryFee: 0, currency: 'coins' }); }
+  function playVsBot() {
+    lastModeRef.current = 'bot_paid';
+    lastSettingsRef.current = { entryFee, currency: betCurrency };
+    socket?.emit('play_car_dash_vs_bot', { entryFee, currency: betCurrency });
+  }
+  function playVsBotFree() {
+    lastModeRef.current = 'bot_free';
+    lastSettingsRef.current = { entryFee: 0, currency: 'coins' };
+    socket?.emit('play_car_dash_vs_bot', { entryFee: 0, currency: 'coins' });
+  }
   function createPrivate(fee, cur) { socket?.emit('create_private_room', { gameType: 'carDash', entryFee: fee, currency: cur }); }
   function joinPrivate(code)       { socket?.emit('join_private_room', { gameType: 'carDash', code }); }
 
@@ -148,6 +161,24 @@ export default function CarDashGame() {
   function reset() {
     setPhase('lobby'); setResult(null); setSeed(null);
     setMyMs(0); setOppMs(0); setCrashed(false); setOppCrashed(false); setStatusMsg(''); crashedRef.current = false;
+  }
+
+  // Play Again re-enters whatever mode was just played (PvP queue, paid bot or
+  // free bot) instead of dumping the player back at the lobby.
+  function playAgain() {
+    const mode = lastModeRef.current;
+    const { entryFee: fee, currency: cur } = lastSettingsRef.current;
+    reset();
+    if (!socket || !mode) return;
+    eloBeforeRef.current = profile?.elo ?? 1000;
+    if (mode === 'pvp') {
+      setPhase('queue');
+      socket.emit('join_car_dash_queue', { entryFee: fee, currency: cur });
+    } else {
+      socket.emit('play_car_dash_vs_bot', mode === 'bot_free'
+        ? { entryFee: 0, currency: 'coins' }
+        : { entryFee: fee, currency: cur });
+    }
   }
 
   // ── Result ──
@@ -171,7 +202,7 @@ export default function CarDashGame() {
             { label: 'Your Time', value: fmtTime(isWinner ? result.winnerMs : result.loserMs) },
             { label: 'Opponent',  value: fmtTime(isWinner ? result.loserMs : result.winnerMs) },
           ].filter(r => r.value !== undefined)}
-          onPlayAgain={reset}
+          onPlayAgain={playAgain}
           onBackToLobby={reset}
         />
       </div>
@@ -207,7 +238,7 @@ export default function CarDashGame() {
         <div className="text-center animate-fade-in">
           <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-6" />
           <h2 className="text-2xl font-bold text-white mb-6">Searching...</h2>
-          <button onClick={leaveQueue} className="text-sm text-danger hover:text-red-400 transition-colors">Cancel</button>
+          <GlowButton variant="ghost" onClick={leaveQueue}>Cancel</GlowButton>
         </div>
       </div>
     );
