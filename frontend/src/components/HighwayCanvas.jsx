@@ -1050,27 +1050,18 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       const tileH = sp.road.height;
       const off = (S.dist * VISUAL_SCROLL * u2p) % tileH;
       for (let y = -tileH + off; y < H + tileH; y += tileH) ctx.drawImage(sp.road, roadX, y);
-      // Vertical motion blur over the asphalt — sells speed without desyncing
-      // the road from the traffic.
+      // Speed haze over the asphalt. Deliberately a flat neutral wash — the
+      // striped highlights that used to run down the lanes read as stray blue
+      // lines on the road, so they're gone.
       const spd01 = clamp((S.speed - SPD_START) / (SPD_MAX + OD_SPEED - SPD_START), 0, 1);
       if (spd01 > 0.15) {
-        ctx.globalAlpha = (spd01 - 0.15) * 0.5;
+        ctx.globalAlpha = (spd01 - 0.15) * 0.35;
         const bl = ctx.createLinearGradient(0, 0, 0, H);
-        bl.addColorStop(0, 'rgba(150,200,255,0.05)');
-        bl.addColorStop(0.55, 'rgba(255,255,255,0.02)');
-        bl.addColorStop(1, 'rgba(150,200,255,0.07)');
+        bl.addColorStop(0, 'rgba(255,255,255,0.03)');
+        bl.addColorStop(0.55, 'rgba(255,255,255,0.015)');
+        bl.addColorStop(1, 'rgba(255,255,255,0.04)');
         ctx.fillStyle = bl;
         ctx.fillRect(roadX, 0, roadW, H);
-        // streaked highlights racing down the lane lines
-        ctx.strokeStyle = `rgba(226,240,255,${0.05 + spd01 * 0.1})`;
-        ctx.lineWidth = 1;
-        const sp2 = (S.dist * u2p) % 220;
-        for (let i = 0; i < LANES; i++) {
-          const x = roadX + laneW * (i + 0.5);
-          for (let y = -220 + sp2; y < H; y += 220) {
-            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 60 + spd01 * 130); ctx.stroke();
-          }
-        }
         ctx.globalAlpha = 1;
       }
 
