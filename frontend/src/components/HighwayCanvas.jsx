@@ -1260,8 +1260,14 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       const score = Math.floor(S.score);
       const popS = 1 + S.scorePop * 0.12;
 
+      // Anchor the readouts to the ROAD, not the canvas. On a wide desktop the
+      // road is centred with black either side, so canvas-corner placement threw
+      // score/time out to the far edges away from the action.
+      const hudL = Math.max(16, roadX + 12);
+      const hudR = Math.min(W - 16, roadX + roadW - 12);
+
       ctx.save();
-      ctx.translate(18, 46);
+      ctx.translate(hudL, 46);
       ctx.scale(popS, popS);
       ctx.textAlign = 'left';
       ctx.font = '900 30px "JetBrains Mono", ui-monospace, monospace';
@@ -1273,17 +1279,17 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       ctx.textAlign = 'left';
       ctx.font = '800 10px Inter, system-ui, sans-serif';
       ctx.fillStyle = 'rgba(159,220,255,0.75)';
-      ctx.fillText('SCORE', 19, 61);
+      ctx.fillText('SCORE', hudL + 1, 61);
 
       ctx.textAlign = 'right';
       ctx.font = '900 22px "JetBrains Mono", ui-monospace, monospace';
       ctx.fillStyle = 'rgba(0,0,0,0.7)';
-      ctx.fillText(S.simT.toFixed(1) + 's', W - 16, 44);
+      ctx.fillText(S.simT.toFixed(1) + 's', hudR + 2, 44);
       ctx.fillStyle = '#F2F8FF';
-      ctx.fillText(S.simT.toFixed(1) + 's', W - 18, 42);
+      ctx.fillText(S.simT.toFixed(1) + 's', hudR, 42);
       ctx.font = '800 10px Inter, system-ui, sans-serif';
       ctx.fillStyle = 'rgba(159,220,255,0.75)';
-      ctx.fillText('TIME', W - 19, 58);
+      ctx.fillText('TIME', hudR - 1, 58);
 
       // GO! flash
       if (S.goT < 0.75 && !S.dead) {
