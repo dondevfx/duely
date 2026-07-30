@@ -162,6 +162,7 @@ export default function CarDashGame() {
           newWinnerElo={result.newWinnerElo}
           newLoserElo={result.newLoserElo}
           eloBeforeRef={eloBeforeRef}
+          profile={profile}
           balanceChange={result.balanceChange}
           currency={result.currency}
           entryFee={result.entryFee}
