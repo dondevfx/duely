@@ -88,8 +88,8 @@ const VTOTAL = VKEYS.reduce((a, k) => a + VEHICLES[k].weight, 0);
 
 // Bright, saturated paints so traffic never sinks into the asphalt.
 const PAINTS = [
-  '#EEF2F7', '#C8D0DA', '#2F86EE', '#E24444', '#39424E',
-  '#F0A93C', '#33B98C', '#8A6BE6', '#E8E2D6', '#9AA5B2',
+  '#F23B3B', '#FF7A29', '#FFC429', '#4CD964', '#00B894',
+  '#8E5BF0', '#E040A0', '#F5F7FA', '#C9D4E0', '#FF5E7E',
 ];
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -214,13 +214,16 @@ function paintCar(g, w, l, paint, P) {
   for (const wy of [fy, ry]) { tyre(-ww * 0.34, wy); tyre(w - ww * 0.66, wy); }
 
   // ── body ──
+  // Arcade shading: broad flat bands of colour rather than a photoreal falloff.
+  // The paint stays saturated across most of the roof; only the extreme edges
+  // roll off, which is what makes the cars pop against the asphalt.
   const bg = g.createLinearGradient(0, 0, w, 0);
-  bg.addColorStop(0.00, shade(paint, -52));
-  bg.addColorStop(0.16, shade(paint, -6));
-  bg.addColorStop(0.36, shade(paint, 40));    // key light, top-left
-  bg.addColorStop(0.52, shade(paint, 6));
-  bg.addColorStop(0.78, shade(paint, -14));
-  bg.addColorStop(1.00, shade(paint, -58));
+  bg.addColorStop(0.00, shade(paint, -44));
+  bg.addColorStop(0.10, shade(paint, 4));
+  bg.addColorStop(0.30, shade(paint, 46));    // key light, top-left
+  bg.addColorStop(0.46, shade(paint, 18));
+  bg.addColorStop(0.82, shade(paint, -4));
+  bg.addColorStop(1.00, shade(paint, -46));
   g.fillStyle = bg;
   carPath(g, 0, 0, w, l, P); g.fill();
 
@@ -229,10 +232,10 @@ function paintCar(g, w, l, paint, P) {
 
   // nose-to-tail form shading
   const vg = g.createLinearGradient(0, 0, 0, l);
-  vg.addColorStop(0, 'rgba(255,255,255,0.14)');
-  vg.addColorStop(0.26, 'rgba(255,255,255,0.02)');
-  vg.addColorStop(0.72, 'rgba(0,0,0,0.10)');
-  vg.addColorStop(1, 'rgba(0,0,0,0.34)');
+  vg.addColorStop(0, 'rgba(255,255,255,0.20)');
+  vg.addColorStop(0.22, 'rgba(255,255,255,0.03)');
+  vg.addColorStop(0.78, 'rgba(0,0,0,0.06)');
+  vg.addColorStop(1, 'rgba(0,0,0,0.26)');
   g.fillStyle = vg; g.fillRect(0, 0, w, l);
 
   // bonnet + boot shut lines
@@ -246,9 +249,9 @@ function paintCar(g, w, l, paint, P) {
   // car reads as roof-glass-roof instead of one dark smear.
   const glass = (top, bot, wt, wb) => {
     const gg = g.createLinearGradient(0, top, 0, bot);
-    gg.addColorStop(0, 'rgba(190,228,255,0.72)');
-    gg.addColorStop(0.22, 'rgba(28,46,72,0.94)');
-    gg.addColorStop(1, 'rgba(16,26,42,0.94)');
+    gg.addColorStop(0, 'rgba(214,240,255,0.92)');
+    gg.addColorStop(0.26, 'rgba(46,86,132,0.95)');
+    gg.addColorStop(1, 'rgba(26,52,86,0.95)');
     g.fillStyle = gg;
     glassShape(g, cx, top, bot, wt, wb); g.fill();
     g.strokeStyle = 'rgba(0,0,0,0.5)'; g.lineWidth = 1.2;
@@ -308,8 +311,14 @@ function paintCar(g, w, l, paint, P) {
 
   g.restore();
 
-  // crisp outline holds the silhouette against the asphalt
-  g.strokeStyle = 'rgba(0,0,0,0.55)'; g.lineWidth = 1.5;
+  // Hard graphic outline plus a rim light along the inside of it — the two
+  // together are what give the arcade look its punch.
+  g.save();
+  carPath(g, 0, 0, w, l, P); g.clip();
+  g.strokeStyle = 'rgba(255,255,255,0.34)'; g.lineWidth = 3;
+  carPath(g, 0, 0, w, l, P); g.stroke();
+  g.restore();
+  g.strokeStyle = 'rgba(8,10,14,0.92)'; g.lineWidth = Math.max(2, w * 0.035);
   carPath(g, 0, 0, w, l, P); g.stroke();
 
   // ── lights ──
@@ -394,7 +403,7 @@ function bakePlayer(wpx, lpx) {
     g.translate(PAD, PAD);
     const w = wpx, l = lpx, cx = w / 2;
 
-    paintCar(g, w, l, '#2E74E0', {
+    paintCar(g, w, l, '#1E7BFF', {
       nose: 0.56, tail: 0.80, shoulder: 0.30, hip: 0.74, cabW: 0.60,
       wsTop: 0.30, wsBot: 0.45, rwTop: 0.61, rwBot: 0.73, rear: true,
       axleF: 0.13, axleR: 0.71, wheelLen: 0.18,
@@ -944,8 +953,8 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     function drawBackdrop(light) {
       if (light) { ctx.fillStyle = '#e9edf3'; ctx.fillRect(0, 0, W, H); return; }
       const g = ctx.createLinearGradient(0, 0, 0, H);
-      g.addColorStop(0, '#0A0E15');
-      g.addColorStop(1, '#05070B');
+      g.addColorStop(0, '#0C1420');
+      g.addColorStop(1, '#070B12');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
     }
@@ -976,7 +985,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       // asphalt: a single clean gradient, brightest around the player
       const ag = ctx.createLinearGradient(0, yTop, 0, H);
       if (light) { ag.addColorStop(0, '#b9c2cf'); ag.addColorStop(0.7, '#cdd5e0'); ag.addColorStop(1, '#c3ccd8'); }
-      else { ag.addColorStop(0, '#1C222B'); ag.addColorStop(0.72, '#2B333F'); ag.addColorStop(1, '#232A34'); }
+      else { ag.addColorStop(0, '#333E4C'); ag.addColorStop(0.72, '#4A5666'); ag.addColorStop(1, '#414C5C'); }
       ctx.fillStyle = ag;
       ctx.fillRect(0, yTop, W, H - yTop);
       // gentle cross-road falloff so the surface has form without texture
@@ -988,7 +997,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       ctx.fillRect(0, yTop, W, H - yTop);
 
       // lane dashes — drawn, not tiled, so they stay perfectly crisp
-      const DASH = 46 * u2p, GAP = 54 * u2p;
+      const DASH = 52 * u2p, GAP = 46 * u2p;
       const cycle = DASH + GAP;
       const off = (S.dist * VISUAL_SCROLL * u2p) % cycle;
       ctx.fillStyle = light ? 'rgba(250,252,255,0.95)' : 'rgba(246,251,255,0.92)';
@@ -1000,12 +1009,36 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
           const h0 = halfAt(wy0), h1 = halfAt(wy1);
           const f = (li / LANES) * 2 - 1;
           const x0 = W / 2 + f * h0, x1 = W / 2 + f * h1;
-          const t0 = Math.max(1.6, h0 * 0.012), t1 = Math.max(1.6, h1 * 0.012);
+          const t0 = Math.max(2.6, h0 * 0.019), t1 = Math.max(2.6, h1 * 0.019);
           ctx.beginPath();
           ctx.moveTo(x0 - t0, y0); ctx.lineTo(x0 + t0, y0);
           ctx.lineTo(x1 + t1, y1); ctx.lineTo(x1 - t1, y1);
           ctx.closePath(); ctx.fill();
         }
+      }
+      ctx.restore();
+
+      // Painted shoulder inside each edge, then the edge itself. Gives the road
+      // a border you can read at a glance without adding any scenery.
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(W / 2 - pts[0].half, pts[0].sy);
+      for (const q of pts) ctx.lineTo(W / 2 - q.half, q.sy);
+      for (let i = pts.length - 1; i >= 0; i--) ctx.lineTo(W / 2 + pts[i].half, pts[i].sy);
+      ctx.closePath();
+      ctx.clip();
+      for (const side of [-1, 1]) {
+        ctx.fillStyle = light ? 'rgba(70,90,120,0.20)' : 'rgba(16,22,32,0.55)';
+        ctx.beginPath();
+        pts.forEach((q, i) => {
+          const x = W / 2 + side * q.half;
+          i === 0 ? ctx.moveTo(x, q.sy) : ctx.lineTo(x, q.sy);
+        });
+        for (let i = pts.length - 1; i >= 0; i--) {
+          const q = pts[i];
+          ctx.lineTo(W / 2 + side * (q.half - q.half * 0.055), q.sy);
+        }
+        ctx.closePath(); ctx.fill();
       }
       ctx.restore();
 
@@ -1067,7 +1100,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         if (!r) continue;
         // headlight wash thrown forward
         if (r.pr > 0.3) {
-          ctx.globalAlpha = 0.16;
+          ctx.globalAlpha = 0.09;
           const gs = r.w * 2.6;
           ctx.drawImage(sp.glowWhite, r.cx - gs / 2, r.sy - r.l - r.lift - gs * 0.7, gs, gs);
           ctx.globalAlpha = 1;
@@ -1124,7 +1157,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       ctx.drawImage(sp.player, -w / 2 - 16, -l - lift, w + 32, l + lift);
       ctx.restore();
       // headlight cones ahead
-      ctx.globalAlpha = 0.2;
+      ctx.globalAlpha = 0.13;
       const hs = w * 3.6;
       ctx.drawImage(sp.glowCyan, cx - hs / 2, sy - l - lift - hs * 0.72, hs, hs);
       ctx.globalAlpha = 1;
