@@ -1391,7 +1391,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         removeFromWordleQueue(socket.id);
         removeFromCoinFlipQueue(socket.id);
         removeFromBlackjackQueue(socket.id);
-      removeFromCarDashQueue(socket.id);
+        removeFromCarDashQueue(socket.id);
         removeFromBlockBlastQueue(socket.id);
         unlockUser(authenticatedUser.userId);
         userQueues.delete(authenticatedUser.userId);

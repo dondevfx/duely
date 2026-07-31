@@ -18,6 +18,13 @@ const gameEvents = require('./gameEvents');
 const { v4: uuidv4 } = require('uuid');
 
 const MAX_RUN_MS = 15 * 60_000; // sanity ceiling — no run is 15 minutes
+// A live client pings progress ~3x/second. If pings stop while the player is
+// still "alive" they have either closed/frozen the tab (backgrounding is the
+// remaining way to pause a run) or are running a client that never reports a
+// crash. Either way the opponent must not be left hanging: after STALL_MS we
+// finalise that player at their last verified progress.
+const STALL_MS   = 10_000;
+const WATCH_MS   = 2_000;
 // Anti-cheat: score is client-computed, so it is capped against server-measured
 // elapsed time. Ceiling mirrors the client formula (distance + time + a generous
 // near-miss rate) plus headroom, so honest runs are never clipped.
@@ -86,6 +93,7 @@ function _makeRoom(roomId, p1, p2) {
     scores: {},
     // last live progress ping per player, for the opponent bar
     progress: {},
+    lastPingAt: {},   // socketId -> ms, for the stall watchdog
     isSolo,
     demoWin,
     // Non-demo solo: the bot crashes at a fixed, believable time.
@@ -107,7 +115,30 @@ async function startCarDashCountdown(io, supabase, roomId) {
   if (!fresh || fresh.state === 'finished') return;
   fresh.state = 'active';
   fresh.startedAt = Date.now();
+  for (const p of fresh.players) if (!p.isBot) fresh.lastPingAt[p.socketId] = Date.now();
   io.to(roomId).emit('car_dash_start', { seed: fresh.seed });
+
+  // Watchdog: no match may hang forever waiting on a client that stops talking.
+  const watch = setInterval(() => {
+    const r = getCarDashRoom(roomId);
+    if (!r || r.state !== 'active') { clearInterval(watch); return; }
+    const now = Date.now();
+    let stalled = false;
+    for (const p of r.players) {
+      if (p.isBot || r.times[p.socketId] != null) continue;
+      const last = r.lastPingAt[p.socketId] ?? r.startedAt;
+      if (now - last > STALL_MS) {
+        // Finalise at their last verified progress — never at a claimed value.
+        r.times[p.socketId] = Math.min(r.progress[p.socketId] ?? 0, now - r.startedAt, MAX_RUN_MS);
+        stalled = true;
+      }
+    }
+    if (stalled || now - r.startedAt > MAX_RUN_MS) {
+      clearInterval(watch);
+      forceResolveCarDash(io, supabase, roomId).catch(() => {});
+    }
+  }, WATCH_MS);
+  fresh.botTimers.push(watch);
 
   // Solo / bot: the bot just trails the player's progress and never crashes on
   // its own — the run ends the moment the PLAYER crashes, and the player always
@@ -138,6 +169,7 @@ function trackCarDashProgress(roomId, socketId, claimedMs, claimedScore) {
   const elapsed = Date.now() - room.startedAt;
   const ms = Math.max(0, Math.min(Number(claimedMs) || 0, elapsed, MAX_RUN_MS));
   room.progress[socketId] = ms;
+  room.lastPingAt[socketId] = Date.now();
   room.scores[socketId] = Math.max(0, Math.min(Number(claimedScore) || 0, maxScoreFor(elapsed)));
   return ms;
 }
@@ -263,6 +295,9 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
 
   io.emit('active_game_ended', { id: roomId });
   gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId).filter(Boolean) });
+  // Drop the room shortly after settling so finished rooms can't accumulate and
+  // can't be re-resolved by a late event.
+  setTimeout(() => deleteCarDashRoom(roomId), 5_000);
   io.to(roomId).emit('car_dash_result', {
     winnerId: winner.userId, loserId: loser.userId,
     winnerUsername: winner.username, loserUsername: loser.username,
