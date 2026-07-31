@@ -690,7 +690,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     // ── State (sim-clock: pausing stops score AND reported time) ──
     const S = {
       simT: 0, dist: 0, speed: SPD_START, score: 0,
-      laneX: LANE_U * 1.5, laneVel: 0, targetLane: 1, queued: null,
+      laneX: LANE_U * 1.5, laneVel: 0, targetLane: 1,
       corridor: 2,
       waveIn: 0.55, waveN: 0,
       changeCooldown: 0,
@@ -709,13 +709,13 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     const laneCenter = (l) => (l + 0.5) * LANE_U;
 
     // ── Input ──
+    // Every input retargets immediately. Nothing is ever queued or ignored, so
+    // reversing mid-change (left then instantly right) responds on the frame it
+    // was pressed rather than finishing the previous move first.
     function move(dir) {
       if (S.dead) return;
-      const cur = S.targetLane;
-      const nxt = clamp(cur + dir, 0, LANES - 1);
-      if (nxt === cur) return;
-      const progress = Math.abs(S.laneX - laneCenter(S.targetLane)) / LANE_U;
-      if (progress > 0.45) { S.queued = dir; return; } // buffer mid-change input
+      const nxt = clamp(S.targetLane + dir, 0, LANES - 1);
+      if (nxt === S.targetLane) return;
       S.targetLane = nxt;
     }
     const onKey = (e) => {
@@ -748,6 +748,11 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     };
     const onPointerUp = (e) => {
       if (!sw.active || e.pointerId !== sw.id) return;
+      // No swipe registered => treat it as a tap on that half of the screen.
+      if (!sw.fired) {
+        const r = canvas.getBoundingClientRect();
+        move((e.clientX - r.left) < r.width / 2 ? -1 : 1);
+      }
       sw.active = false; sw.id = null;
       if (canvas.releasePointerCapture) { try { canvas.releasePointerCapture(e.pointerId); } catch { /* noop */ } }
     };
@@ -846,14 +851,14 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
 
       // player lane spring — snappy with a hint of overshoot
       const targetX = laneCenter(S.targetLane);
-      S.laneVel += (targetX - S.laneX) * 150 * dt;
-      S.laneVel *= Math.exp(-13 * dt);
+      // Snappy, near-critically-damped steering: ~133ms to cross a lane and
+      // ~233ms fully settled, with almost no overshoot. Responsiveness is
+      // deliberately favoured over a long, pretty animation.
+      S.laneVel += (targetX - S.laneX) * 600 * dt;
+      S.laneVel *= Math.exp(-34 * dt);
       S.laneX += S.laneVel * dt;
-      if (S.queued && Math.abs(S.laneX - targetX) < LANE_U * 0.3) {
-        const q = S.queued; S.queued = null; move(q);
-      }
       // tyre smoke while sliding
-      if (Math.abs(S.laneVel) > 130) {
+      if (Math.abs(S.laneVel) > 240) {
         const px = roadX + S.laneX * u2p;
         puffAt(px - sprites.playerW * 0.34, playerY + sprites.playerL * 0.42, 0.8 + frand() * 0.4);
         puffAt(px + sprites.playerW * 0.34, playerY + sprites.playerL * 0.42, 0.8 + frand() * 0.4);
@@ -980,7 +985,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
 
       const shx = S.shake ? (frand() - 0.5) * 16 * S.shake : 0;
       const shy = S.shake ? (frand() - 0.5) * 12 * S.shake : 0;
-      const tilt = clamp(S.laneVel * 0.000014, -0.009, 0.009);
+      const tilt = clamp(S.laneVel * 0.0000075, -0.009, 0.009);
       const camX = -(S.laneX - LANE_U * LANES / 2) * u2p * 0.022;
 
       ctx.save();
@@ -1182,7 +1187,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       const sp = sprites;
       const px = roadX + S.laneX * u2p;
       const pw = sp.playerW, pl = sp.playerL;
-      const roll = clamp(S.laneVel * 0.00042, -0.1, 0.1);
+      const roll = clamp(S.laneVel * 0.00023, -0.1, 0.1);
       const squash = 1 - Math.min(0.035, Math.abs(S.laneVel) * 0.00004);
 
       // pulsing underglow
