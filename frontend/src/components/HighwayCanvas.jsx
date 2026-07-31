@@ -594,6 +594,12 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
           gr.addColorStop(1, 'rgba(176,190,210,0)');
           g.fillStyle = gr; g.fillRect(0, 0, w, h);
         }),
+        vignette: bake(W, H, (g) => {
+          const v = g.createRadialGradient(W / 2, H * 0.6, Math.min(W, H) * 0.42, W / 2, H * 0.6, Math.max(W, H) * 0.78);
+          v.addColorStop(0, 'rgba(0,0,0,0)');
+          v.addColorStop(1, 'rgba(0,0,0,0.55)');
+          g.fillStyle = v; g.fillRect(0, 0, W, H);
+        }),
         edgeFlash: bake(W, H, (g) => {
           const v = g.createRadialGradient(W / 2, H * 0.55, Math.min(W, H) * 0.3, W / 2, H * 0.55, Math.max(W, H) * 0.72);
           v.addColorStop(0, 'rgba(0,191,255,0)');
@@ -938,6 +944,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       ctx.restore();
 
       drawAtmosphere(light, nowMs);
+      if (!light) { ctx.drawImage(sp.vignette, 0, 0); }
 
       if (S.flash > 0.01) {
         ctx.globalAlpha = S.flash;
@@ -953,8 +960,9 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     function drawBackdrop(light) {
       if (light) { ctx.fillStyle = '#e9edf3'; ctx.fillRect(0, 0, W, H); return; }
       const g = ctx.createLinearGradient(0, 0, 0, H);
-      g.addColorStop(0, '#0C1420');
-      g.addColorStop(1, '#070B12');
+      g.addColorStop(0, '#0B1626');
+      g.addColorStop(0.55, '#070E1A');
+      g.addColorStop(1, '#04070E');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
     }
@@ -982,40 +990,75 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       ctx.closePath();
       ctx.clip();
 
-      // asphalt: a single clean gradient, brightest around the player
+      // Asphalt is deep blue-black, not grey. All the contrast in the frame
+      // comes from the markings, the car paint and the light pooling on the
+      // surface — a mid-grey road just flattens everything it sits under.
       const ag = ctx.createLinearGradient(0, yTop, 0, H);
       if (light) { ag.addColorStop(0, '#b9c2cf'); ag.addColorStop(0.7, '#cdd5e0'); ag.addColorStop(1, '#c3ccd8'); }
-      else { ag.addColorStop(0, '#333E4C'); ag.addColorStop(0.72, '#4A5666'); ag.addColorStop(1, '#414C5C'); }
+      else {
+        ag.addColorStop(0, '#121A28');
+        ag.addColorStop(0.55, '#1B2637');
+        ag.addColorStop(1, '#131B29');
+      }
       ctx.fillStyle = ag;
       ctx.fillRect(0, yTop, W, H - yTop);
-      // gentle cross-road falloff so the surface has form without texture
+
+      // Cool sheen down the middle of the road, warm-dark at the kerbs. This
+      // cross-lighting is what stops a flat fill from reading as cardboard.
       const xg = ctx.createLinearGradient(W / 2 - pts[0].half, 0, W / 2 + pts[0].half, 0);
-      xg.addColorStop(0, 'rgba(0,0,0,0.22)');
-      xg.addColorStop(0.45, 'rgba(255,255,255,0.03)');
-      xg.addColorStop(1, 'rgba(0,0,0,0.22)');
+      xg.addColorStop(0.00, 'rgba(0,0,0,0.42)');
+      xg.addColorStop(0.22, 'rgba(0,140,220,0.05)');
+      xg.addColorStop(0.50, 'rgba(90,190,255,0.09)');
+      xg.addColorStop(0.78, 'rgba(0,140,220,0.05)');
+      xg.addColorStop(1.00, 'rgba(0,0,0,0.42)');
       ctx.fillStyle = xg;
       ctx.fillRect(0, yTop, W, H - yTop);
 
-      // lane dashes — drawn, not tiled, so they stay perfectly crisp
+      // ── lane markings ──────────────────────────────────────────────────────
+      // At full speed the road covers ~3300px/s, so a fixed dash cycle completes
+      // in about five frames and the stripes appear to teleport — the road looks
+      // like it keeps vanishing. Each dash is therefore stretched by the distance
+      // travelled in one frame, exactly like a camera shutter would: crisp dashes
+      // when slow, smooth continuous rails when fast. No strobe at any speed.
       const DASH = 52 * u2p, GAP = 46 * u2p;
       const cycle = DASH + GAP;
       const off = (S.dist * VISUAL_SCROLL * u2p) % cycle;
-      ctx.fillStyle = light ? 'rgba(250,252,255,0.95)' : 'rgba(246,251,255,0.92)';
+      const blur = Math.min(GAP * 0.97, S.speed * u2p * VISUAL_SCROLL * (1 / 60));
       for (let li = 1; li < LANES; li++) {
-        for (let y = playerY + off; y > yTop - cycle; y -= cycle) {
-          const y0 = y - DASH, y1 = y;
+        // A faint unbroken rail sits under the dashes. Motion blur alone still
+        // leaves a gap that can beat against the frame rate at top speed; this
+        // guarantees every lane line is continuously present, so the road can
+        // never appear to blink out however fast the run gets.
+        {
+          const f = (li / LANES) * 2 - 1;
+          ctx.strokeStyle = light ? 'rgba(255,255,255,0.30)' : 'rgba(150,205,245,0.20)';
+          ctx.lineWidth = Math.max(2, roadW * 0.0035);
+          ctx.beginPath();
+          pts.forEach((q, i) => {
+            const x = W / 2 + f * q.half;
+            i === 0 ? ctx.moveTo(x, q.sy) : ctx.lineTo(x, q.sy);
+          });
+          ctx.stroke();
+        }
+        for (let y = playerY + off; y > yTop - cycle - blur; y -= cycle) {
+          const y0 = y - DASH - blur, y1 = y;
           if (y0 > H || y1 < yTop) continue;
           const wy0 = Math.max(0, (playerY - y0) / u2p), wy1 = Math.max(0, (playerY - y1) / u2p);
           const h0 = halfAt(wy0), h1 = halfAt(wy1);
           const f = (li / LANES) * 2 - 1;
           const x0 = W / 2 + f * h0, x1 = W / 2 + f * h1;
           const t0 = Math.max(2.6, h0 * 0.019), t1 = Math.max(2.6, h1 * 0.019);
-          ctx.beginPath();
-          ctx.moveTo(x0 - t0, y0); ctx.lineTo(x0 + t0, y0);
-          ctx.lineTo(x1 + t1, y1); ctx.lineTo(x1 - t1, y1);
-          ctx.closePath(); ctx.fill();
+          const mark = (sc, style) => {
+            ctx.fillStyle = style;
+            ctx.beginPath();
+            ctx.moveTo(x0 - t0 * sc, y0); ctx.lineTo(x0 + t0 * sc, y0);
+            ctx.lineTo(x1 + t1 * sc, y1); ctx.lineTo(x1 - t1 * sc, y1);
+            ctx.closePath(); ctx.fill();
+          };
+          mark(1, light ? 'rgba(250,252,255,0.95)' : '#EAF6FF');
         }
       }
+
       ctx.restore();
 
       // Painted shoulder inside each edge, then the edge itself. Gives the road
@@ -1042,23 +1085,27 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       }
       ctx.restore();
 
-      // edges: one white line over a thin electric-blue rail. Nothing else.
+      // Edges: a lit kerb rail — wide soft spill, a solid accent core, and a
+      // white inner line. Reads as a boundary at a glance and gives the frame
+      // its two anchor points of saturated colour.
       for (const side of [-1, 1]) {
-        const trace = () => {
+        const trace = (inset) => {
           ctx.beginPath();
           pts.forEach((q, i) => {
-            const x = W / 2 + side * q.half;
+            const x = W / 2 + side * (q.half - inset);
             i === 0 ? ctx.moveTo(x, q.sy) : ctx.lineTo(x, q.sy);
           });
         };
-        ctx.strokeStyle = 'rgba(0,150,255,0.22)'; ctx.lineWidth = 10; trace(); ctx.stroke();
-        ctx.strokeStyle = CYAN;                    ctx.lineWidth = 3;  trace(); ctx.stroke();
-        ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = 1.4; trace(); ctx.stroke();
+        ctx.lineCap = 'butt';
+        ctx.strokeStyle = 'rgba(0,150,255,0.13)'; ctx.lineWidth = 26; trace(0); ctx.stroke();
+        ctx.strokeStyle = 'rgba(0,160,255,0.30)'; ctx.lineWidth = 12; trace(0); ctx.stroke();
+        ctx.strokeStyle = CYAN;                    ctx.lineWidth = 4;  trace(0); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,0.92)'; ctx.lineWidth = 2.4; trace(roadW * 0.022); ctx.stroke();
       }
     }
 
     // ── Vehicles: scaled by perspective, grounded with contact shadows ──
-    function drawVehicleSprite(img, wy, laneF, wpx, lpx) {
+    function drawVehicleSprite(img, wy, laneF, wpx, lpx, tint) {
       const pr = taperAt(wy);
       if (pr <= 0.02) return;
       const sy = wy2sy(wy);
@@ -1066,8 +1113,24 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       const w = wpx * pr, l = lpx * pr, lift = 0;
       if (sy < -l - 60 || sy > H + l) return;
 
+      // colour bounce: a wash of the car's own paint on the tarmac beneath it.
+      // Cheap, but it is most of what separates "placed on top of" from "lit in".
+      if (tint) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const cy = sy - l * 0.5, rx = w * 1.1, ry = l * 0.72;
+        const bg2 = ctx.createRadialGradient(cx, cy, 0, cx, cy, rx);
+        bg2.addColorStop(0, tint);
+        bg2.addColorStop(0.45, tint);
+        bg2.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.globalAlpha = 0.2;
+        ctx.translate(cx, cy); ctx.scale(1, ry / rx); ctx.translate(-cx, -cy);
+        ctx.fillStyle = bg2;
+        ctx.beginPath(); ctx.arc(cx, cy, rx, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
       // contact shadow on the tarmac
-      ctx.globalAlpha = 0.34;
+      ctx.globalAlpha = 0.4;
       ctx.drawImage(sprites.shadow, cx - w * 0.68, sy - l * 0.4, w * 1.36, l * 0.5);
       ctx.globalAlpha = 1;
       // wet-road reflection under the body
@@ -1096,7 +1159,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         const v = VEHICLES[c.kind];
         const img = sp.vkey(c.kind, c.paint);
         const r = drawVehicleSprite(img, c.y, c.laneF,
-          v.wid * u2p, v.len * u2p);
+          v.wid * u2p, v.len * u2p, c.paint);
         if (!r) continue;
         // headlight wash thrown forward
         if (r.pr > 0.3) {
