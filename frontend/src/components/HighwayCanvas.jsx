@@ -83,9 +83,10 @@ const PLAYER_H_U = 38;   // player body height (visual only)
 const VKEYS = Object.keys(VEHICLES);
 const VTOTAL = VKEYS.reduce((a, k) => a + VEHICLES[k].weight, 0);
 
+// Bright, saturated paints so traffic never sinks into the asphalt.
 const PAINTS = [
-  '#B33A3A', '#C77B2F', '#C9B33B', '#3E8E57', '#3D74B8', '#6E56C4',
-  '#B04A7E', '#C9CFD8', '#6E7580', '#23282F', '#2E9E96', '#C2542E',
+  '#EEF2F7', '#C8D0DA', '#2F86EE', '#E24444', '#39424E',
+  '#F0A93C', '#33B98C', '#8A6BE6', '#E8E2D6', '#9AA5B2',
 ];
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -337,8 +338,8 @@ function bakePlayer(wpx, lpx, hpx) {
 
     drawShell(g, 0, 0, w, l, lift, {
       roofInset: 0.17, noseInset: 0.26,
-      body: '#12213F', roof: '#16294D',
-      glass: 'rgba(6,14,26,0.95)',
+      body: '#1E4C9E', roof: '#2C6BD6',      // bright Duely blue, high contrast
+      glass: 'rgba(16,32,54,0.9)',
     });
 
     // carbon weave across the roof
@@ -352,8 +353,8 @@ function bakePlayer(wpx, lpx, hpx) {
 
     // electric-blue emissives with baked bloom
     const bloom = (x0, y0, x1, y1, cw) => {
-      for (const [lw, al] of [[cw * 5, 0.09], [cw * 2.6, 0.2], [cw, 0.95]]) {
-        g.strokeStyle = `rgba(0,191,255,${al})`;
+      for (const [lw, al] of [[cw * 6, 0.18], [cw * 3, 0.38], [cw, 1]]) {
+        g.strokeStyle = `rgba(120,225,255,${al})`;
         g.lineWidth = lw; g.lineCap = 'round';
         g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
       }
@@ -367,15 +368,18 @@ function bakePlayer(wpx, lpx, hpx) {
     bloom(w * 0.03, l * 0.3, w * 0.03, l * 0.9, 1.6);
     bloom(w * 0.97, l * 0.3, w * 0.97, l * 0.9, 1.6);
     // twin rear light strips on the rear FACE
-    for (const [lw, al] of [[9, 0.12], [5, 0.26], [2.4, 0.95]]) {
-      g.strokeStyle = `rgba(0,191,255,${al})`; g.lineWidth = lw; g.lineCap = 'round';
+    for (const [lw, al] of [[13, 0.22], [7, 0.42], [3, 1]]) {
+      g.strokeStyle = `rgba(140,232,255,${al})`; g.lineWidth = lw; g.lineCap = 'round';
       g.beginPath(); g.moveTo(w * 0.12, l * 0.965); g.lineTo(w * 0.42, l * 0.965); g.stroke();
       g.beginPath(); g.moveTo(w * 0.58, l * 0.965); g.lineTo(w * 0.88, l * 0.965); g.stroke();
     }
     // headlights
-    g.fillStyle = '#EAF7FF';
-    g.fillRect(w * 0.12, -lift - 1, w * 0.16, Math.max(2, l * 0.02));
-    g.fillRect(w * 0.72, -lift - 1, w * 0.16, Math.max(2, l * 0.02));
+    g.fillStyle = '#FFFFFF';
+    g.fillRect(w * 0.1, -lift - 2, w * 0.2, Math.max(3, l * 0.032));
+    g.fillRect(w * 0.7, -lift - 2, w * 0.2, Math.max(3, l * 0.032));
+    g.fillStyle = 'rgba(190,240,255,0.55)';
+    g.fillRect(w * 0.06, -lift - 3, w * 0.28, Math.max(4, l * 0.05));
+    g.fillRect(w * 0.66, -lift - 3, w * 0.28, Math.max(4, l * 0.05));
   });
 }
 
@@ -384,15 +388,17 @@ function bakeRoadTile(roadW, u2p, rand) {
   const tileH = 320 * u2p;
   const laneW = roadW / LANES;
   return bake(roadW, tileH, (g, W, H) => {
+    // Soft gray asphalt — light enough to read at a glance, with a gentle
+    // cross-road falloff so the centre catches more ambient light.
     const base = g.createLinearGradient(0, 0, W, 0);
-    base.addColorStop(0, '#0D1015');
-    base.addColorStop(0.5, '#14171D');
-    base.addColorStop(1, '#0D1015');
+    base.addColorStop(0, '#262C35');
+    base.addColorStop(0.5, '#333A45');
+    base.addColorStop(1, '#262C35');
     g.fillStyle = base; g.fillRect(0, 0, W, H);
 
     for (let i = 0; i < W * H / 40; i++) {
       const x = rand() * W, y = rand() * H;
-      g.fillStyle = rand() < 0.5 ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.05)';
+      g.fillStyle = rand() < 0.5 ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.04)';
       g.fillRect(x, y, 1.4, 1.4);
     }
     // tyre polish down each lane
@@ -401,13 +407,13 @@ function bakeRoadTile(roadW, u2p, rand) {
       for (const off of [-laneW * 0.18, laneW * 0.18]) {
         const wg = g.createLinearGradient(cx + off - laneW * 0.1, 0, cx + off + laneW * 0.1, 0);
         wg.addColorStop(0, 'rgba(0,0,0,0)');
-        wg.addColorStop(0.5, 'rgba(0,0,0,0.14)');
+        wg.addColorStop(0.5, 'rgba(0,0,0,0.10)');
         wg.addColorStop(1, 'rgba(0,0,0,0)');
         g.fillStyle = wg;
         g.fillRect(cx + off - laneW * 0.1, 0, laneW * 0.2, H);
       }
     }
-    g.strokeStyle = 'rgba(0,0,0,0.13)'; g.lineWidth = 1;
+    g.strokeStyle = 'rgba(0,0,0,0.10)'; g.lineWidth = 1;
     for (let i = 0; i < 3; i++) {
       let x = rand() * W, y = rand() * H;
       g.beginPath(); g.moveTo(x, y);
@@ -419,19 +425,19 @@ function bakeRoadTile(roadW, u2p, rand) {
     for (let l = 1; l < LANES; l++) {
       const x = laneW * l;
       for (let y = 0; y < H; y += cycle) {
-        for (const [lw, al] of [[7, 0.05], [3.6, 0.13], [1.9, 0.8]]) {
-          g.strokeStyle = `rgba(232,242,255,${al})`;
+        for (const [lw, al] of [[10, 0.08], [5.4, 0.2], [3.1, 1]]) {
+          g.strokeStyle = `rgba(245,250,255,${al})`;
           g.lineWidth = lw; g.lineCap = 'round';
           g.beginPath(); g.moveTo(x, y + 4); g.lineTo(x, y + dashOn); g.stroke();
         }
       }
     }
-    g.fillStyle = 'rgba(228,238,250,0.6)';
-    g.fillRect(laneW * 0.06, 0, 2, H);
-    g.fillRect(W - laneW * 0.06 - 2, 0, 2, H);
+    g.fillStyle = 'rgba(240,247,255,0.9)';
+    g.fillRect(laneW * 0.06, 0, 3, H);
+    g.fillRect(W - laneW * 0.06 - 3, 0, 3, H);
     for (const x of [1.5, W - 1.5]) {
-      for (const [lw, al] of [[10, 0.09], [5, 0.28], [2, 0.9]]) {
-        g.strokeStyle = `rgba(0,191,255,${al})`;
+      for (const [lw, al] of [[16, 0.16], [8, 0.4], [3, 1]]) {
+        g.strokeStyle = `rgba(60,205,255,${al})`;
         g.lineWidth = lw;
         g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke();
       }
@@ -443,11 +449,11 @@ function bakeRailTile(u2p) {
   const h = 80 * u2p, w = 16;
   return bake(w, h, (g) => {
     const rg = g.createLinearGradient(0, 0, w, 0);
-    rg.addColorStop(0, '#191D24'); rg.addColorStop(0.45, '#39424F'); rg.addColorStop(1, '#12161C');
+    rg.addColorStop(0, '#2C333D'); rg.addColorStop(0.45, '#5A6472'); rg.addColorStop(1, '#232932');
     g.fillStyle = rg; g.fillRect(3, 0, w - 6, h);
-    g.fillStyle = 'rgba(0,191,255,0.16)'; g.fillRect(4, 0, 1.6, h);
-    g.fillStyle = 'rgba(255,255,255,0.07)'; g.fillRect(6, 0, 2, h);
-    g.fillStyle = '#0E1116';
+    g.fillStyle = 'rgba(60,205,255,0.34)'; g.fillRect(4, 0, 2, h);
+    g.fillStyle = 'rgba(255,255,255,0.14)'; g.fillRect(6, 0, 2, h);
+    g.fillStyle = '#1A1F27';
     rr(g, 0, h * 0.42, w, h * 0.14, 2); g.fill();
   });
 }
@@ -463,7 +469,7 @@ function bakeSkyline(w, h, rand, density, tint) {
       g.fillStyle = tint;
       g.fillRect(x, y, bw, bh);
       // lit windows
-      g.fillStyle = 'rgba(0,191,255,0.5)';
+      g.fillStyle = 'rgba(120,220,255,0.85)';
       for (let wy = y + 5; wy < H - 4; wy += 8) {
         for (let wx = x + 4; wx < x + bw - 3; wx += 7) {
           if (((wx * 31 + wy * 17) % 13) < 4) g.fillRect(wx, wy, 2, 3);
@@ -621,9 +627,9 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         glowAmber: bakeGlow('#FFB020', 28),
         glowWhite: bakeGlow('#FFF3D6', 44),
         // three parallax skyline bands: far haze, mid, near
-        skyFar:  bakeSkyline(Math.max(520, W), Math.max(60, H * 0.13), makePRNG(21), 'sparse', '#0A1220'),
-        skyMid:  bakeSkyline(Math.max(560, W), Math.max(70, H * 0.16), makePRNG(43), 'dense',  '#080E19'),
-        skyNear: bakeSkyline(Math.max(600, W), Math.max(80, H * 0.19), makePRNG(87), 'dense',  '#05090F'),
+        skyFar:  bakeSkyline(Math.max(520, W), Math.max(60, H * 0.13), makePRNG(21), 'sparse', '#243247'),
+        skyMid:  bakeSkyline(Math.max(560, W), Math.max(70, H * 0.16), makePRNG(43), 'dense',  '#1A2436'),
+        skyNear: bakeSkyline(Math.max(600, W), Math.max(80, H * 0.19), makePRNG(87), 'dense',  '#121B29'),
         smokePuff: bake(48, 48, (g, w, h) => {
           const gr = g.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
           gr.addColorStop(0, 'rgba(176,190,210,0.5)');
@@ -633,7 +639,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         vignette: bake(W, H, (g) => {
           const v = g.createRadialGradient(W / 2, H * 0.6, Math.min(W, H) * 0.36, W / 2, H * 0.6, Math.max(W, H) * 0.8);
           v.addColorStop(0, 'rgba(0,0,0,0)');
-          v.addColorStop(1, 'rgba(2,4,10,0.5)');
+          v.addColorStop(1, 'rgba(6,10,18,0.2)');
           g.fillStyle = v; g.fillRect(0, 0, W, H);
         }),
         edgeFlash: bake(W, H, (g) => {
@@ -1015,9 +1021,9 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       if (light) return;   // light mode keeps the page background clean
 
       const g = ctx.createLinearGradient(0, 0, 0, hy);
-      if (zone === 'tunnel') { g.addColorStop(0, '#03050A'); g.addColorStop(1, '#070C16'); }
-      else if (zone === 'rain') { g.addColorStop(0, '#04060C'); g.addColorStop(1, '#0B1524'); }
-      else { g.addColorStop(0, '#02040A'); g.addColorStop(0.55, '#050B18'); g.addColorStop(1, '#0A1930'); }
+      if (zone === 'tunnel') { g.addColorStop(0, '#141922'); g.addColorStop(1, '#1B2532'); }
+      else if (zone === 'rain') { g.addColorStop(0, '#131A26'); g.addColorStop(1, '#22354D'); }
+      else { g.addColorStop(0, '#101620'); g.addColorStop(0.5, '#182436'); g.addColorStop(1, '#27405E'); }
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, hy);
 
@@ -1039,12 +1045,13 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       }
 
       // horizon glow + haze so the road fades in rather than starting abruptly
-      const hz = ctx.createLinearGradient(0, hy - H * 0.07, 0, hy + H * 0.05);
-      hz.addColorStop(0, 'rgba(0,191,255,0)');
-      hz.addColorStop(0.62, 'rgba(0,140,220,0.16)');
-      hz.addColorStop(1, 'rgba(0,191,255,0)');
+      // ambient horizon bloom — the light source the whole scene sits under
+      const hz = ctx.createLinearGradient(0, hy - H * 0.12, 0, hy + H * 0.06);
+      hz.addColorStop(0, 'rgba(60,190,255,0)');
+      hz.addColorStop(0.6, 'rgba(70,190,255,0.34)');
+      hz.addColorStop(1, 'rgba(60,190,255,0)');
       ctx.fillStyle = hz;
-      ctx.fillRect(0, hy - H * 0.07, W, H * 0.12);
+      ctx.fillRect(0, hy - H * 0.12, W, H * 0.18);
     }
 
     // Ground beyond the tarmac — keeps the world from ending at the road edge.
@@ -1052,8 +1059,9 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       if (light) return;
       const hy = horizonY();
       const g = ctx.createLinearGradient(0, hy, 0, H);
-      g.addColorStop(0, '#060A12');
-      g.addColorStop(1, '#02040A');
+      g.addColorStop(0, '#1A2331');
+      g.addColorStop(0.45, '#141B26');
+      g.addColorStop(1, '#0F141C');
       ctx.fillStyle = g;
       ctx.fillRect(0, hy, W, H - hy);
     }
@@ -1095,8 +1103,9 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
 
       // fog fade into the horizon
       const fg = ctx.createLinearGradient(0, hy, 0, hy + H * 0.22);
-      fg.addColorStop(0, 'rgba(8,18,34,0.95)');
-      fg.addColorStop(1, 'rgba(8,18,34,0)');
+      fg.addColorStop(0, 'rgba(52,86,124,0.85)');
+      fg.addColorStop(0.5, 'rgba(40,66,98,0.4)');
+      fg.addColorStop(1, 'rgba(36,60,90,0)');
       ctx.fillStyle = fg;
       ctx.fillRect(0, hy, W, H * 0.22);
 
@@ -1107,9 +1116,11 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
           const x = W / 2 + side * q.half;
           i === 0 ? ctx.moveTo(x, q.sy) : ctx.lineTo(x, q.sy);
         });
-        ctx.strokeStyle = 'rgba(0,191,255,0.5)'; ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(60,205,255,0.45)'; ctx.lineWidth = 7;
         ctx.stroke();
-        ctx.strokeStyle = 'rgba(200,240,255,0.85)'; ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(120,225,255,0.9)'; ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(240,252,255,0.95)'; ctx.lineWidth = 1.2;
         ctx.stroke();
       }
     }
@@ -1236,15 +1247,21 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         if (!r) continue;
         // headlight wash thrown forward
         if (r.pr > 0.3) {
-          ctx.globalAlpha = 0.08 + S.tunnelA * 0.1;
-          const gs = r.w * 2.2;
+          ctx.globalAlpha = 0.16 + S.tunnelA * 0.12;
+          const gs = r.w * 2.6;
           ctx.drawImage(sp.glowWhite, r.cx - gs / 2, r.sy - r.l - r.lift - gs * 0.7, gs, gs);
           ctx.globalAlpha = 1;
         }
+        // every car gets a soft tail marker so none of them vanish into the road
+        ctx.globalAlpha = 0.3;
+        const ts = r.w * 0.7;
+        ctx.drawImage(sp.glowRed, r.cx - r.w * 0.34 - ts / 2, r.sy - ts / 2, ts, ts);
+        ctx.drawImage(sp.glowRed, r.cx + r.w * 0.34 - ts / 2, r.sy - ts / 2, ts, ts);
+        ctx.globalAlpha = 1;
         // brake glow on the rear face
         if (c.brake || c.spd < S.speed * 0.42) {
-          ctx.globalAlpha = 0.55;
-          const gs = r.w * 0.85;
+          ctx.globalAlpha = 0.75;
+          const gs = r.w * 1.05;
           ctx.drawImage(sp.glowRed, r.cx - r.w * 0.36 - gs / 2, r.sy - gs / 2, gs, gs);
           ctx.drawImage(sp.glowRed, r.cx + r.w * 0.36 - gs / 2, r.sy - gs / 2, gs, gs);
           ctx.globalAlpha = 1;
@@ -1270,9 +1287,9 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       const w = sp.playerW, l = sp.playerL, lift = sp.playerH;
 
       // pulsing underglow pool
-      const pulse = 0.4 + Math.sin(nowMs * 0.006) * 0.08;
+      const pulse = 0.62 + Math.sin(nowMs * 0.006) * 0.1;
       ctx.globalAlpha = pulse;
-      const gs = w * 2.6;
+      const gs = w * 3.1;
       ctx.drawImage(sp.glowCyan, cx - gs / 2, sy - gs * 0.42, gs, gs * 0.75);
       ctx.globalAlpha = 1;
       // contact shadow
@@ -1287,8 +1304,8 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       ctx.drawImage(sp.player, -w / 2 - 16, -l - lift, w + 32, l + lift);
       ctx.restore();
       // headlight cones ahead
-      ctx.globalAlpha = 0.12 + S.tunnelA * 0.16;
-      const hs = w * 3.2;
+      ctx.globalAlpha = 0.2 + S.tunnelA * 0.18;
+      const hs = w * 3.6;
       ctx.drawImage(sp.glowCyan, cx - hs / 2, sy - l - lift - hs * 0.72, hs, hs);
       ctx.globalAlpha = 1;
       // body with roll + suspension squash
@@ -1348,7 +1365,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     function drawAtmosphere(light, raining, nowMs) {
       if (light) return;
       if (S.tunnelA > 0.01) {
-        ctx.fillStyle = `rgba(1,2,6,${S.tunnelA * 0.16})`;
+        ctx.fillStyle = `rgba(20,30,46,${S.tunnelA * 0.12})`;
         ctx.fillRect(0, 0, W, H);
         // ceiling strips flying past
         const gap = 190 * u2p;
