@@ -52,44 +52,39 @@ const OVERLAY_S    = 1.05;   // only show GAME OVER if we're still here (i.e. wa
 
 const HIT_FORGIVE  = 0.88;   // hitbox forgiveness factor
 
-// ── Camera ───────────────────────────────────────────────────────────────────
-// Virtual camera pulled back and tilted ~17 degrees off vertical. Far objects
-// render at ~71% scale — enough to read as 3D, nowhere near a racing sim.
-// Purely a projection change: lanes, hitboxes and spawning stay world-space.
-// Near-orthographic top-down. The road runs straight off the top of the screen —
-// there is no horizon and no vanishing point. Depth comes from a gentle width
-// taper, body height and lighting instead of perspective convergence.
-const TAPER     = 0.10;  // road narrows only 10% across the whole view
-const HEIGHT_K  = 0.30;  // how far body height leans toward the camera
-const ROAD_FRAC = 0.90;  // road occupies 90% of the canvas width — it is the hero
-
 // Duely palette
 const CYAN  = '#00BFFF';
+const BLUE  = '#1250B4';
+
+// ── Lane marking cadence ────────────────────────────────────────────────────
+// Chosen from the frame budget, not by eye. Top speed is SPD_MAX + OD_SPEED =
+// 1450 u/s, i.e. ~24.2u of travel per frame at 60fps. A marking cycle shorter
+// than ~6 frames beats against the refresh rate and the road appears to blink
+// out, which is exactly what the previous art did. 70 + 80 = 150u gives 6.2
+// frames per cycle at maximum speed, with margin.
+const MARK_LEN = 70;
+const MARK_GAP = 80;
+const MARK_CYCLE = MARK_LEN + MARK_GAP;
 const ICE   = '#9FDCFF';
 
 // Sizes are in world units and drive BOTH the sprite and the hitbox, so art and
 // collision can never drift apart.
-// len/wid drive gameplay (hitboxes) and are UNCHANGED. `hgt` is purely visual:
-// it extrudes the body so each class has its own silhouette from the tilted
-// camera — a sports car sits low and wide, a semi towers over everything.
 const VEHICLES = {
-  sedan:  { len: 81,  wid: 53, hgt: 40, close: 1.00, weight: 26 },
-  suv:    { len: 90,  wid: 58, hgt: 56, close: 1.05, weight: 20 },
-  pickup: { len: 95,  wid: 56, hgt: 50, close: 1.05, weight: 14 },
-  sports: { len: 75,  wid: 51, hgt: 30, close: 0.78, weight: 14 },
-  van:    { len: 107, wid: 60, hgt: 66, close: 1.12, weight: 14 },
-  semi:   { len: 174, wid: 66, hgt: 82, close: 1.22, weight: 8  },
+  sedan:  { len: 81,  wid: 53, close: 1.00, weight: 26 },
+  suv:    { len: 90,  wid: 58, close: 1.05, weight: 20 },
+  pickup: { len: 95,  wid: 56, close: 1.05, weight: 14 },
+  sports: { len: 75,  wid: 51, close: 0.78, weight: 14 },
+  van:    { len: 107, wid: 60, close: 1.12, weight: 14 },
+  semi:   { len: 174, wid: 66, close: 1.22, weight: 8  },
 };
 const PLAYER_W_U = 56;   // player world width  (sprite + hitbox)
 const PLAYER_L_U = 117;  // player world length (sprite + hitbox)
-const PLAYER_H_U = 38;   // player body height (visual only)
 const VKEYS = Object.keys(VEHICLES);
 const VTOTAL = VKEYS.reduce((a, k) => a + VEHICLES[k].weight, 0);
 
-// Bright, saturated paints so traffic never sinks into the asphalt.
 const PAINTS = [
-  '#F23B3B', '#FF7A29', '#FFC429', '#4CD964', '#00B894',
-  '#8E5BF0', '#E040A0', '#F5F7FA', '#C9D4E0', '#FF5E7E',
+  '#B33A3A', '#C77B2F', '#C9B33B', '#3E8E57', '#3D74B8', '#6E56C4',
+  '#B04A7E', '#C9CFD8', '#6E7580', '#23282F', '#2E9E96', '#C2542E',
 ];
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -106,8 +101,7 @@ function makePRNG(seed) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  SPRITE BAKERY — every vehicle is baked once as an extruded 3D form
-//  (roof + rear face + side faces), then blitted and scaled by perspective.
+//  SPRITE BAKERY — draw once, blit forever
 // ─────────────────────────────────────────────────────────────────────────────
 function bake(w, h, fn) {
   const c = document.createElement('canvas');
@@ -135,13 +129,14 @@ function shade(hex, amt) {
   return `rgb(${c(((n >> 16) & 255) + amt)},${c(((n >> 8) & 255) + amt)},${c((n & 255) + amt)})`;
 }
 
+// Baked glow disc (runtime bloom without shadowBlur)
 function bakeGlow(hex, r) {
   const n = parseInt(hex.slice(1), 16);
   const rc = (n >> 16) & 255, gc = (n >> 8) & 255, bc = n & 255;
   return bake(r * 2, r * 2, (g, w, h) => {
     const gr = g.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
     gr.addColorStop(0, `rgba(${rc},${gc},${bc},0.9)`);
-    gr.addColorStop(0.4, `rgba(${rc},${gc},${bc},0.3)`);
+    gr.addColorStop(0.4, `rgba(${rc},${gc},${bc},0.32)`);
     gr.addColorStop(1, `rgba(${rc},${gc},${bc},0)`);
     g.fillStyle = gr;
     g.fillRect(0, 0, w, h);
@@ -151,301 +146,52 @@ function bakeGlow(hex, r) {
 function bakeSoftShadow(w, h) {
   return bake(w, h, (g, W, H) => {
     const gr = g.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W / 2);
-    gr.addColorStop(0, 'rgba(0,0,0,0.55)');
-    gr.addColorStop(0.65, 'rgba(0,0,0,0.26)');
+    gr.addColorStop(0, 'rgba(0,0,0,0.5)');
+    gr.addColorStop(0.7, 'rgba(0,0,0,0.28)');
     gr.addColorStop(1, 'rgba(0,0,0,0)');
     g.save();
-    g.translate(W / 2, H / 2); g.scale(1, H / W); g.translate(-W / 2, -W / 2);
-    g.fillStyle = gr; g.fillRect(0, H / 2 - W / 2, W, W);
+    g.translate(W / 2, H / 2);
+    g.scale(1, H / W);
+    g.translate(-W / 2, -W / 2);
+    g.fillStyle = gr;
+    g.fillRect(0, H / 2 - W / 2, W, W);
     g.restore();
   });
 }
 
+// -- Traffic vehicle sprite ------------------------------------------------
+// House style: graphite hulls with hard chamfered geometry and a single bold
+// livery wrap, lit by the road's neon (cool rim on the left, warm bounce on the
+// right). Colour identifies a vehicle at a glance without turning the highway
+// into a rainbow -- they read as one fleet, clearly distinct from the player's
+// glowing blue Interceptor.
 // ─────────────────────────────────────────────────────────────────────────────
-//  VEHICLE ART
-//  Seen from a slightly angled top-down camera. Every vehicle is built from the
-//  same anatomy — tapered nose, shouldered body, inset cabin with real glass,
-//  four visible wheels, lights, and a top-left key light — so the fleet feels
-//  designed rather than assembled. Class proportions do the rest.
+//  PLACEHOLDER VEHICLE ART
+//  Intentionally flat. Real authored sprite art lands in the next step; these
+//  exist only so the road and lighting can be judged on their own.
 // ─────────────────────────────────────────────────────────────────────────────
-
-// Body outline: narrow at the nose, widest at the shoulders, tapering to the
-// tail. Never a rectangle.
-function carPath(g, x, y, w, l, P) {
-  const nw = w * P.nose, tw = w * P.tail;
-  const sh = y + l * P.shoulder;          // widest point
-  const hp = y + l * P.hip;               // rear haunch
-  g.beginPath();
-  g.moveTo(x + (w - nw) / 2, y + l * 0.02);
-  g.quadraticCurveTo(x + w / 2, y - l * 0.012, x + (w + nw) / 2, y + l * 0.02);
-  g.quadraticCurveTo(x + w, y + l * 0.06, x + w, sh - y + y);
-  g.lineTo(x + w, hp);
-  g.quadraticCurveTo(x + w, y + l, x + (w + tw) / 2, y + l);
-  g.lineTo(x + (w - tw) / 2, y + l);
-  g.quadraticCurveTo(x, y + l, x, hp);
-  g.lineTo(x, sh);
-  g.quadraticCurveTo(x, y + l * 0.06, x + (w - nw) / 2, y + l * 0.02);
-  g.closePath();
-}
-
-function glassShape(g, cx, top, bot, wTop, wBot) {
-  g.beginPath();
-  g.moveTo(cx - wTop / 2, top);
-  g.lineTo(cx + wTop / 2, top);
-  g.lineTo(cx + wBot / 2, bot);
-  g.lineTo(cx - wBot / 2, bot);
-  g.closePath();
-}
-
-// One shared painter for every road vehicle.
-function paintCar(g, w, l, paint, P) {
-  const cx = w / 2;
-
-  // ── wheels: four, tucked at the corners and only just proud of the body ──
-  const ww = w * 0.115, wh = l * P.wheelLen;
-  const fy = l * P.axleF, ry = l * P.axleR;
-  const tyre = (x, y) => {
-    g.fillStyle = '#0A0C10';
-    rr(g, x, y, ww, wh, ww * 0.46); g.fill();
-    // sidewall catch-light so the tyre reads as round, not as a black tab
-    g.fillStyle = 'rgba(255,255,255,0.13)';
-    rr(g, x + ww * 0.28, y + wh * 0.1, ww * 0.3, wh * 0.8, ww * 0.15); g.fill();
-  };
-  for (const wy of [fy, ry]) { tyre(-ww * 0.34, wy); tyre(w - ww * 0.66, wy); }
-
-  // ── body ──
-  // Arcade shading: broad flat bands of colour rather than a photoreal falloff.
-  // The paint stays saturated across most of the roof; only the extreme edges
-  // roll off, which is what makes the cars pop against the asphalt.
-  const bg = g.createLinearGradient(0, 0, w, 0);
-  bg.addColorStop(0.00, shade(paint, -44));
-  bg.addColorStop(0.10, shade(paint, 4));
-  bg.addColorStop(0.30, shade(paint, 46));    // key light, top-left
-  bg.addColorStop(0.46, shade(paint, 18));
-  bg.addColorStop(0.82, shade(paint, -4));
-  bg.addColorStop(1.00, shade(paint, -46));
-  g.fillStyle = bg;
-  carPath(g, 0, 0, w, l, P); g.fill();
-
-  g.save();
-  carPath(g, 0, 0, w, l, P); g.clip();
-
-  // nose-to-tail form shading
-  const vg = g.createLinearGradient(0, 0, 0, l);
-  vg.addColorStop(0, 'rgba(255,255,255,0.20)');
-  vg.addColorStop(0.22, 'rgba(255,255,255,0.03)');
-  vg.addColorStop(0.78, 'rgba(0,0,0,0.06)');
-  vg.addColorStop(1, 'rgba(0,0,0,0.26)');
-  g.fillStyle = vg; g.fillRect(0, 0, w, l);
-
-  // bonnet + boot shut lines
-  g.strokeStyle = 'rgba(0,0,0,0.26)'; g.lineWidth = 1;
-  g.beginPath(); g.moveTo(w * 0.1, l * P.wsTop - l * 0.02); g.lineTo(w * 0.9, l * P.wsTop - l * 0.02); g.stroke();
-  g.beginPath(); g.moveTo(w * 0.1, l * P.rwBot + l * 0.02); g.lineTo(w * 0.9, l * P.rwBot + l * 0.02); g.stroke();
-
-  // ── glass ──
-  // Two distinct dark screens with a bright leading edge. The roof between them
-  // stays body colour and slightly LIGHTER than the flanks, so from above the
-  // car reads as roof-glass-roof instead of one dark smear.
-  const glass = (top, bot, wt, wb) => {
-    const gg = g.createLinearGradient(0, top, 0, bot);
-    gg.addColorStop(0, 'rgba(214,240,255,0.92)');
-    gg.addColorStop(0.26, 'rgba(46,86,132,0.95)');
-    gg.addColorStop(1, 'rgba(26,52,86,0.95)');
-    g.fillStyle = gg;
-    glassShape(g, cx, top, bot, wt, wb); g.fill();
-    g.strokeStyle = 'rgba(0,0,0,0.5)'; g.lineWidth = 1.2;
-    glassShape(g, cx, top, bot, wt, wb); g.stroke();
-  };
-
-  // roof first, so the screens sit on top of it
-  if (P.rear) {
-    const rw2 = w * P.cabW;
-    const rg2 = g.createLinearGradient(cx - rw2 / 2, 0, cx + rw2 / 2, 0);
-    rg2.addColorStop(0, shade(paint, -10));
-    rg2.addColorStop(0.34, shade(paint, 52));
-    rg2.addColorStop(1, shade(paint, -22));
-    g.fillStyle = rg2;
-    g.fillRect(cx - rw2 / 2, l * P.wsBot, rw2, Math.max(0, l * (P.rwTop - P.wsBot)));
-    // thin side-window slivers flanking the roof
-    g.fillStyle = 'rgba(22,36,58,0.92)';
-    g.fillRect(cx - rw2 / 2 - w * 0.035, l * P.wsBot, w * 0.035, l * (P.rwTop - P.wsBot));
-    g.fillRect(cx + rw2 / 2, l * P.wsBot, w * 0.035, l * (P.rwTop - P.wsBot));
-  }
-  if (P.ribs) {
-    // cargo body: roof ribs instead of glass, so vans/boxes read as cargo
-    g.strokeStyle = 'rgba(0,0,0,0.18)'; g.lineWidth = 1;
-    for (let t = P.wsBot + 0.08; t < 0.96; t += 0.09) {
-      g.beginPath(); g.moveTo(w * 0.08, l * t); g.lineTo(w * 0.92, l * t); g.stroke();
-    }
-  }
-
-  glass(l * P.wsTop, l * P.wsBot, w * P.cabW * 0.82, w * P.cabW);
-  if (P.rear) glass(l * P.rwTop, l * P.rwBot, w * P.cabW, w * P.cabW * 0.84);
-
-  if (P.bed) {
-    const by = l * (P.rwBot + 0.02), bl = l * 0.93 - by;
-    g.fillStyle = 'rgba(10,14,20,0.55)';
-    rr(g, w * 0.1, by, w * 0.8, bl, w * 0.04); g.fill();
-    g.strokeStyle = 'rgba(255,255,255,0.10)'; g.lineWidth = 1;
-    rr(g, w * 0.1, by, w * 0.8, bl, w * 0.04); g.stroke();
-  }
-
-  // wing mirrors — small, but they are what makes the silhouette read instantly
-  if (P.mirrors !== false) {
-    const my = l * P.wsTop + l * 0.012, mw = w * 0.085, mh = l * 0.035;
-    g.fillStyle = shade(paint, -30);
-    rr(g, -mw * 0.75, my, mw, mh, mh * 0.4); g.fill();
-    rr(g, w - mw * 0.25, my, mw, mh, mh * 0.4); g.fill();
-    g.fillStyle = 'rgba(255,255,255,0.18)';
-    rr(g, -mw * 0.75, my, mw, mh * 0.45, mh * 0.25); g.fill();
-    rr(g, w - mw * 0.25, my, mw, mh * 0.45, mh * 0.25); g.fill();
-  }
-
-  // single crisp specular streak — the "expensive paint" cue
-  g.fillStyle = 'rgba(255,255,255,0.11)';
-  g.beginPath();
-  g.moveTo(w * 0.26, 0); g.lineTo(w * 0.32, 0);
-  g.lineTo(w * 0.27, l); g.lineTo(w * 0.2, l);
-  g.closePath(); g.fill();
-
-  g.restore();
-
-  // Hard graphic outline plus a rim light along the inside of it — the two
-  // together are what give the arcade look its punch.
-  g.save();
-  carPath(g, 0, 0, w, l, P); g.clip();
-  g.strokeStyle = 'rgba(255,255,255,0.34)'; g.lineWidth = 3;
-  carPath(g, 0, 0, w, l, P); g.stroke();
-  g.restore();
-  g.strokeStyle = 'rgba(8,10,14,0.92)'; g.lineWidth = Math.max(2, w * 0.035);
-  carPath(g, 0, 0, w, l, P); g.stroke();
-
-  // ── lights ──
-  const hh = Math.max(2.2, l * 0.022);
-  g.fillStyle = '#FFF8E2';
-  rr(g, w * 0.11, l * 0.012, w * 0.2, hh, hh * 0.5); g.fill();
-  rr(g, w * 0.69, l * 0.012, w * 0.2, hh, hh * 0.5); g.fill();
-  const th = Math.max(2.4, l * 0.024);
-  g.fillStyle = '#FF4436';
-  rr(g, w * 0.09, l - th - l * 0.012, w * 0.22, th, th * 0.5); g.fill();
-  rr(g, w * 0.69, l - th - l * 0.012, w * 0.22, th, th * 0.5); g.fill();
-}
-
-// Class proportions — this is what makes an SUV read as an SUV.
-const PROPS = {
-  sports: { nose: 0.50, tail: 0.72, shoulder: 0.30, hip: 0.74, cabW: 0.56,
-            wsTop: 0.34, wsBot: 0.50, rwTop: 0.58, rwBot: 0.70, rear: true,
-            axleF: 0.12, axleR: 0.72, wheelLen: 0.17 },
-  sedan:  { nose: 0.60, tail: 0.76, shoulder: 0.24, hip: 0.80, cabW: 0.62,
-            wsTop: 0.28, wsBot: 0.44, rwTop: 0.60, rwBot: 0.74, rear: true,
-            axleF: 0.11, axleR: 0.74, wheelLen: 0.16 },
-  suv:    { nose: 0.72, tail: 0.84, shoulder: 0.16, hip: 0.86, cabW: 0.70,
-            wsTop: 0.20, wsBot: 0.34, rwTop: 0.72, rwBot: 0.86, rear: true,
-            axleF: 0.10, axleR: 0.76, wheelLen: 0.16 },
-  pickup: { nose: 0.70, tail: 0.86, shoulder: 0.18, hip: 0.84, cabW: 0.68,
-            wsTop: 0.17, wsBot: 0.31, rwTop: 0.36, rwBot: 0.46, rear: true, bed: true,
-            axleF: 0.10, axleR: 0.76, wheelLen: 0.16 },
-  van:    { nose: 0.80, tail: 0.92, shoulder: 0.10, hip: 0.90, cabW: 0.74,
-            wsTop: 0.05, wsBot: 0.19, rwTop: 0, rwBot: 0, rear: false, ribs: true,
-            axleF: 0.08, axleR: 0.80, wheelLen: 0.15 },
-};
-
 function bakeVehicle(kind, paint, wpx, lpx) {
-  const PAD = 8;
-  return bake(wpx + PAD * 2, lpx + PAD * 2, (g) => {
-    g.translate(PAD, PAD);
-    const w = wpx, l = lpx;
-
-    if (kind === 'semi') {
-      // tractor unit up front
-      const cabL = l * 0.26;
-      paintCar(g, w, cabL, paint, {
-        nose: 0.9, tail: 0.96, shoulder: 0.1, hip: 0.9, cabW: 0.8,
-        wsTop: 0.16, wsBot: 0.46, rwTop: 0, rwBot: 0, rear: false,
-        axleF: 0.1, axleR: 0.66, wheelLen: 0.26,
-      });
-      // trailer box
-      const ty = cabL + l * 0.02, tl = l - ty;
-      g.fillStyle = '#0B0D11';
-      const ww = w * 0.13;
-      for (const wy of [ty + tl * 0.6, ty + tl * 0.82]) {
-        rr(g, -ww * 0.22, wy, ww, tl * 0.11, ww * 0.35); g.fill();
-        rr(g, w - ww * 0.78, wy, ww, tl * 0.11, ww * 0.35); g.fill();
-      }
-      const tg = g.createLinearGradient(0, 0, w, 0);
-      tg.addColorStop(0.00, '#7C8592');
-      tg.addColorStop(0.34, '#E4EAF2');
-      tg.addColorStop(0.6, '#C2CAD6');
-      tg.addColorStop(1.00, '#6C7482');
-      g.fillStyle = tg;
-      rr(g, 0, ty, w, tl, w * 0.06); g.fill();
-      g.strokeStyle = 'rgba(0,0,0,0.5)'; g.lineWidth = 1.5;
-      rr(g, 0, ty, w, tl, w * 0.06); g.stroke();
-      g.fillStyle = paint;
-      g.fillRect(0, ty + tl * 0.34, w, tl * 0.14);
-      const th2 = Math.max(2.4, l * 0.016);
-      g.fillStyle = '#FF4436';
-      rr(g, w * 0.08, l - th2 - 2, w * 0.24, th2, th2 * 0.5); g.fill();
-      rr(g, w * 0.68, l - th2 - 2, w * 0.24, th2, th2 * 0.5); g.fill();
-    } else {
-      paintCar(g, w, l, paint, PROPS[kind] || PROPS.sedan);
-    }
+  return bake(wpx, lpx, (g, w, l) => {
+    g.fillStyle = paint;
+    rr(g, 0, 0, w, l, Math.min(w, l) * 0.16); g.fill();
+    g.strokeStyle = 'rgba(0,0,0,0.6)'; g.lineWidth = 2;
+    rr(g, 1, 1, w - 2, l - 2, Math.min(w, l) * 0.16); g.stroke();
+    // a lighter band at the nose so orientation stays readable
+    g.fillStyle = 'rgba(255,255,255,0.22)';
+    g.fillRect(w * 0.12, l * 0.06, w * 0.76, l * 0.1);
   });
 }
 
-// ── Player car — the Duely Interceptor ─────────────────────────────────────
-// Same anatomy so it belongs to the world, but a silhouette nothing else has:
-// wide planted stance, arrow nose, cab-back canopy and electric-blue signature.
 function bakePlayer(wpx, lpx) {
-  const PAD = 14;
-  return bake(wpx + PAD * 2, lpx + PAD * 2, (g) => {
-    g.translate(PAD, PAD);
-    const w = wpx, l = lpx, cx = w / 2;
-
-    paintCar(g, w, l, '#1E7BFF', {
-      nose: 0.56, tail: 0.80, shoulder: 0.30, hip: 0.74, cabW: 0.60,
-      wsTop: 0.30, wsBot: 0.45, rwTop: 0.61, rwBot: 0.73, rear: true,
-      axleF: 0.13, axleR: 0.71, wheelLen: 0.18,
-    });
-
-    // ── signature lighting: arrow headlight, roof spine, twin rear bar ──
-    const glow = (path, cw) => {
-      for (const [lw, al] of [[cw * 5.5, 0.16], [cw * 2.6, 0.34], [cw, 1]]) {
-        g.strokeStyle = `rgba(150,232,255,${al})`;
-        g.lineWidth = lw; g.lineCap = 'round'; g.lineJoin = 'round';
-        path(); g.stroke();
-      }
-    };
-    // arrow across the nose
-    glow(() => {
-      g.beginPath();
-      g.moveTo(w * 0.2, l * 0.075);
-      g.lineTo(cx, l * 0.028);
-      g.lineTo(w * 0.8, l * 0.075);
-    }, 2.4);
-    // spine over the roof
-    glow(() => { g.beginPath(); g.moveTo(cx, l * 0.47); g.lineTo(cx, l * 0.59); }, 2);
-    // rear light bar, split
-    glow(() => {
-      g.beginPath();
-      g.moveTo(w * 0.14, l * 0.955); g.lineTo(w * 0.43, l * 0.955);
-      g.moveTo(w * 0.57, l * 0.955); g.lineTo(w * 0.86, l * 0.955);
-    }, 2.6);
-    // lower body accent strakes
-    glow(() => {
-      g.beginPath();
-      g.moveTo(w * 0.055, l * 0.42); g.lineTo(w * 0.055, l * 0.8);
-      g.moveTo(w * 0.945, l * 0.42); g.lineTo(w * 0.945, l * 0.8);
-    }, 1.5);
-
-    // brighter headlamps than any traffic car
-    g.fillStyle = '#FFFFFF';
-    rr(g, w * 0.13, l * 0.03, w * 0.2, Math.max(3, l * 0.028), 2); g.fill();
-    rr(g, w * 0.67, l * 0.03, w * 0.2, Math.max(3, l * 0.028), 2); g.fill();
+  return bake(wpx, lpx, (g, w, l) => {
+    g.fillStyle = BLUE;
+    rr(g, 0, 0, w, l, Math.min(w, l) * 0.16); g.fill();
+    g.strokeStyle = CYAN; g.lineWidth = 2;
+    rr(g, 1, 1, w - 2, l - 2, Math.min(w, l) * 0.16); g.stroke();
+    g.fillStyle = 'rgba(255,255,255,0.3)';
+    g.fillRect(w * 0.12, l * 0.06, w * 0.76, l * 0.1);
   });
 }
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  AUDIO — engine, wind, whoosh, crash (Web Audio synth; respects site mute)
@@ -554,9 +300,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       canvas.height = Math.floor(H * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       playerY = H * PLAYER_YF;
-      // Scale is set by the road width so it always fills ROAD_FRAC of the
-      // canvas; the view then extends as far up the screen as that allows.
-      u2p = (W * ROAD_FRAC) / (LANES * LANE_U);
+      u2p = Math.min((playerY - H * 0.02) / VIEW_AHEAD, (W * 0.965) / (LANES * LANE_U));
       laneW = LANE_U * u2p;
       roadW = laneW * LANES;
       roadX = (W - roadW) / 2;
@@ -568,44 +312,41 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     const isLight = () => document.documentElement.classList.contains('light');
 
     function bakeAll() {
-      const bakeRand = makePRNG(1234567); // art randomness — stable, never gameplay
       const vs = {};
-      const playerW = PLAYER_W_U * u2p, playerL = PLAYER_L_U * u2p, playerH = PLAYER_H_U * u2p * HEIGHT_K;
+      const playerW = PLAYER_W_U * u2p, playerL = PLAYER_L_U * u2p;
       sprites = {
         vs,
         vkey(kind, paint) {
           const k = kind + '|' + paint;
-          if (!vs[k]) {
-            const v = VEHICLES[kind];
-            vs[k] = bakeVehicle(kind, paint, v.wid * u2p, v.len * u2p);
-          }
+          if (!vs[k]) vs[k] = bakeVehicle(kind, paint, VEHICLES[kind].wid * u2p, VEHICLES[kind].len * u2p);
           return vs[k];
         },
-        player: bakePlayer(PLAYER_W_U * u2p, PLAYER_L_U * u2p),
-        playerW: PLAYER_W_U * u2p, playerL: PLAYER_L_U * u2p,
-        shadow: bakeSoftShadow(180, 200),
-        glowCyan: bakeGlow(CYAN, 64),
-        glowRed: bakeGlow('#FF3B30', 36),
-        glowAmber: bakeGlow('#FFB020', 28),
-        glowWhite: bakeGlow('#FFF3D6', 44),
+        player: bakePlayer(playerW, playerL),
+        playerW, playerL,
+        shadow: bakeSoftShadow(140, 210),
+        glowCyan: bakeGlow(CYAN, 60),
+        glowRed: bakeGlow('#FF3B30', 34),
+        glowAmber: bakeGlow('#FFB020', 26),
+        glowWhite: bakeGlow('#FFF6D8', 40),
         smokePuff: bake(48, 48, (g, w, h) => {
           const gr = g.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
-          gr.addColorStop(0, 'rgba(176,190,210,0.45)');
+          gr.addColorStop(0, 'rgba(176,190,210,0.5)');
           gr.addColorStop(1, 'rgba(176,190,210,0)');
           g.fillStyle = gr; g.fillRect(0, 0, w, h);
         }),
         vignette: bake(W, H, (g) => {
-          const v = g.createRadialGradient(W / 2, H * 0.6, Math.min(W, H) * 0.42, W / 2, H * 0.6, Math.max(W, H) * 0.78);
+          const v = g.createRadialGradient(W / 2, H * 0.62, Math.min(W, H) * 0.34, W / 2, H * 0.62, Math.max(W, H) * 0.82);
           v.addColorStop(0, 'rgba(0,0,0,0)');
-          v.addColorStop(1, 'rgba(0,0,0,0.55)');
+          v.addColorStop(1, 'rgba(0,0,0,0.62)');
           g.fillStyle = v; g.fillRect(0, 0, W, H);
         }),
         edgeFlash: bake(W, H, (g) => {
           const v = g.createRadialGradient(W / 2, H * 0.55, Math.min(W, H) * 0.3, W / 2, H * 0.55, Math.max(W, H) * 0.72);
           v.addColorStop(0, 'rgba(0,191,255,0)');
-          v.addColorStop(1, 'rgba(0,191,255,0.45)');
+          v.addColorStop(1, 'rgba(0,191,255,0.5)');
           g.fillStyle = v; g.fillRect(0, 0, W, H);
         }),
+
       };
     }
     layout();
@@ -626,7 +367,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     // ── State (sim-clock: pausing stops score AND reported time) ──
     const S = {
       simT: 0, dist: 0, speed: SPD_START, score: 0,
-      laneX: LANE_U * 1.5, laneVel: 0, targetLane: 1, camX: 0,
+      laneX: LANE_U * 1.5, laneVel: 0, targetLane: 1,
       corridor: 2,
       waveIn: 0.55, waveN: 0,
       changeCooldown: 0,
@@ -795,10 +536,9 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       S.laneX += S.laneVel * dt;
       // tyre smoke while sliding
       if (Math.abs(S.laneVel) > 240) {
-        const pLane = S.laneX / LANE_U - 0.5;
-        const px = laneXAt(pLane, 0), py = wy2sy(0);
-        puffAt(px - sprites.playerW * 0.34, py - sprites.playerL * 0.08, 0.8 + frand() * 0.4);
-        puffAt(px + sprites.playerW * 0.34, py - sprites.playerL * 0.08, 0.8 + frand() * 0.4);
+        const px = roadX + S.laneX * u2p;
+        puffAt(px - sprites.playerW * 0.34, playerY + sprites.playerL * 0.42, 0.8 + frand() * 0.4);
+        puffAt(px + sprites.playerW * 0.34, playerY + sprites.playerL * 0.42, 0.8 + frand() * 0.4);
       }
 
       // roadside poles
@@ -868,7 +608,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         if (!S.dead && overlapY && dx < sumW) {
           // ── CRASH ──
           S.dead = true; S.deadT = 0; S.shake = 1; S.flash = 1;
-          crashBurst(laneXAt(S.laneX / LANE_U - 0.5, 0), wy2sy(0) - sprites.playerL * 0.4);
+          crashBurst(roadX + px * u2p, playerY);
           audio?.crash();
           break;
         }
@@ -881,8 +621,8 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
           S.score += pts;
           S.flash = Math.max(S.flash, 0.34);
           S.scorePop = 1;
-          addFloat(laneXAt(c.laneF, c.y), wy2sy(c.y) - 24, `+${pts}${S.combo > 1 ? ' ×' + S.combo : ''}`);
-          sparkTrail((laneXAt(c.laneF, c.y) + laneXAt(S.laneX / LANE_U - 0.5, 0)) / 2, wy2sy(c.y), 5);
+          addFloat(roadX + cx * u2p, playerY - c.y * u2p - 20, `+${pts}${S.combo > 1 ? ' ×' + S.combo : ''}`);
+          sparkTrail(roadX + ((cx + px) / 2) * u2p, playerY - c.y * u2p, 5);
           audio?.whoosh();
         }
       }
@@ -911,29 +651,23 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     // ─────────────────────────────────────────────────────────────────────────
     //  RENDER
     // ─────────────────────────────────────────────────────────────────────────
-    // ── Projection ──────────────────────────────────────────────────────────
-    // Vertical mapping is LINEAR (a true top-down scroller, so nothing warps and
-    // readability is perfect). Depth is suggested only by a 10% width taper and
-    // by vehicle shading, never by a vanishing point. The road simply runs off
-    // the top of the screen.
     const wy2sy = (wy) => playerY - wy * u2p;
-    const taperAt = (wy) => 1 - TAPER * clamp(wy / VIEW_AHEAD, 0, 1.2);
-    const halfAt = (wy) => (roadW / 2) * taperAt(wy);
-    const laneXAt = (laneF, wy) => W / 2 + ((laneF + 0.5) / LANES * 2 - 1) * halfAt(wy);
 
     function render(nowMs) {
       const sp = sprites;
+      // Off-road surround = the site background behind the canvas.
       const light = isLight();
+      drawVoid(light);
 
-      const shx = S.shake ? (frand() - 0.5) * 14 * S.shake : 0;
-      const shy = S.shake ? (frand() - 0.5) * 10 * S.shake : 0;
-      // Smoothed camera follow — a touch of lateral drift, no lurching.
-      S.camX += ((S.laneX - LANE_U * LANES / 2) * u2p * -0.02 - S.camX) * 0.12;
-
-      drawBackdrop(light);
+      const shx = S.shake ? (frand() - 0.5) * 16 * S.shake : 0;
+      const shy = S.shake ? (frand() - 0.5) * 12 * S.shake : 0;
+      const tilt = clamp(S.laneVel * 0.0000075, -0.009, 0.009);
+      const camX = -(S.laneX - LANE_U * LANES / 2) * u2p * 0.022;
 
       ctx.save();
-      ctx.translate(shx + S.camX, shy);
+      ctx.translate(W / 2 + shx + camX, H + shy);
+      ctx.rotate(tilt);
+      ctx.translate(-W / 2, -H);
 
       drawRoad(light);
       drawTraffic(nowMs);
@@ -943,252 +677,164 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       drawFloats();
       ctx.restore();
 
-      drawAtmosphere(light, nowMs);
-      if (!light) { ctx.drawImage(sp.vignette, 0, 0); }
-
       if (S.flash > 0.01) {
         ctx.globalAlpha = S.flash;
         ctx.drawImage(sp.edgeFlash, 0, 0);
         ctx.globalAlpha = 1;
       }
+      const d = diff();
+      if (d > 0.35 && !S.dead) {
+        ctx.strokeStyle = `rgba(159,220,255,${(d - 0.35) * 0.3})`;
+        ctx.lineWidth = 1.6;
+        for (let i = 0; i < 8; i++) {
+          const t = ((nowMs * (0.9 + d) * 0.001) + i * 0.37) % 1;
+          const y = t * t * H;
+          const side = i % 2 ? 1 : -1;
+          const x = W / 2 + side * (roadW / 2 + 14 + t * 30);
+          ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 30 + t * 90); ctx.stroke();
+        }
+      }
+      if (!light) ctx.drawImage(sp.vignette, 0, 0); // a dark vignette would muddy light mode
       drawHUD(nowMs);
     }
 
-    // ── Backdrop ────────────────────────────────────────────────────────────
-    // Deliberately quiet: the road fills the frame, so all this has to do is
-    // frame it. No skyline, no glow gimmicks, no fake depth.
-    function drawBackdrop(light) {
-      if (light) { ctx.fillStyle = '#e9edf3'; ctx.fillRect(0, 0, W, H); return; }
+    // ── The void either side of the road ────────────────────────────────────
+    // Not decoration. The road is the only lit thing in frame, so everything
+    // around it has to fall away rather than compete.
+    function drawVoid(light) {
+      if (light) { ctx.fillStyle = '#f0f4f8'; ctx.fillRect(0, 0, W, H); return; }
       const g = ctx.createLinearGradient(0, 0, 0, H);
-      g.addColorStop(0, '#0B1626');
-      g.addColorStop(0.55, '#070E1A');
-      g.addColorStop(1, '#04070E');
+      g.addColorStop(0, '#04060B');
+      g.addColorStop(0.6, '#06090F');
+      g.addColorStop(1, '#03050A');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
     }
 
     // ── Road ────────────────────────────────────────────────────────────────
-    // Painted, not tiled: one smooth asphalt gradient plus crisp scrolling lane
-    // dashes drawn directly. No repeating texture, no noise, no cracks — so it
-    // never shows seams or banding, and lane readability is absolute.
+    // One light model: a cool key from above and slightly left. The asphalt is
+    // near-black and is only visible where something lights it — the sheen down
+    // the crown, the markings, the kerb rails. Painted every frame from plain
+    // rects; there is no tile, no texture and no noise, so there is nothing that
+    // can seam, shimmer or repeat.
     function drawRoad(light) {
-      const wyBot = (playerY - (H + 60)) / u2p;
-      const wyTop = (playerY + 60) / u2p;
-      const steps = 12;
-      const pts = [];
-      for (let i = 0; i <= steps; i++) {
-        const wy = wyBot + (wyTop - wyBot) * (i / steps);
-        pts.push({ sy: wy2sy(wy), half: halfAt(Math.max(0, wy)) });
-      }
-      const yTop = pts[pts.length - 1].sy;
+      const x0 = roadX, x1 = roadX + roadW;
 
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(W / 2 - pts[0].half, pts[0].sy);
-      for (const q of pts) ctx.lineTo(W / 2 - q.half, q.sy);
-      for (let i = pts.length - 1; i >= 0; i--) ctx.lineTo(W / 2 + pts[i].half, pts[i].sy);
-      ctx.closePath();
-      ctx.clip();
-
-      // Asphalt is deep blue-black, not grey. All the contrast in the frame
-      // comes from the markings, the car paint and the light pooling on the
-      // surface — a mid-grey road just flattens everything it sits under.
-      const ag = ctx.createLinearGradient(0, yTop, 0, H);
-      if (light) { ag.addColorStop(0, '#b9c2cf'); ag.addColorStop(0.7, '#cdd5e0'); ag.addColorStop(1, '#c3ccd8'); }
-      else {
-        ag.addColorStop(0, '#121A28');
-        ag.addColorStop(0.55, '#1B2637');
-        ag.addColorStop(1, '#131B29');
+      // asphalt
+      const ag = ctx.createLinearGradient(0, 0, 0, H);
+      if (light) {
+        ag.addColorStop(0, '#c4ccd8'); ag.addColorStop(0.72, '#d6dde7'); ag.addColorStop(1, '#cbd3de');
+      } else {
+        ag.addColorStop(0, '#0B111B');
+        ag.addColorStop(0.55, '#151F2E');
+        ag.addColorStop(1, '#0D1520');
       }
       ctx.fillStyle = ag;
-      ctx.fillRect(0, yTop, W, H - yTop);
+      ctx.fillRect(x0, 0, roadW, H);
 
-      // Cool sheen down the middle of the road, warm-dark at the kerbs. This
-      // cross-lighting is what stops a flat fill from reading as cardboard.
-      const xg = ctx.createLinearGradient(W / 2 - pts[0].half, 0, W / 2 + pts[0].half, 0);
-      xg.addColorStop(0.00, 'rgba(0,0,0,0.42)');
-      xg.addColorStop(0.22, 'rgba(0,140,220,0.05)');
-      xg.addColorStop(0.50, 'rgba(90,190,255,0.09)');
-      xg.addColorStop(0.78, 'rgba(0,140,220,0.05)');
-      xg.addColorStop(1.00, 'rgba(0,0,0,0.42)');
-      ctx.fillStyle = xg;
-      ctx.fillRect(0, yTop, W, H - yTop);
+      if (!light) {
+        // crown sheen — the key light catching the camber of the road
+        const xg = ctx.createLinearGradient(x0, 0, x1, 0);
+        xg.addColorStop(0.00, 'rgba(0,0,0,0.55)');
+        xg.addColorStop(0.30, 'rgba(70,150,220,0.055)');
+        xg.addColorStop(0.46, 'rgba(120,200,255,0.085)');
+        xg.addColorStop(0.72, 'rgba(70,150,220,0.045)');
+        xg.addColorStop(1.00, 'rgba(0,0,0,0.55)');
+        ctx.fillStyle = xg;
+        ctx.fillRect(x0, 0, roadW, H);
+      }
 
-      // ── lane markings ──────────────────────────────────────────────────────
-      // At full speed the road covers ~3300px/s, so a fixed dash cycle completes
-      // in about five frames and the stripes appear to teleport — the road looks
-      // like it keeps vanishing. Each dash is therefore stretched by the distance
-      // travelled in one frame, exactly like a camera shutter would: crisp dashes
-      // when slow, smooth continuous rails when fast. No strobe at any speed.
-      const DASH = 52 * u2p, GAP = 46 * u2p;
-      const cycle = DASH + GAP;
-      const off = (S.dist * VISUAL_SCROLL * u2p) % cycle;
-      const blur = Math.min(GAP * 0.97, S.speed * u2p * VISUAL_SCROLL * (1 / 60));
-      for (let li = 1; li < LANES; li++) {
-        // A faint unbroken rail sits under the dashes. Motion blur alone still
-        // leaves a gap that can beat against the frame rate at top speed; this
-        // guarantees every lane line is continuously present, so the road can
-        // never appear to blink out however fast the run gets.
-        {
-          const f = (li / LANES) * 2 - 1;
-          ctx.strokeStyle = light ? 'rgba(255,255,255,0.30)' : 'rgba(150,205,245,0.20)';
-          ctx.lineWidth = Math.max(2, roadW * 0.0035);
-          ctx.beginPath();
-          pts.forEach((q, i) => {
-            const x = W / 2 + f * q.half;
-            i === 0 ? ctx.moveTo(x, q.sy) : ctx.lineTo(x, q.sy);
-          });
-          ctx.stroke();
-        }
-        for (let y = playerY + off; y > yTop - cycle - blur; y -= cycle) {
-          const y0 = y - DASH - blur, y1 = y;
-          if (y0 > H || y1 < yTop) continue;
-          const wy0 = Math.max(0, (playerY - y0) / u2p), wy1 = Math.max(0, (playerY - y1) / u2p);
-          const h0 = halfAt(wy0), h1 = halfAt(wy1);
-          const f = (li / LANES) * 2 - 1;
-          const x0 = W / 2 + f * h0, x1 = W / 2 + f * h1;
-          const t0 = Math.max(2.6, h0 * 0.019), t1 = Math.max(2.6, h1 * 0.019);
-          const mark = (sc, style) => {
-            ctx.fillStyle = style;
-            ctx.beginPath();
-            ctx.moveTo(x0 - t0 * sc, y0); ctx.lineTo(x0 + t0 * sc, y0);
-            ctx.lineTo(x1 + t1 * sc, y1); ctx.lineTo(x1 - t1 * sc, y1);
-            ctx.closePath(); ctx.fill();
-          };
-          mark(1, light ? 'rgba(250,252,255,0.95)' : '#EAF6FF');
+      // ── lane markings ─────────────────────────────────────────────────────
+      // Two layers, and the pairing is deliberate:
+      //   1. a continuous rail, so a lane line is present in every single frame
+      //      no matter where the dash phase happens to land;
+      //   2. dashes stretched by one frame of travel, the way a camera shutter
+      //      would smear them — crisp when slow, near-solid when fast.
+      // Either alone can strobe at top speed. Together they cannot.
+      const stepPx = MARK_CYCLE * u2p;
+      const off = (S.dist * VISUAL_SCROLL * u2p) % stepPx;
+      const dashPx = MARK_LEN * u2p;
+      const smear = Math.min(MARK_GAP * u2p * 0.9, S.speed * VISUAL_SCROLL * u2p / 60);
+      const lw = Math.max(2, roadW * 0.006);
+
+      for (let i = 1; i < LANES; i++) {
+        const x = x0 + laneW * i;
+        ctx.fillStyle = light ? 'rgba(255,255,255,0.34)' : 'rgba(120,175,225,0.16)';
+        ctx.fillRect(x - lw * 0.32, 0, lw * 0.64, H);
+        ctx.fillStyle = light ? '#FFFFFF' : '#DCEEFF';
+        for (let y = off - stepPx; y < H + stepPx; y += stepPx) {
+          const top = y - smear;
+          const hgt = dashPx + smear;
+          if (top > H || top + hgt < 0) continue;
+          ctx.fillRect(x - lw / 2, top, lw, hgt);
         }
       }
 
-      ctx.restore();
-
-      // Painted shoulder inside each edge, then the edge itself. Gives the road
-      // a border you can read at a glance without adding any scenery.
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(W / 2 - pts[0].half, pts[0].sy);
-      for (const q of pts) ctx.lineTo(W / 2 - q.half, q.sy);
-      for (let i = pts.length - 1; i >= 0; i--) ctx.lineTo(W / 2 + pts[i].half, pts[i].sy);
-      ctx.closePath();
-      ctx.clip();
-      for (const side of [-1, 1]) {
-        ctx.fillStyle = light ? 'rgba(70,90,120,0.20)' : 'rgba(16,22,32,0.55)';
-        ctx.beginPath();
-        pts.forEach((q, i) => {
-          const x = W / 2 + side * q.half;
-          i === 0 ? ctx.moveTo(x, q.sy) : ctx.lineTo(x, q.sy);
-        });
-        for (let i = pts.length - 1; i >= 0; i--) {
-          const q = pts[i];
-          ctx.lineTo(W / 2 + side * (q.half - q.half * 0.055), q.sy);
+      // ── kerbs ─────────────────────────────────────────────────────────────
+      // The two anchor points of saturated colour in the frame, and the only
+      // light source that runs the full height of the screen.
+      if (!light) {
+        for (const [ex, dir] of [[x0, -1], [x1, 1]]) {
+          const sp2 = ctx.createLinearGradient(ex, 0, ex + dir * roadW * 0.10, 0);
+          sp2.addColorStop(0, 'rgba(0,150,235,0.30)');
+          sp2.addColorStop(1, 'rgba(0,150,235,0)');
+          ctx.fillStyle = sp2;
+          ctx.fillRect(Math.min(ex, ex + dir * roadW * 0.10), 0, roadW * 0.10, H);
+          // inward spill onto the asphalt
+          const inw = ctx.createLinearGradient(ex, 0, ex - dir * roadW * 0.13, 0);
+          inw.addColorStop(0, 'rgba(0,170,255,0.20)');
+          inw.addColorStop(1, 'rgba(0,170,255,0)');
+          ctx.fillStyle = inw;
+          ctx.fillRect(Math.min(ex, ex - dir * roadW * 0.13), 0, roadW * 0.13, H);
         }
-        ctx.closePath(); ctx.fill();
       }
-      ctx.restore();
-
-      // Edges: a lit kerb rail — wide soft spill, a solid accent core, and a
-      // white inner line. Reads as a boundary at a glance and gives the frame
-      // its two anchor points of saturated colour.
-      for (const side of [-1, 1]) {
-        const trace = (inset) => {
-          ctx.beginPath();
-          pts.forEach((q, i) => {
-            const x = W / 2 + side * (q.half - inset);
-            i === 0 ? ctx.moveTo(x, q.sy) : ctx.lineTo(x, q.sy);
-          });
-        };
-        ctx.lineCap = 'butt';
-        ctx.strokeStyle = 'rgba(0,150,255,0.13)'; ctx.lineWidth = 26; trace(0); ctx.stroke();
-        ctx.strokeStyle = 'rgba(0,160,255,0.30)'; ctx.lineWidth = 12; trace(0); ctx.stroke();
-        ctx.strokeStyle = CYAN;                    ctx.lineWidth = 4;  trace(0); ctx.stroke();
-        ctx.strokeStyle = 'rgba(255,255,255,0.92)'; ctx.lineWidth = 2.4; trace(roadW * 0.022); ctx.stroke();
+      for (const ex of [x0, x1]) {
+        ctx.fillStyle = light ? '#8894a6' : CYAN;
+        ctx.fillRect(ex - lw * 0.55, 0, lw * 1.1, H);
+        ctx.fillStyle = light ? '#ffffff' : 'rgba(226,244,255,0.95)';
+        ctx.fillRect(ex + (ex === x0 ? roadW * 0.016 : -roadW * 0.016) - lw * 0.28, 0, lw * 0.56, H);
       }
-    }
 
-    // ── Vehicles: scaled by perspective, grounded with contact shadows ──
-    function drawVehicleSprite(img, wy, laneF, wpx, lpx, tint) {
-      const pr = taperAt(wy);
-      if (pr <= 0.02) return;
-      const sy = wy2sy(wy);
-      const cx = laneXAt(laneF, wy);
-      const w = wpx * pr, l = lpx * pr, lift = 0;
-      if (sy < -l - 60 || sy > H + l) return;
-
-      // colour bounce: a wash of the car's own paint on the tarmac beneath it.
-      // Cheap, but it is most of what separates "placed on top of" from "lit in".
-      if (tint) {
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        const cy = sy - l * 0.5, rx = w * 1.1, ry = l * 0.72;
-        const bg2 = ctx.createRadialGradient(cx, cy, 0, cx, cy, rx);
-        bg2.addColorStop(0, tint);
-        bg2.addColorStop(0.45, tint);
-        bg2.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.globalAlpha = 0.2;
-        ctx.translate(cx, cy); ctx.scale(1, ry / rx); ctx.translate(-cx, -cy);
-        ctx.fillStyle = bg2;
-        ctx.beginPath(); ctx.arc(cx, cy, rx, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
+      // ── distance falloff ──────────────────────────────────────────────────
+      // The road runs off the top of the screen rather than meeting a horizon,
+      // so the top of the frame dissolves into the void. This is the only depth
+      // cue, and it costs one rect.
+      if (!light) {
+        const fade = ctx.createLinearGradient(0, 0, 0, H * 0.34);
+        fade.addColorStop(0, 'rgba(3,5,10,0.96)');
+        fade.addColorStop(1, 'rgba(3,5,10,0)');
+        ctx.fillStyle = fade;
+        ctx.fillRect(0, 0, W, H * 0.34);
       }
-      // contact shadow on the tarmac
-      ctx.globalAlpha = 0.4;
-      ctx.drawImage(sprites.shadow, cx - w * 0.68, sy - l * 0.4, w * 1.36, l * 0.5);
-      ctx.globalAlpha = 1;
-      // wet-road reflection under the body
-      ctx.save();
-      ctx.globalAlpha = 0.09;
-      ctx.translate(cx, sy);
-      ctx.scale(1, -0.55);
-      ctx.drawImage(img, -w / 2 - (10 * pr), -l - lift, w + 20 * pr, l + lift);
-      ctx.restore();
-      // body
-      const padX = 10 * pr, padY = 10 * pr;
-      ctx.drawImage(img,
-        cx - w / 2 - padX,
-        sy - l - lift - padY,
-        w + padX * 2,
-        l + lift + padY * 2);
-      return { cx, sy, w, l, lift, pr };
     }
 
     function drawTraffic(nowMs) {
       const sp = sprites;
       const list = [];
-      for (const c of cars) if (c.on && c.y < VIEW_AHEAD + 120 && c.y > DESPAWN_Y) list.push(c);
-      list.sort((a, b) => b.y - a.y);           // far → near
+      for (const c of cars) if (c.on && c.y < SPAWN_Y + 80 && c.y > DESPAWN_Y) list.push(c);
+      list.sort((a, b) => b.y - a.y); // far → near
       for (const c of list) {
         const v = VEHICLES[c.kind];
         const img = sp.vkey(c.kind, c.paint);
-        const r = drawVehicleSprite(img, c.y, c.laneF,
-          v.wid * u2p, v.len * u2p, c.paint);
-        if (!r) continue;
-        // headlight wash thrown forward
-        if (r.pr > 0.3) {
-          ctx.globalAlpha = 0.09;
-          const gs = r.w * 2.6;
-          ctx.drawImage(sp.glowWhite, r.cx - gs / 2, r.sy - r.l - r.lift - gs * 0.7, gs, gs);
-          ctx.globalAlpha = 1;
-        }
-        // every car gets a soft tail marker so none of them vanish into the road
-        ctx.globalAlpha = 0.3;
-        const ts = r.w * 0.7;
-        ctx.drawImage(sp.glowRed, r.cx - r.w * 0.34 - ts / 2, r.sy - ts / 2, ts, ts);
-        ctx.drawImage(sp.glowRed, r.cx + r.w * 0.34 - ts / 2, r.sy - ts / 2, ts, ts);
+        const cx = roadX + laneCenter(c.laneF) * u2p;
+        const cy = wy2sy(c.y);
+        const wpx = v.wid * u2p, lpx = v.len * u2p;
+        if (cy < -lpx || cy > H + lpx) continue;
+        ctx.globalAlpha = 0.5;
+        ctx.drawImage(sp.shadow, cx - wpx * 0.62, cy - lpx * 0.5, wpx * 1.24, lpx * 1.06);
         ctx.globalAlpha = 1;
-        // brake glow on the rear face
+        ctx.drawImage(img, cx - img.width / 2, cy - lpx / 2);
         if (c.brake || c.spd < S.speed * 0.42) {
-          ctx.globalAlpha = 0.75;
-          const gs = r.w * 1.05;
-          ctx.drawImage(sp.glowRed, r.cx - r.w * 0.36 - gs / 2, r.sy - gs / 2, gs, gs);
-          ctx.drawImage(sp.glowRed, r.cx + r.w * 0.36 - gs / 2, r.sy - gs / 2, gs, gs);
+          ctx.globalAlpha = 0.5;
+          ctx.drawImage(sp.glowRed, cx - wpx * 0.36 - 17, cy + lpx / 2 - 14, 34, 34);
+          ctx.drawImage(sp.glowRed, cx + wpx * 0.36 - 17, cy + lpx / 2 - 14, 34, 34);
           ctx.globalAlpha = 1;
         }
-        // indicator while changing lanes
         if (c.changing === -1 && Math.floor(nowMs / 130) % 2 === 0) {
-          const gs = r.w * 0.6;
-          const sx = r.cx + c.sigDir * r.w * 0.46;
+          const sx = cx + c.sigDir * wpx * 0.42;
           ctx.globalAlpha = 0.9;
-          ctx.drawImage(sp.glowAmber, sx - gs / 2, r.sy - r.l - r.lift, gs, gs);
-          ctx.drawImage(sp.glowAmber, sx - gs / 2, r.sy - gs, gs, gs);
+          ctx.drawImage(sp.glowAmber, sx - 13, cy - lpx / 2 - 6, 26, 26);
+          ctx.drawImage(sp.glowAmber, sx - 13, cy + lpx / 2 - 18, 26, 26);
           ctx.globalAlpha = 1;
         }
       }
@@ -1196,40 +842,25 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
 
     function drawPlayer(nowMs) {
       const sp = sprites;
-      const laneF = S.laneX / LANE_U - 0.5;
+      const px = roadX + S.laneX * u2p;
+      const pw = sp.playerW, pl = sp.playerL;
       const roll = clamp(S.laneVel * 0.00023, -0.1, 0.1);
-      const squash = 1 - Math.min(0.03, Math.abs(S.laneVel) * 0.000022);
-      const cx = laneXAt(laneF, 0), sy = wy2sy(0);
-      const w = sp.playerW, l = sp.playerL, lift = 0;
+      const squash = 1 - Math.min(0.035, Math.abs(S.laneVel) * 0.00004);
 
-      // pulsing underglow pool
-      const pulse = 0.62 + Math.sin(nowMs * 0.006) * 0.1;
+      // The player is the brightest source on the road — the one thing the eye
+      // should never have to search for.
+      const pulse = 0.42 + Math.sin(nowMs * 0.006) * 0.08;
       ctx.globalAlpha = pulse;
-      const gs = w * 3.1;
-      ctx.drawImage(sp.glowCyan, cx - gs / 2, sy - gs * 0.42, gs, gs * 0.75);
+      ctx.drawImage(sp.glowCyan, px - pw * 1.05, playerY - pl * 0.55, pw * 2.1, pl * 1.15);
       ctx.globalAlpha = 1;
-      // contact shadow
-      ctx.globalAlpha = 0.3;
-      ctx.drawImage(sp.shadow, cx - w * 0.72, sy - l * 0.42, w * 1.44, l * 0.55);
+      ctx.globalAlpha = 0.6;
+      ctx.drawImage(sp.shadow, px - pw * 0.66, playerY - pl * 0.5, pw * 1.32, pl * 1.04);
       ctx.globalAlpha = 1;
-      // reflection
       ctx.save();
-      ctx.globalAlpha = 0.1;
-      ctx.translate(cx, sy);
-      ctx.scale(1, -0.55);
-      ctx.drawImage(sp.player, -w / 2 - 16, -l - lift, w + 32, l + lift);
-      ctx.restore();
-      // headlight cones ahead
-      ctx.globalAlpha = 0.13;
-      const hs = w * 3.6;
-      ctx.drawImage(sp.glowCyan, cx - hs / 2, sy - l - lift - hs * 0.72, hs, hs);
-      ctx.globalAlpha = 1;
-      // body with roll + suspension squash
-      ctx.save();
-      ctx.translate(cx, sy);
+      ctx.translate(px, playerY);
       ctx.rotate(roll);
       ctx.scale(1, squash);
-      ctx.drawImage(sp.player, -w / 2 - 16, -l - lift - 16, w + 32, l + lift + 32);
+      ctx.drawImage(sp.player, -sp.player.width / 2, -pl / 2);
       ctx.restore();
     }
 
@@ -1238,9 +869,9 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       for (const p of puffs) {
         if (!p.on) continue;
         const a = 1 - p.age / p.life;
-        ctx.globalAlpha = a * 0.45;
-        const s2 = 20 * p.s * (1 + p.age * 2.4);
-        ctx.drawImage(sp.smokePuff, p.x - s2 / 2, p.y - s2 / 2, s2, s2);
+        ctx.globalAlpha = a * 0.5;
+        const s = 20 * p.s * (1 + p.age * 2.4);
+        ctx.drawImage(sp.smokePuff, p.x - s / 2, p.y - s / 2, s, s);
       }
       ctx.globalAlpha = 1;
     }
@@ -1251,8 +882,8 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         const a = 1 - p.age / p.life;
         if (p.kind === 2) {
           ctx.globalAlpha = a * 0.4;
-          const s2 = p.s * (1 + p.age * 2);
-          ctx.drawImage(sprites.smokePuff, p.x - s2, p.y - s2, s2 * 2, s2 * 2);
+          const s = p.s * (1 + p.age * 2);
+          ctx.drawImage(sprites.smokePuff, p.x - s, p.y - s, s * 2, s * 2);
         } else {
           ctx.globalAlpha = a;
           ctx.fillStyle = p.c;
@@ -1275,23 +906,6 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         ctx.fillText(f.txt, f.x, f.y);
       }
       ctx.globalAlpha = 1;
-    }
-
-    // ── Atmosphere: speed streaks only. Nothing that muddies the art. ──
-    function drawAtmosphere(light, nowMs) {
-      if (light) return;
-      const d = diff();
-      if (d > 0.3 && !S.dead) {
-        ctx.strokeStyle = `rgba(180,225,255,${(d - 0.3) * 0.26})`;
-        ctx.lineWidth = 1.6;
-        for (let i = 0; i < 10; i++) {
-          const t = ((nowMs * (1.1 + d) * 0.0012) + i * 0.31) % 1;
-          const y = H * (t * t);
-          const side = i % 2 ? 1 : -1;
-          const x = W / 2 + side * (roadW * 0.5 + 18 + t * 40);
-          ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 26 + t * 90); ctx.stroke();
-        }
-      }
     }
 
     // ── HUD: score, time, pause, GO, hint, game-over ──
