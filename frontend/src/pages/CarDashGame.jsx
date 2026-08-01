@@ -220,11 +220,13 @@ export default function CarDashGame() {
           // The match is decided on SCORE, with time only breaking a tie, so the
           // score is shown first — otherwise a player who survived longer but
           // scored less has no way to see why they lost.
+          // Grouped by player rather than by stat: your time and score together,
+          // then the opponent's below, so each side reads as one result.
           extraRows={[
-            { label: 'Your Score', value: (isWinner ? result.winnerScore : result.loserScore)?.toLocaleString() },
+            { label: 'Your Time',      value: fmtTime(isWinner ? result.winnerMs : result.loserMs) },
+            { label: 'Your Score',     value: (isWinner ? result.winnerScore : result.loserScore)?.toLocaleString() },
+            { label: 'Opponent Time',  value: fmtTime(isWinner ? result.loserMs : result.winnerMs) },
             { label: 'Opponent Score', value: (isWinner ? result.loserScore : result.winnerScore)?.toLocaleString() },
-            { label: 'Your Time', value: fmtTime(isWinner ? result.winnerMs : result.loserMs) },
-            { label: 'Opponent Time', value: fmtTime(isWinner ? result.loserMs : result.winnerMs) },
           ].filter(r => r.value !== undefined && r.value !== null)}
           onPlayAgain={playAgain}
           onBackToLobby={reset}
