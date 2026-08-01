@@ -1075,28 +1075,28 @@ function BlackjackGame() {
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       <div className="w-full max-w-md animate-slide-up">
 
-        <div className="text-center mb-3 sm:mb-6">
-          <h1 className="text-4xl sm:text-6xl font-black text-white mb-1 sm:mb-2 leading-tight">🃏 Blackjack</h1>
-          <p className="text-muted text-sm sm:text-base">Get closer to 21 than your opponent</p>
+        <div className="text-center mb-1.5 sm:mb-6">
+          <h1 className="text-4xl sm:text-6xl font-black text-white mb-0.5 sm:mb-2 leading-tight">🃏 Blackjack</h1>
+          <p className="text-center text-muted text-xs sm:text-base leading-snug sm:leading-relaxed px-2 line-clamp-2 sm:line-clamp-none">Get closer to 21 than your opponent. Both players act at the same time — no waiting.</p>
         </div>
 
-        <div className="mb-4 bg-surface border border-border rounded-2xl p-5">
-          <div className="flex items-center justify-between mb-4">
+        <div className="mb-1.5 sm:mb-4 bg-surface border border-border rounded-2xl p-2.5 sm:p-5">
+          <div className="flex items-center justify-between mb-1.5 sm:mb-4">
             <span className="text-base font-bold text-white">Entry Fee</span>
             <div className="flex items-center gap-0.5 bg-bg border border-border rounded-lg p-1">
-              <button onClick={() => switchCurrency('coins')} className={`px-4 py-2 rounded text-sm font-bold transition-all ${!isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}><CoinIcon size="0.85em" /> Coins</button>
-              <button onClick={() => switchCurrency('diamonds')} className={`px-4 py-2 rounded text-sm font-bold transition-all ${isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}>💎 Diamonds</button>
+              <button onClick={() => switchCurrency('coins')} className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${!isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}><CoinIcon size="0.85em" /> Coins</button>
+              <button onClick={() => switchCurrency('diamonds')} className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}>💎 Diamonds</button>
             </div>
           </div>
           <BetSlider fees={fees} entryFee={entryFee} setEntryFee={setEntryFee} currLabel={currLabel} isDiamonds={isDiamonds} />
           {(playerCounts?.blackjack ?? 0) > 0 && (
-            <div className="flex items-center gap-1.5 mt-3">
+            <div className="flex items-center gap-1.5 mt-0 sm:mt-1">
               <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#1250B4', boxShadow: '0 0 6px #1250B4' }} />
               <span style={{ color: '#1250B4', fontSize: 12, fontWeight: 600 }}>{playerCounts.blackjack} playing</span>
             </div>
           )}
           {(() => { const n = betCounts?.[`blackjack:${entryFee}:${betCurrency}`] || 0; return n > 0 ? (
-            <div className="flex items-center gap-1.5 mt-1">
+            <div className="flex items-center gap-1.5 mt-0 sm:mt-1">
               <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#1250B4', boxShadow: '0 0 6px #1250B4' }} />
               <span style={{ color: '#1250B4', fontSize: 12, fontWeight: 600 }}>{n} at this bet</span>
             </div>

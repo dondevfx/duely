@@ -2,6 +2,7 @@
 import { useNavigate } from 'react-router-dom';
 import GlowButton from './GlowButton';
 import { useSocket } from '../context/SocketContext';
+import BetSlider from './BetSlider';
 import { useAuth } from '../context/AuthContext';
 import CoinIcon from './CoinIcon';
 import CreateRoomModal from './CreateRoomModal';
@@ -19,24 +20,6 @@ function fmtFee(fee) {
   if (fee < 1)         return `${fee}`;
   if (fee >= 1000)     return `${(fee / 1000).toLocaleString()}k`;
   return `${fee}`;
-}
-
-function calcPayout(fee, isDiamonds) {
-  if (isDiamonds) return (fee * 2).toLocaleString();
-  const p = fee * 2 * 0.95;
-  return p % 1 === 0 ? p.toLocaleString() : p.toFixed(2);
-}
-
-// Updates slider visuals directly on DOM nodes — no React re-render needed
-function applySliderDOM(rawIdx, fees, isDiamonds, thumb, fill, display, payout) {
-  const maxIdx = fees.length - 1;
-  const clampedRaw = Math.max(0, Math.min(maxIdx, rawIdx));
-  const pct = maxIdx > 0 ? (clampedRaw / maxIdx) * 100 : 0;
-  const fee = fees[Math.round(clampedRaw)] ?? fees[0];
-  if (thumb)   thumb.style.left    = `${pct}%`;
-  if (fill)    fill.style.width    = `${pct}%`;
-  if (display) display.textContent = fmtFee(fee);
-  if (payout)  payout.textContent  = fee > 0 ? `+${calcPayout(fee, isDiamonds)}` : '';
 }
 
 export default function GameLobby({
@@ -62,12 +45,6 @@ export default function GameLobby({
 }) {
   const [privateMode, setPrivateMode] = useState(null); // null | 'create' | 'join'
   const [joinCode, setJoinCode]       = useState('');
-  const sliderTrackRef = useRef(null);
-  const sliderThumbRef = useRef(null);
-  const sliderFillRef  = useRef(null);
-  const feeDisplayRef  = useRef(null);
-  const payoutDisplayRef = useRef(null);
-  const dragRef        = useRef({ active: false, fees: [], setEntryFee: null, isDiamonds: false });
 
   const { betCounts } = useSocket() || {};
   const { session } = useAuth();
@@ -101,65 +78,6 @@ export default function GameLobby({
     const newFees = cur === 'diamonds' ? DIAMOND_FEES : COIN_FEES;
     setEntryFee(newFees[0]);
   }
-
-  // Keep dragRef in sync so native event handlers always see current values
-  dragRef.current.fees       = fees;
-  dragRef.current.setEntryFee = setEntryFee;
-  dragRef.current.isDiamonds  = isDiamonds;
-
-  // Sync slider DOM position when entryFee changes externally (currency switch, mount)
-  useEffect(() => {
-    const idx = Math.max(0, fees.indexOf(entryFee));
-    applySliderDOM(idx, fees, isDiamonds, sliderThumbRef.current, sliderFillRef.current, feeDisplayRef.current, payoutDisplayRef.current);
-  }, [fees, entryFee, isDiamonds]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Attach native pointer events once — no React re-renders during drag
-  useEffect(() => {
-    const track = sliderTrackRef.current;
-    if (!track) return;
-
-    function rawFromX(clientX) {
-      const rect = track.getBoundingClientRect();
-      const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-      return pct * (dragRef.current.fees.length - 1);
-    }
-
-    function apply(raw) {
-      applySliderDOM(raw, dragRef.current.fees, dragRef.current.isDiamonds,
-        sliderThumbRef.current, sliderFillRef.current, feeDisplayRef.current, payoutDisplayRef.current);
-    }
-
-    function onDown(e) {
-      dragRef.current.active = true;
-      track.setPointerCapture(e.pointerId);
-      apply(rawFromX(e.clientX));
-      e.preventDefault();
-    }
-
-    function onMove(e) {
-      if (!dragRef.current.active) return;
-      apply(rawFromX(e.clientX));
-    }
-
-    function onUp(e) {
-      if (!dragRef.current.active) return;
-      dragRef.current.active = false;
-      const snapped = Math.round(Math.max(0, Math.min(dragRef.current.fees.length - 1, rawFromX(e.clientX))));
-      apply(snapped);
-      dragRef.current.setEntryFee(dragRef.current.fees[snapped]);
-    }
-
-    track.addEventListener('pointerdown', onDown);
-    track.addEventListener('pointermove', onMove);
-    track.addEventListener('pointerup', onUp);
-    track.addEventListener('pointercancel', onUp);
-    return () => {
-      track.removeEventListener('pointerdown', onDown);
-      track.removeEventListener('pointermove', onMove);
-      track.removeEventListener('pointerup', onUp);
-      track.removeEventListener('pointercancel', onUp);
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const payoutAmt = isDiamonds
     ? (entryFee * 2).toLocaleString()
@@ -195,56 +113,17 @@ export default function GameLobby({
           </div>
         </div>
 
-        {/* Bet amount display */}
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-sm text-muted">Min: {fmtFee(fees[0])} {currLabel}</span>
-          <span className="text-xl sm:text-2xl font-black text-white">
-            <span ref={feeDisplayRef}>{fmtFee(entryFee)}</span>{' '}
-            <span className="text-primary">{currLabel}</span>
-          </span>
-          <span className="text-sm text-muted">Max: {fmtFee(fees[fees.length - 1])} {currLabel}</span>
-        </div>
-
-        {/* Custom smooth slider — DOM-driven during drag, zero React re-renders per frame */}
-        <div
-          ref={sliderTrackRef}
-          className="relative w-full h-9 sm:h-12 flex items-center cursor-grab active:cursor-grabbing select-none touch-none"
-          style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
-        >
-          {/* Track background */}
-          <div className="absolute left-0 right-0 h-2 rounded-full bg-border overflow-hidden">
-            {/* width is controlled exclusively via sliderFillRef — never set here so React re-renders don't override drag position */}
-            <div ref={sliderFillRef} className="h-full rounded-full bg-primary" style={{ width: '0%' }} />
-          </div>
-          {/* Tick marks — static, React-controlled fine */}
-          {fees.map((_, i) => {
-            const tickPct = fees.length > 1 ? (i / (fees.length - 1)) * 100 : 0;
-            return (
-              <div
-                key={i}
-                className="absolute w-1.5 h-1.5 rounded-full bg-white opacity-50 -translate-x-1/2 pointer-events-none"
-                style={{ left: `${tickPct}%` }}
-              />
-            );
-          })}
-          {/* Thumb — left is controlled exclusively via sliderThumbRef */}
-          <div
-            ref={sliderThumbRef}
-            className="absolute w-6 h-6 rounded-full bg-white border-2 border-primary -translate-x-1/2 pointer-events-none"
-            style={{ left: '0%', boxShadow: '0 2px 12px rgba(18,80,180,0.6)' }}
-          />
-        </div>
-
-        {/* Payout — updates live during drag via payoutDisplayRef */}
-        {entryFee > 0 && (
-          <div className="mt-2 sm:mt-4 text-center">
-            <div className="text-xs text-muted uppercase tracking-widest mb-1 font-semibold">Win Payout</div>
-            <div className="text-2xl sm:text-3xl font-black text-success inline-flex items-center gap-1" style={{ textShadow: '0 0 16px rgba(34,197,94,0.4)' }}>
-              <span ref={payoutDisplayRef}>{`+${calcPayout(entryFee, isDiamonds)}`}</span>
-              {' '}{currLabel}
-            </div>
-          </div>
-        )}
+        {/* One shared slider for every betting screen. This used to be a second,
+            near-identical implementation living here, which is why the bet
+            sections drifted apart between games and why a fix to the shared
+            control never reached Rush Hour, Block Burst or Word VS. */}
+        <BetSlider
+          fees={fees}
+          entryFee={entryFee}
+          setEntryFee={setEntryFee}
+          currLabel={currLabel}
+          isDiamonds={isDiamonds}
+        />
 
         {/* Live player count — only show when > 0 */}
         {typeof liveCount === 'number' && liveCount > 0 && (

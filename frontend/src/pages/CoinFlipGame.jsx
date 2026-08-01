@@ -578,7 +578,7 @@ export default function CoinFlipGame() {
         {phase === 'lobby' && (
           <div className="text-center mb-1.5 sm:mb-6">
             <h1 className="text-4xl sm:text-6xl font-black text-white mb-0.5 sm:mb-2 leading-tight">🟡 Coin Flip</h1>
-            <p className="hidden sm:block text-muted text-xs sm:text-base">Pick a side — get matched with the opposite</p>
+            <p className="text-center text-muted text-xs sm:text-base leading-snug sm:leading-relaxed px-2 line-clamp-2 sm:line-clamp-none">Pick heads or tails — you get matched with someone on the opposite side. One flip decides it.</p>
           </div>
         )}
 
@@ -628,8 +628,8 @@ export default function CoinFlipGame() {
         {/* Lobby */}
         {phase === 'lobby' && (
           <>
-            <div className="mb-2 sm:mb-4 bg-surface border border-border rounded-2xl p-3 sm:p-5">
-              <div className="flex items-center justify-between mb-2 sm:mb-4">
+            <div className="mb-1.5 sm:mb-4 bg-surface border border-border rounded-2xl p-2.5 sm:p-5">
+              <div className="flex items-center justify-between mb-1.5 sm:mb-4">
                 <span className="text-base font-bold text-white">Entry Fee</span>
                 <div className="flex items-center gap-0.5 bg-bg border border-border rounded-lg p-1">
                   <button onClick={() => switchCurrency('coins')} className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${!isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}><CoinIcon size="0.85em" /> Coins</button>
