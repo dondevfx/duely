@@ -1,29 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { isMuted } from '../utils/sound';
-import { sedanSVG, rasterize } from './rushHourArt';
 
-// ── Authored sprite cache ───────────────────────────────────────────────────
-// Vehicles authored as SVG are rasterized once per (class, paint, size) and
-// then blitted like any other sprite. Rasterizing is asynchronous, so a flat
-// placeholder is drawn until the real art resolves — a frame or two at load,
-// and never mid-run because the size only changes on resize.
-const SVG_ART = { sedan: sedanSVG };
-const svgCache = new Map();
-function authoredSprite(kind, paint, wpx, lpx, dpr) {
-  const build = SVG_ART[kind];
-  if (!build) return null;
-  const key = `${kind}|${paint}|${Math.round(wpx)}x${Math.round(lpx)}@${dpr}`;
-  const hit = svgCache.get(key);
-  if (hit) return hit === 'pending' ? null : hit;
-  svgCache.set(key, 'pending');
-  // Rasterize at DEVICE pixels and blit at CSS size. Baking at CSS size and
-  // letting the 2x backing store scale it up is what makes sprites look soft
-  // on a phone or a retina display.
-  rasterize(build(paint), wpx * dpr, lpx * dpr)
-    .then((c) => svgCache.set(key, c))
-    .catch(() => svgCache.delete(key));
-  return null;
-}
 
 /**
  * HIGHWAY DASH — gameplay canvas. Complete rebuild.
@@ -78,6 +55,20 @@ const HIT_FORGIVE  = 0.88;   // hitbox forgiveness factor
 
 // Duely palette
 const CYAN  = '#00BFFF';
+
+// ── Night-highway pixel palette ─────────────────────────────────────────────
+// Tight on purpose. A small, fixed palette is most of what separates pixel art
+// from "a low-resolution picture", and it keeps the whole screen coherent.
+const PAL = {
+  void0:  '#05070E', void1:  '#0A0F1A',
+  road0:  '#12192A', road1:  '#171F33', road2:  '#1D2740',
+  line:   '#E6F2FF', lineDim:'#5C7CA8',
+  kerb:   '#00BFFF', kerbDim:'#0B5C8C',
+  shadow: '#080B14',
+  glass:  '#16233C', glassLit:'#31527F',
+  tyre:   '#07090F',
+  lampW:  '#FFF6D8', lampR:'#FF3B4E', lampC:'#8CF2FF',
+};
 const BLUE  = '#1250B4';
 
 // ── Lane marking cadence ────────────────────────────────────────────────────
@@ -106,10 +97,15 @@ const PLAYER_L_U = 117;  // player world length (sprite + hitbox)
 const VKEYS = Object.keys(VEHICLES);
 const VTOTAL = VKEYS.reduce((a, k) => a + VEHICLES[k].weight, 0);
 
+// Traffic paints. Chosen to sit with the road rather than fight it: cool
+// steels and midnight blues carry the night, with a few warm bodies so the
+// screen never goes monochrome. No blue this saturated appears here — that
+// belongs to the player alone.
 const PAINTS = [
-  '#B33A3A', '#C77B2F', '#C9B33B', '#3E8E57', '#3D74B8', '#6E56C4',
-  '#B04A7E', '#C9CFD8', '#6E7580', '#23282F', '#2E9E96', '#C2542E',
+  '#C43B3B', '#D9762B', '#E0B23A', '#3E9E63', '#2E8C8C',
+  '#7B5BD6', '#C2496F', '#D6DEEA', '#8E99AB', '#40506B',
 ];
+
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const smooth = (t) => t * t * (3 - 2 * t);
@@ -157,13 +153,17 @@ function shade(hex, amt) {
 function bakeGlow(hex, r) {
   const n = parseInt(hex.slice(1), 16);
   const rc = (n >> 16) & 255, gc = (n >> 8) & 255, bc = n & 255;
+  // Stepped rings, not a radial gradient. A smooth blur sitting on top of
+  // pixel art reads as a mistake — the glow has to live on the same grid as
+  // everything else, so it falls off in a few discrete bands instead.
+  const STEPS = 4;
   return bake(r * 2, r * 2, (g, w, h) => {
-    const gr = g.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
-    gr.addColorStop(0, `rgba(${rc},${gc},${bc},0.9)`);
-    gr.addColorStop(0.4, `rgba(${rc},${gc},${bc},0.32)`);
-    gr.addColorStop(1, `rgba(${rc},${gc},${bc},0)`);
-    g.fillStyle = gr;
-    g.fillRect(0, 0, w, h);
+    for (let i = STEPS; i >= 1; i--) {
+      const t = i / STEPS;
+      const rad = Math.round((w / 2) * t);
+      g.fillStyle = `rgba(${rc},${gc},${bc},${(0.42 * (1 - t) + 0.10).toFixed(3)})`;
+      g.fillRect(Math.round(w / 2 - rad), Math.round(h / 2 - rad), rad * 2, rad * 2);
+    }
   });
 }
 
@@ -190,30 +190,121 @@ function bakeSoftShadow(w, h) {
 // into a rainbow -- they read as one fleet, clearly distinct from the player's
 // glowing blue Interceptor.
 // ─────────────────────────────────────────────────────────────────────────────
-//  PLACEHOLDER VEHICLE ART
-//  Intentionally flat. Real authored sprite art lands in the next step; these
-//  exist only so the road and lighting can be judged on their own.
+//  PIXEL VEHICLE ART
+//
+//  Sprites are generated at exactly the size they appear on the virtual grid —
+//  roughly 23x36 pixels for a car — rather than authored large and scaled down.
+//  Scaling pixel art by a fraction is what produces uneven, crawling edges, so
+//  every shape here is laid out in whole pixels at the final size.
+//
+//  Each vehicle is built from the same five ideas: a dark outline, a body with
+//  a lit left edge and a shaded right edge, a dark cabin, lamps at both ends,
+//  and tyres breaking the silhouette. At this resolution that is all that fits,
+//  and all that is needed.
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Whole-pixel rect. Everything goes through here, so nothing can land on a
+// half pixel and blur.
+function px(g, x, y, w, h, c) {
+  const x0 = Math.round(x), y0 = Math.round(y);
+  const x1 = Math.round(x + w), y1 = Math.round(y + h);
+  if (x1 <= x0 || y1 <= y0) return;
+  g.fillStyle = c;
+  g.fillRect(x0, y0, x1 - x0, y1 - y0);
+}
+
+// Per-class proportions, as fractions of the sprite. `cab` is where the dark
+// glasshouse sits along the length; `nose`/`tail` set how far the body insets
+// at each end, which is what makes a van read differently from a sports car.
+const SHAPE = {
+  sedan:  { nose: 0.14, tail: 0.10, cab: [0.30, 0.66], bonnet: 0.26 },
+  sports: { nose: 0.20, tail: 0.14, cab: [0.40, 0.70], bonnet: 0.34 },
+  suv:    { nose: 0.09, tail: 0.07, cab: [0.22, 0.70], bonnet: 0.18 },
+  pickup: { nose: 0.11, tail: 0.06, cab: [0.20, 0.48], bonnet: 0.16 },
+  van:    { nose: 0.07, tail: 0.05, cab: [0.12, 0.40], bonnet: 0.10 },
+  semi:   { nose: 0.05, tail: 0.03, cab: [0.06, 0.24], bonnet: 0.04 },
+};
+
+function shadeHex(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  const c = (v) => Math.max(0, Math.min(255, v + amt));
+  const r = c(n >> 16), g2 = c((n >> 8) & 255), b = c(n & 255);
+  return '#' + ((1 << 24) | (r << 16) | (g2 << 8) | b).toString(16).slice(1);
+}
+
+function paintPixelVehicle(g, w, l, body, S2, opts = {}) {
+  const lit = shadeHex(body, 34);
+  const dim = shadeHex(body, -42);
+  const out = shadeHex(body, -86);
+  const inset = Math.max(1, Math.round(w * 0.09));
+
+  // silhouette: full width through the middle, inset at nose and tail
+  const noseL = Math.max(1, Math.round(l * S2.nose));
+  const tailL = Math.max(1, Math.round(l * S2.tail));
+  px(g, inset, 0, w - inset * 2, l, out);              // outline pass
+  px(g, inset + 1, noseL, w - inset * 2 - 2, l - noseL - tailL, body);
+  px(g, inset + 2, 1, w - inset * 4, l - 2, body);
+
+  // key light down the left flank, shadow down the right
+  px(g, inset + 1, noseL, 1, l - noseL - tailL, lit);
+  px(g, inset + 2, 1, 1, l - 2, lit);
+  px(g, w - inset - 2, noseL, 1, l - noseL - tailL, dim);
+  px(g, w - inset - 3, 1, 1, l - 2, dim);
+
+  // tyres break the silhouette so the shape never reads as a plain block
+  const tyreL = Math.max(2, Math.round(l * 0.13));
+  for (const ty of [Math.round(l * 0.16), Math.round(l * 0.68)]) {
+    px(g, 0, ty, inset + 1, tyreL, PAL.tyre);
+    px(g, w - inset - 1, ty, inset + 1, tyreL, PAL.tyre);
+  }
+
+  // glasshouse
+  const c0 = Math.round(l * S2.cab[0]), c1 = Math.round(l * S2.cab[1]);
+  px(g, inset + 2, c0, w - inset * 2 - 4, c1 - c0, PAL.glass);
+  px(g, inset + 2, c0, 1, c1 - c0, PAL.glassLit);
+  px(g, inset + 2, c0, w - inset * 2 - 4, 1, PAL.glassLit);
+
+  // bonnet crease
+  px(g, Math.round(w / 2), Math.round(l * 0.05), 1, Math.round(l * S2.bonnet), dim);
+
+  // lamps
+  const lw = Math.max(2, Math.round(w * 0.2));
+  px(g, inset + 2, 0, lw, 1, opts.head || PAL.lampW);
+  px(g, w - inset - 2 - lw, 0, lw, 1, opts.head || PAL.lampW);
+  px(g, inset + 2, l - 1, lw, 1, PAL.lampR);
+  px(g, w - inset - 2 - lw, l - 1, lw, 1, PAL.lampR);
+}
+
 function bakeVehicle(kind, paint, wpx, lpx) {
-  return bake(wpx, lpx, (g, w, l) => {
-    g.fillStyle = paint;
-    rr(g, 0, 0, w, l, Math.min(w, l) * 0.16); g.fill();
-    g.strokeStyle = 'rgba(0,0,0,0.6)'; g.lineWidth = 2;
-    rr(g, 1, 1, w - 2, l - 2, Math.min(w, l) * 0.16); g.stroke();
-    // a lighter band at the nose so orientation stays readable
-    g.fillStyle = 'rgba(255,255,255,0.22)';
-    g.fillRect(w * 0.12, l * 0.06, w * 0.76, l * 0.1);
+  const w = Math.max(6, Math.round(wpx)), l = Math.max(10, Math.round(lpx));
+  return bake(w, l, (g) => {
+    paintPixelVehicle(g, w, l, paint, SHAPE[kind] || SHAPE.sedan);
+    if (kind === 'semi') {
+      // trailer gets a livery band so the longest vehicle is unmistakable
+      px(g, Math.round(w * 0.14), Math.round(l * 0.34), Math.round(w * 0.72), 2, shadeHex(paint, 60));
+      px(g, Math.round(w * 0.14), Math.round(l * 0.62), Math.round(w * 0.72), 2, shadeHex(paint, 60));
+    }
   });
 }
 
+// ── Player car ──────────────────────────────────────────────────────────────
+// Deliberately unlike anything in traffic: a pointed nose, a cyan light bar
+// across the tail, glowing strakes down both flanks and a cyan-white lamp pair.
+// At this resolution identity has to come from lighting, not from detail.
 function bakePlayer(wpx, lpx) {
-  return bake(wpx, lpx, (g, w, l) => {
-    g.fillStyle = BLUE;
-    rr(g, 0, 0, w, l, Math.min(w, l) * 0.16); g.fill();
-    g.strokeStyle = CYAN; g.lineWidth = 2;
-    rr(g, 1, 1, w - 2, l - 2, Math.min(w, l) * 0.16); g.stroke();
-    g.fillStyle = 'rgba(255,255,255,0.3)';
-    g.fillRect(w * 0.12, l * 0.06, w * 0.76, l * 0.1);
+  const w = Math.max(8, Math.round(wpx)), l = Math.max(12, Math.round(lpx));
+  return bake(w, l, (g) => {
+    paintPixelVehicle(g, w, l, '#1668FF',
+      { nose: 0.20, tail: 0.10, cab: [0.40, 0.68], bonnet: 0.34 },
+      { head: PAL.lampC });
+    const inset = Math.max(1, Math.round(w * 0.09));
+    // cyan strakes down the flanks
+    px(g, inset + 1, Math.round(l * 0.34), 1, Math.round(l * 0.34), PAL.lampC);
+    px(g, w - inset - 2, Math.round(l * 0.34), 1, Math.round(l * 0.34), PAL.lampC);
+    // full-width tail bar — no traffic vehicle has one
+    px(g, inset + 2, l - 2, w - inset * 2 - 4, 1, PAL.lampC);
+    // nose spike
+    px(g, Math.round(w / 2) - 1, 0, 2, Math.max(2, Math.round(l * 0.06)), '#FFFFFF');
   });
 }
 
@@ -307,7 +398,11 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || seed == null) return;
-    const ctx = canvas.getContext('2d', { alpha: false });
+    // `dctx` is the real canvas — HUD only. `ctx` is the low-resolution world
+    // buffer that every gameplay draw call writes into.
+    const dctx = canvas.getContext('2d', { alpha: false });
+    const world = document.createElement('canvas');
+    const ctx = world.getContext('2d', { alpha: false });
     const rand = makePRNG(seed);        // gameplay randomness — identical for both players
     const frand = Math.random;          // FX-only randomness
     const audio = createAudio();
@@ -317,17 +412,44 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     let sprites = null;
 
+    // ── Pixel grid ──────────────────────────────────────────────────────────
+    // The world is drawn at PIX_W virtual pixels across and blown up by a whole
+    // number. Integer scaling is not optional: at a fractional factor some
+    // source pixels land on two screen pixels and some on one, so edges crawl
+    // as things move. That shimmer is the signature glitch of fake pixel art.
+    const PIX_W = 180;
+    let pix = 1;
+
     function layout() {
       W = canvas.clientWidth || 360;
       H = canvas.clientHeight || 640;
-      canvas.width = Math.floor(W * dpr);
-      canvas.height = Math.floor(H * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      playerY = H * PLAYER_YF;
-      u2p = Math.min((playerY - H * 0.02) / VIEW_AHEAD, (W * 0.965) / (LANES * LANE_U));
-      laneW = LANE_U * u2p;
+      const devW = Math.floor(W * dpr), devH = Math.floor(H * dpr);
+      pix = Math.max(1, Math.round(devW / PIX_W));
+      // Virtual size follows from the integer factor, so the buffer always maps
+      // exactly onto the display with no half-pixel remainder.
+      const vw = Math.ceil(devW / pix), vh = Math.ceil(devH / pix);
+      world.width = vw; world.height = vh;
+      canvas.width = vw * pix; canvas.height = vh * pix;
+      // Pin the CSS size to match the backing store exactly. Without this the
+      // buffer is an integer multiple internally but the browser then rescales
+      // the element by a fraction to fit its box, which reintroduces exactly
+      // the crawling edges the integer factor was there to prevent.
+      canvas.style.width = (vw * pix / dpr) + 'px';
+      canvas.style.height = (vh * pix / dpr) + 'px';
+      canvas.style.imageRendering = 'pixelated';
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      dctx.imageSmoothingEnabled = false;
+      W = vw; H = vh;
+      playerY = Math.round(H * PLAYER_YF);
+      // Snap the lane width to a whole pixel so lane lines and cars never sit
+      // on a half pixel — the other half of keeping the grid honest.
+      laneW = Math.max(8, Math.floor(Math.min(
+        ((playerY - H * 0.02) / VIEW_AHEAD) * LANE_U,
+        (W * 0.965) / LANES)));
+      u2p = laneW / LANE_U;
       roadW = laneW * LANES;
-      roadX = (W - roadW) / 2;
+      roadX = Math.round((W - roadW) / 2);
       bakeAll();
     }
 
@@ -342,8 +464,6 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         vs,
         vkey(kind, paint) {
           const wpx = VEHICLES[kind].wid * u2p, lpx = VEHICLES[kind].len * u2p;
-          const art = authoredSprite(kind, paint, wpx, lpx, dpr);
-          if (art) return art;
           const k = kind + '|' + paint;
           if (!vs[k]) vs[k] = bakeVehicle(kind, paint, wpx, lpx);
           return vs[k];
@@ -722,116 +842,99 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         }
       }
       if (!light) ctx.drawImage(sp.vignette, 0, 0); // a dark vignette would muddy light mode
+
+      // Blow the world buffer up onto the real canvas. Nearest-neighbour, whole
+      // factor: every virtual pixel becomes an exact pix x pix block.
+      dctx.imageSmoothingEnabled = false;
+      dctx.setTransform(1, 0, 0, 1, 0, 0);
+      dctx.drawImage(world, 0, 0, W, H, 0, 0, W * pix, H * pix);
+
+      // HUD is drawn after the upscale, at full resolution, so the score and
+      // timer stay crisp rather than becoming chunky along with the art.
+      dctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       drawHUD(nowMs);
+      dctx.setTransform(1, 0, 0, 1, 0, 0);
     }
 
     // ── The void either side of the road ────────────────────────────────────
     // Not decoration. The road is the only lit thing in frame, so everything
     // around it has to fall away rather than compete.
     function drawVoid(light) {
-      if (light) { ctx.fillStyle = '#f0f4f8'; ctx.fillRect(0, 0, W, H); return; }
-      const g = ctx.createLinearGradient(0, 0, 0, H);
-      g.addColorStop(0, '#04060B');
-      g.addColorStop(0.6, '#06090F');
-      g.addColorStop(1, '#03050A');
-      ctx.fillStyle = g;
+      if (light) { ctx.fillStyle = '#e9edf3'; ctx.fillRect(0, 0, W, H); return; }
+      ctx.fillStyle = PAL.void0;
       ctx.fillRect(0, 0, W, H);
+      // two flat bands rather than a gradient — a gradient at this resolution
+      // just produces visible banding, which reads as a rendering fault
+      ctx.fillStyle = PAL.void1;
+      ctx.fillRect(0, Math.round(H * 0.34), W, H);
     }
 
     // ── Road ────────────────────────────────────────────────────────────────
-    // One light model: a cool key from above and slightly left. The asphalt is
-    // near-black and is only visible where something lights it — the sheen down
-    // the crown, the markings, the kerb rails. Painted every frame from plain
-    // rects; there is no tile, no texture and no noise, so there is nothing that
-    // can seam, shimmer or repeat.
+    // Night highway, drawn entirely in whole pixels. Three tones of asphalt, a
+    // dithered crown, bright lane dashes, and neon kerbs that are the only
+    // saturated colour in the frame.
     function drawRoad(light) {
       const x0 = roadX, x1 = roadX + roadW;
-
-      // asphalt
-      const ag = ctx.createLinearGradient(0, 0, 0, H);
       if (light) {
-        ag.addColorStop(0, '#c4ccd8'); ag.addColorStop(0.72, '#d6dde7'); ag.addColorStop(1, '#cbd3de');
+        ctx.fillStyle = '#c9d2de'; ctx.fillRect(x0, 0, roadW, H);
       } else {
-        ag.addColorStop(0, '#0B111B');
-        ag.addColorStop(0.55, '#151F2E');
-        ag.addColorStop(1, '#0D1520');
-      }
-      ctx.fillStyle = ag;
-      ctx.fillRect(x0, 0, roadW, H);
-
-      if (!light) {
-        // crown sheen — the key light catching the camber of the road
-        const xg = ctx.createLinearGradient(x0, 0, x1, 0);
-        xg.addColorStop(0.00, 'rgba(0,0,0,0.55)');
-        xg.addColorStop(0.30, 'rgba(70,150,220,0.055)');
-        xg.addColorStop(0.46, 'rgba(120,200,255,0.085)');
-        xg.addColorStop(0.72, 'rgba(70,150,220,0.045)');
-        xg.addColorStop(1.00, 'rgba(0,0,0,0.55)');
-        ctx.fillStyle = xg;
-        ctx.fillRect(x0, 0, roadW, H);
+        ctx.fillStyle = PAL.road0; ctx.fillRect(x0, 0, roadW, H);
+        // crown: a lighter band down the centre of the carriageway
+        ctx.fillStyle = PAL.road1;
+        ctx.fillRect(x0 + Math.round(roadW * 0.12), 0, Math.round(roadW * 0.76), H);
+        ctx.fillStyle = PAL.road2;
+        ctx.fillRect(x0 + Math.round(roadW * 0.30), 0, Math.round(roadW * 0.40), H);
+        // ordered dither along the tone boundaries, so the bands read as a
+        // gradient without ever showing a hard edge
+        const scroll = Math.round(S.dist * VISUAL_SCROLL * u2p);
+        for (const bx of [x0 + Math.round(roadW * 0.12), x0 + Math.round(roadW * 0.30),
+                          x0 + Math.round(roadW * 0.70), x0 + Math.round(roadW * 0.88)]) {
+          ctx.fillStyle = PAL.road1;
+          for (let y = -((scroll % 2) + 2); y < H; y += 2) ctx.fillRect(bx - 1, y, 1, 1);
+        }
       }
 
       // ── lane markings ─────────────────────────────────────────────────────
-      // Two layers, and the pairing is deliberate:
-      //   1. a continuous rail, so a lane line is present in every single frame
-      //      no matter where the dash phase happens to land;
-      //   2. dashes stretched by one frame of travel, the way a camera shutter
-      //      would smear them — crisp when slow, near-solid when fast.
-      // Either alone can strobe at top speed. Together they cannot.
-      const stepPx = MARK_CYCLE * u2p;
-      const off = (S.dist * VISUAL_SCROLL * u2p) % stepPx;
-      const dashPx = MARK_LEN * u2p;
-      const smear = Math.min(MARK_GAP * u2p * 0.9, S.speed * VISUAL_SCROLL * u2p / 60);
-      const lw = Math.max(2, roadW * 0.006);
-
+      // Same two-layer rule as before, now on the pixel grid: a dim continuous
+      // rail so a lane line exists in every frame at any speed, plus bright
+      // dashes on the cadence that keeps them clear of the frame rate.
+      const stepPx = Math.max(4, Math.round(MARK_CYCLE * u2p));
+      const dashPx = Math.max(2, Math.round(MARK_LEN * u2p));
+      const off = Math.round(S.dist * VISUAL_SCROLL * u2p) % stepPx;
+      const lw = Math.max(1, Math.round(roadW * 0.008));
       for (let i = 1; i < LANES; i++) {
-        const x = x0 + laneW * i;
-        ctx.fillStyle = light ? 'rgba(255,255,255,0.34)' : 'rgba(120,175,225,0.16)';
-        ctx.fillRect(x - lw * 0.32, 0, lw * 0.64, H);
-        ctx.fillStyle = light ? '#FFFFFF' : '#DCEEFF';
+        const x = x0 + laneW * i - Math.floor(lw / 2);
+        ctx.fillStyle = light ? '#ffffff' : PAL.lineDim;
+        ctx.fillRect(x, 0, lw, H);
+        ctx.fillStyle = light ? '#ffffff' : PAL.line;
         for (let y = off - stepPx; y < H + stepPx; y += stepPx) {
-          const top = y - smear;
-          const hgt = dashPx + smear;
-          if (top > H || top + hgt < 0) continue;
-          ctx.fillRect(x - lw / 2, top, lw, hgt);
+          ctx.fillRect(x, y, lw, dashPx);
         }
       }
 
       // ── kerbs ─────────────────────────────────────────────────────────────
-      // The two anchor points of saturated colour in the frame, and the only
-      // light source that runs the full height of the screen.
       if (!light) {
-        for (const [ex, dir] of [[x0, -1], [x1, 1]]) {
-          const sp2 = ctx.createLinearGradient(ex, 0, ex + dir * roadW * 0.10, 0);
-          sp2.addColorStop(0, 'rgba(0,150,235,0.30)');
-          sp2.addColorStop(1, 'rgba(0,150,235,0)');
-          ctx.fillStyle = sp2;
-          ctx.fillRect(Math.min(ex, ex + dir * roadW * 0.10), 0, roadW * 0.10, H);
-          // inward spill onto the asphalt
-          const inw = ctx.createLinearGradient(ex, 0, ex - dir * roadW * 0.13, 0);
-          inw.addColorStop(0, 'rgba(0,170,255,0.20)');
-          inw.addColorStop(1, 'rgba(0,170,255,0)');
-          ctx.fillStyle = inw;
-          ctx.fillRect(Math.min(ex, ex - dir * roadW * 0.13), 0, roadW * 0.13, H);
-        }
+        const glow = Math.max(2, Math.round(roadW * 0.035));
+        ctx.fillStyle = PAL.kerbDim;
+        ctx.fillRect(x0, 0, glow, H);
+        ctx.fillRect(x1 - glow, 0, glow, H);
       }
-      for (const ex of [x0, x1]) {
-        ctx.fillStyle = light ? '#8894a6' : CYAN;
-        ctx.fillRect(ex - lw * 0.55, 0, lw * 1.1, H);
-        ctx.fillStyle = light ? '#ffffff' : 'rgba(226,244,255,0.95)';
-        ctx.fillRect(ex + (ex === x0 ? roadW * 0.016 : -roadW * 0.016) - lw * 0.28, 0, lw * 0.56, H);
-      }
+      const kw = Math.max(1, Math.round(roadW * 0.012));
+      ctx.fillStyle = light ? '#8894a6' : PAL.kerb;
+      ctx.fillRect(x0, 0, kw, H);
+      ctx.fillRect(x1 - kw, 0, kw, H);
 
       // ── distance falloff ──────────────────────────────────────────────────
-      // The road runs off the top of the screen rather than meeting a horizon,
-      // so the top of the frame dissolves into the void. This is the only depth
-      // cue, and it costs one rect.
+      // Stepped, not smooth: at this resolution a gradient bands anyway, so the
+      // road fades into the night in a handful of deliberate bars instead.
       if (!light) {
-        const fade = ctx.createLinearGradient(0, 0, 0, H * 0.34);
-        fade.addColorStop(0, 'rgba(3,5,10,0.96)');
-        fade.addColorStop(1, 'rgba(3,5,10,0)');
-        ctx.fillStyle = fade;
-        ctx.fillRect(0, 0, W, H * 0.34);
+        const steps = 7, band = Math.round(H * 0.30) / steps;
+        for (let i = 0; i < steps; i++) {
+          ctx.globalAlpha = 0.30 * (1 - i / steps);
+          ctx.fillStyle = PAL.void0;
+          ctx.fillRect(0, Math.round(i * band), W, Math.ceil(band) + 1);
+        }
+        ctx.globalAlpha = 1;
       }
     }
 
@@ -847,21 +950,23 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         const cy = wy2sy(c.y);
         const wpx = v.wid * u2p, lpx = v.len * u2p;
         if (cy < -lpx || cy > H + lpx) continue;
-        ctx.globalAlpha = 0.5;
+        ctx.globalAlpha = 0.4;
         ctx.drawImage(sp.shadow, cx - wpx * 0.62, cy - lpx * 0.5, wpx * 1.24, lpx * 1.06);
         ctx.globalAlpha = 1;
         ctx.drawImage(img, cx - wpx / 2, cy - lpx / 2, wpx, lpx);
         if (c.brake || c.spd < S.speed * 0.42) {
           ctx.globalAlpha = 0.5;
-          ctx.drawImage(sp.glowRed, cx - wpx * 0.36 - 17, cy + lpx / 2 - 14, 34, 34);
-          ctx.drawImage(sp.glowRed, cx + wpx * 0.36 - 17, cy + lpx / 2 - 14, 34, 34);
+          const gs = Math.max(4, wpx * 0.5);
+          ctx.drawImage(sp.glowRed, cx - wpx * 0.3 - gs / 2, cy + lpx / 2 - gs * 0.55, gs, gs);
+          ctx.drawImage(sp.glowRed, cx + wpx * 0.3 - gs / 2, cy + lpx / 2 - gs * 0.55, gs, gs);
           ctx.globalAlpha = 1;
         }
         if (c.changing === -1 && Math.floor(nowMs / 130) % 2 === 0) {
           const sx = cx + c.sigDir * wpx * 0.42;
           ctx.globalAlpha = 0.9;
-          ctx.drawImage(sp.glowAmber, sx - 13, cy - lpx / 2 - 6, 26, 26);
-          ctx.drawImage(sp.glowAmber, sx - 13, cy + lpx / 2 - 18, 26, 26);
+          const as = Math.max(3, wpx * 0.38);
+          ctx.drawImage(sp.glowAmber, sx - as / 2, cy - lpx / 2 - as * 0.3, as, as);
+          ctx.drawImage(sp.glowAmber, sx - as / 2, cy + lpx / 2 - as * 0.7, as, as);
           ctx.globalAlpha = 1;
         }
       }
@@ -876,11 +981,13 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
 
       // The player is the brightest source on the road — the one thing the eye
       // should never have to search for.
-      const pulse = 0.42 + Math.sin(nowMs * 0.006) * 0.08;
+      // Underglow, kept low: on the pixel grid a strong one shows up as an
+      // obvious rectangle behind the car rather than as light.
+      const pulse = 0.20 + Math.sin(nowMs * 0.006) * 0.05;
       ctx.globalAlpha = pulse;
-      ctx.drawImage(sp.glowCyan, px - pw * 1.05, playerY - pl * 0.55, pw * 2.1, pl * 1.15);
+      ctx.drawImage(sp.glowCyan, px - pw * 0.85, playerY - pl * 0.4, pw * 1.7, pl * 0.9);
       ctx.globalAlpha = 1;
-      ctx.globalAlpha = 0.6;
+      ctx.globalAlpha = 0.45;
       ctx.drawImage(sp.shadow, px - pw * 0.66, playerY - pl * 0.5, pw * 1.32, pl * 1.04);
       ctx.globalAlpha = 1;
       ctx.save();
@@ -939,95 +1046,103 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     function drawHUD(nowMs) {
       const score = Math.floor(S.score);
       const popS = 1 + S.scorePop * 0.12;
+      // The HUD lives in CSS pixels, not on the pixel-art grid — chunky score
+      // digits would be unreadable. Positions come from the virtual grid, so
+      // they are converted across here.
+      // The HUD lives in CSS pixels, not on the pixel-art grid — chunky score
+      // digits would be unreadable. Positions come from the virtual grid, so
+      // they are converted across here.
+      const hs = (canvas.width / dpr) / W;
+      const hW = W * hs, hRoadX = roadX * hs, hRoadW = roadW * hs;
 
       // Anchor the readouts to the ROAD, not the canvas. On a wide desktop the
       // road is centred with black either side, so canvas-corner placement threw
       // score/time out to the far edges away from the action.
-      const hudL = Math.max(16, roadX + 12);
-      const hudR = Math.min(W - 16, roadX + roadW - 12);
+      const hudL = Math.max(16, hRoadX + 12);
+      const hudR = Math.min(hW - 16, hRoadX + hRoadW - 12);
 
-      ctx.save();
-      ctx.translate(hudL, 46);
-      ctx.scale(popS, popS);
-      ctx.textAlign = 'left';
-      ctx.font = '900 30px "JetBrains Mono", ui-monospace, monospace';
-      ctx.fillStyle = 'rgba(0,0,0,0.7)';
-      ctx.fillText(score.toLocaleString(), 2, 2);
-      ctx.fillStyle = '#F2F8FF';
-      ctx.fillText(score.toLocaleString(), 0, 0);
-      ctx.restore();
-      ctx.textAlign = 'left';
-      ctx.font = '800 10px Inter, system-ui, sans-serif';
-      ctx.fillStyle = 'rgba(159,220,255,0.75)';
-      ctx.fillText('SCORE', hudL + 1, 61);
+      dctx.save();
+      dctx.translate(hudL, 46);
+      dctx.scale(popS, popS);
+      dctx.textAlign = 'left';
+      dctx.font = '900 30px "JetBrains Mono", ui-monospace, monospace';
+      dctx.fillStyle = 'rgba(0,0,0,0.7)';
+      dctx.fillText(score.toLocaleString(), 2, 2);
+      dctx.fillStyle = '#F2F8FF';
+      dctx.fillText(score.toLocaleString(), 0, 0);
+      dctx.restore();
+      dctx.textAlign = 'left';
+      dctx.font = '800 10px Inter, system-ui, sans-serif';
+      dctx.fillStyle = 'rgba(159,220,255,0.75)';
+      dctx.fillText('SCORE', hudL + 1, 61);
 
-      ctx.textAlign = 'right';
-      ctx.font = '900 22px "JetBrains Mono", ui-monospace, monospace';
-      ctx.fillStyle = 'rgba(0,0,0,0.7)';
-      ctx.fillText(S.simT.toFixed(1) + 's', hudR + 2, 44);
-      ctx.fillStyle = '#F2F8FF';
-      ctx.fillText(S.simT.toFixed(1) + 's', hudR, 42);
-      ctx.font = '800 10px Inter, system-ui, sans-serif';
-      ctx.fillStyle = 'rgba(159,220,255,0.75)';
-      ctx.fillText('TIME', hudR - 1, 58);
+      dctx.textAlign = 'right';
+      dctx.font = '900 22px "JetBrains Mono", ui-monospace, monospace';
+      dctx.fillStyle = 'rgba(0,0,0,0.7)';
+      dctx.fillText(S.simT.toFixed(1) + 's', hudR + 2, 44);
+      dctx.fillStyle = '#F2F8FF';
+      dctx.fillText(S.simT.toFixed(1) + 's', hudR, 42);
+      dctx.font = '800 10px Inter, system-ui, sans-serif';
+      dctx.fillStyle = 'rgba(159,220,255,0.75)';
+      dctx.fillText('TIME', hudR - 1, 58);
 
       // GO! flash
       if (S.goT < 0.75 && !S.dead) {
         const a = S.goT < 0.5 ? 1 : 1 - (S.goT - 0.5) / 0.25;
         const sc = 1 + S.goT * 0.7;
-        ctx.save();
-        ctx.globalAlpha = a;
-        ctx.translate(W / 2, H * 0.38);
-        ctx.scale(sc, sc);
-        ctx.textAlign = 'center';
-        ctx.font = '900 54px Inter, system-ui, sans-serif';
-        ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.fillText('GO!', 3, 3);
-        ctx.fillStyle = CYAN;
-        ctx.fillText('GO!', 0, 0);
-        ctx.restore();
+        dctx.save();
+        dctx.globalAlpha = a;
+        dctx.translate(hW / 2, (canvas.height / dpr) * 0.38);
+        dctx.scale(sc, sc);
+        dctx.textAlign = 'center';
+        dctx.font = '900 54px Inter, system-ui, sans-serif';
+        dctx.fillStyle = 'rgba(0,0,0,0.6)';
+        dctx.fillText('GO!', 3, 3);
+        dctx.fillStyle = CYAN;
+        dctx.fillText('GO!', 0, 0);
+        dctx.restore();
       }
       // controls hint
       if (S.hintT < 3.6 && !S.dead) {
         const a = S.hintT < 2.8 ? 0.85 : 0.85 * (1 - (S.hintT - 2.8) / 0.8);
-        ctx.globalAlpha = a;
-        ctx.textAlign = 'center';
-        ctx.font = '700 11px Inter, system-ui, sans-serif';
-        ctx.fillStyle = 'rgba(5,8,14,0.6)';
-        rr(ctx, W / 2 - 108, H - 40, 216, 24, 12); ctx.fill();
-        ctx.fillStyle = ICE;
-        ctx.fillText('← → / A D  ·  swipe to change lanes', W / 2, H - 24);
-        ctx.globalAlpha = 1;
+        dctx.globalAlpha = a;
+        dctx.textAlign = 'center';
+        dctx.font = '700 11px Inter, system-ui, sans-serif';
+        dctx.fillStyle = 'rgba(5,8,14,0.6)';
+        rr(ctx, hW / 2 - 108, (canvas.height / dpr) - 40, 216, 24, 12); dctx.fill();
+        dctx.fillStyle = ICE;
+        dctx.fillText('← → / A D  ·  swipe to change lanes', hW / 2, (canvas.height / dpr) - 24);
+        dctx.globalAlpha = 1;
       }
 
       // game-over overlay before values are returned
       if (S.dead && S.deadT > OVERLAY_S) {
         const a = clamp((S.deadT - OVERLAY_S) / 0.35, 0, 1);
-        ctx.globalAlpha = a;
-        const g = ctx.createLinearGradient(0, H * 0.28, 0, H * 0.74);
+        dctx.globalAlpha = a;
+        const g = dctx.createLinearGradient(0, (canvas.height / dpr) * 0.28, 0, (canvas.height / dpr) * 0.74);
         g.addColorStop(0, 'rgba(2,3,8,0)');
         g.addColorStop(0.3, 'rgba(2,3,8,0.86)');
         g.addColorStop(0.7, 'rgba(2,3,8,0.86)');
         g.addColorStop(1, 'rgba(2,3,8,0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(0, H * 0.28, W, H * 0.46);
-        ctx.textAlign = 'center';
-        ctx.font = '900 38px Inter, system-ui, sans-serif';
-        ctx.fillStyle = '#FF4D42';
-        ctx.fillText('GAME OVER', W / 2, H * 0.42);
-        ctx.font = '900 30px "JetBrains Mono", ui-monospace, monospace';
-        ctx.fillStyle = '#F2F8FF';
-        ctx.fillText(Math.floor(S.score).toLocaleString(), W / 2, H * 0.5);
-        ctx.font = '700 13px Inter, system-ui, sans-serif';
-        ctx.fillStyle = 'rgba(159,220,255,0.85)';
-        ctx.fillText(`survived ${S.simT.toFixed(1)}s`, W / 2, H * 0.55);
-        ctx.strokeStyle = 'rgba(0,191,255,0.5)';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.moveTo(W / 2 - 60, H * 0.585); ctx.lineTo(W / 2 + 60, H * 0.585); ctx.stroke();
-        ctx.font = '700 12px Inter, system-ui, sans-serif';
-        ctx.fillStyle = 'rgba(180,195,215,0.6)';
-        ctx.fillText('waiting for opponent…', W / 2, H * 0.625);
-        ctx.globalAlpha = 1;
+        dctx.fillStyle = g;
+        dctx.fillRect(0, (canvas.height / dpr) * 0.28, hW, (canvas.height / dpr) * 0.46);
+        dctx.textAlign = 'center';
+        dctx.font = '900 38px Inter, system-ui, sans-serif';
+        dctx.fillStyle = '#FF4D42';
+        dctx.fillText('GAME OVER', hW / 2, (canvas.height / dpr) * 0.42);
+        dctx.font = '900 30px "JetBrains Mono", ui-monospace, monospace';
+        dctx.fillStyle = '#F2F8FF';
+        dctx.fillText(Math.floor(S.score).toLocaleString(), hW / 2, (canvas.height / dpr) * 0.5);
+        dctx.font = '700 13px Inter, system-ui, sans-serif';
+        dctx.fillStyle = 'rgba(159,220,255,0.85)';
+        dctx.fillText(`survived ${S.simT.toFixed(1)}s`, hW / 2, (canvas.height / dpr) * 0.55);
+        dctx.strokeStyle = 'rgba(0,191,255,0.5)';
+        dctx.lineWidth = 1.5;
+        dctx.beginPath(); dctx.moveTo(hW / 2 - 60, (canvas.height / dpr) * 0.585); dctx.lineTo(hW / 2 + 60, (canvas.height / dpr) * 0.585); dctx.stroke();
+        dctx.font = '700 12px Inter, system-ui, sans-serif';
+        dctx.fillStyle = 'rgba(180,195,215,0.6)';
+        dctx.fillText('waiting for opponent…', hW / 2, (canvas.height / dpr) * 0.625);
+        dctx.globalAlpha = 1;
       }
     }
 
