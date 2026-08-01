@@ -102,19 +102,23 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
   return (
     <>
       {/* Fee display row */}
-      <div className="flex items-center justify-between mb-1 sm:mb-3">
-        <span className="text-sm text-muted">Min: {fmtFee(fees[0])} {currLabel}</span>
-        <span className="text-xl sm:text-2xl font-black text-white">
+      <div className="flex items-center justify-center sm:justify-between mb-1.5 sm:mb-3">
+        <span className="hidden sm:inline text-sm text-muted">Min: {fmtFee(fees[0])} {currLabel}</span>
+        <span className="text-2xl sm:text-2xl font-black text-white">
           <span ref={displayRef}>{fmtFee(entryFee)}</span>{' '}
           <span className="text-primary">{currLabel}</span>
         </span>
-        <span className="text-sm text-muted">Max: {fmtFee(fees[fees.length - 1])} {currLabel}</span>
+        <span className="hidden sm:inline text-sm text-muted">Max: {fmtFee(fees[fees.length - 1])} {currLabel}</span>
       </div>
 
-      {/* Slider track */}
+      {/* Slider track.
+          The thumb is 24px wide and centred on its position, so it sticks out
+          12px past each end of the track. Without this inset it hangs off the
+          side of the card — and off the screen — at the min and max stops. */}
+      <div className="px-3">
       <div
         ref={trackRef}
-        className="relative w-full h-7 sm:h-12 flex items-center cursor-grab active:cursor-grabbing select-none touch-none"
+        className="relative w-full h-9 sm:h-12 flex items-center cursor-grab active:cursor-grabbing select-none touch-none"
         style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
       >
         <div className="absolute left-0 right-0 h-2 rounded-full bg-border overflow-hidden">
@@ -135,6 +139,7 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
           className="absolute w-6 h-6 rounded-full bg-white border-2 border-primary -translate-x-1/2 pointer-events-none"
           style={{ left: '0%', boxShadow: '0 2px 12px rgba(18,80,180,0.6)' }}
         />
+      </div>
       </div>
 
       {/* Live payout — updates during drag. On a phone the label and figure

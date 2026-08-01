@@ -271,7 +271,7 @@ export default function CarDashGame() {
   // ── Lobby (identical UI to every other game) ──
   return (
     <div
-      className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-3 sm:px-4 py-1 sm:py-8"
+      className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-3 sm:px-4 py-0 sm:py-8"
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}
     >
       <GameLobby

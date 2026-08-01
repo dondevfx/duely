@@ -54,11 +54,14 @@ const PTS_NEAR     = 75;
 // How far outside the hitboxes still counts as a near miss, in world units.
 // Widening this makes the bonus easier to earn without touching collisions —
 // the hitbox itself is unchanged, so nothing about crashing gets more lenient.
-const NEAR_BAND    = 104;
-// How far BEHIND a car still counts as a near miss, in world units. Slipping in
-// behind someone is the same piece of driving as going past their door, so it
-// should score the same.
-const NEAR_TAIL    = 90;
+// Near misses are earned by CUTTING IN BEHIND a vehicle, never by sitting
+// alongside one. Running level with a car in the next lane is not a piece of
+// driving — the gap does not change and there is no decision in it. Slipping in
+// behind one, just after its tail has passed, is.
+//   NEAR_BAND — how far to the side of the car the player may be, in world units
+//   NEAR_TAIL — how far behind its rear bumper still counts
+const NEAR_BAND    = 88;
+const NEAR_TAIL    = 74;
 
 const FREEZE_S     = 0.15;
 const REPORT_S     = 0.55;   // report as soon as the crash FX has read
@@ -973,11 +976,11 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         const dx = Math.abs(cx - px);
         const sumW = (v.wid * HIT_FORGIVE + pw) / 2;
         const overlapY = Math.abs(c.y) < (v.len * HIT_FORGIVE + pl) / 2;
-        // A near miss should also register while slipping in behind a car, not
-        // only while strictly alongside it. The window is extended backwards
-        // (positive c.y is ahead of the player), so passing close behind counts.
-        const nearOverlapY = c.y > -(v.len * HIT_FORGIVE + pl) / 2
-                          && c.y < (v.len * HIT_FORGIVE + pl) / 2 + NEAR_TAIL;
+        // Gap from the player's nose to the car's rear bumper. Positive c.y is
+        // ahead of the player, so this is only meaningful while the player is
+        // behind the car — which is exactly the case we want to reward.
+        const rearGap = (c.y - (v.len * HIT_FORGIVE) / 2) - pl / 2;
+        const behindRear = rearGap > -2 && rearGap < NEAR_TAIL;
 
         if (!S.dead && overlapY && dx < sumW) {
           // ── CRASH ──
@@ -986,8 +989,8 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
           audio?.crash();
           break;
         }
-        // near miss — longitudinally overlapping, laterally just clear
-        if (!c.near && !S.dead && nearOverlapY && dx >= sumW && dx < sumW + NEAR_BAND) {
+        // near miss — cutting in just behind a car's tail, laterally just clear
+        if (!c.near && !S.dead && behindRear && dx >= sumW && dx < sumW + NEAR_BAND) {
           c.near = true;
           S.combo = (S.simT - S.comboT < 1.5) ? Math.min(S.combo + 1, 4) : 1;
           S.comboT = S.simT;

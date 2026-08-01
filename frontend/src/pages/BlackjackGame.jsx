@@ -747,7 +747,7 @@ function BlackjackGame() {
     const oppId = Object.keys(resultData.hands || {}).find(id => id !== profile?.id);
     const oppResult = oppId ? resultData.hands[oppId] : null;
     return (
-      <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-4">
+      <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-3 sm:px-4 py-0 sm:py-4">
         <ResultScreen
           isWinner={isWinner}
           isDraw={resultData.isDraw}
@@ -1072,7 +1072,7 @@ function BlackjackGame() {
   // ── Lobby ──
   return (
     <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4"
-      style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}>
+      style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       <div className="w-full max-w-md animate-slide-up">
 
         <div className="text-center mb-3 sm:mb-6">

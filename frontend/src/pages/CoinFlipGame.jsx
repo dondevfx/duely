@@ -538,8 +538,8 @@ export default function CoinFlipGame() {
   }
 
   return (
-    <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-3 sm:px-4 py-1 sm:py-4"
-      style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 4px)' }}>
+    <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-3 sm:px-4 py-0 sm:py-4"
+      style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
 
       {/* ── RESULT ── */}
       {phase === 'result' && resultData && (() => {
@@ -578,7 +578,7 @@ export default function CoinFlipGame() {
         {phase === 'lobby' && (
           <div className="text-center mb-1.5 sm:mb-6">
             <h1 className="text-4xl sm:text-6xl font-black text-white mb-0.5 sm:mb-2 leading-tight">🟡 Coin Flip</h1>
-            <p className="text-muted text-xs sm:text-base">Pick a side — get matched with the opposite</p>
+            <p className="hidden sm:block text-muted text-xs sm:text-base">Pick a side — get matched with the opposite</p>
           </div>
         )}
 
@@ -628,7 +628,7 @@ export default function CoinFlipGame() {
         {/* Lobby */}
         {phase === 'lobby' && (
           <>
-            <div className="mb-1.5 sm:mb-4 bg-surface border border-border rounded-2xl p-2 sm:p-5">
+            <div className="mb-2 sm:mb-4 bg-surface border border-border rounded-2xl p-3 sm:p-5">
               <div className="flex items-center justify-between mb-2 sm:mb-4">
                 <span className="text-base font-bold text-white">Entry Fee</span>
                 <div className="flex items-center gap-0.5 bg-bg border border-border rounded-lg p-1">
@@ -649,15 +649,15 @@ export default function CoinFlipGame() {
                   <span style={{ color: '#1250B4', fontSize: 12, fontWeight: 600 }}>{n} at this bet</span>
                 </div>
               ) : null; })()}
-              {insufficient && <p className="text-danger text-sm mt-2 text-center font-semibold">Insufficient balance.</p>}
+              {insufficient && <p className="text-danger text-[11px] sm:text-sm mt-0.5 sm:mt-2 text-center font-semibold leading-tight">Insufficient balance.</p>}
             </div>
 
-            <div className="mb-1.5 sm:mb-4 bg-surface border border-border rounded-2xl p-2 sm:p-4">
-              <p className="text-xs sm:text-sm font-bold text-white mb-1.5 sm:mb-3">Pick Your Side</p>
+            <div className="mb-2 sm:mb-4 bg-surface border border-border rounded-2xl p-2.5 sm:p-4">
+              <p className="text-xs sm:text-sm font-bold text-white mb-1 sm:mb-3">Pick Your Side</p>
               <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 {['heads', 'tails'].map(s => (
                   <button key={s} onClick={() => setSide(s)}
-                    className={`py-1.5 sm:py-3 rounded-xl text-center font-black border-2 transition-all ${
+                    className={`py-2 sm:py-3 rounded-xl text-center font-black border-2 transition-all ${
                       side === s ? 'border-primary bg-primary/20 text-white' : 'border-border text-muted hover:border-primary/50 hover:text-white'
                     }`}>
                     <div className="text-lg sm:text-2xl mb-0 sm:mb-0.5">{s === 'heads' ? '🔵' : '⚪'}</div>
@@ -667,17 +667,17 @@ export default function CoinFlipGame() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 sm:gap-3">
+            <div className="flex flex-col gap-1 sm:gap-3">
               {!session ? (
-                <GlowButton onClick={() => navigate('/login')} variant="primary" size="lg" className="w-full text-base sm:text-lg py-2.5 sm:py-4">
+                <GlowButton onClick={() => navigate('/login')} variant="primary" size="lg" className="w-full text-base sm:text-lg py-3.5 sm:py-4">
                   🔒 Login to Play
                 </GlowButton>
               ) : (
               <>
-              <GlowButton onClick={joinQueue} variant="primary" size="lg" className="w-full text-base sm:text-lg py-2.5 sm:py-4" disabled={session && (!authenticated || insufficient)}>
+              <GlowButton onClick={joinQueue} variant="primary" size="lg" className="w-full text-base sm:text-lg py-3.5 sm:py-4" disabled={session && (!authenticated || insufficient)}>
                 {!session ? '🔒 Login to Play' : `Find Opponent (${side === 'heads' ? '🔵 Heads' : '⚪ Tails'})`}
               </GlowButton>
-              <GlowButton onClick={() => setPrivateMode('create')} variant="ghost" size="lg" className="w-full text-base sm:text-lg py-2.5 sm:py-4 border border-border hover:border-primary">
+              <GlowButton onClick={() => setPrivateMode('create')} variant="ghost" size="lg" className="w-full text-base sm:text-lg py-3.5 sm:py-4 border border-border hover:border-primary">
                 🎮 Challenge a Friend
               </GlowButton>
               <>

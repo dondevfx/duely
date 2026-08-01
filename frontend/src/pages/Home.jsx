@@ -97,13 +97,13 @@ export default function Home() {
                 <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
                 Live — Play Now
               </div>
-              <h1 className="text-4xl md:text-7xl font-black text-white mb-3 md:mb-6 leading-tight">
+              <h1 className="text-5xl md:text-7xl font-black text-white mb-3 md:mb-6 leading-tight">
                 1v1{' '}
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-primary">
                   Duels
                 </span>
               </h1>
-              <p className="text-base md:text-xl text-muted max-w-2xl mx-auto lg:mx-0 mb-4 md:mb-10">
+              <p className="text-lg md:text-xl text-muted max-w-2xl mx-auto lg:mx-0 mb-5 md:mb-10">
                 Challenge opponents in real-time skill-based games. Wager{' '}
                 <span className="text-primary font-semibold whitespace-nowrap"><CoinIcon size="1em" /> Coins</span>, climb the leaderboard,
                 and prove you're the best.
@@ -111,13 +111,13 @@ export default function Home() {
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4">
                 <Link
                   to="/games"
-                  className="px-6 md:px-8 py-3 md:py-4 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl shadow-glow hover:shadow-glow-lg transition-all text-base md:text-lg"
+                  className="px-8 py-4 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl shadow-glow hover:shadow-glow-lg transition-all text-lg"
                 >
                   ⚡ Play Now
                 </Link>
                 <Link
                   to="/leaderboard"
-                  className="px-6 md:px-8 py-3 md:py-4 border border-surfaceLight hover:border-primary text-muted hover:text-white font-semibold rounded-xl transition-all text-base md:text-lg"
+                  className="px-8 py-4 border border-surfaceLight hover:border-primary text-muted hover:text-white font-semibold rounded-xl transition-all text-lg"
                 >
                   Leaderboard
                 </Link>
