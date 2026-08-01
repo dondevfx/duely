@@ -26,8 +26,13 @@ import { isMuted } from '../utils/sound';
 // ── World tuning (units: 1 lane = 100u, sedan ≈ 95u long) ───────────────────
 const LANES        = 4;
 const LANE_U       = 100;
-const VIEW_AHEAD   = 700;    // world units visible above the player — fixed on all devices
-const PLAYER_YF    = 0.78;   // player screen position (fraction of height)
+// World units visible above the player — fixed on all devices, because both
+// players in a match must get the same reaction distance whatever they play on.
+// This value also decides where the player sits on screen: the player line is
+// placed at VIEW_AHEAD * scale, so lowering it moves the car DOWN the screen.
+// 590 puts it in the bottom third at normal phone and desktop aspects.
+const VIEW_AHEAD   = 590;
+const PLAYER_YF    = 0.78;   // legacy default; the player line is derived in layout()
 const SPAWN_Y      = 880;    // > VIEW_AHEAD + longest vehicle, so nothing pops in
 const DESPAWN_Y    = -280;
 
@@ -93,7 +98,7 @@ const VEHICLES = {
   semi:   { len: 174, wid: 66, close: 1.22, weight: 8  },
 };
 const PLAYER_W_U = 56;   // player world width  (sprite + hitbox)
-const PLAYER_L_U = 117;  // player world length (sprite + hitbox)
+const PLAYER_L_U = 104;  // player world length (sprite + hitbox)
 const VKEYS = Object.keys(VEHICLES);
 const VTOTAL = VKEYS.reduce((a, k) => a + VEHICLES[k].weight, 0);
 
@@ -560,7 +565,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       // get the same reaction distance whatever device they are on. The clamp
       // guarantees some road behind the player; the canvas aspect is capped in
       // the JSX so the clamp never actually binds.
-      playerY = Math.round(clamp(VIEW_AHEAD * u2p, H * 0.62, H * 0.88));
+      playerY = Math.round(clamp(VIEW_AHEAD * u2p, H * 0.52, H * 0.82));
       bakeAll();
     }
 
