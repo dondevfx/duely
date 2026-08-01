@@ -54,7 +54,11 @@ const PTS_NEAR     = 75;
 // How far outside the hitboxes still counts as a near miss, in world units.
 // Widening this makes the bonus easier to earn without touching collisions —
 // the hitbox itself is unchanged, so nothing about crashing gets more lenient.
-const NEAR_BAND    = 72;
+const NEAR_BAND    = 104;
+// How far BEHIND a car still counts as a near miss, in world units. Slipping in
+// behind someone is the same piece of driving as going past their door, so it
+// should score the same.
+const NEAR_TAIL    = 90;
 
 const FREEZE_S     = 0.15;
 const REPORT_S     = 0.55;   // report as soon as the crash FX has read
@@ -969,6 +973,11 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         const dx = Math.abs(cx - px);
         const sumW = (v.wid * HIT_FORGIVE + pw) / 2;
         const overlapY = Math.abs(c.y) < (v.len * HIT_FORGIVE + pl) / 2;
+        // A near miss should also register while slipping in behind a car, not
+        // only while strictly alongside it. The window is extended backwards
+        // (positive c.y is ahead of the player), so passing close behind counts.
+        const nearOverlapY = c.y > -(v.len * HIT_FORGIVE + pl) / 2
+                          && c.y < (v.len * HIT_FORGIVE + pl) / 2 + NEAR_TAIL;
 
         if (!S.dead && overlapY && dx < sumW) {
           // ── CRASH ──
@@ -978,7 +987,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
           break;
         }
         // near miss — longitudinally overlapping, laterally just clear
-        if (!c.near && !S.dead && overlapY && dx >= sumW && dx < sumW + NEAR_BAND) {
+        if (!c.near && !S.dead && nearOverlapY && dx >= sumW && dx < sumW + NEAR_BAND) {
           c.near = true;
           S.combo = (S.simT - S.comboT < 1.5) ? Math.min(S.combo + 1, 4) : 1;
           S.comboT = S.simT;
@@ -1267,20 +1276,23 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       const hudL = Math.max(16, hRoadX + 12);
       const hudR = Math.min(hW - 16, hRoadX + hRoadW - 12);
 
+      // Score sits centred over the road — it decides the match, so it gets the
+      // most readable position on screen.
+      const hudC = hRoadX + hRoadW / 2;
       dctx.save();
-      dctx.translate(hudL, 46);
+      dctx.translate(hudC, 46);
       dctx.scale(popS, popS);
-      dctx.textAlign = 'left';
-      dctx.font = '900 30px "JetBrains Mono", ui-monospace, monospace';
+      dctx.textAlign = 'center';
+      dctx.font = '900 34px "JetBrains Mono", ui-monospace, monospace';
       dctx.fillStyle = 'rgba(0,0,0,0.7)';
       dctx.fillText(score.toLocaleString(), 2, 2);
       dctx.fillStyle = '#F2F8FF';
       dctx.fillText(score.toLocaleString(), 0, 0);
       dctx.restore();
-      dctx.textAlign = 'left';
+      dctx.textAlign = 'center';
       dctx.font = '800 10px Inter, system-ui, sans-serif';
       dctx.fillStyle = 'rgba(159,220,255,0.75)';
-      dctx.fillText('SCORE', hudL + 1, 61);
+      dctx.fillText('SCORE', hudC, 63);
 
       dctx.textAlign = 'right';
       dctx.font = '900 22px "JetBrains Mono", ui-monospace, monospace';

@@ -86,10 +86,10 @@ export default function Home() {
   const { playerCounts } = useSocket();
 
   return (
-    <div className="min-h-screen bg-bg pt-4 md:pt-16">
+    <div className="min-h-screen bg-bg pt-2 md:pt-16">
       {/* Hero — a little breathing room on mobile (~40px), roomy on desktop
           (was ~120px of stacked top padding on every screen size) */}
-      <section className="relative pt-6 md:pt-14 pb-10 px-4 overflow-hidden">
+      <section className="relative pt-3 md:pt-14 pb-6 md:pb-10 px-4 overflow-hidden">
         <div className="relative max-w-7xl mx-auto">
           <div className="flex flex-col lg:flex-row items-center justify-between gap-6 lg:gap-12">
             <div className="flex-1 text-center lg:text-left">
@@ -97,13 +97,13 @@ export default function Home() {
                 <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
                 Live — Play Now
               </div>
-              <h1 className="text-5xl md:text-7xl font-black text-white mb-4 md:mb-6 leading-tight">
+              <h1 className="text-4xl md:text-7xl font-black text-white mb-3 md:mb-6 leading-tight">
                 1v1{' '}
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-primary">
                   Duels
                 </span>
               </h1>
-              <p className="text-xl text-muted max-w-2xl mx-auto lg:mx-0 mb-6 md:mb-10">
+              <p className="text-base md:text-xl text-muted max-w-2xl mx-auto lg:mx-0 mb-4 md:mb-10">
                 Challenge opponents in real-time skill-based games. Wager{' '}
                 <span className="text-primary font-semibold whitespace-nowrap"><CoinIcon size="1em" /> Coins</span>, climb the leaderboard,
                 and prove you're the best.
@@ -111,13 +111,13 @@ export default function Home() {
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4">
                 <Link
                   to="/games"
-                  className="px-8 py-4 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl shadow-glow hover:shadow-glow-lg transition-all text-lg"
+                  className="px-6 md:px-8 py-3 md:py-4 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl shadow-glow hover:shadow-glow-lg transition-all text-base md:text-lg"
                 >
                   ⚡ Play Now
                 </Link>
                 <Link
                   to="/leaderboard"
-                  className="px-8 py-4 border border-surfaceLight hover:border-primary text-muted hover:text-white font-semibold rounded-xl transition-all text-lg"
+                  className="px-6 md:px-8 py-3 md:py-4 border border-surfaceLight hover:border-primary text-muted hover:text-white font-semibold rounded-xl transition-all text-base md:text-lg"
                 >
                   Leaderboard
                 </Link>
@@ -134,7 +134,7 @@ export default function Home() {
       </section>
 
       {/* Live match ticker */}
-      <section className="border-y border-surfaceLight bg-surface/40 py-5 mt-0 mb-8">
+      <section className="border-y border-surfaceLight bg-surface/40 py-3 md:py-5 mt-0 mb-5 md:mb-8">
         <div className="max-w-7xl mx-auto px-4">
           <MatchTicker />
         </div>
@@ -142,7 +142,7 @@ export default function Home() {
 
       {/* Stats bar */}
       {profile && (
-        <section className="max-w-7xl mx-auto px-4 mb-10">
+        <section className="max-w-7xl mx-auto px-4 mb-6 md:mb-10">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { label: 'Balance', value: (
@@ -155,8 +155,8 @@ export default function Home() {
               { label: 'Wins', value: profile.wins ?? 0 },
               { label: 'Losses', value: profile.losses ?? 0 },
             ].map(stat => (
-              <div key={stat.label} className="bg-surface border border-surfaceLight rounded-xl p-4 text-center overflow-hidden">
-                <div className="text-2xl font-black text-white font-mono overflow-hidden">{stat.value}</div>
+              <div key={stat.label} className="bg-surface border border-surfaceLight rounded-xl p-3 md:p-4 text-center overflow-hidden">
+                <div className="text-xl md:text-2xl font-black text-white font-mono overflow-hidden">{stat.value}</div>
                 <div className="text-xs text-muted mt-1">{stat.label}</div>
               </div>
             ))}
@@ -165,11 +165,11 @@ export default function Home() {
       )}
 
       {/* Game cards + daily bonus */}
-      <section className="max-w-7xl mx-auto px-4 pb-24">
+      <section className="max-w-7xl mx-auto px-4 pb-16 md:pb-24">
         <div className="flex flex-col lg:flex-row gap-8">
           <div className="flex-1">
-            <h2 className="text-2xl font-bold text-white mb-6">Choose a Game</h2>
-            <div className="grid sm:grid-cols-2 gap-5">
+            <h2 className="text-xl md:text-2xl font-bold text-white mb-4 md:mb-6">Choose a Game</h2>
+            <div className="grid sm:grid-cols-2 gap-4 md:gap-5">
               {GAMES.map(game => (
                 <GameCard key={game.title} {...game} liveCount={playerCounts?.[game.countKey] ?? 0} />
               ))}

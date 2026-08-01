@@ -6,7 +6,7 @@ export default function GameCard({ title, description, icon, route, available = 
 
   return (
     <div className={`
-      relative flex flex-col gap-4 p-6 rounded-2xl border transition-all duration-300
+      relative flex flex-col gap-3 md:gap-4 p-4 md:p-6 rounded-2xl border transition-all duration-300
       ${available
         ? 'bg-surface border-surfaceLight hover:border-primary/50 hover:shadow-glow cursor-pointer group'
         : 'bg-surface/50 border-surfaceLight/50 opacity-60'}
@@ -21,7 +21,7 @@ export default function GameCard({ title, description, icon, route, available = 
       <div className="text-4xl">{icon}</div>
 
       <div>
-        <h3 className="text-xl font-bold text-white mb-1 group-hover:text-primary transition-colors">
+        <h3 className="text-lg md:text-xl font-bold text-white mb-1 group-hover:text-primary transition-colors">
           {title}
         </h3>
         <p className="text-sm text-muted leading-relaxed">{description}</p>

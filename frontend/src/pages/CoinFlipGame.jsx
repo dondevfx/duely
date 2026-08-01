@@ -538,8 +538,8 @@ export default function CoinFlipGame() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-4"
-      style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}>
+    <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-3 sm:px-4 py-1 sm:py-4"
+      style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 4px)' }}>
 
       {/* ── RESULT ── */}
       {phase === 'result' && resultData && (() => {
@@ -576,8 +576,8 @@ export default function CoinFlipGame() {
       <div className="w-full max-w-md animate-slide-up">
 
         {phase === 'lobby' && (
-          <div className="text-center mb-2 sm:mb-6">
-            <h1 className="text-4xl sm:text-6xl font-black text-white mb-1 sm:mb-2 leading-tight">🟡 Coin Flip</h1>
+          <div className="text-center mb-1.5 sm:mb-6">
+            <h1 className="text-4xl sm:text-6xl font-black text-white mb-0.5 sm:mb-2 leading-tight">🟡 Coin Flip</h1>
             <p className="text-muted text-xs sm:text-base">Pick a side — get matched with the opposite</p>
           </div>
         )}
@@ -628,7 +628,7 @@ export default function CoinFlipGame() {
         {/* Lobby */}
         {phase === 'lobby' && (
           <>
-            <div className="mb-2 sm:mb-4 bg-surface border border-border rounded-2xl p-2.5 sm:p-5">
+            <div className="mb-1.5 sm:mb-4 bg-surface border border-border rounded-2xl p-2 sm:p-5">
               <div className="flex items-center justify-between mb-2 sm:mb-4">
                 <span className="text-base font-bold text-white">Entry Fee</span>
                 <div className="flex items-center gap-0.5 bg-bg border border-border rounded-lg p-1">
@@ -638,13 +638,13 @@ export default function CoinFlipGame() {
               </div>
               <BetSlider fees={fees} entryFee={entryFee} setEntryFee={setEntryFee} currLabel={currLabel} isDiamonds={isDiamonds} payoutMult={0.98} />
               {(playerCounts?.['coin-flip'] ?? 0) > 0 && (
-                <div className="flex items-center gap-1.5 mt-3">
+                <div className="flex items-center gap-1.5 mt-1 sm:mt-3">
                   <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#1250B4', boxShadow: '0 0 6px #1250B4' }} />
                   <span style={{ color: '#1250B4', fontSize: 12, fontWeight: 600 }}>{playerCounts['coin-flip']} playing</span>
                 </div>
               )}
               {(() => { const n = betCounts?.[`coin-flip:${entryFee}:${betCurrency}`] || 0; return n > 0 ? (
-                <div className="flex items-center gap-1.5 mt-1">
+                <div className="flex items-center gap-1.5 mt-0.5 sm:mt-1">
                   <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#1250B4', boxShadow: '0 0 6px #1250B4' }} />
                   <span style={{ color: '#1250B4', fontSize: 12, fontWeight: 600 }}>{n} at this bet</span>
                 </div>
@@ -652,7 +652,7 @@ export default function CoinFlipGame() {
               {insufficient && <p className="text-danger text-sm mt-2 text-center font-semibold">Insufficient balance.</p>}
             </div>
 
-            <div className="mb-2 sm:mb-4 bg-surface border border-border rounded-2xl p-2.5 sm:p-4">
+            <div className="mb-1.5 sm:mb-4 bg-surface border border-border rounded-2xl p-2 sm:p-4">
               <p className="text-xs sm:text-sm font-bold text-white mb-1.5 sm:mb-3">Pick Your Side</p>
               <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 {['heads', 'tails'].map(s => (

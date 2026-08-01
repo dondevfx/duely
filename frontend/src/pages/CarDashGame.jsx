@@ -217,10 +217,15 @@ export default function CarDashGame() {
           currency={result.currency}
           entryFee={result.entryFee}
           disconnected={result.disconnected}
+          // The match is decided on SCORE, with time only breaking a tie, so the
+          // score is shown first — otherwise a player who survived longer but
+          // scored less has no way to see why they lost.
           extraRows={[
+            { label: 'Your Score', value: (isWinner ? result.winnerScore : result.loserScore)?.toLocaleString() },
+            { label: 'Opponent Score', value: (isWinner ? result.loserScore : result.winnerScore)?.toLocaleString() },
             { label: 'Your Time', value: fmtTime(isWinner ? result.winnerMs : result.loserMs) },
-            { label: 'Opponent',  value: fmtTime(isWinner ? result.loserMs : result.winnerMs) },
-          ].filter(r => r.value !== undefined)}
+            { label: 'Opponent Time', value: fmtTime(isWinner ? result.loserMs : result.winnerMs) },
+          ].filter(r => r.value !== undefined && r.value !== null)}
           onPlayAgain={playAgain}
           onBackToLobby={reset}
         />
@@ -266,7 +271,7 @@ export default function CarDashGame() {
   // ── Lobby (identical UI to every other game) ──
   return (
     <div
-      className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-3 sm:px-4 py-2 sm:py-8"
+      className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-3 sm:px-4 py-1 sm:py-8"
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}
     >
       <GameLobby
