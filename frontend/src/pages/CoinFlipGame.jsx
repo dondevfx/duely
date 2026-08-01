@@ -649,7 +649,6 @@ export default function CoinFlipGame() {
                   <span style={{ color: '#1250B4', fontSize: 12, fontWeight: 600 }}>{n} at this bet</span>
                 </div>
               ) : null; })()}
-              {insufficient && <p className="text-danger text-[11px] sm:text-sm mt-0.5 sm:mt-2 text-center font-semibold leading-tight">Insufficient balance.</p>}
             </div>
 
             <div className="mb-2 sm:mb-4 bg-surface border border-border rounded-2xl p-2.5 sm:p-4">
@@ -675,7 +674,9 @@ export default function CoinFlipGame() {
               ) : (
               <>
               <GlowButton onClick={joinQueue} variant="primary" size="lg" className="w-full text-base sm:text-lg py-3.5 sm:py-4" disabled={session && (!authenticated || insufficient)}>
-                {!session ? '🔒 Login to Play' : `Find Opponent (${side === 'heads' ? '🔵 Heads' : '⚪ Tails'})`}
+                {!session ? '🔒 Login to Play'
+                  : insufficient ? 'Insufficient Balance'
+                  : `Find Opponent (${side === 'heads' ? '🔵 Heads' : '⚪ Tails'})`}
               </GlowButton>
               <GlowButton onClick={() => setPrivateMode('create')} variant="ghost" size="lg" className="w-full text-base sm:text-lg py-3.5 sm:py-4 border border-border hover:border-primary">
                 🎮 Challenge a Friend

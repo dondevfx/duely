@@ -1101,7 +1101,6 @@ function BlackjackGame() {
               <span style={{ color: '#1250B4', fontSize: 12, fontWeight: 600 }}>{n} at this bet</span>
             </div>
           ) : null; })()}
-          {insufficient && <p className="text-danger text-sm mt-2 text-center font-semibold">Insufficient balance.</p>}
         </div>
 
         <div className="flex flex-col gap-3">
@@ -1113,13 +1112,13 @@ function BlackjackGame() {
           <>
           {!isDiamonds && (
             <GlowButton onClick={session ? joinQueue : () => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4" disabled={session && (!authenticated || insufficient)}>
-              {!session ? '🔒 Login to Play' : 'Find Opponent'}
+              {!session ? '🔒 Login to Play' : insufficient ? 'Insufficient Balance' : 'Find Opponent'}
             </GlowButton>
           )}
 
           {isDiamonds && (
             <GlowButton onClick={session ? joinQueue : () => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4" disabled={session && (!authenticated || insufficient)}>
-              {!session ? '🔒 Login to Play' : 'Find Opponent'}
+              {!session ? '🔒 Login to Play' : insufficient ? 'Insufficient Balance' : 'Find Opponent'}
             </GlowButton>
           )}
 

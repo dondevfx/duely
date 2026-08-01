@@ -135,9 +135,6 @@ export default function QuickMatch() {
           </div>
 
           <BetSlider fees={fees} entryFee={entryFee} setEntryFee={setEntryFee} currLabel={currLabel} isDiamonds={isDiamonds} />
-          {insufficient && (
-            <p className="text-danger text-sm mt-2 text-center font-semibold">Insufficient balance.</p>
-          )}
         </div>
 
         {/* Picked game display */}
@@ -162,7 +159,9 @@ export default function QuickMatch() {
           className="w-full text-lg py-4"
           disabled={session && (!authenticated || insufficient || rolling)}
         >
-          {!session ? '🔒 Login to Play' : rolling ? '⚡ Finding game…' : '⚡ Play'}
+          {!session ? '🔒 Login to Play'
+            : insufficient ? 'Insufficient Balance'
+            : rolling ? '⚡ Finding game…' : '⚡ Play'}
         </GlowButton>
 
         {!authenticated && (

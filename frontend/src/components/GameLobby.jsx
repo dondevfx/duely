@@ -269,9 +269,6 @@ export default function GameLobby({
           );
         })()}
 
-        {insufficient && (
-          <p className="text-danger text-[11px] sm:text-sm mt-0.5 sm:mt-2 text-center font-semibold leading-tight">Insufficient balance.</p>
-        )}
       </div>
 
       {/* ── Controls / extras ── */}
@@ -285,6 +282,11 @@ export default function GameLobby({
           </GlowButton>
         ) : (
         <>
+      {/* Insufficient balance is surfaced ON the disabled action button,
+          not as a line of its own. As a separate row it added ~14px of
+          height that only ever appeared to players who could not afford
+          the bet — i.e. it pushed the lobby off small screens in exactly
+          the case where the buttons most needed to stay reachable. */}
         <GlowButton
           onClick={session ? onQueue : () => navigate('/login')}
           variant="primary"
@@ -292,7 +294,7 @@ export default function GameLobby({
           className="w-full text-base sm:text-lg py-3.5 sm:py-4"
           disabled={session && (!authenticated || insufficient)}
         >
-          {session ? 'Find Opponent' : '🔒 Login to Play'}
+          {!session ? '🔒 Login to Play' : insufficient ? 'Insufficient Balance' : 'Find Opponent'}
         </GlowButton>
 
         {/* ── Challenge a Friend (link or direct invite) ── */}
