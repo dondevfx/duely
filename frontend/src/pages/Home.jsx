@@ -169,7 +169,7 @@ export default function Home() {
         <div className="flex flex-col lg:flex-row gap-8">
           <div className="flex-1">
             <h2 className="text-xl md:text-2xl font-bold text-white mb-4 md:mb-6">Choose a Game</h2>
-            <div className="grid sm:grid-cols-2 gap-4 md:gap-5">
+            <div className="grid grid-cols-2 gap-3 md:gap-5">
               {GAMES.map(game => (
                 <GameCard key={game.title} {...game} liveCount={playerCounts?.[game.countKey] ?? 0} />
               ))}

@@ -61,28 +61,28 @@ export default function Games() {
           <p className="text-muted">Pick a game, set your bet, and play.</p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
           {GAMES.map(game => {
             const live = game.countKey ? (playerCounts?.[game.countKey] ?? 0) : 0;
             return (
               <div
                 key={game.title}
-                className="bg-surface border border-surfaceLight rounded-2xl p-6 flex flex-col hover:border-primary transition-all"
+                className="bg-surface border border-surfaceLight rounded-2xl p-3 sm:p-6 flex flex-col hover:border-primary transition-all"
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="text-4xl">{game.icon}</div>
+                <div className="flex items-start justify-between mb-1.5 sm:mb-3">
+                  <div className="text-2xl sm:text-4xl">{game.icon}</div>
                   {live > 0 && (
-                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-primary">
+                    <span className="inline-flex items-center gap-1 text-[9px] sm:text-[11px] font-bold text-primary whitespace-nowrap">
                       <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
                       {live} playing
                     </span>
                   )}
                 </div>
-                <h2 className="text-lg font-black text-white mb-1">{game.title}</h2>
-                <p className="text-sm text-muted mb-5 flex-1">{game.description}</p>
+                <h2 className="text-sm sm:text-lg font-black text-white mb-0.5 sm:mb-1 leading-tight">{game.title}</h2>
+                <p className="text-[11px] sm:text-sm text-muted leading-snug sm:leading-relaxed mb-2 sm:mb-5 flex-1 line-clamp-3 sm:line-clamp-none">{game.description}</p>
                 <Link
                   to={game.route}
-                  className="block w-full text-center py-3 rounded-xl bg-primary hover:bg-blue-500 text-white font-black transition-all"
+                  className="block w-full text-center text-sm sm:text-base py-2 sm:py-3 rounded-xl bg-primary hover:bg-blue-500 text-white font-black transition-all"
                 >
                   Play
                 </Link>

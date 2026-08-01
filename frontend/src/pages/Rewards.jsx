@@ -288,7 +288,7 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
       </div>
 
       {/* Wheel area */}
-      <div className="relative flex items-center justify-center select-none px-4 py-4">
+      <div className="relative flex items-center justify-center select-none px-2 sm:px-4 py-3 sm:py-4">
         {/* Pointer */}
         <div
           className="absolute z-20"
@@ -310,8 +310,8 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
           <div
             className="absolute rounded-full animate-pulse"
             style={{
-              width:     SIZE + 20,
-              height:    SIZE + 20,
+              width:     '104%',
+              aspectRatio: '1 / 1',
               background: 'transparent',
               border:    `2px solid ${tier.color}55`,
               boxShadow: `0 0 30px ${tier.glow}`,
@@ -321,14 +321,16 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
 
         {/* The SVG wheel */}
         <div
+          className="w-full"
           style={{
             transform:  `rotate(${rotation}deg)`,
             transition: spinning ? 'transform 4s cubic-bezier(0.17,0.67,0.12,0.99)' : 'none',
             willChange: 'transform',
             opacity:    isUnlocked ? 1 : 0.55,
+            maxWidth:   SIZE,
           }}
         >
-          <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
+          <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-full h-auto block" style={{ maxWidth: SIZE }}>
             <defs>
               {SEG_THEMES.map((t, i) =>
                 t.isGold ? (
@@ -563,8 +565,9 @@ export default function Rewards() {
           </div>
         )}
 
-        {/* 6 wheel cards — 5 rank wheels + daily spin — 3 per row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* 6 wheel cards — 5 rank wheels + daily spin. Two per row on phones so a
+            pair is visible at a time, three per row from large screens up. */}
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
           {TIERS.map(tier => {
             const placementDone = isRanked(profile);
             const placement = placementMatches(profile);

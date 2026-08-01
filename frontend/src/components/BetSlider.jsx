@@ -145,9 +145,8 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
       {/* Live payout — updates during drag. On a phone the label and figure
           share one line; stacked they cost ~20px the action buttons need. */}
       {entryFee > 0 && (
-        <div className="mt-1 sm:mt-4 text-center flex items-baseline justify-center gap-2 sm:block">
-          <div className="text-[10px] sm:text-xs text-muted uppercase tracking-widest mb-0 sm:mb-1 font-semibold">Win Payout</div>
-          <div className="text-lg sm:text-3xl font-black text-success inline-flex items-center gap-1" style={{ textShadow: '0 0 16px rgba(34,197,94,0.4)' }}>
+        <div className="mt-1.5 sm:mt-4 text-center">
+          <div className="text-3xl sm:text-4xl font-black text-success inline-flex items-center gap-1" style={{ textShadow: '0 0 18px rgba(34,197,94,0.45)' }}>
             <span ref={payoutRef}>{entryFee > 0 ? `+${calcPayout(entryFee, isDiamonds, payoutMult)}` : ''}</span>
             {' '}{currLabel}
           </div>

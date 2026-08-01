@@ -10,7 +10,7 @@ import JoinRoomModal from './JoinRoomModal';
 
 // Small secondary buttons under the two primary actions on every betting screen.
 export const SMALL_BTN =
-  'flex-1 px-3 sm:px-4 py-3 sm:py-3 rounded-xl text-sm font-bold whitespace-nowrap border border-border bg-surface text-muted ' +
+  'flex-1 px-3 sm:px-4 py-3.5 rounded-xl text-sm font-bold whitespace-nowrap border border-border bg-surface text-muted ' +
   'hover:border-primary hover:text-white transition-all disabled:opacity-40 disabled:hover:border-border';
 
 export const COIN_FEES    = [1, 5, 10, 25, 50, 100];
@@ -154,9 +154,9 @@ export default function GameLobby({
       {controls && <div className="mb-2 sm:mb-4">{controls}</div>}
 
       {/* ── Action Buttons ── */}
-      <div className="flex flex-col gap-1 sm:gap-3">
+      <div className="flex flex-col gap-2 sm:gap-3">
         {!session ? (
-          <GlowButton onClick={() => navigate('/login')} variant="primary" size="lg" className="w-full text-base sm:text-lg py-3.5 sm:py-4">
+          <GlowButton onClick={() => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent">
             🔒 Login to Play
           </GlowButton>
         ) : (
@@ -170,7 +170,7 @@ export default function GameLobby({
           onClick={session ? onQueue : () => navigate('/login')}
           variant="primary"
           size="lg"
-          className="w-full text-base sm:text-lg py-3.5 sm:py-4"
+          className="w-full text-lg py-4 border border-transparent"
           disabled={session && (!authenticated || insufficient)}
         >
           {!session ? '🔒 Login to Play' : insufficient ? 'Insufficient Balance' : 'Find Opponent'}
@@ -182,7 +182,7 @@ export default function GameLobby({
             onClick={() => setPrivateMode('create')}
             variant="ghost"
             size="lg"
-            className="w-full text-base sm:text-lg py-3.5 sm:py-4 border border-border hover:border-primary"
+            className="w-full text-lg py-4 border border-border hover:border-primary"
           >
             🎮 Challenge a Friend
           </GlowButton>
@@ -191,7 +191,7 @@ export default function GameLobby({
         {/* Secondary options — small buttons, still visible but not competing
             with the two primary actions above. */}
         {session && (onBot || onBotFree || onCreatePrivate) && (
-          <div className="flex flex-col gap-1.5 sm:gap-2 pt-0 sm:pt-1">
+          <div className="flex flex-col gap-2 sm:gap-2 pt-0.5 sm:pt-1">
             {/* Diamond bet-vs-bot gets its own full-width row — the label is too
                 long to share a row with the other two. */}
             {onBot && isDiamonds && entryFee > 0 && (
@@ -199,7 +199,7 @@ export default function GameLobby({
                 Bet vs Bot — {fmtFee(entryFee)} 💎
               </button>
             )}
-            <div className="flex gap-1.5 sm:gap-2">
+            <div className="flex gap-2 sm:gap-2">
               {onBotFree && (
                 <button onClick={onBotFree} className={SMALL_BTN}>
                   {botLabel || 'Play vs Bot'}

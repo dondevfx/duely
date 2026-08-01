@@ -576,7 +576,7 @@ export default function CoinFlipGame() {
       <div className="w-full max-w-md animate-slide-up">
 
         {phase === 'lobby' && (
-          <div className="text-center mb-1.5 sm:mb-6">
+          <div className="text-center mb-1 sm:mb-6">
             <h1 className="text-4xl sm:text-6xl font-black text-white mb-0.5 sm:mb-2 leading-tight">🟡 Coin Flip</h1>
             <p className="text-center text-muted text-xs sm:text-base leading-snug sm:leading-relaxed px-2 line-clamp-2 sm:line-clamp-none">Pick heads or tails — you get matched with someone on the opposite side. One flip decides it.</p>
           </div>
@@ -651,34 +651,34 @@ export default function CoinFlipGame() {
               ) : null; })()}
             </div>
 
-            <div className="mb-2 sm:mb-4 bg-surface border border-border rounded-2xl p-2.5 sm:p-4">
-              <p className="text-xs sm:text-sm font-bold text-white mb-1 sm:mb-3">Pick Your Side</p>
-              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+            <div className="mb-1.5 sm:mb-4 bg-surface border border-border rounded-2xl p-2 sm:p-4">
+              <p className="hidden sm:block text-sm font-bold text-white mb-3">Pick Your Side</p>
+              <div className="grid grid-cols-2 gap-1.5 sm:gap-3">
                 {['heads', 'tails'].map(s => (
                   <button key={s} onClick={() => setSide(s)}
-                    className={`py-2 sm:py-3 rounded-xl text-center font-black border-2 transition-all ${
+                    className={`py-1.5 sm:py-3 rounded-xl text-center font-black border-2 transition-all ${
                       side === s ? 'border-primary bg-primary/20 text-white' : 'border-border text-muted hover:border-primary/50 hover:text-white'
                     }`}>
-                    <div className="text-lg sm:text-2xl mb-0 sm:mb-0.5">{s === 'heads' ? '🔵' : '⚪'}</div>
-                    <div className="capitalize text-xs sm:text-sm">{s}</div>
+                    <div className="text-base sm:text-2xl mb-0 sm:mb-0.5">{s === 'heads' ? '🔵' : '⚪'}</div>
+                    <div className="capitalize text-[11px] sm:text-sm leading-none">{s}</div>
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="flex flex-col gap-1 sm:gap-3">
+            <div className="flex flex-col gap-2 sm:gap-3">
               {!session ? (
-                <GlowButton onClick={() => navigate('/login')} variant="primary" size="lg" className="w-full text-base sm:text-lg py-3.5 sm:py-4">
+                <GlowButton onClick={() => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent">
                   🔒 Login to Play
                 </GlowButton>
               ) : (
               <>
-              <GlowButton onClick={joinQueue} variant="primary" size="lg" className="w-full text-base sm:text-lg py-3.5 sm:py-4" disabled={session && (!authenticated || insufficient)}>
+              <GlowButton onClick={joinQueue} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent" disabled={session && (!authenticated || insufficient)}>
                 {!session ? '🔒 Login to Play'
                   : insufficient ? 'Insufficient Balance'
                   : `Find Opponent (${side === 'heads' ? '🔵 Heads' : '⚪ Tails'})`}
               </GlowButton>
-              <GlowButton onClick={() => setPrivateMode('create')} variant="ghost" size="lg" className="w-full text-base sm:text-lg py-3.5 sm:py-4 border border-border hover:border-primary">
+              <GlowButton onClick={() => setPrivateMode('create')} variant="ghost" size="lg" className="w-full text-lg py-4 border border-border hover:border-primary">
                 🎮 Challenge a Friend
               </GlowButton>
               <>

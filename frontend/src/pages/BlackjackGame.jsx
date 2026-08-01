@@ -1105,19 +1105,19 @@ function BlackjackGame() {
 
         <div className="flex flex-col gap-3">
           {!session ? (
-            <GlowButton onClick={() => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4">
+            <GlowButton onClick={() => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent">
               🔒 Login to Play
             </GlowButton>
           ) : (
           <>
           {!isDiamonds && (
-            <GlowButton onClick={session ? joinQueue : () => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4" disabled={session && (!authenticated || insufficient)}>
+            <GlowButton onClick={session ? joinQueue : () => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent" disabled={session && (!authenticated || insufficient)}>
               {!session ? '🔒 Login to Play' : insufficient ? 'Insufficient Balance' : 'Find Opponent'}
             </GlowButton>
           )}
 
           {isDiamonds && (
-            <GlowButton onClick={session ? joinQueue : () => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4" disabled={session && (!authenticated || insufficient)}>
+            <GlowButton onClick={session ? joinQueue : () => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent" disabled={session && (!authenticated || insufficient)}>
               {!session ? '🔒 Login to Play' : insufficient ? 'Insufficient Balance' : 'Find Opponent'}
             </GlowButton>
           )}

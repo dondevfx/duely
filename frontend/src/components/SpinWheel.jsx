@@ -178,19 +178,20 @@ export default function SpinWheel({ locked = false }) {
         {/* Spin ring glow */}
         {spinning && (
           <div className="absolute rounded-full animate-pulse" style={{
-            width: SIZE + 20, height: SIZE + 20,
+            width: '104%', aspectRatio: '1 / 1',
             background: 'transparent',
             border: '2px solid rgba(255,255,255,0.12)',
             boxShadow: '0 0 30px rgba(255,255,255,0.08)',
           }} />
         )}
 
-        <div style={{
+        <div className="w-full" style={{
           transform: `rotate(${rotation}deg)`,
           transition: spinning ? 'transform 4s cubic-bezier(0.17,0.67,0.12,0.99)' : 'none',
           willChange: 'transform',
+          maxWidth: SIZE,
         }}>
-          <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
+          <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-full h-auto block" style={{ maxWidth: SIZE }}>
             <defs>
               {SEG.map((seg, i) => {
                 const t = THEMES[seg.theme];

@@ -156,7 +156,7 @@ export default function QuickMatch() {
           onClick={session ? play : () => navigate('/login')}
           variant="primary"
           size="lg"
-          className="w-full text-lg py-4"
+          className="w-full text-lg py-4 border border-transparent"
           disabled={session && (!authenticated || insufficient || rolling)}
         >
           {!session ? '🔒 Login to Play'
