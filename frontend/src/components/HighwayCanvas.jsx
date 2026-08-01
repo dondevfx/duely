@@ -1,5 +1,29 @@
 import { useEffect, useRef } from 'react';
 import { isMuted } from '../utils/sound';
+import { sedanSVG, rasterize } from './rushHourArt';
+
+// ── Authored sprite cache ───────────────────────────────────────────────────
+// Vehicles authored as SVG are rasterized once per (class, paint, size) and
+// then blitted like any other sprite. Rasterizing is asynchronous, so a flat
+// placeholder is drawn until the real art resolves — a frame or two at load,
+// and never mid-run because the size only changes on resize.
+const SVG_ART = { sedan: sedanSVG };
+const svgCache = new Map();
+function authoredSprite(kind, paint, wpx, lpx, dpr) {
+  const build = SVG_ART[kind];
+  if (!build) return null;
+  const key = `${kind}|${paint}|${Math.round(wpx)}x${Math.round(lpx)}@${dpr}`;
+  const hit = svgCache.get(key);
+  if (hit) return hit === 'pending' ? null : hit;
+  svgCache.set(key, 'pending');
+  // Rasterize at DEVICE pixels and blit at CSS size. Baking at CSS size and
+  // letting the 2x backing store scale it up is what makes sprites look soft
+  // on a phone or a retina display.
+  rasterize(build(paint), wpx * dpr, lpx * dpr)
+    .then((c) => svgCache.set(key, c))
+    .catch(() => svgCache.delete(key));
+  return null;
+}
 
 /**
  * HIGHWAY DASH — gameplay canvas. Complete rebuild.
@@ -317,8 +341,11 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       sprites = {
         vs,
         vkey(kind, paint) {
+          const wpx = VEHICLES[kind].wid * u2p, lpx = VEHICLES[kind].len * u2p;
+          const art = authoredSprite(kind, paint, wpx, lpx, dpr);
+          if (art) return art;
           const k = kind + '|' + paint;
-          if (!vs[k]) vs[k] = bakeVehicle(kind, paint, VEHICLES[kind].wid * u2p, VEHICLES[kind].len * u2p);
+          if (!vs[k]) vs[k] = bakeVehicle(kind, paint, wpx, lpx);
           return vs[k];
         },
         player: bakePlayer(playerW, playerL),
@@ -823,7 +850,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         ctx.globalAlpha = 0.5;
         ctx.drawImage(sp.shadow, cx - wpx * 0.62, cy - lpx * 0.5, wpx * 1.24, lpx * 1.06);
         ctx.globalAlpha = 1;
-        ctx.drawImage(img, cx - img.width / 2, cy - lpx / 2);
+        ctx.drawImage(img, cx - wpx / 2, cy - lpx / 2, wpx, lpx);
         if (c.brake || c.spd < S.speed * 0.42) {
           ctx.globalAlpha = 0.5;
           ctx.drawImage(sp.glowRed, cx - wpx * 0.36 - 17, cy + lpx / 2 - 14, 34, 34);
@@ -860,7 +887,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       ctx.translate(px, playerY);
       ctx.rotate(roll);
       ctx.scale(1, squash);
-      ctx.drawImage(sp.player, -sp.player.width / 2, -pl / 2);
+      ctx.drawImage(sp.player, -pw / 2, -pl / 2, pw, pl);
       ctx.restore();
     }
 
@@ -1042,8 +1069,29 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
   }, [seed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="relative w-full bg-bg" style={{ height: 'calc(100dvh - 56px)' }}>
-      <canvas ref={canvasRef} className="w-full h-full block touch-none select-none" style={{ cursor: 'pointer' }} />
+    <div
+      className="relative w-full bg-bg flex justify-center overflow-hidden"
+      style={{ height: 'calc(100dvh - 56px)' }}
+    >
+      {/* Night ambience behind the play area. On a wide screen the road cannot
+          fill the width without either distorting the cars or cutting the fixed
+          700-unit view distance that keeps the match fair, so the play area
+          stays portrait and the surround is lit rather than left dead black. */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(120% 75% at 50% 62%, rgba(18,80,180,0.16) 0%, rgba(6,12,24,0.5) 45%, rgba(0,0,0,0.92) 100%)',
+        }}
+      />
+      {/* Aspect cap: roadW works out at ~0.44x the canvas height, so a canvas
+          about half as wide as it is tall puts the road at ~90% of the frame.
+          Narrow screens are already taller than this and are unaffected. */}
+      <canvas
+        ref={canvasRef}
+        className="relative h-full block touch-none select-none w-full"
+        style={{ cursor: 'pointer', maxWidth: 'calc((100dvh - 56px) * 0.52)' }}
+      />
     </div>
   );
 }
