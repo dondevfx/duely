@@ -1073,7 +1073,7 @@ function BlackjackGame() {
       <div className="w-full max-w-md animate-slide-up">
 
         <div className="text-center mb-3 sm:mb-6">
-          <h1 className="text-3xl sm:text-5xl font-black text-white mb-1 sm:mb-2">🃏 Blackjack</h1>
+          <h1 className="text-4xl sm:text-6xl font-black text-white mb-1 sm:mb-2 leading-tight">🃏 Blackjack</h1>
           <p className="text-muted text-sm sm:text-base">Get closer to 21 than your opponent</p>
         </div>
 

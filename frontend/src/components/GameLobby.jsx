@@ -170,13 +170,13 @@ export default function GameLobby({
 
   return (
     <div className="w-full max-w-md animate-slide-up">
-      <h1 className="text-3xl sm:text-5xl font-black text-white text-center mb-1.5 sm:mb-3">{title}</h1>
+      <h1 className="text-4xl sm:text-6xl font-black text-white text-center mb-1 sm:mb-3 leading-tight">{title}</h1>
       {description && (
-        <p className="text-center text-muted text-sm sm:text-base leading-snug sm:leading-relaxed mb-3 sm:mb-6 px-2">{description}</p>
+        <p className="text-center text-muted text-xs sm:text-base leading-snug sm:leading-relaxed mb-2 sm:mb-6 px-2">{description}</p>
       )}
 
       {/* ── Entry Fee ── */}
-      <div className="mb-2.5 sm:mb-4 bg-surface border border-border rounded-2xl p-3 sm:p-5">
+      <div className="mb-2 sm:mb-4 bg-surface border border-border rounded-2xl p-2.5 sm:p-5">
         <div className="flex items-center justify-between mb-2.5 sm:mb-4">
           <span className="text-base font-bold text-white">Entry Fee</span>
           <div className="flex items-center gap-0.5 bg-bg border border-border rounded-lg p-1">

@@ -66,9 +66,9 @@ const CYAN  = '#00BFFF';
 // from "a low-resolution picture", and it keeps the whole screen coherent.
 const PAL = {
   void0:  '#05070E', void1:  '#0A0F1A',
-  road0:  '#12192A', road1:  '#171F33', road2:  '#1D2740',
+  road0:  '#0B0E14', road1:  '#101420', road2:  '#151A29',
   line:   '#E6F2FF', lineDim:'#5C7CA8',
-  kerb:   '#00BFFF', kerbDim:'#0B5C8C',
+  kerb:   '#1250B4', kerbDim:'#0A2A5C',
   shadow: '#080B14',
   glass:  '#16233C', glassLit:'#31527F',
   tyre:   '#07090F',
@@ -671,6 +671,11 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     const swipeMin = () => Math.max(26, canvas.clientWidth * 0.055);
 
     const onPointerDown = (e) => {
+      // Non-passive: this preventDefault is what stops the browser starting a
+      // text selection (and the blue highlight that comes with it) on a swipe.
+      if (e.cancelable) e.preventDefault();
+      const sel = window.getSelection?.();
+      if (sel && !sel.isCollapsed) sel.removeAllRanges();
       audio?.resume();
       const r = canvas.getBoundingClientRect();
       const x = e.clientX - r.left;
@@ -680,6 +685,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     };
     const onPointerMove = (e) => {
       if (!sw.active || sw.fired || e.pointerId !== sw.id) return;
+      if (e.cancelable) e.preventDefault();
       const r = canvas.getBoundingClientRect();
       const dx = (e.clientX - r.left) - sw.startX;
       // Exactly ONE lane per swipe, however far the finger travels. Lift and
@@ -697,10 +703,13 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       if (canvas.releasePointerCapture) { try { canvas.releasePointerCapture(e.pointerId); } catch { /* noop */ } }
     };
     window.addEventListener('keydown', onKey);
-    canvas.addEventListener('pointerdown', onPointerDown);
-    canvas.addEventListener('pointermove', onPointerMove);
+    canvas.addEventListener('pointerdown', onPointerDown, { passive: false });
+    canvas.addEventListener('pointermove', onPointerMove, { passive: false });
     canvas.addEventListener('pointerup', onPointerUp);
     canvas.addEventListener('pointercancel', onPointerUp);
+    const noSelect = (e) => e.preventDefault();
+    canvas.addEventListener('selectstart', noSelect);
+    canvas.addEventListener('contextmenu', noSelect);
 
     // ── Spawning: snaking corridor — deterministic AND always survivable ──
     function pick() {
@@ -1074,18 +1083,6 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       ctx.fillRect(x0, 0, kw, H);
       ctx.fillRect(x1 - kw, 0, kw, H);
 
-      // ── distance falloff ──────────────────────────────────────────────────
-      // Stepped, not smooth: at this resolution a gradient bands anyway, so the
-      // road fades into the night in a handful of deliberate bars instead.
-      if (!light) {
-        const steps = 7, band = Math.round(H * 0.30) / steps;
-        for (let i = 0; i < steps; i++) {
-          ctx.globalAlpha = 0.30 * (1 - i / steps);
-          ctx.fillStyle = PAL.void0;
-          ctx.fillRect(0, Math.round(i * band), W, Math.ceil(band) + 1);
-        }
-        ctx.globalAlpha = 1;
-      }
     }
 
     function drawTraffic(nowMs) {
@@ -1325,6 +1322,8 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       clearTimeout(resizeT);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('keydown', onKey);
+      canvas.removeEventListener('selectstart', noSelect);
+      canvas.removeEventListener('contextmenu', noSelect);
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerUp);
@@ -1335,8 +1334,15 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
 
   return (
     <div
-      className="relative w-full bg-bg flex justify-center overflow-hidden"
-      style={{ height: 'calc(100dvh - 56px)' }}
+      className="relative w-full bg-bg flex justify-center overflow-hidden select-none"
+      style={{
+        height: 'calc(100dvh - 56px)',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
+        WebkitTapHighlightColor: 'transparent',
+        touchAction: 'none',
+      }}
     >
       {/* Night ambience behind the play area. On a wide screen the road cannot
           fill the width without either distorting the cars or cutting the fixed

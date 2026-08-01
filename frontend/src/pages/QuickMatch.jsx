@@ -95,14 +95,14 @@ export default function QuickMatch() {
     >
       <div className="w-full max-w-md animate-slide-up">
 
-        <div className="text-center mb-6">
-          <div className="text-5xl mb-3">⚡</div>
-          <h1 className="text-5xl font-black text-white mb-2">Quick Match</h1>
-          <p className="text-muted text-base">Pick your bet — we'll choose the game</p>
+        <div className="text-center mb-3 sm:mb-6">
+          <div className="text-3xl sm:text-5xl mb-1 sm:mb-3">⚡</div>
+          <h1 className="text-4xl sm:text-6xl font-black text-white mb-2 leading-tight">Quick Match</h1>
+          <p className="text-muted text-xs sm:text-base">Pick your bet — we'll choose the game</p>
         </div>
 
         {/* Game pool preview */}
-        <div className="flex justify-center gap-3 mb-5">
+        <div className="flex justify-center gap-3 mb-2 sm:mb-5">
           {POOL.map(g => (
             <div
               key={g.route}
@@ -115,8 +115,8 @@ export default function QuickMatch() {
         </div>
 
         {/* Entry fee selector */}
-        <div className="mb-4 bg-surface border border-border rounded-2xl p-5">
-          <div className="flex items-center justify-between mb-4">
+        <div className="mb-2 sm:mb-4 bg-surface border border-border rounded-2xl p-3 sm:p-5">
+          <div className="flex items-center justify-between mb-2.5 sm:mb-4">
             <span className="text-base font-bold text-white">Entry Fee</span>
             <div className="flex items-center gap-0.5 bg-bg border border-border rounded-lg p-1">
               <button
