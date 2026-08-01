@@ -7,6 +7,7 @@ import GameLobby from '../components/GameLobby';
 import GlowButton from '../components/GlowButton';
 import ResultScreen from '../components/ResultScreen';
 import { usePageReady } from '../hooks/usePageReady';
+import { useResumeMatch } from '../hooks/useResumeMatch';
 import { playMatchFound, playCountdown, playGo } from '../utils/sound';
 import HighwayCanvas from '../components/HighwayCanvas';
 
@@ -47,6 +48,9 @@ export default function CarDashGame() {
   const eloBeforeRef = useRef(profile?.elo ?? 1000);
   useEffect(() => { socketRef.current = socket; }, [socket]);
   useEffect(() => { profileRef.current = profile; }, [profile]);
+
+  // Only a live match re-claims itself after a reconnect; a refresh forfeits.
+  useResumeMatch(socket, () => phaseRef.current === 'playing');
 
   const isDiamonds = betCurrency === 'diamonds';
   const balance = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);

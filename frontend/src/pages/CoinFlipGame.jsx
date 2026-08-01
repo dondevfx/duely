@@ -576,9 +576,9 @@ export default function CoinFlipGame() {
       <div className="w-full max-w-md animate-slide-up">
 
         {phase === 'lobby' && (
-          <div className="text-center mb-3 sm:mb-6">
+          <div className="text-center mb-2 sm:mb-6">
             <h1 className="text-4xl sm:text-6xl font-black text-white mb-1 sm:mb-2 leading-tight">🟡 Coin Flip</h1>
-            <p className="text-muted text-sm sm:text-base">Pick a side — get matched with the opposite</p>
+            <p className="text-muted text-xs sm:text-base">Pick a side — get matched with the opposite</p>
           </div>
         )}
 
@@ -628,12 +628,12 @@ export default function CoinFlipGame() {
         {/* Lobby */}
         {phase === 'lobby' && (
           <>
-            <div className="mb-4 bg-surface border border-border rounded-2xl p-5">
-              <div className="flex items-center justify-between mb-4">
+            <div className="mb-2 sm:mb-4 bg-surface border border-border rounded-2xl p-2.5 sm:p-5">
+              <div className="flex items-center justify-between mb-2 sm:mb-4">
                 <span className="text-base font-bold text-white">Entry Fee</span>
                 <div className="flex items-center gap-0.5 bg-bg border border-border rounded-lg p-1">
-                  <button onClick={() => switchCurrency('coins')} className={`px-4 py-2 rounded text-sm font-bold transition-all ${!isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}><CoinIcon size="0.85em" /> Coins</button>
-                  <button onClick={() => switchCurrency('diamonds')} className={`px-4 py-2 rounded text-sm font-bold transition-all ${isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}>💎 Diamonds</button>
+                  <button onClick={() => switchCurrency('coins')} className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${!isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}><CoinIcon size="0.85em" /> Coins</button>
+                  <button onClick={() => switchCurrency('diamonds')} className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}>💎 Diamonds</button>
                 </div>
               </div>
               <BetSlider fees={fees} entryFee={entryFee} setEntryFee={setEntryFee} currLabel={currLabel} isDiamonds={isDiamonds} payoutMult={0.98} />
@@ -652,32 +652,32 @@ export default function CoinFlipGame() {
               {insufficient && <p className="text-danger text-sm mt-2 text-center font-semibold">Insufficient balance.</p>}
             </div>
 
-            <div className="mb-4 bg-surface border border-border rounded-2xl p-4">
-              <p className="text-sm font-bold text-white mb-3">Pick Your Side</p>
-              <div className="grid grid-cols-2 gap-3">
+            <div className="mb-2 sm:mb-4 bg-surface border border-border rounded-2xl p-2.5 sm:p-4">
+              <p className="text-xs sm:text-sm font-bold text-white mb-1.5 sm:mb-3">Pick Your Side</p>
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 {['heads', 'tails'].map(s => (
                   <button key={s} onClick={() => setSide(s)}
-                    className={`py-3 rounded-xl text-center font-black border-2 transition-all ${
+                    className={`py-1.5 sm:py-3 rounded-xl text-center font-black border-2 transition-all ${
                       side === s ? 'border-primary bg-primary/20 text-white' : 'border-border text-muted hover:border-primary/50 hover:text-white'
                     }`}>
-                    <div className="text-2xl mb-0.5">{s === 'heads' ? '🔵' : '⚪'}</div>
-                    <div className="capitalize text-sm">{s}</div>
+                    <div className="text-lg sm:text-2xl mb-0 sm:mb-0.5">{s === 'heads' ? '🔵' : '⚪'}</div>
+                    <div className="capitalize text-xs sm:text-sm">{s}</div>
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2 sm:gap-3">
               {!session ? (
-                <GlowButton onClick={() => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4">
+                <GlowButton onClick={() => navigate('/login')} variant="primary" size="lg" className="w-full text-base sm:text-lg py-2.5 sm:py-4">
                   🔒 Login to Play
                 </GlowButton>
               ) : (
               <>
-              <GlowButton onClick={joinQueue} variant="primary" size="lg" className="w-full text-lg py-4" disabled={session && (!authenticated || insufficient)}>
+              <GlowButton onClick={joinQueue} variant="primary" size="lg" className="w-full text-base sm:text-lg py-2.5 sm:py-4" disabled={session && (!authenticated || insufficient)}>
                 {!session ? '🔒 Login to Play' : `Find Opponent (${side === 'heads' ? '🔵 Heads' : '⚪ Tails'})`}
               </GlowButton>
-              <GlowButton onClick={() => setPrivateMode('create')} variant="ghost" size="lg" className="w-full text-lg py-4 border border-border hover:border-primary">
+              <GlowButton onClick={() => setPrivateMode('create')} variant="ghost" size="lg" className="w-full text-base sm:text-lg py-2.5 sm:py-4 border border-border hover:border-primary">
                 🎮 Challenge a Friend
               </GlowButton>
               <>

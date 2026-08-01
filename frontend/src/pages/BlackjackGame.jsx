@@ -13,6 +13,7 @@ import CreateRoomModal from '../components/CreateRoomModal';
 import JoinRoomModal from '../components/JoinRoomModal';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
 import { usePageReady } from '../hooks/usePageReady';
+import { useResumeMatch } from '../hooks/useResumeMatch';
 import CoinIcon from '../components/CoinIcon';
 
 function fmtFee(fee) {
@@ -190,6 +191,8 @@ function BlackjackGame() {
   const location = useLocation();
   const { profile, session, refreshProfile, updateProfile } = useAuth();
   const { socket, authenticated, playerCounts, betCounts } = useSocket();
+  // Only a live match re-claims itself after a reconnect; a refresh forfeits.
+  useResumeMatch(socket, () => phaseRef.current === 'playing' || phaseRef.current === 'reveal');
   const { displayCurrency: betCurrency, setDisplayCurrency: setBetCurrency } = useCurrency();
   const eloBeforeRef    = useRef(profile?.elo ?? 1000);
   const lastModeRef     = useRef(null); // 'pvp' | 'bot_free' | 'bot_paid'

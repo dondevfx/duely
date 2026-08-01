@@ -102,9 +102,9 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
   return (
     <>
       {/* Fee display row */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-1.5 sm:mb-3">
         <span className="text-sm text-muted">Min: {fmtFee(fees[0])} {currLabel}</span>
-        <span className="text-2xl font-black text-white">
+        <span className="text-xl sm:text-2xl font-black text-white">
           <span ref={displayRef}>{fmtFee(entryFee)}</span>{' '}
           <span className="text-primary">{currLabel}</span>
         </span>
@@ -114,7 +114,7 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
       {/* Slider track */}
       <div
         ref={trackRef}
-        className="relative w-full h-12 flex items-center cursor-grab active:cursor-grabbing select-none touch-none"
+        className="relative w-full h-9 sm:h-12 flex items-center cursor-grab active:cursor-grabbing select-none touch-none"
         style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
       >
         <div className="absolute left-0 right-0 h-2 rounded-full bg-border overflow-hidden">
@@ -139,9 +139,9 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
 
       {/* Live payout — updates during drag */}
       {entryFee > 0 && (
-        <div className="mt-4 text-center">
+        <div className="mt-2 sm:mt-4 text-center">
           <div className="text-xs text-muted uppercase tracking-widest mb-1 font-semibold">Win Payout</div>
-          <div className="text-3xl font-black text-success inline-flex items-center gap-1" style={{ textShadow: '0 0 16px rgba(34,197,94,0.4)' }}>
+          <div className="text-2xl sm:text-3xl font-black text-success inline-flex items-center gap-1" style={{ textShadow: '0 0 16px rgba(34,197,94,0.4)' }}>
             <span ref={payoutRef}>{entryFee > 0 ? `+${calcPayout(entryFee, isDiamonds, payoutMult)}` : ''}</span>
             {' '}{currLabel}
           </div>

@@ -51,6 +51,10 @@ const VISUAL_SCROLL = 1.0;   // road MUST scroll with the world or it slides und
 const PTS_DIST     = 0.06;
 const PTS_TIME     = 8;
 const PTS_NEAR     = 75;
+// How far outside the hitboxes still counts as a near miss, in world units.
+// Widening this makes the bonus easier to earn without touching collisions —
+// the hitbox itself is unchanged, so nothing about crashing gets more lenient.
+const NEAR_BAND    = 72;
 
 const FREEZE_S     = 0.15;
 const REPORT_S     = 0.55;   // report as soon as the crash FX has read
@@ -702,6 +706,14 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       sw.active = false; sw.id = null;
       if (canvas.releasePointerCapture) { try { canvas.releasePointerCapture(e.pointerId); } catch { /* noop */ } }
     };
+    // Dev-only inspection hook. `import.meta.env.DEV` is statically false in a
+    // production build, so this whole block is dropped by the bundler and never
+    // reaches players. It exists so survivability can be PROVEN by solving real
+    // runs headlessly, rather than assumed from reading the spawner.
+    if (import.meta.env.DEV) {
+      canvas.__rh = { S, cars, VEHICLES, LANES, LANE_U, PLAYER_L_U, PLAYER_W_U, move, laneCenter };
+    }
+
     window.addEventListener('keydown', onKey);
     canvas.addEventListener('pointerdown', onPointerDown, { passive: false });
     canvas.addEventListener('pointermove', onPointerMove, { passive: false });
@@ -722,6 +734,19 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       for (const c of cars) if (c.on && Math.round(c.laneF) === l && c.y > 300) min = Math.min(min, SPAWN_Y - c.y);
       return min;
     }
+    // A lane counts as clear only if nothing occupies it anywhere along the
+    // stretch the player still has to drive through — including cars that are
+    // part-way through a lane change into it.
+    function laneRunClear(l) {
+      for (const c of cars) {
+        if (!c.on) continue;
+        if (c.y < -60 || c.y > SPAWN_Y + 240) continue;
+        if (Math.round(c.laneF) === l || c.lane === l) return false;
+        if (c.changing === -1 && clamp(c.lane + c.sigDir, 0, LANES - 1) === l) return false;
+      }
+      return true;
+    }
+
     // How long a car indicates before it moves. Long enough to read and react
     // to, which is the point — the indicator is information, not decoration.
     const SIGNAL_S = 1.5;
@@ -732,6 +757,9 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     // another.
     function laneChangeClear(c, target) {
       if (target < 0 || target > LANES - 1) return false;
+      // The open lane stays open. Without this an indicating car can seal the
+      // only way through after the wave has already committed to leaving it.
+      if (target === S.corridor) return false;
       for (const o of cars) {
         if (!o.on || o === c) continue;
         const occupies = Math.round(o.laneF) === target || o.lane === target;
@@ -745,9 +773,22 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     function spawnWave() {
       const d = diff();
       S.waveN++;
-      // The free lane random-walks ±1 → a weaveable path always exists.
+      // ── Guaranteeing a way through ──────────────────────────────────────
+      // The corridor is the lane deliberately left open. It random-walks by at
+      // most one lane per wave so the player can always follow it.
+      //
+      // Leaving it free at spawn time is NOT enough on its own, which is what
+      // used to let a wall form: a slow car from an EARLIER wave can still be
+      // sitting in the lane the corridor moves into, and the player closes on
+      // it. So the corridor may only move to a lane that is genuinely empty
+      // across the whole approach, and if no candidate is, it stays put.
       const step = rand();
-      S.corridor = clamp(S.corridor + (step < 0.36 ? -1 : step < 0.72 ? 1 : 0), 0, LANES - 1);
+      const want = clamp(S.corridor + (step < 0.36 ? -1 : step < 0.72 ? 1 : 0), 0, LANES - 1);
+      S.corridor = laneRunClear(want) ? want
+                 : laneRunClear(S.corridor) ? S.corridor
+                 : (laneRunClear(clamp(S.corridor - 1, 0, LANES - 1)) ? clamp(S.corridor - 1, 0, LANES - 1)
+                 : laneRunClear(clamp(S.corridor + 1, 0, LANES - 1)) ? clamp(S.corridor + 1, 0, LANES - 1)
+                 : S.corridor);
 
       // How many lanes a single wave may block. With four lanes, three blocked
       // at once leaves exactly one gap and reads as a wall — fine deep into a
@@ -757,8 +798,26 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       if (S.waveN % 4 === 0) n = Math.max(1, n - 1);   // breathing pocket
       if (S.simT < 6) n = 1;                           // gentle first seconds
 
+      // ── Which lanes this wave blocks ────────────────────────────────────
+      // Leaving one lane open is not sufficient on its own. Blocking lanes 1
+      // and 2 while leaving 0 and 3 open technically leaves a gap, but a player
+      // over on lane 3 is walled off from the corridor on lane 0 and dies with
+      // a clear lane visible on the far side of the screen. Solving real runs
+      // headlessly turns that up as a genuine death.
+      //
+      // So the OPEN lanes are always kept contiguous: a single window that
+      // contains the corridor. Whatever falls outside the window is blocked,
+      // which means the player can always walk to the corridor one lane at a
+      // time without crossing a blocked lane. Note this depends only on the
+      // corridor and the seeded RNG, never on where the player is — both
+      // players in a match must get an identical road.
+      n = Math.min(n, LANES - 1);
+      const openWidth = LANES - n;
+      const aMin = Math.max(0, S.corridor - openWidth + 1);
+      const aMax = Math.min(S.corridor, LANES - openWidth);
+      const a = aMin + Math.floor(rand() * (aMax - aMin + 1));
       const lanes = [];
-      for (let l = 0; l < LANES; l++) if (l !== S.corridor) lanes.push(l);
+      for (let l = 0; l < LANES; l++) if (l < a || l >= a + openWidth) lanes.push(l);
       for (let i = lanes.length - 1; i > 0; i--) {
         const j = Math.floor(rand() * (i + 1));
         [lanes[i], lanes[j]] = [lanes[j], lanes[i]];
@@ -919,7 +978,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
           break;
         }
         // near miss — longitudinally overlapping, laterally just clear
-        if (!c.near && !S.dead && overlapY && dx >= sumW && dx < sumW + 44) {
+        if (!c.near && !S.dead && overlapY && dx >= sumW && dx < sumW + NEAR_BAND) {
           c.near = true;
           S.combo = (S.simT - S.comboT < 1.5) ? Math.min(S.combo + 1, 4) : 1;
           S.comboT = S.simT;

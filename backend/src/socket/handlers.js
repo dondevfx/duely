@@ -268,17 +268,34 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         socket._authenticatedUserId = user.id;
         socket.emit('authenticated', { userId: user.id, username: profile.username });
 
-        // If this user has a pending disconnect timer, cancel it and silently
-        // restore their socket ID in any active rooms so game events keep flowing.
-        const pending = disconnectTimers.get(user.id);
-        if (pending) {
-          clearTimeout(pending.timer);
-          disconnectTimers.delete(user.id);
-          for (const job of pending.jobs) {
-            if (!job.cancelled) job.updateSocketFn(socket);
-          }
-        }
+        // NOTE: reconnecting does NOT by itself cancel a pending forfeit.
+        //
+        // It used to. That silently rebound any active room to the new socket,
+        // on the assumption that a reconnect means "I am resuming the match".
+        // A page refresh breaks that assumption: the client comes back,
+        // authenticates, and boots straight to the lobby with no game state —
+        // but the server had already handed it the old room. The player was
+        // then tied to a match they were not playing, which ended their NEXT
+        // game early and denied the opponent the forfeit they were owed.
+        //
+        // A client that genuinely is mid-match now has to say so, by emitting
+        // 'resume_match'. Silence means gone, and the forfeit runs.
       } catch { socket.emit('error', { message: 'Authentication error' }); }
+    });
+
+    // ── Explicit match re-claim after a dropped connection ───────────
+    // Only a client that is still actually rendering an active game sends
+    // this. It is what separates "my connection blipped" from "I left".
+    socket.on('resume_match', () => {
+      if (!authenticatedUser) return;
+      const pending = disconnectTimers.get(authenticatedUser.userId);
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      disconnectTimers.delete(authenticatedUser.userId);
+      for (const job of pending.jobs) {
+        if (!job.cancelled) job.updateSocketFn(socket);
+      }
+      socket.emit('match_resumed');
     });
 
     // ── Global lobby chat ─────────────────────────────────────────────

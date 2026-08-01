@@ -8,6 +8,7 @@ import GameLobby, { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
 import GlowButton from '../components/GlowButton';
 import ResultScreen from '../components/ResultScreen';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
+import { useResumeMatch } from '../hooks/useResumeMatch';
 
 const MAX_GUESSES = 6;
 const WORD_LENGTH = 5;
@@ -165,6 +166,8 @@ export default function WordleGame() {
   const navigate   = useNavigate();
   const location   = useLocation();
   const { socket, authenticated, doAuth, playerCounts } = useSocket();
+  // Only a live match re-claims itself after a reconnect; a refresh forfeits.
+  useResumeMatch(socket, () => phase === 'playing');
   const { profile, refreshProfile } = useAuth();
   const { displayCurrency: betCurrency, setDisplayCurrency: setBetCurrency } = useCurrency();
 

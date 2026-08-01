@@ -9,6 +9,7 @@ import GameLobby from '../components/GameLobby';
 import ResultScreen from '../components/ResultScreen';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
 import { usePageReady } from '../hooks/usePageReady';
+import { useResumeMatch } from '../hooks/useResumeMatch';
 import CoinIcon from '../components/CoinIcon';
 
 const COIN_FEES    = [1, 5, 10, 25, 50, 100];
@@ -148,6 +149,8 @@ export default function BlockBlastGame() {
   const ready = usePageReady();
   const { profile, refreshProfile, updateProfile } = useAuth();
   const { socket, authenticated, doAuth, playerCounts } = useSocket();
+  // Only a live match re-claims itself after a reconnect; a refresh forfeits.
+  useResumeMatch(socket, () => phaseRef.current === 'playing');
   const location = useLocation();
 
   const [phase, _setPhase]             = useState(location.state?.autoQueue ? 'queue' : 'lobby');
