@@ -287,24 +287,142 @@ function bakeVehicle(kind, paint, wpx, lpx) {
   });
 }
 
-// ── Player car ──────────────────────────────────────────────────────────────
-// Deliberately unlike anything in traffic: a pointed nose, a cyan light bar
-// across the tail, glowing strakes down both flanks and a cyan-white lamp pair.
-// At this resolution identity has to come from lighting, not from detail.
+// ── Player car — the Interceptor ────────────────────────────────────────────
+// Built scanline by scanline rather than from stacked rectangles. At roughly
+// 25x51 pixels a car's identity is almost entirely its outline, so the
+// silhouette is defined as a half-width curve down the length: a drawn-in nose,
+// wide shoulders over the front wheels, a waisted middle, flared rear haunches
+// and a wing that overhangs the body. Nothing in traffic has that outline, so
+// the player is identifiable at a glance even with the screen full of cars.
 function bakePlayer(wpx, lpx) {
-  const w = Math.max(8, Math.round(wpx)), l = Math.max(12, Math.round(lpx));
+  const w = Math.max(10, Math.round(wpx));
+  const l = Math.max(16, Math.round(lpx));
+  const cx = Math.floor(w / 2);
+
+  const BLUE = '#1668FF';
+  const BLUE_HI = '#68B4FF';
+  const BLUE_LO = '#0B3A96';
+  const EDGE = '#04102A';
+
+  // Half-width of the bodywork at a given fraction along the car. Hand-tuned
+  // control points, linearly interpolated, so the shape holds at any size.
+  // A wedge, not a bullet: the nose starts genuinely narrow and the flanks run
+  // straight out to the shoulders. The body is pinched back in at both axles so
+  // the tyres break the outline instead of hiding under it.
+  // A wedge, not a bullet and not a spike. The nose is genuinely narrower than
+  // the shoulders but still a real face — taken much below half width it stops
+  // reading as a car and starts reading as an antenna. The body is pinched at
+  // both axles so the tyres break the outline instead of hiding under it.
+  const KEYS = [
+    [0.00, 0.50], [0.05, 0.58], [0.12, 0.70], [0.18, 0.74],
+    [0.24, 0.68], [0.34, 0.68], [0.40, 0.76], [0.56, 0.76],
+    [0.64, 0.82], [0.70, 0.72], [0.80, 0.72], [0.86, 0.84],
+    [0.94, 0.82], [1.00, 0.72],
+  ];
+  const halfAtF = (f) => {
+    for (let i = 1; i < KEYS.length; i++) {
+      if (f <= KEYS[i][0]) {
+        const [f0, v0] = KEYS[i - 1], [f1, v1] = KEYS[i];
+        const t = (f - f0) / (f1 - f0 || 1);
+        return v0 + (v1 - v0) * t;
+      }
+    }
+    return KEYS[KEYS.length - 1][1];
+  };
+
   return bake(w, l, (g) => {
-    paintPixelVehicle(g, w, l, '#1668FF',
-      { nose: 0.20, tail: 0.10, cab: [0.40, 0.68], bonnet: 0.34 },
-      { head: PAL.lampC });
-    const inset = Math.max(1, Math.round(w * 0.09));
-    // cyan strakes down the flanks
-    px(g, inset + 1, Math.round(l * 0.34), 1, Math.round(l * 0.34), PAL.lampC);
-    px(g, w - inset - 2, Math.round(l * 0.34), 1, Math.round(l * 0.34), PAL.lampC);
-    // full-width tail bar — no traffic vehicle has one
-    px(g, inset + 2, l - 2, w - inset * 2 - 4, 1, PAL.lampC);
-    // nose spike
-    px(g, Math.round(w / 2) - 1, 0, 2, Math.max(2, Math.round(l * 0.06)), '#FFFFFF');
+    const halfPx = [];
+    for (let y = 0; y < l; y++) {
+      halfPx[y] = Math.max(1, Math.round(halfAtF(y / (l - 1)) * (w / 2)));
+    }
+
+    // Wheels first so the body sits over them and only the shoulders show.
+    // Aligned with the waists in KEYS — offset from them, the pinch reads as a
+    // dent in the bodywork rather than as a wheel arch.
+    const tyreL = Math.max(2, Math.round(l * 0.11));
+    for (const ty of [Math.round(l * 0.23), Math.round(l * 0.70)]) {
+      for (let y = ty; y < Math.min(l, ty + tyreL); y++) {
+        px(g, cx - halfPx[y] - 1, y, 2, 1, PAL.tyre);
+        px(g, cx + halfPx[y] - 1, y, 2, 1, PAL.tyre);
+      }
+    }
+
+    // Body: outline pass, then fill, then the lit and shaded flanks.
+    for (let y = 0; y < l; y++) {
+      const h = halfPx[y];
+      px(g, cx - h, y, h * 2, 1, EDGE);
+      if (h > 1) px(g, cx - h + 1, y, (h - 1) * 2, 1, BLUE);
+      if (h > 2) {
+        px(g, cx - h + 1, y, 1, 1, BLUE_HI);          // key light, left flank
+        px(g, cx + h - 2, y, 1, 1, BLUE_LO);          // shade, right flank
+        if (h > 4) px(g, cx + h - 3, y, 1, 1, '#0F4FC4'); // second shade step
+      }
+    }
+
+    // Centre spine — the one continuous bright line, and most of what makes
+    // the nose read as pointed rather than blunt.
+    // Racing stripe over the bonnet — two pixels wide so it reads as a stripe
+    // rather than a scratch, and stopping at the canopy.
+    const stW = Math.max(1, Math.round(w * 0.09));
+    px(g, cx - Math.floor(stW / 2), Math.round(l * 0.04), stW, Math.round(l * 0.32), '#EAF6FF');
+    px(g, cx - Math.floor(stW / 2), Math.round(l * 0.04), 1, Math.round(l * 0.32), BLUE_HI);
+
+    // Front splitter: a dark bar across the nose, which stops the wedge from
+    // reading as a plain point.
+    const spY = Math.round(l * 0.13);
+    px(g, cx - halfPx[spY] + 1, spY, (halfPx[spY] - 1) * 2, 1, EDGE);
+
+    // Headlights, tucked inside the nose taper.
+    const hl = Math.max(2, Math.round(l * 0.07));
+    const hw = Math.max(2, Math.round(w * 0.15));
+    px(g, cx - halfPx[hl] + 1, hl, hw, 1, PAL.lampC);
+    px(g, cx + halfPx[hl] - 1 - hw, hl, hw, 1, PAL.lampC);
+
+    // Canopy: a trapezoid that narrows toward the tail, not a round bubble.
+    const c0 = Math.round(l * 0.38), c1 = Math.round(l * 0.58);
+    for (let y = c0; y < c1; y++) {
+      const t = (y - c0) / Math.max(1, c1 - c0 - 1);
+      const gh = Math.max(1, Math.round(halfPx[y] * (0.66 - 0.16 * t)));
+      px(g, cx - gh, y, gh * 2, 1, PAL.glass);
+      if (y === c0) px(g, cx - gh, y, gh * 2, 1, PAL.glassLit);
+      if (t > 0.2 && t < 0.6) px(g, cx - gh + 1, y, 1, 1, PAL.glassLit);
+    }
+
+    // Bonnet vents either side of the stripe, and a shut line at the tail —
+    // without them the panels read as empty blue.
+    const vY = Math.round(l * 0.17), vH = Math.max(1, Math.round(l * 0.05));
+    const vW = Math.max(1, Math.round(w * 0.11));
+    px(g, cx - Math.round(w * 0.26), vY, vW, vH, BLUE_LO);
+    px(g, cx + Math.round(w * 0.26) - vW, vY, vW, vH, BLUE_LO);
+    const dY = Math.round(l * 0.78);
+    px(g, cx - halfPx[dY] + 2, dY, (halfPx[dY] - 2) * 2, 1, BLUE_LO);
+
+    // Two SHORT strakes over the rear haunches. Running them the full length
+    // made them merge with the outline and the car read as a box.
+    const s0 = Math.round(l * 0.62), s1 = Math.round(l * 0.74);
+    for (let y = s0; y < s1; y++) {
+      px(g, cx - halfPx[y] + 1, y, 1, 1, PAL.lampC);
+      px(g, cx + halfPx[y] - 2, y, 1, 1, PAL.lampC);
+    }
+
+    // Rear wing, standing clear of the bodywork with a visible gap beneath it
+    // and cyan only at the tips. No traffic vehicle is wider at the tail, so
+    // this is the strongest silhouette cue the car has.
+    const wy = Math.round(l * 0.84);
+    const wingH = Math.max(2, Math.round(l * 0.045));
+    const wingW = Math.min(w, halfPx[wy] * 2 + Math.max(2, Math.round(w * 0.12)));
+    const wx = cx - Math.floor(wingW / 2);
+    px(g, wx, wy, wingW, wingH, EDGE);
+    const tip = Math.max(1, Math.round(wingW * 0.22));
+    px(g, wx, wy, tip, 1, PAL.lampC);
+    px(g, wx + wingW - tip, wy, tip, 1, PAL.lampC);
+
+    // Tail: red clusters either side of a cyan bar.
+    const ty2 = l - Math.max(2, Math.round(l * 0.055));
+    const tw = Math.max(2, Math.round(w * 0.22));
+    px(g, cx - halfPx[l - 2] + 1, ty2, tw, 1, PAL.lampR);
+    px(g, cx + halfPx[l - 2] - 1 - tw, ty2, tw, 1, PAL.lampR);
+    px(g, cx - Math.round(w * 0.14), l - 1, Math.max(2, Math.round(w * 0.28)), 1, PAL.lampC);
   });
 }
 
