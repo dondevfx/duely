@@ -170,14 +170,14 @@ export default function GameLobby({
 
   return (
     <div className="w-full max-w-md animate-slide-up">
-      <h1 className="text-5xl font-black text-white text-center mb-3">{title}</h1>
+      <h1 className="text-3xl sm:text-5xl font-black text-white text-center mb-1.5 sm:mb-3">{title}</h1>
       {description && (
-        <p className="text-center text-muted text-base leading-relaxed mb-6 px-2">{description}</p>
+        <p className="text-center text-muted text-sm sm:text-base leading-snug sm:leading-relaxed mb-3 sm:mb-6 px-2">{description}</p>
       )}
 
       {/* ── Entry Fee ── */}
-      <div className="mb-4 bg-surface border border-border rounded-2xl p-5">
-        <div className="flex items-center justify-between mb-4">
+      <div className="mb-2.5 sm:mb-4 bg-surface border border-border rounded-2xl p-3 sm:p-5">
+        <div className="flex items-center justify-between mb-2.5 sm:mb-4">
           <span className="text-base font-bold text-white">Entry Fee</span>
           <div className="flex items-center gap-0.5 bg-bg border border-border rounded-lg p-1">
             <button
@@ -198,7 +198,7 @@ export default function GameLobby({
         {/* Bet amount display */}
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm text-muted">Min: {fmtFee(fees[0])} {currLabel}</span>
-          <span className="text-2xl font-black text-white">
+          <span className="text-xl sm:text-2xl font-black text-white">
             <span ref={feeDisplayRef}>{fmtFee(entryFee)}</span>{' '}
             <span className="text-primary">{currLabel}</span>
           </span>
@@ -208,7 +208,7 @@ export default function GameLobby({
         {/* Custom smooth slider — DOM-driven during drag, zero React re-renders per frame */}
         <div
           ref={sliderTrackRef}
-          className="relative w-full h-12 flex items-center cursor-grab active:cursor-grabbing select-none touch-none"
+          className="relative w-full h-9 sm:h-12 flex items-center cursor-grab active:cursor-grabbing select-none touch-none"
           style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
         >
           {/* Track background */}
@@ -237,9 +237,9 @@ export default function GameLobby({
 
         {/* Payout — updates live during drag via payoutDisplayRef */}
         {entryFee > 0 && (
-          <div className="mt-4 text-center">
+          <div className="mt-2 sm:mt-4 text-center">
             <div className="text-xs text-muted uppercase tracking-widest mb-1 font-semibold">Win Payout</div>
-            <div className="text-3xl font-black text-success inline-flex items-center gap-1" style={{ textShadow: '0 0 16px rgba(34,197,94,0.4)' }}>
+            <div className="text-2xl sm:text-3xl font-black text-success inline-flex items-center gap-1" style={{ textShadow: '0 0 16px rgba(34,197,94,0.4)' }}>
               <span ref={payoutDisplayRef}>{`+${calcPayout(entryFee, isDiamonds)}`}</span>
               {' '}{currLabel}
             </div>
@@ -278,9 +278,9 @@ export default function GameLobby({
       {controls && <div className="mb-4">{controls}</div>}
 
       {/* ── Action Buttons ── */}
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2 sm:gap-3">
         {!session ? (
-          <GlowButton onClick={() => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4">
+          <GlowButton onClick={() => navigate('/login')} variant="primary" size="lg" className="w-full text-base sm:text-lg py-2.5 sm:py-4">
             🔒 Login to Play
           </GlowButton>
         ) : (
@@ -289,7 +289,7 @@ export default function GameLobby({
           onClick={session ? onQueue : () => navigate('/login')}
           variant="primary"
           size="lg"
-          className="w-full text-lg py-4"
+          className="w-full text-base sm:text-lg py-2.5 sm:py-4"
           disabled={session && (!authenticated || insufficient)}
         >
           {session ? 'Find Opponent' : '🔒 Login to Play'}
@@ -301,7 +301,7 @@ export default function GameLobby({
             onClick={() => setPrivateMode('create')}
             variant="ghost"
             size="lg"
-            className="w-full text-lg py-4 border border-border hover:border-primary"
+            className="w-full text-base sm:text-lg py-2.5 sm:py-4 border border-border hover:border-primary"
           >
             🎮 Challenge a Friend
           </GlowButton>
@@ -358,7 +358,7 @@ export default function GameLobby({
       </div>
 
       {statusMsg && (
-        <p className="text-center text-base text-muted mt-4 animate-fade-in">{statusMsg}</p>
+        <p className="text-center text-sm sm:text-base text-muted mt-2 sm:mt-4 animate-fade-in">{statusMsg}</p>
       )}
       {session && !authenticated && (
         <div className="flex items-center justify-center gap-2 text-sm text-muted mt-3">

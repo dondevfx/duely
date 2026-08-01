@@ -116,3 +116,9 @@ html.light .hover\:bg-surfaceLight:hover { background-color: #cdd4e0 !important;
 @media (min-width: 3400px) {
   .tv-scale { zoom: 0.7; }
 }
+
+/* Rush Hour: the surround either side of the play area. On a phone the road
+   fills the width and this is never seen; on a desktop it frames the portrait
+   play area and must match the page behind it. */
+:root { --rh-surround: #000000; }
+html.light { --rh-surround: #ffffff; }

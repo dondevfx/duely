@@ -287,142 +287,130 @@ function bakeVehicle(kind, paint, wpx, lpx) {
   });
 }
 
-// ── Player car — the Interceptor ────────────────────────────────────────────
-// Built scanline by scanline rather than from stacked rectangles. At roughly
-// 25x51 pixels a car's identity is almost entirely its outline, so the
-// silhouette is defined as a half-width curve down the length: a drawn-in nose,
-// wide shoulders over the front wheels, a waisted middle, flared rear haunches
-// and a wing that overhangs the body. Nothing in traffic has that outline, so
-// the player is identifiable at a glance even with the screen full of cars.
+// ── Player car ──────────────────────────────────────────────────────────────
+// A GT3 RS read from above: wide low body, pronounced front wheel arches that
+// stand proud of the nose, a cab-forward roof, a waisted middle, huge rear
+// haunches, and a swan-neck wing that overhangs the bodywork. Black bodywork
+// with a blue centre section and grey arches and aero, which also keeps it
+// clearly apart from traffic without using traffic's colours.
 function bakePlayer(wpx, lpx) {
   const w = Math.max(10, Math.round(wpx));
   const l = Math.max(16, Math.round(lpx));
   const cx = Math.floor(w / 2);
 
-  const BLUE = '#1668FF';
-  const BLUE_HI = '#68B4FF';
-  const BLUE_LO = '#0B3A96';
-  const EDGE = '#04102A';
+  const BLACK   = '#101418';   // bodywork
+  const BLACK_HI= '#2A3138';   // lit flank
+  const BLACK_LO= '#080A0D';   // shaded flank
+  const BLUE    = '#1668FF';   // centre section
+  const BLUE_HI = '#63AEFF';
+  const GREY    = '#79838F';   // arches, splitter, wing
+  const GREY_HI = '#AFB9C4';
+  const EDGE    = '#04070B';
 
-  // Half-width of the bodywork at a given fraction along the car. Hand-tuned
-  // control points, linearly interpolated, so the shape holds at any size.
-  // A wedge, not a bullet: the nose starts genuinely narrow and the flanks run
-  // straight out to the shoulders. The body is pinched back in at both axles so
-  // the tyres break the outline instead of hiding under it.
-  // A wedge, not a bullet and not a spike. The nose is genuinely narrower than
-  // the shoulders but still a real face — taken much below half width it stops
-  // reading as a car and starts reading as an antenna. The body is pinched at
-  // both axles so the tyres break the outline instead of hiding under it.
+  // Half-width down the length. The two bulges are the wheel arches — on a GT3
+  // RS they are the widest points of the car, wider than the doors, and that is
+  // most of what makes the shape recognisable from above.
   const KEYS = [
-    [0.00, 0.50], [0.05, 0.58], [0.12, 0.70], [0.18, 0.74],
-    [0.24, 0.68], [0.34, 0.68], [0.40, 0.76], [0.56, 0.76],
-    [0.64, 0.82], [0.70, 0.72], [0.80, 0.72], [0.86, 0.84],
-    [0.94, 0.82], [1.00, 0.72],
+    [0.00, 0.56], [0.05, 0.66], [0.10, 0.80], [0.17, 0.84],
+    [0.24, 0.80], [0.34, 0.70], [0.46, 0.70], [0.58, 0.76],
+    [0.66, 0.88], [0.76, 0.90], [0.86, 0.84], [0.94, 0.78],
+    [1.00, 0.70],
   ];
   const halfAtF = (f) => {
     for (let i = 1; i < KEYS.length; i++) {
       if (f <= KEYS[i][0]) {
         const [f0, v0] = KEYS[i - 1], [f1, v1] = KEYS[i];
-        const t = (f - f0) / (f1 - f0 || 1);
-        return v0 + (v1 - v0) * t;
+        return v0 + (v1 - v0) * ((f - f0) / (f1 - f0 || 1));
       }
     }
     return KEYS[KEYS.length - 1][1];
   };
 
   return bake(w, l, (g) => {
-    const halfPx = [];
-    for (let y = 0; y < l; y++) {
-      halfPx[y] = Math.max(1, Math.round(halfAtF(y / (l - 1)) * (w / 2)));
-    }
+    const half = [];
+    for (let y = 0; y < l; y++) half[y] = Math.max(1, Math.round(halfAtF(y / (l - 1)) * (w / 2)));
 
-    // Wheels first so the body sits over them and only the shoulders show.
-    // Aligned with the waists in KEYS — offset from them, the pinch reads as a
-    // dent in the bodywork rather than as a wheel arch.
-    const tyreL = Math.max(2, Math.round(l * 0.11));
-    for (const ty of [Math.round(l * 0.23), Math.round(l * 0.70)]) {
+    // tyres, sitting in the arches
+    const tyreL = Math.max(2, Math.round(l * 0.10));
+    for (const ty of [Math.round(l * 0.12), Math.round(l * 0.68)]) {
       for (let y = ty; y < Math.min(l, ty + tyreL); y++) {
-        px(g, cx - halfPx[y] - 1, y, 2, 1, PAL.tyre);
-        px(g, cx + halfPx[y] - 1, y, 2, 1, PAL.tyre);
+        px(g, cx - half[y] - 1, y, 2, 1, PAL.tyre);
+        px(g, cx + half[y] - 1, y, 2, 1, PAL.tyre);
       }
     }
 
-    // Body: outline pass, then fill, then the lit and shaded flanks.
+    // body: outline, black fill, lit left flank, shaded right
     for (let y = 0; y < l; y++) {
-      const h = halfPx[y];
+      const h = half[y];
       px(g, cx - h, y, h * 2, 1, EDGE);
-      if (h > 1) px(g, cx - h + 1, y, (h - 1) * 2, 1, BLUE);
+      if (h > 1) px(g, cx - h + 1, y, (h - 1) * 2, 1, BLACK);
       if (h > 2) {
-        px(g, cx - h + 1, y, 1, 1, BLUE_HI);          // key light, left flank
-        px(g, cx + h - 2, y, 1, 1, BLUE_LO);          // shade, right flank
-        if (h > 4) px(g, cx + h - 3, y, 1, 1, '#0F4FC4'); // second shade step
+        px(g, cx - h + 1, y, 1, 1, BLACK_HI);
+        px(g, cx + h - 2, y, 1, 1, BLACK_LO);
       }
     }
 
-    // Centre spine — the one continuous bright line, and most of what makes
-    // the nose read as pointed rather than blunt.
-    // Racing stripe over the bonnet — two pixels wide so it reads as a stripe
-    // rather than a scratch, and stopping at the canopy.
-    const stW = Math.max(1, Math.round(w * 0.09));
-    px(g, cx - Math.floor(stW / 2), Math.round(l * 0.04), stW, Math.round(l * 0.32), '#EAF6FF');
-    px(g, cx - Math.floor(stW / 2), Math.round(l * 0.04), 1, Math.round(l * 0.32), BLUE_HI);
+    // grey arch caps over both axles — the RS cue
+    for (const [ay, ah] of [[Math.round(l * 0.09), Math.round(l * 0.11)],
+                            [Math.round(l * 0.65), Math.round(l * 0.13)]]) {
+      for (let y = ay; y < Math.min(l, ay + ah); y++) {
+        px(g, cx - half[y] + 1, y, 1, 1, GREY);
+        px(g, cx + half[y] - 2, y, 1, 1, GREY);
+      }
+    }
 
-    // Front splitter: a dark bar across the nose, which stops the wedge from
-    // reading as a plain point.
-    const spY = Math.round(l * 0.13);
-    px(g, cx - halfPx[spY] + 1, spY, (halfPx[spY] - 1) * 2, 1, EDGE);
+    // blue centre section, nose to tail, narrowing over the cabin
+    const bw = Math.max(2, Math.round(w * 0.34));
+    px(g, cx - Math.floor(bw / 2), Math.round(l * 0.05), bw, Math.round(l * 0.30), BLUE);
+    px(g, cx - Math.floor(bw / 2), Math.round(l * 0.05), 1, Math.round(l * 0.30), BLUE_HI);
+    px(g, cx - Math.floor(bw / 2), Math.round(l * 0.60), bw, Math.round(l * 0.24), BLUE);
+    px(g, cx - Math.floor(bw / 2), Math.round(l * 0.60), 1, Math.round(l * 0.24), BLUE_HI);
 
-    // Headlights, tucked inside the nose taper.
+    // grey front splitter
+    const spY = Math.max(1, Math.round(l * 0.03));
+    px(g, cx - half[spY] + 1, spY, (half[spY] - 1) * 2, 1, GREY);
+
+    // headlights, set into the arches
     const hl = Math.max(2, Math.round(l * 0.07));
-    const hw = Math.max(2, Math.round(w * 0.15));
-    px(g, cx - halfPx[hl] + 1, hl, hw, 1, PAL.lampC);
-    px(g, cx + halfPx[hl] - 1 - hw, hl, hw, 1, PAL.lampC);
+    const hw = Math.max(2, Math.round(w * 0.14));
+    px(g, cx - half[hl] + 2, hl, hw, 1, PAL.lampW);
+    px(g, cx + half[hl] - 2 - hw, hl, hw, 1, PAL.lampW);
 
-    // Canopy: a trapezoid that narrows toward the tail, not a round bubble.
-    const c0 = Math.round(l * 0.38), c1 = Math.round(l * 0.58);
+    // cab-forward glasshouse
+    const c0 = Math.round(l * 0.34), c1 = Math.round(l * 0.58);
     for (let y = c0; y < c1; y++) {
       const t = (y - c0) / Math.max(1, c1 - c0 - 1);
-      const gh = Math.max(1, Math.round(halfPx[y] * (0.66 - 0.16 * t)));
+      const gh = Math.max(1, Math.round(half[y] * (0.74 - 0.20 * t)));
       px(g, cx - gh, y, gh * 2, 1, PAL.glass);
       if (y === c0) px(g, cx - gh, y, gh * 2, 1, PAL.glassLit);
       if (t > 0.2 && t < 0.6) px(g, cx - gh + 1, y, 1, 1, PAL.glassLit);
     }
 
-    // Bonnet vents either side of the stripe, and a shut line at the tail —
-    // without them the panels read as empty blue.
-    const vY = Math.round(l * 0.17), vH = Math.max(1, Math.round(l * 0.05));
-    const vW = Math.max(1, Math.round(w * 0.11));
-    px(g, cx - Math.round(w * 0.26), vY, vW, vH, BLUE_LO);
-    px(g, cx + Math.round(w * 0.26) - vW, vY, vW, vH, BLUE_LO);
-    const dY = Math.round(l * 0.78);
-    px(g, cx - halfPx[dY] + 2, dY, (halfPx[dY] - 2) * 2, 1, BLUE_LO);
-
-    // Two SHORT strakes over the rear haunches. Running them the full length
-    // made them merge with the outline and the car read as a box.
-    const s0 = Math.round(l * 0.62), s1 = Math.round(l * 0.74);
-    for (let y = s0; y < s1; y++) {
-      px(g, cx - halfPx[y] + 1, y, 1, 1, PAL.lampC);
-      px(g, cx + halfPx[y] - 2, y, 1, 1, PAL.lampC);
+    // engine louvres over the rear deck
+    const lv = Math.round(l * 0.62);
+    for (let i = 0; i < 3; i++) {
+      const y = lv + i * 2;
+      if (y < l) px(g, cx - Math.round(w * 0.22), y, Math.round(w * 0.44), 1, BLACK_LO);
     }
 
-    // Rear wing, standing clear of the bodywork with a visible gap beneath it
-    // and cyan only at the tips. No traffic vehicle is wider at the tail, so
-    // this is the strongest silhouette cue the car has.
-    const wy = Math.round(l * 0.84);
-    const wingH = Math.max(2, Math.round(l * 0.045));
-    const wingW = Math.min(w, halfPx[wy] * 2 + Math.max(2, Math.round(w * 0.12)));
+    // swan-neck wing: grey, standing clear and overhanging both flanks
+    const wy = Math.round(l * 0.855);
+    const wingH = Math.max(2, Math.round(l * 0.05));
+    const wingW = Math.min(w, half[wy] * 2 + Math.max(2, Math.round(w * 0.14)));
     const wx = cx - Math.floor(wingW / 2);
     px(g, wx, wy, wingW, wingH, EDGE);
-    const tip = Math.max(1, Math.round(wingW * 0.22));
-    px(g, wx, wy, tip, 1, PAL.lampC);
-    px(g, wx + wingW - tip, wy, tip, 1, PAL.lampC);
+    px(g, wx + 1, wy, wingW - 2, 1, GREY_HI);
+    px(g, wx + 1, wy + 1, wingW - 2, Math.max(1, wingH - 2), GREY);
+    // the two uprights
+    px(g, cx - Math.round(w * 0.18), wy + wingH, 1, 2, GREY);
+    px(g, cx + Math.round(w * 0.18), wy + wingH, 1, 2, GREY);
 
-    // Tail: red clusters either side of a cyan bar.
-    const ty2 = l - Math.max(2, Math.round(l * 0.055));
-    const tw = Math.max(2, Math.round(w * 0.22));
-    px(g, cx - halfPx[l - 2] + 1, ty2, tw, 1, PAL.lampR);
-    px(g, cx + halfPx[l - 2] - 1 - tw, ty2, tw, 1, PAL.lampR);
-    px(g, cx - Math.round(w * 0.14), l - 1, Math.max(2, Math.round(w * 0.28)), 1, PAL.lampC);
+    // tail: red clusters, grey diffuser between them
+    const ty2 = l - Math.max(2, Math.round(l * 0.05));
+    const tw = Math.max(2, Math.round(w * 0.2));
+    px(g, cx - half[l - 2] + 1, ty2, tw, 1, PAL.lampR);
+    px(g, cx + half[l - 2] - 1 - tw, ty2, tw, 1, PAL.lampR);
+    px(g, cx - Math.round(w * 0.16), l - 1, Math.max(2, Math.round(w * 0.32)), 1, GREY);
   });
 }
 
@@ -559,15 +547,20 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       ctx.imageSmoothingEnabled = false;
       dctx.imageSmoothingEnabled = false;
       W = vw; H = vh;
-      playerY = Math.round(H * PLAYER_YF);
-      // Snap the lane width to a whole pixel so lane lines and cars never sit
-      // on a half pixel — the other half of keeping the grid honest.
-      laneW = Math.max(8, Math.floor(Math.min(
-        ((playerY - H * 0.02) / VIEW_AHEAD) * LANE_U,
-        (W * 0.965) / LANES)));
+      // The road fills the width. Scale therefore comes from the width alone,
+      // snapped to a whole pixel so lane lines and cars never straddle one.
+      laneW = Math.max(8, Math.floor((W * 0.995) / LANES));
       u2p = laneW / LANE_U;
       roadW = laneW * LANES;
       roadX = Math.round((W - roadW) / 2);
+
+      // Because the scale is now set by the width, the player line has to move
+      // to keep the view ahead at exactly VIEW_AHEAD units. That constancy is a
+      // fairness requirement, not a style choice: both players in a match must
+      // get the same reaction distance whatever device they are on. The clamp
+      // guarantees some road behind the player; the canvas aspect is capped in
+      // the JSX so the clamp never actually binds.
+      playerY = Math.round(clamp(VIEW_AHEAD * u2p, H * 0.62, H * 0.88));
       bakeAll();
     }
 
@@ -715,6 +708,26 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       for (const c of cars) if (c.on && Math.round(c.laneF) === l && c.y > 300) min = Math.min(min, SPAWN_Y - c.y);
       return min;
     }
+    // How long a car indicates before it moves. Long enough to read and react
+    // to, which is the point — the indicator is information, not decoration.
+    const SIGNAL_S = 1.5;
+
+    // Is `target` clear for `c` to move into? Considers cars occupying the lane,
+    // cars sliding into it, and cars indicating into it — without the last two,
+    // two vehicles can pick the same gap from opposite sides and merge into one
+    // another.
+    function laneChangeClear(c, target) {
+      if (target < 0 || target > LANES - 1) return false;
+      for (const o of cars) {
+        if (!o.on || o === c) continue;
+        const occupies = Math.round(o.laneF) === target || o.lane === target;
+        const heading = o.changing !== 0 && clamp(o.lane + (o.changing === -1 ? o.sigDir : 0), 0, LANES - 1) === target;
+        if (!occupies && !heading) continue;
+        if (Math.abs(o.y - c.y) < 300) return false;
+      }
+      return true;
+    }
+
     function spawnWave() {
       const d = diff();
       S.waveN++;
@@ -722,9 +735,13 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       const step = rand();
       S.corridor = clamp(S.corridor + (step < 0.36 ? -1 : step < 0.72 ? 1 : 0), 0, LANES - 1);
 
-      const maxBlock = S.simT < 9 ? 1 : S.simT < 24 ? 2 : 3;
+      // How many lanes a single wave may block. With four lanes, three blocked
+      // at once leaves exactly one gap and reads as a wall — fine deep into a
+      // run, far too much in the opening seconds.
+      const maxBlock = S.simT < 14 ? 1 : S.simT < 32 ? 2 : 3;
       let n = 1 + Math.floor(rand() * maxBlock);
-      if (S.waveN % 6 === 0) n = Math.max(1, n - 1); // breathing pocket
+      if (S.waveN % 4 === 0) n = Math.max(1, n - 1);   // breathing pocket
+      if (S.simT < 6) n = 1;                           // gentle first seconds
 
       const lanes = [];
       for (let l = 0; l < LANES; l++) if (l !== S.corridor) lanes.push(l);
@@ -733,19 +750,23 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         [lanes[i], lanes[j]] = [lanes[j], lanes[i]];
       }
       const closing = CLOSE_MIN + (CLOSE_MAX - CLOSE_MIN) * d + over() * OD_CLOSE;
+      let spawned = 0;
       for (const l of lanes.slice(0, n)) {
         if (laneHeadway(l) < closing * 0.95 + 190) continue; // deterministic headway guard
         const c = take(cars); if (!c) continue;
         const kind = pick();
         c.on = true; c.kind = kind;
         c.paint = PAINTS[Math.floor(rand() * PAINTS.length)];
-        c.y = SPAWN_Y + rand() * 70;
+        // Stagger each car in the wave, so a wave never arrives as a rank of
+        // cars line abreast across the road.
+        c.y = SPAWN_Y + rand() * 70 + spawned * (120 + rand() * 90);
         c.laneF = l; c.lane = l;
         c.spd = S.speed - closing * VEHICLES[kind].close * (0.86 + rand() * 0.28);
         c.near = false; c.brake = rand() < 0.16;
         c.sig = 0; c.sigDir = 0; c.changing = 0;
         // pre-rolled lane change — deterministic, fires only well ahead of the player
         c.changeAt = (S.simT > 11 && kind !== 'semi' && rand() < 0.18 + d * 0.22 + over() * 0.12) ? S.simT + 0.8 + rand() * 2.0 : -1;
+        spawned++;
       }
       S.waveIn = Math.max(0.28, (1.16 - d * 0.72 - over() * 0.16) + rand() * Math.max(0.14, 0.6 - d * 0.28 - over() * 0.1));
     }
@@ -793,11 +814,12 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
 
       // player lane spring — snappy with a hint of overshoot
       const targetX = laneCenter(S.targetLane);
-      // Snappy, near-critically-damped steering: ~133ms to cross a lane and
-      // ~233ms fully settled, with almost no overshoot. Responsiveness is
-      // deliberately favoured over a long, pretty animation.
-      S.laneVel += (targetX - S.laneX) * 600 * dt;
-      S.laneVel *= Math.exp(-34 * dt);
+      // Steering is deliberately quick rather than pretty: a stiffer spring and
+      // heavier damping, so a lane is crossed in about 90ms and settled in
+      // roughly 150ms with no overshoot. At these speeds an input that takes a
+      // fifth of a second to land feels broken.
+      S.laneVel += (targetX - S.laneX) * 1350 * dt;
+      S.laneVel *= Math.exp(-46 * dt);
       S.laneX += S.laneVel * dt;
       // tyre smoke while sliding
       if (Math.abs(S.laneVel) > 240) {
@@ -848,17 +870,22 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         if (c.changeAt > 0 && S.simT >= c.changeAt && c.changing === 0 && c.y > 330 && S.changeCooldown <= 0) {
           const dir = c.lane === 0 ? 1 : c.lane === LANES - 1 ? -1 : (rand() < 0.5 ? -1 : 1);
           const target = c.lane + dir;
-          let ok = true;
-          for (const o of cars) {
-            if (!o.on || o === c) continue;
-            if (Math.round(o.laneF) === target && Math.abs(o.y - c.y) < 240) { ok = false; break; }
+          if (laneChangeClear(c, target)) {
+            c.sig = SIGNAL_S; c.sigDir = dir; c.changing = -1;
+            S.changeCooldown = Math.max(0.45, 1.1 - over() * 0.35);
           }
-          if (ok) { c.sig = 0.42; c.sigDir = dir; c.changing = -1; S.changeCooldown = Math.max(0.45, 1.1 - over() * 0.35); }
           c.changeAt = -1;
         }
         if (c.changing === -1) {
           c.sig -= dt;
-          if (c.sig <= 0) { c.changing = 1; c.lane = clamp(c.lane + c.sigDir, 0, LANES - 1); }
+          // Re-check on the way in. The gap was clear when the indicator came
+          // on, but 1.5 seconds is long enough for another car to move into it
+          // — including one indicating the other way into the same lane.
+          if (!laneChangeClear(c, c.lane + c.sigDir)) {
+            c.changing = 0; c.sig = 0; c.sigDir = 0;
+          } else if (c.sig <= 0) {
+            c.changing = 1; c.lane = clamp(c.lane + c.sigDir, 0, LANES - 1);
+          }
         } else if (c.changing === 1) {
           c.laneF += (c.lane - c.laneF) * Math.min(1, dt * 5);
           if (Math.abs(c.laneF - c.lane) < 0.02) { c.laneF = c.lane; c.changing = 0; }
@@ -1079,7 +1106,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
           ctx.drawImage(sp.glowRed, cx + wpx * 0.3 - gs / 2, cy + lpx / 2 - gs * 0.55, gs, gs);
           ctx.globalAlpha = 1;
         }
-        if (c.changing === -1 && Math.floor(nowMs / 130) % 2 === 0) {
+        if (c.changing === -1 && Math.floor(nowMs / 220) % 2 === 0) {
           const sx = cx + c.sigDir * wpx * 0.42;
           ctx.globalAlpha = 0.9;
           const as = Math.max(3, wpx * 0.38);
@@ -1313,8 +1340,9 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       <div
         className="pointer-events-none absolute inset-0"
         style={{
-          background:
-            'radial-gradient(120% 75% at 50% 62%, rgba(18,80,180,0.16) 0%, rgba(6,12,24,0.5) 45%, rgba(0,0,0,0.92) 100%)',
+          // Plain surround either side of the play area: black in dark mode,
+        // white in light mode, matching the page behind it.
+        background: 'var(--rh-surround, #000000)',
         }}
       />
       {/* Aspect cap: roadW works out at ~0.44x the canvas height, so a canvas
@@ -1323,7 +1351,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       <canvas
         ref={canvasRef}
         className="relative h-full block touch-none select-none w-full"
-        style={{ cursor: 'pointer', maxWidth: 'calc((100dvh - 56px) * 0.52)' }}
+        style={{ cursor: 'pointer', maxWidth: 'calc((100dvh - 56px) * 0.50)' }}
       />
     </div>
   );

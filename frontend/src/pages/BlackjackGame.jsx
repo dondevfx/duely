@@ -1072,9 +1072,9 @@ function BlackjackGame() {
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}>
       <div className="w-full max-w-md animate-slide-up">
 
-        <div className="text-center mb-6">
-          <h1 className="text-5xl font-black text-white mb-2">🃏 Blackjack</h1>
-          <p className="text-muted text-base">Get closer to 21 than your opponent</p>
+        <div className="text-center mb-3 sm:mb-6">
+          <h1 className="text-3xl sm:text-5xl font-black text-white mb-1 sm:mb-2">🃏 Blackjack</h1>
+          <p className="text-muted text-sm sm:text-base">Get closer to 21 than your opponent</p>
         </div>
 
         <div className="mb-4 bg-surface border border-border rounded-2xl p-5">

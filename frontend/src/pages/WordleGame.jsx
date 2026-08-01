@@ -598,7 +598,7 @@ export default function WordleGame() {
     const paidPayout = soloResult?.payout   ?? 0;
     const newElo     = soloResult?.newElo   ?? null;
     return (
-      <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-4 py-8">
+      <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-3 sm:px-4 py-2 sm:py-8">
         <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
         <ResultScreen
           isWinner={solved}
@@ -627,7 +627,7 @@ export default function WordleGame() {
   // ── Result screen (PvP) ───────────────────────────────────────────────────
   if (phase === 'result' && result) {
     return (
-      <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-4 py-8">
+      <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-3 sm:px-4 py-2 sm:py-8">
         <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
         <ResultScreen
           isWinner={result.iWon}

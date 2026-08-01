@@ -576,9 +576,9 @@ export default function CoinFlipGame() {
       <div className="w-full max-w-md animate-slide-up">
 
         {phase === 'lobby' && (
-          <div className="text-center mb-6">
-            <h1 className="text-5xl font-black text-white mb-2">🟡 Coin Flip</h1>
-            <p className="text-muted text-base">Pick a side — get matched with the opposite</p>
+          <div className="text-center mb-3 sm:mb-6">
+            <h1 className="text-3xl sm:text-5xl font-black text-white mb-1 sm:mb-2">🟡 Coin Flip</h1>
+            <p className="text-muted text-sm sm:text-base">Pick a side — get matched with the opposite</p>
           </div>
         )}
 

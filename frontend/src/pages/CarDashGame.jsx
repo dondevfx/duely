@@ -56,6 +56,21 @@ export default function CarDashGame() {
     if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
   }, []);
 
+  // Lock the page while the match is live. The countdown screen is tall enough
+  // to scroll, and any scroll offset was still applied when the canvas mounted,
+  // so the road came up shifted off the top of the viewport. Pinning the
+  // scroller to the top and disabling it removes the cause rather than
+  // compensating for it afterwards.
+  useEffect(() => {
+    if (phase !== 'queue' && phase !== 'playing') return;
+    const main = document.querySelector('main');
+    if (!main) return;
+    const prev = main.style.overflowY;
+    main.scrollTop = 0;
+    main.style.overflowY = 'hidden';
+    return () => { main.style.overflowY = prev; };
+  }, [phase]);
+
   useEffect(() => {
     if (!socket) return;
 
@@ -247,7 +262,7 @@ export default function CarDashGame() {
   // ── Lobby (identical UI to every other game) ──
   return (
     <div
-      className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-4 py-8"
+      className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-3 sm:px-4 py-2 sm:py-8"
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}
     >
       <GameLobby
