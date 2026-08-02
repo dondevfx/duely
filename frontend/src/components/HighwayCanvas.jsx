@@ -38,7 +38,15 @@ const DESPAWN_Y    = -280;
 
 const SPD_START    = 585;    // u/s
 const SPD_MAX      = 1150;
-const RAMP_S       = 48;     // seconds to reach max speed
+// Seconds to full difficulty. Shortened from 48: the old curve spent most of a
+// minute easing in, so a run only became interesting once it was nearly over.
+const RAMP_S       = 36;
+// The first stretch stays a warm-up, matching the old pace to the knee. Past
+// RAMP_KNEE the curve is deliberately steeper than it used to be — by 25s it
+// now runs at ~906 u/s where the old curve gave ~884, and by 30s ~1058 against
+// ~971 — so the run tightens noticeably from that point instead of drifting.
+const RAMP_KNEE    = 16;     // seconds before the difficulty curve steepens
+const KNEE_AT      = 0.25;   // difficulty reached at the knee
 // Past RAMP_S the run keeps escalating instead of flat-lining.
 const OD_S         = 70;     // seconds per unit of "overdrive"
 const OD_MAX       = 1.8;
@@ -60,6 +68,9 @@ const PTS_NEAR     = 75;
 // behind one, just after its tail has passed, is.
 //   NEAR_BAND — how far to the side of the car the player may be, in world units
 //   NEAR_TAIL — how far behind its rear bumper still counts
+// How close behind a car the player must get, in its lane, before a swerve out
+// counts as a near miss at all.
+const NEAR_ARM     = 150;
 const NEAR_BAND    = 88;
 const NEAR_TAIL    = 74;
 
@@ -631,7 +642,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     // ── Pools ──
     const cars = Array.from({ length: 34 }, () => ({
       on: false, kind: 'sedan', paint: PAINTS[0], y: 0, lane: 0, laneF: 0,
-      spd: 0, near: false, sig: 0, sigDir: 0, changeAt: -1, changing: 0, brake: false,
+      spd: 0, near: false, armed: false, sig: 0, sigDir: 0, changeAt: -1, changing: 0, brake: false,
     }));
     const parts = Array.from({ length: 200 }, () => ({ on: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, age: 0, s: 2, kind: 0, c: '' }));
     const floats = Array.from({ length: 12 }, () => ({ on: false, x: 0, y: 0, age: 0, life: 0, txt: '' }));
@@ -654,7 +665,15 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       poles: Array.from({ length: 5 }, (_, i) => ({ y: i * 300, side: i % 2 ? 1 : -1 })),
     };
 
-    const diff = () => smooth(clamp(S.simT / RAMP_S, 0, 1));
+    // Two-piece curve. Up to RAMP_KNEE it climbs gently to KNEE_AT; after that
+    // it accelerates to full difficulty by RAMP_S. A single smoothstep spent
+    // too long being easy — by 16s it was barely a fifth of the way up.
+    const diff = () => {
+      const t = S.simT;
+      if (t <= RAMP_KNEE) return smooth(t / RAMP_KNEE) * KNEE_AT;
+      const u = clamp((t - RAMP_KNEE) / (RAMP_S - RAMP_KNEE), 0, 1);
+      return KNEE_AT + (1 - KNEE_AT) * smooth(u);
+    };
     // Overdrive keeps speed, density and aggression climbing after the ramp.
     const over = () => clamp((S.simT - RAMP_S) / OD_S, 0, OD_MAX);
     const laneCenter = (l) => (l + 0.5) * LANE_U;
@@ -842,7 +861,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         c.y = SPAWN_Y + rand() * 70 + spawned * (120 + rand() * 90);
         c.laneF = l; c.lane = l;
         c.spd = S.speed - closing * VEHICLES[kind].close * (0.86 + rand() * 0.28);
-        c.near = false; c.brake = rand() < 0.16;
+        c.near = false; c.armed = false; c.brake = rand() < 0.16;
         c.sig = 0; c.sigDir = 0; c.changing = 0;
         // pre-rolled lane change — deterministic, fires only well ahead of the player
         c.changeAt = (S.simT > 11 && kind !== 'semi' && rand() < 0.18 + d * 0.22 + over() * 0.12) ? S.simT + 0.8 + rand() * 2.0 : -1;
@@ -978,9 +997,17 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         const overlapY = Math.abs(c.y) < (v.len * HIT_FORGIVE + pl) / 2;
         // Gap from the player's nose to the car's rear bumper. Positive c.y is
         // ahead of the player, so this is only meaningful while the player is
-        // behind the car — which is exactly the case we want to reward.
+        // behind the car.
         const rearGap = (c.y - (v.len * HIT_FORGIVE) / 2) - pl / 2;
         const behindRear = rearGap > -2 && rearGap < NEAR_TAIL;
+
+        // Closing on this car IN ITS OWN LANE arms it. Without this, simply
+        // driving up an adjacent lane satisfied "behind and laterally clear"
+        // and scored — which is why points were coming from ordinary passes on
+        // the left or right. A near miss now requires the player to have been
+        // lined up on the car's tail and then swerved out of it.
+        if (!c.armed && c.y > 0 && dx < sumW && rearGap < NEAR_ARM) c.armed = true;
+        if (c.y < -(v.len * HIT_FORGIVE + pl) / 2) c.armed = false;
 
         if (!S.dead && overlapY && dx < sumW) {
           // ── CRASH ──
@@ -990,7 +1017,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
           break;
         }
         // near miss — cutting in just behind a car's tail, laterally just clear
-        if (!c.near && !S.dead && behindRear && dx >= sumW && dx < sumW + NEAR_BAND) {
+        if (!c.near && c.armed && !S.dead && behindRear && dx >= sumW && dx < sumW + NEAR_BAND) {
           c.near = true;
           S.combo = (S.simT - S.comboT < 1.5) ? Math.min(S.combo + 1, 4) : 1;
           S.comboT = S.simT;

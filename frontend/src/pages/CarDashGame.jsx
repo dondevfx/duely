@@ -60,19 +60,56 @@ export default function CarDashGame() {
     if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
   }, []);
 
-  // Lock the page while the match is live. The countdown screen is tall enough
-  // to scroll, and any scroll offset was still applied when the canvas mounted,
-  // so the road came up shifted off the top of the viewport. Pinning the
-  // scroller to the top and disabling it removes the cause rather than
-  // compensating for it afterwards.
+  // Lock the page while the match is live.
+  //
+  // Pinning the inner scroller once was not enough. On a phone the document
+  // itself can also scroll, and the canvas changes the page height when it
+  // mounts, so a scroll offset could be reintroduced AFTER the reset ran — the
+  // game then came up with the top of the road cut off. This locks both
+  // scrollers, and re-pins across the next few frames and on resize, which is
+  // when a mobile browser reflows as its address bar shows or hides.
   useEffect(() => {
     if (phase !== 'queue' && phase !== 'playing') return;
     const main = document.querySelector('main');
-    if (!main) return;
-    const prev = main.style.overflowY;
-    main.scrollTop = 0;
-    main.style.overflowY = 'hidden';
-    return () => { main.style.overflowY = prev; };
+    const body = document.body;
+    const html = document.documentElement;
+    const prev = {
+      main: main ? main.style.overflowY : null,
+      body: body.style.overflow,
+      html: html.style.overflow,
+      touch: body.style.touchAction,
+    };
+
+    const pin = () => {
+      if (main) main.scrollTop = 0;
+      if (window.scrollY) window.scrollTo(0, 0);
+    };
+
+    pin();
+    if (main) main.style.overflowY = 'hidden';
+    body.style.overflow = 'hidden';
+    html.style.overflow = 'hidden';
+    body.style.touchAction = 'none';
+
+    // Re-pin over the next few frames: the canvas sizes itself on mount, and
+    // that reflow can land after this effect has already run.
+    let frames = 0;
+    let raf = requestAnimationFrame(function again() {
+      pin();
+      if (++frames < 20) raf = requestAnimationFrame(again);
+    });
+    window.addEventListener('resize', pin);
+    window.addEventListener('orientationchange', pin);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', pin);
+      window.removeEventListener('orientationchange', pin);
+      if (main) main.style.overflowY = prev.main;
+      body.style.overflow = prev.body;
+      html.style.overflow = prev.html;
+      body.style.touchAction = prev.touch;
+    };
   }, [phase]);
 
   useEffect(() => {
