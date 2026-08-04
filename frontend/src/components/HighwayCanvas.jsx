@@ -58,14 +58,19 @@ const CLOSE_MAX    = 470;    // closing speed at full difficulty
 // The drivable path is generated FIRST, as a ribbon through arrival time, and
 // traffic is then scattered freely around it (see makePath / spawnTraffic).
 //
-// PATH_SEG_*  how long the clear lane holds before stepping one across. This is
-//             what caps idle time: the player must move at least this often.
+// PATH_SEG_*  how long the clear lane holds before stepping one across.
+//             These must exceed the FLIGHT TIME of a car — roughly SPAWN_Y over
+//             closing speed, about 1.8s. When the ribbon leaves a lane, traffic
+//             bound for that lane still takes a flight to arrive, so an empty
+//             shadow trails the ribbon. If a segment is shorter than that
+//             shadow, the shadow never closes and the player can simply follow
+//             one lane behind the gap, sitting still for tens of seconds.
 // PATH_TRANS  extra clear time either side of a step, so the lane being left
 //             and the lane being entered are both open across the change.
 // PATH_PAD    safety margin on every rejection test, absorbing the small error
 //             in predicting arrival time while the run is still accelerating.
-const PATH_SEG_MAX = 3.6;
-const PATH_SEG_MIN = 1.4;
+const PATH_SEG_MAX = 3.4;
+const PATH_SEG_MIN = 2.2;
 const PATH_TRANS   = 0.42;
 const PATH_PAD     = 0.30;
 const PATH_HORIZON = 14;   // seconds of path kept generated ahead
@@ -882,7 +887,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         if (lane < 0 || lane > LANES - 1) { dir = -dir; lane = last.lane + dir; S.pathRun = 0; }
         S.pathDir = dir;
         S.pathRun++;
-        const dur = Math.max(0.9, segDuration() * (0.8 + rand() * 0.45));
+        const dur = Math.max(2.0, segDuration() * (0.85 + rand() * 0.4));
         S.path.push({ t0: last.t1, t1: last.t1 + dur, lane: clamp(lane, 0, LANES - 1) });
         last = S.path[S.path.length - 1];
       }
@@ -1012,8 +1017,14 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
           const gap = y - o.y;
           const need = (v.len + VEHICLES[o.kind].len) / 2 + 80;
           if (Math.abs(gap) < need) { ok = false; break; }
-          if (gap > 0) hi = Math.min(hi, o.spd);   // it is ahead: stay no faster
-          else         lo = Math.max(lo, o.spd);   // it is behind: stay no slower
+          // gap > 0 means the NEW car is ahead of o, so o must not be able to
+          // catch it: the new car has to be at least as fast. gap < 0 is the
+          // mirror. These two were the wrong way round, which let faster cars
+          // land behind slower ones — the overlaps — and rejected many valid
+          // placements as impossible, which is what left whole lanes empty and
+          // allowed long stretches of sitting still.
+          if (gap > 0) lo = Math.max(lo, o.spd);   // new car is ahead: no slower
+          else         hi = Math.min(hi, o.spd);   // new car is behind: no faster
         }
         if (import.meta.env.DEV) S._rej.tries++;
         if (!ok) { if (import.meta.env.DEV) S._rej.lane++; continue; }
