@@ -13,7 +13,7 @@ import { isMuted } from '../utils/sound';
  * (high detail: panel lines, glass with reflections, baked bloom on emissives),
  * then the frame loop is pure drawImage + gradients. No shadowBlur per frame.
  *
- * Fairness: traffic comes from the shared server seed via a "snaking corridor"
+ * Fairness: traffic comes from the shared server seed via a generated path
  * spawner — the guaranteed-free lane random-walks one lane per wave, so a
  * survivable path always exists and BOTH players face identical traffic.
  * AI lane changes fire on deterministic thresholds (never conditioned on the
@@ -54,18 +54,33 @@ const OD_SPEED     = 300;    // extra u/s at full overdrive
 const OD_CLOSE     = 170;    // extra closing speed at full overdrive
 const CLOSE_MIN    = 250;    // closing speed floor (u/s)
 const CLOSE_MAX    = 470;    // closing speed at full difficulty
-// ── Traffic bands ───────────────────────────────────────────────────────────
-// Traffic is placed as discrete BANDS across the road, each with exactly one
-// free lane, and that free lane steps by one every band. See spawnBand.
-// Spacing shrinks with difficulty, and it is what sets how often the player is
-// forced to move: time between bands = BAND_GAP / closing speed.
+// ── Traffic ─────────────────────────────────────────────────────────────────
+// The drivable path is generated FIRST, as a ribbon through arrival time, and
+// traffic is then scattered freely around it (see makePath / spawnTraffic).
 //
-// Both values are kept comfortably BELOW VIEW_AHEAD. At spacing equal to the
-// view distance a band only becomes visible as the previous one reaches the
-// player, leaving no time to read the next gap and commit to it — which showed
-// up as deaths around 20s, exactly where the two numbers met.
-const BAND_GAP_START = 700;
-const BAND_GAP_MIN   = 545;
+// PATH_SEG_*  how long the clear lane holds before stepping one across.
+//             These must exceed the FLIGHT TIME of a car — roughly SPAWN_Y over
+//             closing speed, about 1.8s. When the ribbon leaves a lane, traffic
+//             bound for that lane still takes a flight to arrive, so an empty
+//             shadow trails the ribbon. If a segment is shorter than that
+//             shadow, the shadow never closes and the player can simply follow
+//             one lane behind the gap, sitting still for tens of seconds.
+// PATH_TRANS  extra clear time either side of a step, so the lane being left
+//             and the lane being entered are both open across the change.
+// PATH_PAD    safety margin on every rejection test, absorbing the small error
+//             in predicting arrival time while the run is still accelerating.
+const PATH_SEG_MAX = 3.4;
+const PATH_SEG_MIN = 2.2;
+const PATH_TRANS   = 0.42;
+const PATH_PAD     = 0.30;
+const PATH_HORIZON = 14;   // seconds of path kept generated ahead
+
+// Spawn attempts per second, and how many lanes an attempt may retry.
+// How soon every non-path lane must have traffic arriving. This is the cap
+// on idle time.
+const COVER_WINDOW   = 2.6;
+const SPAWN_RATE_MIN = 4.5;
+const SPAWN_RATE_MAX = 14;
 const VISUAL_SCROLL = 1.0;   // road MUST scroll with the world or it slides under the cars
 
 const PTS_DIST     = 0.06;
@@ -686,7 +701,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     // ── Pools ──
     const cars = Array.from({ length: 34 }, () => ({
       on: false, kind: 'sedan', paint: PAINTS[0], y: 0, lane: 0, laneF: 0,
-      spd: 0, near: false, armed: false, armedAt: 0, pathLane: null, sig: 0, sigDir: 0, changeAt: -1, changing: 0, brake: false,
+      spd: 0, near: false, armed: false, armedAt: 0, arriveAt: 0, sig: 0, sigDir: 0, changeAt: -1, changing: 0, brake: false,
     }));
     const parts = Array.from({ length: 200 }, () => ({ on: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, age: 0, s: 2, kind: 0, c: '' }));
     const floats = Array.from({ length: 12 }, () => ({ on: false, x: 0, y: 0, age: 0, life: 0, txt: '' }));
@@ -697,8 +712,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     const S = {
       simT: 0, dist: 0, speed: SPD_START, score: 0,
       laneX: LANE_U * 1.5, laneVel: 0, targetLane: 1,
-      corridor: 2,
-      waveN: 0, pathLane: 1, pathDir: 1, sinceBand: 1e9, bandSpd: 0,
+      waveN: 0, pathDir: 1, pathRun: 0, path: [], spawnAcc: 0, coverT: 0, laneLast: [0, 0, 0, 0],
       changeCooldown: 0,
       combo: 0, comboT: -9,
       flash: 0, shake: 0, scorePop: 0,
@@ -712,14 +726,19 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     // Two-piece curve. Up to RAMP_KNEE it climbs gently to KNEE_AT; after that
     // it accelerates to full difficulty by RAMP_S. A single smoothstep spent
     // too long being easy — by 16s it was barely a fifth of the way up.
-    const diff = () => {
-      const t = S.simT;
+    // Difficulty and speed are pure functions of elapsed time, which is what
+    // makes it possible to predict exactly when a car will reach the player
+    // even though the run is still accelerating while it flies.
+    const diffAt = (t) => {
       if (t <= RAMP_KNEE) return smooth(t / RAMP_KNEE) * KNEE_AT;
       const u = clamp((t - RAMP_KNEE) / (RAMP_S - RAMP_KNEE), 0, 1);
       return KNEE_AT + (1 - KNEE_AT) * smooth(u);
     };
+    const overAt = (t) => clamp((t - RAMP_S) / OD_S, 0, OD_MAX);
+    const speedAt = (t) => SPD_START + (SPD_MAX - SPD_START) * diffAt(t) + overAt(t) * OD_SPEED;
+    const diff = () => diffAt(S.simT);
     // Overdrive keeps speed, density and aggression climbing after the ramp.
-    const over = () => clamp((S.simT - RAMP_S) / OD_S, 0, OD_MAX);
+    const over = () => overAt(S.simT);
     const laneCenter = (l) => (l + 0.5) * LANE_U;
 
     // ── Input ──
@@ -793,29 +812,15 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     canvas.addEventListener('selectstart', noSelect);
     canvas.addEventListener('contextmenu', noSelect);
 
-    // ── Spawning: snaking corridor — deterministic AND always survivable ──
+    // ── Spawning: path-first, traffic scattered around it ──
     function pick() {
       let r = rand() * VTOTAL;
       for (const k of VKEYS) { r -= VEHICLES[k].weight; if (r <= 0) return k; }
       return 'sedan';
     }
-    function laneHeadway(l) {
-      let min = 1e9;
-      for (const c of cars) if (c.on && Math.round(c.laneF) === l && c.y > 300) min = Math.min(min, SPAWN_Y - c.y);
-      return min;
-    }
     // A lane counts as clear only if nothing occupies it anywhere along the
     // stretch the player still has to drive through — including cars that are
     // part-way through a lane change into it.
-    function laneRunClear(l) {
-      for (const c of cars) {
-        if (!c.on) continue;
-        if (c.y < -60 || c.y > SPAWN_Y + 240) continue;
-        if (Math.round(c.laneF) === l || c.lane === l) return false;
-        if (c.changing === -1 && clamp(c.lane + c.sigDir, 0, LANES - 1) === l) return false;
-      }
-      return true;
-    }
 
     // How long a car indicates before it moves. Long enough to read and react
     // to, which is the point — the indicator is information, not decoration.
@@ -829,10 +834,13 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       if (target < 0 || target > LANES - 1) return false;
       // The open lane stays open. Without this an indicating car can seal the
       // only way through after the wave has already committed to leaving it.
-      if (target === S.corridor) return false;
-      // Nor the free lane of the band this car belongs to — that gap is the
-      // player's guaranteed way through and must survive until it is passed.
-      if (c.pathLane != null && target === c.pathLane) return false;
+      // A merge is checked against the ribbon exactly like a spawn is, so
+      // traffic can change lanes again without ever closing the way through.
+      const v = VEHICLES[c.kind];
+      const closing = Math.max(60, S.speed - c.spd);
+      const tMid = arrivalTime(Math.max(0, c.y), c.spd);
+      const half = ((v.len * HIT_FORGIVE + PLAYER_L_U * HIT_FORGIVE) / 2) / closing + PATH_PAD;
+      if (pathBlocked(target, tMid - half, tMid + half)) return false;
       for (const o of cars) {
         if (!o.on || o === c) continue;
         const occupies = Math.round(o.laneF) === target || o.lane === target;
@@ -843,92 +851,212 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       return true;
     }
 
-    // ── Traffic bands ───────────────────────────────────────────────────────
+    // ── The drivable path ───────────────────────────────────────────────────
     //
-    // The road is built as a sequence of bands. Each band spans every lane but
-    // one, and the free lane moves by exactly ONE lane from the previous band.
-    // Driving the run is following that gap as it zig-zags, and the two things
-    // that kept going wrong both fall out of the construction:
+    // The solution is generated before the traffic. `S.path` is a list of
+    // segments in ARRIVAL TIME — "between t=4.2s and t=6.0s the clear lane is
+    // 2" — stepping exactly one lane at each boundary.
     //
-    //   survivable — consecutive gaps are always adjacent, and the space
-    //     between bands is many times the distance a lane change takes, so the
-    //     player can always be in the right lane before a band arrives. Cars
-    //     WITHIN a band share one speed, so a band stays a band instead of
-    //     smearing across the road and quietly sealing the gap. Per-car speeds
-    //     were what made every earlier attempt at this unsurvivable.
-    //
-    //   never idle — the gap moves at EVERY band, so holding one lane stops
-    //     working immediately. Idle time is now a designed quantity,
-    //     BAND_GAP / closing speed, falling from about 4s early to near 1s at
-    //     full difficulty.
-    //
-    // Everything here depends only on the seeded RNG, so both players in a
-    // match still drive an identical road.
-    function bandGap() {
-      return BAND_GAP_START + (BAND_GAP_MIN - BAND_GAP_START) * diff() - over() * 60;
+    // Working in arrival time rather than in position is what lets every car
+    // have its own speed again. A car's arrival at the player line is fixed the
+    // moment it spawns, so it can be tested against the ribbon once and can
+    // never drift into the gap later however fast it travels. Placing traffic
+    // by position is what made earlier attempts unsurvivable: bands smeared as
+    // they travelled and quietly sealed their own gap.
+    function segDuration() {
+      const d = diff();
+      return PATH_SEG_MAX + (PATH_SEG_MIN - PATH_SEG_MAX) * d - over() * 0.12;
     }
 
-    function spawnBand() {
+    function extendPath() {
+      if (!S.path.length) {
+        S.path.push({ t0: 0, t1: 2.2, lane: clamp(S.targetLane, 0, LANES - 1) });
+      }
+      let last = S.path[S.path.length - 1];
+      while (last.t1 < S.simT + PATH_HORIZON) {
+        // Step one lane. The path must SWEEP across the road rather than
+        // ping-pong between two neighbours: an oscillating path protects both
+        // of those lanes in turn, so both stay empty and the player can simply
+        // sit between them — which is exactly what was happening late in a run.
+        // A reversal therefore needs at least two steps in the current
+        // direction behind it, so the ribbon works its way across all four
+        // lanes and every lane spends most of its time carrying traffic.
+        let dir = S.pathDir;
+        if (S.pathRun >= 2 && rand() < 0.3) { dir = -dir; S.pathRun = 0; }
+        let lane = last.lane + dir;
+        if (lane < 0 || lane > LANES - 1) { dir = -dir; lane = last.lane + dir; S.pathRun = 0; }
+        S.pathDir = dir;
+        S.pathRun++;
+        const dur = Math.max(2.0, segDuration() * (0.85 + rand() * 0.4));
+        S.path.push({ t0: last.t1, t1: last.t1 + dur, lane: clamp(lane, 0, LANES - 1) });
+        last = S.path[S.path.length - 1];
+      }
+      // drop segments that are well behind
+      while (S.path.length > 2 && S.path[1].t1 < S.simT - 2) S.path.shift();
+    }
+
+    function pathLaneAt(t) {
+      for (const seg of S.path) if (t >= seg.t0 && t < seg.t1) return seg.lane;
+      return S.path.length ? S.path[S.path.length - 1].lane : 0;
+    }
+
+    // Would a vehicle in `lane`, occupying the player line across
+    // [tA, tB], block the path? Each segment is widened by PATH_TRANS so the
+    // lanes either side of a step are protected too.
+    function pathBlocked(lane, tA, tB) {
+      for (const seg of S.path) {
+        if (seg.lane !== lane) continue;
+        if (tB < seg.t0 - PATH_TRANS) continue;
+        if (tA > seg.t1 + PATH_TRANS) continue;
+        return true;
+      }
+      return false;
+    }
+
+    // When will a car at world y, travelling at cspd, reach the player line?
+    // Integrated rather than divided, because the player is still accelerating.
+    function arrivalTime(y, cspd) {
+      let t = S.simT, yy = y;
+      for (let i = 0; i < 120 && yy > 0; i++) {
+        const closing = Math.max(20, speedAt(t) - cspd);
+        const step = Math.min(0.06, Math.max(0.01, yy / closing));
+        yy -= closing * step;
+        t += step;
+      }
+      return t;
+    }
+
+    // ── Scattering traffic around the path ──────────────────────────────────
+    // Cars are placed at random lanes, offsets and speeds — the road should read
+    // as traffic, not as rows — and a placement is simply rejected if it would
+    // close the ribbon or land on top of another car in its lane.
+    // Every lane the path is not using must have something arriving soon, or a
+    // player can simply park in whichever lane the ribbon happens to have left
+    // empty. Random placement alone does not guarantee that — rejections leave
+    // holes — so coverage is enforced explicitly. This is what actually caps
+    // idle time; the path only guarantees a way through, not that standing
+    // still is punished.
+    function enforceCoverage() {
+      const now = S.simT;
+      for (let lane = 0; lane < LANES; lane++) {
+        let covered = false;
+        for (const c of cars) {
+          if (!c.on || Math.round(c.laneF) !== lane) continue;
+          if (c.arriveAt > now + 0.4 && c.arriveAt < now + COVER_WINDOW) { covered = true; break; }
+        }
+        if (covered) continue;
+        // Skip if this lane is the way through at the time we would be filling.
+        if (pathLaneAt(now + COVER_WINDOW * 0.6) === lane) continue;
+        tryPlaceCar(diff(), lane);
+      }
+    }
+
+    function spawnTraffic(dt) {
+      extendPath();
       const d = diff();
-      S.waveN++;
-
-      // Step the free lane one across, bouncing off the edges.
-      let nextPath = S.pathLane + S.pathDir;
-      if (nextPath < 0 || nextPath > LANES - 1) {
-        S.pathDir = -S.pathDir;
-        nextPath = S.pathLane + S.pathDir;
+      // Density has to be defined in SPACE, not in time. A fixed number of cars
+      // per second thins the road out as the run speeds up, because each car
+      // sweeps past sooner — which is exactly why long idle stretches kept
+      // appearing late in a run while the early game stayed packed. Scaling the
+      // rate by closing speed keeps cars-per-mile constant instead.
+      const closingNow = CLOSE_MIN + (CLOSE_MAX - CLOSE_MIN) * d + over() * OD_CLOSE;
+      const rate = (SPAWN_RATE_MIN + (SPAWN_RATE_MAX - SPAWN_RATE_MIN) * d)
+                 * (closingNow / CLOSE_MIN);
+      S.spawnAcc += rate * dt;
+      let budget = 10;
+      while (S.spawnAcc >= 1 && budget-- > 0) {
+        S.spawnAcc -= 1;
+        tryPlaceCar(d);
       }
-      // Reverse early now and then so the weave is not a metronome.
-      if (rand() < 0.22) {
-        const alt = S.pathLane - S.pathDir;
-        if (alt >= 0 && alt <= LANES - 1) { S.pathDir = -S.pathDir; nextPath = alt; }
+      S.coverT -= dt;
+      if (S.coverT <= 0) { S.coverT = 0.25; enforceCoverage(); }
+    }
+
+    function tryPlaceCar(d, forceLane) {
+      if (import.meta.env.DEV && !S._rej) S._rej = { lane: 0, path: 0, pool: 0, placed: 0, tries: 0 };
+      // Prefer whichever lane has gone longest without a car, so every lane is
+      // used within a few seconds instead of by luck.
+      // Fill the lanes the path is NOT using. Without this the road stays
+      // loosely packed, other lanes happen to be survivable anyway, and a
+      // player can sit still for long stretches even though the path is
+      // weaving. Saturating everything except the ribbon is what makes
+      // following the ribbon the only option.
+      const ribbonSoon = pathLaneAt(S.simT + 2.4);
+      let order;
+      if (forceLane != null) {
+        order = [forceLane];
+      } else {
+        order = [];
+        for (let l = 0; l < LANES; l++) order.push(l);
+        order.sort((x, y) =>
+          ((x === ribbonSoon ? 1e6 : 0) - (y === ribbonSoon ? 1e6 : 0))
+          + (S.laneLast[x] - S.laneLast[y]) + (rand() - 0.5) * 1.2);
       }
-      S.pathLane = clamp(nextPath, 0, LANES - 1);
-      S.corridor = S.pathLane;
 
-      // Ease the opening: extra lanes stay free for the first few seconds.
-      const extraFree = S.simT < 3 ? 1 : 0;
-      const free = new Set([S.pathLane]);
-      for (let i = 0; i < extraFree; i++) {
-        const side = rand() < 0.5 ? -1 : 1;
-        free.add(clamp(S.pathLane + side * (i + 1), 0, LANES - 1));
-      }
-
-      // One speed for the whole band. This is what keeps it coherent.
-      const closing = CLOSE_MIN + (CLOSE_MAX - CLOSE_MIN) * d + over() * OD_CLOSE;
-      const bandSpd = S.speed - closing;
-
-      for (let l = 0; l < LANES; l++) {
-        if (free.has(l)) continue;
-        const c = take(cars);
-        if (!c) continue;
+      for (const lane of order) {
         const kind = pick();
+        const v = VEHICLES[kind];
+        const closingBase = CLOSE_MIN + (CLOSE_MAX - CLOSE_MIN) * d + over() * OD_CLOSE;
+        // Per-car speed spread. This is what brings overtaking back.
+        let closing = Math.max(90, closingBase * v.close * (0.72 + rand() * 0.62));
+        const y = SPAWN_Y + rand() * 150;
+        let cspd = S.speed - closing;
+
+        // Same-lane sanity: leave room behind whatever is already there, and
+        // never drop a faster car in behind a slower one it would rear-end.
+        // Same-lane ordering. A car dropped in behind a SLOWER one closes the
+        // gap in flight and drives through it, so speeds within a lane have to
+        // be ordered. Rejecting on that basis threw away most placements and
+        // left the road empty, so instead the speed is ADJUSTED to fit between
+        // the neighbours it will actually have. Only the physical gap is a
+        // hard rejection.
+        let ok = true;
+        let lo = -Infinity, hi = Infinity;
+        for (const o of cars) {
+          if (!o.on || Math.round(o.laneF) !== lane) continue;
+          const gap = y - o.y;
+          const need = (v.len + VEHICLES[o.kind].len) / 2 + 80;
+          if (Math.abs(gap) < need) { ok = false; break; }
+          // gap > 0 means the NEW car is ahead of o, so o must not be able to
+          // catch it: the new car has to be at least as fast. gap < 0 is the
+          // mirror. These two were the wrong way round, which let faster cars
+          // land behind slower ones — the overlaps — and rejected many valid
+          // placements as impossible, which is what left whole lanes empty and
+          // allowed long stretches of sitting still.
+          if (gap > 0) lo = Math.max(lo, o.spd);   // new car is ahead: no slower
+          else         hi = Math.min(hi, o.spd);   // new car is behind: no faster
+        }
+        if (import.meta.env.DEV) S._rej.tries++;
+        if (!ok) { if (import.meta.env.DEV) S._rej.lane++; continue; }
+        if (lo > hi) { if (import.meta.env.DEV) S._rej.lane++; continue; }
+        cspd = clamp(cspd, lo === -Infinity ? cspd : lo, hi === Infinity ? cspd : hi);
+        closing = S.speed - cspd;
+        if (closing < 70) { if (import.meta.env.DEV) S._rej.lane++; continue; }
+
+        // Does it close the ribbon?
+        const tMid = arrivalTime(y, cspd);
+        const half = ((v.len * HIT_FORGIVE + PLAYER_L_U * HIT_FORGIVE) / 2) / closing + PATH_PAD;
+        if (pathBlocked(lane, tMid - half, tMid + half)) { if (import.meta.env.DEV) S._rej.path++; continue; }
+
+        const c = take(cars);
+        if (!c) { if (import.meta.env.DEV) S._rej.pool++; return; }
         c.on = true; c.kind = kind;
         c.paint = PAINTS[Math.floor(rand() * PAINTS.length)];
-        // Only a slight stagger: enough to look natural, small enough that the
-        // band still behaves as one line of traffic.
-        c.y = SPAWN_Y + (rand() - 0.5) * 40;
-        c.laneF = l; c.lane = l;
-        c.spd = bandSpd;
-        c.pathLane = S.pathLane;
+        c.y = y;
+        c.laneF = lane; c.lane = lane;
+        c.spd = cspd;
+        c.arriveAt = tMid;
         c.near = false; c.armed = false; c.armedAt = 0;
-        c.brake = false;
+        c.brake = rand() < 0.12;
         c.sig = 0; c.sigDir = 0; c.changing = 0;
-        // Any lane change is between two blocked lanes of this band, so it can
-        // never seal the gap.
-        // Traffic holds its lane.
-        //
-        // Cars used to merge between lanes, which looked good but quietly broke
-        // the band guarantee: a car could slide into the lane the player needed
-        // to cross to reach the next gap, turning a solvable weave into a wall.
-        // Solving runs headlessly caught it as a real death. The blinkers stay
-        // in the code for the brief signalling animation, but no car changes
-        // lane any more.
-        c.changeAt = -1;
+        // Lane changes are safe again: a merge is tested against the ribbon in
+        // exactly the same way a spawn is.
+        c.changeAt = (S.simT > 9 && kind !== 'semi' && rand() < 0.18 + d * 0.20)
+          ? S.simT + 0.7 + rand() * 2.2 : -1;
+        S.laneLast[lane] = S.simT;
+        if (import.meta.env.DEV) S._rej.placed++;
+        return;
       }
-
-      S.bandSpd = bandSpd;
-      S.sinceBand = 0;
     }
 
     // ── FX helpers ──
@@ -1012,13 +1140,10 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       if (S.event !== 'tunnel') S.tunnelA = clamp(S.tunnelA - dt * 2, 0, 1);
 
       // waves — and never a long empty road
-      // Bands are spaced by DISTANCE, not time, so spacing stays honest as the
-      // run speeds up.
-      S.sinceBand += Math.max(60, S.speed - S.bandSpd) * dt;
-      if (S.sinceBand >= bandGap()) spawnBand();
+      spawnTraffic(dt);
       let ahead = 0;
       for (const c of cars) if (c.on && c.y > 0) ahead++;
-      if (ahead === 0) S.sinceBand = Math.max(S.sinceBand, bandGap());
+      if (ahead < 2) S.spawnAcc = Math.max(S.spawnAcc, 1);
 
       // traffic
       S.changeCooldown -= dt;
