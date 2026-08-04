@@ -55,6 +55,44 @@ module.exports = function registerSocketHandlers(io, supabase) {
 const userQueues = new Set(); // userId → currently in a queue (prevents dual-tab double-join)
   // Returns true if user is in a queue OR in an active match (lock held until settlement)
   const inMatchOrQueue = (uid) => userQueues.has(uid) || isLocked(uid);
+
+  // Every room type, in one place. Used both for settling on leave and for the
+  // guard below.
+  const ROOM_LOOKUPS = () => ([
+    [getRoomBySocket,           deleteRoom,           'reaction'],
+    [getBlockBlastRoomBySocket, deleteBlockBlastRoom, 'blockBlast'],
+    [getWordleRoomBySocket,     deleteWordleRoom,     'scrabble'],
+    [getCoinFlipRoomBySocket,   deleteCoinFlipRoom,   'coin_flip'],
+    [getBlackjackRoomBySocket,  deleteBlackjackRoom,  'blackjack'],
+    [getCarDashRoomBySocket,    deleteCarDashRoom,    'carDash'],
+  ]);
+
+  // Is this socket already sitting in a live room of ANY game?
+  //
+  // inMatchOrQueue() alone does not cover this. It is built on userQueues, which
+  // is cleared the moment a match starts, and on isLocked(), which is only set
+  // for PAID entries — so a player already mid-match could open a second game,
+  // and a free game was never covered at all. One socket in two rooms means the
+  // per-socket room lookups return only one of them, so a leave settles one and
+  // leaves the other to the stall watchdog.
+  //
+  // Balances were never at risk: entry fees are taken by an atomic DB call that
+  // throws on insufficient funds, so a second game could not be paid for twice.
+  // This is about room and settlement integrity.
+  function _inLiveRoom(socketId) {
+    for (const [getFn] of ROOM_LOOKUPS()) {
+      const found = getFn(socketId);
+      if (!found || !found.room) continue;
+      // Engines do not agree on how a finished room is marked: most set
+      // state === 'finished', Word VS instead flips a `settled` flag and has no
+      // state field at all. Checking only one of them treats a finished Word VS
+      // room as live and locks the player out of starting anything else until
+      // the room is swept.
+      const done = found.room.state === 'finished' || found.room.settled === true;
+      if (!done) return true;
+    }
+    return false;
+  }
   const chatBanned = new Set(); // userId → banned from chat
   const lastChatAt = new Map(); // userId → last chat message timestamp (flood control)
   const CHAT_MIN_INTERVAL_MS = 750;
@@ -375,6 +413,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_block_blast_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      if (_inLiveRoom(socket.id))
+        return socket.emit('error', { message: 'Finish your current game first.' });
       if (!isValidFee(entryFee, currency)) return socket.emit('error', { message: 'Invalid entry fee' });
       if (inMatchOrQueue(authenticatedUser.userId))
         return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
@@ -499,6 +539,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
     socket.on('play_block_blast_vs_bot', async ({ entryFee = 0, currency = 'coins' } = {}) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      if (_inLiveRoom(socket.id))
+        return socket.emit('error', { message: 'Finish your current game first.' });
       socket._startingGame = 'block_blast';
       try {
         if (currency !== 'diamonds') entryFee = 0; // bot games are free for coins
@@ -579,6 +621,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_car_dash_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      if (_inLiveRoom(socket.id))
+        return socket.emit('error', { message: 'Finish your current game first.' });
       if (!isValidFee(entryFee, currency)) return socket.emit('error', { message: 'Invalid entry fee' });
       if (inMatchOrQueue(authenticatedUser.userId))
         return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
@@ -685,6 +729,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
     socket.on('play_car_dash_vs_bot', async ({ entryFee = 0, currency = 'coins' } = {}) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      if (_inLiveRoom(socket.id))
+        return socket.emit('error', { message: 'Finish your current game first.' });
       socket._startingGame = 'car_dash';
       try {
         if (currency !== 'diamonds') entryFee = 0; // bot games are free for coins
@@ -892,8 +938,10 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_scrabble_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      if (_inLiveRoom(socket.id))
+        return socket.emit('error', { message: 'Finish your current game first.' });
       if (!isValidFee(entryFee, currency)) return socket.emit('error', { message: 'Invalid entry fee' });
-      if (userQueues.has(authenticatedUser.userId))
+      if (inMatchOrQueue(authenticatedUser.userId))
         return socket.emit('error', { message: 'Already in a queue' });
       socket._startingGame = 'scrabble';
       try {
@@ -1023,6 +1071,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
     socket.on('play_scrabble_vs_bot', async ({ entryFee = 0, currency = 'coins' } = {}) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      if (_inLiveRoom(socket.id))
+        return socket.emit('error', { message: 'Finish your current game first.' });
       socket._startingGame = 'scrabble';
       try {
         if (currency !== 'diamonds') entryFee = 0; // bot games free for coins
@@ -1142,9 +1192,11 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_coin_flip_queue', async ({ entryFee = 0, currency = 'coins', side }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      if (_inLiveRoom(socket.id))
+        return socket.emit('error', { message: 'Finish your current game first.' });
       if (!['heads', 'tails'].includes(side)) return socket.emit('error', { message: 'Pick heads or tails' });
       if (!isValidFee(entryFee, currency)) return socket.emit('error', { message: 'Invalid entry fee' });
-      if (userQueues.has(authenticatedUser.userId))
+      if (inMatchOrQueue(authenticatedUser.userId))
         return socket.emit('error', { message: 'Already in a queue' });
       const { data: profile } = await supabase.from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
       if (entryFee > 0 && currency === 'diamonds' && profile.diamonds < entryFee)
@@ -1226,6 +1278,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
     socket.on('play_coin_flip_vs_bot', async ({ entryFee = 0, currency = 'coins', side } = {}) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      if (_inLiveRoom(socket.id))
+        return socket.emit('error', { message: 'Finish your current game first.' });
       if (!['heads', 'tails'].includes(side)) return socket.emit('error', { message: 'Pick heads or tails' });
       socket._startingGame = 'coin_flip';
       try {
@@ -1268,6 +1322,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ════════════════════════════════════════════════════════════════
     socket.on('join_bj_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      if (_inLiveRoom(socket.id))
+        return socket.emit('error', { message: 'Finish your current game first.' });
       if (!isValidFee(entryFee, currency)) return socket.emit('error', { message: 'Invalid entry fee' });
       if (userQueues.has(authenticatedUser.userId)) return socket.emit('error', { message: 'Already in a queue' });
       socket._startingGame = 'blackjack';
@@ -1431,6 +1487,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
     socket.on('play_bj_vs_bot', async ({ entryFee = 0, currency = 'coins' } = {}) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      if (_inLiveRoom(socket.id))
+        return socket.emit('error', { message: 'Finish your current game first.' });
       socket._startingGame = 'blackjack';
       try {
         if (currency !== 'diamonds') entryFee = 0;

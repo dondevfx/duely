@@ -1,3 +1,10 @@
+// Outcomes that decide real money use the crypto RNG, not Math.random.
+// V8's Math.random is a fast non-cryptographic PRNG: an attacker who can watch
+// enough results can recover its internal state and predict the next ones. For
+// a coin flip, a shuffled deck or a shared level seed that is a live edge, so
+// these use crypto.randomInt instead. Cosmetic randomness elsewhere (bot names,
+// timing jitter) is deliberately left alone.
+const { randomInt } = require('node:crypto');
 /**
  * carDashEngine.js — "Rush Hour"
  *
@@ -85,7 +92,7 @@ function _makeRoom(roomId, p1, p2) {
     entryFee: p1.entryFee,
     currency: p1.currency,
     feesDeducted: false,
-    seed: Math.floor(Math.random() * 999999),
+    seed: randomInt(1000000),
     startedAt: null,
     // survival times (ms) — server-authoritative, set when a player crashes
     times: {},

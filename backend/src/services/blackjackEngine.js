@@ -1,3 +1,10 @@
+// Outcomes that decide real money use the crypto RNG, not Math.random.
+// V8's Math.random is a fast non-cryptographic PRNG: an attacker who can watch
+// enough results can recover its internal state and predict the next ones. For
+// a coin flip, a shuffled deck or a shared level seed that is a live edge, so
+// these use crypto.randomInt instead. Cosmetic randomness elsewhere (bot names,
+// timing jitter) is deliberately left alone.
+const { randomInt } = require('node:crypto');
 const { v4: uuidv4 } = require('uuid');
 const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
@@ -14,7 +21,7 @@ function _makeDeck() {
   const deck = [];
   for (const s of SUITS) for (const v of VALUES) deck.push({ suit: s, value: v });
   for (let i = deck.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = randomInt(i + 1);
     [deck[i], deck[j]] = [deck[j], deck[i]];
   }
   return deck;

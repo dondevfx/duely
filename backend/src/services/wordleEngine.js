@@ -206,9 +206,16 @@ function createDirectWordleRoom(p1, p2) {
 function getWordleRoom(roomId)    { return rooms.get(roomId) || null; }
 function deleteWordleRoom(roomId) { rooms.delete(roomId); }
 
+// Returns { roomId, room } — the same shape as every other engine's lookup.
+//
+// This used to return the bare room. The forfeit and disconnect handlers all do
+// `const { room, roomId } = getFn(socket.id)`, so for Word VS `room` came back
+// undefined and the very next line — `room.state` — threw. The practical effect
+// was that leaving a Word VS match never forfeited it, and the exception took
+// out the rest of the disconnect sweep with it.
 function getWordleRoomBySocket(socketId) {
-  for (const room of rooms.values()) {
-    if (room.players.some(p => p.socketId === socketId)) return room;
+  for (const [roomId, room] of rooms) {
+    if (room.players.some(p => p.socketId === socketId)) return { roomId, room };
   }
   return null;
 }
