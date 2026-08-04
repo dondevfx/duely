@@ -133,7 +133,18 @@ async function startCarDashCountdown(io, supabase, roomId) {
         stalled = true;
       }
     }
-    if (stalled || now - r.startedAt > MAX_RUN_MS) {
+    if (stalled) {
+      // A stalled player is treated exactly as if they had crashed: their run
+      // ends at their last verified progress and THEIR OPPONENT PLAYS ON.
+      //
+      // Resolving the whole match here was an exploit. A player who was ahead
+      // could background the tab, and ten seconds later the match settled with
+      // the opponent frozen wherever they happened to be — denying them the
+      // chance to catch up. Leaving must never be better than playing.
+      _maybeResolve(io, supabase, roomId).catch(() => {});
+      checkOvertake(io, supabase, roomId).catch(() => {});
+    }
+    if (now - r.startedAt > MAX_RUN_MS) {
       clearInterval(watch);
       forceResolveCarDash(io, supabase, roomId).catch(() => {});
     }
@@ -199,6 +210,33 @@ async function handleCarDashCrash(io, supabase, roomId, socketId, claimedScore) 
   }
 
   await _maybeResolve(io, supabase, roomId);
+}
+
+// One player is out, the other is still driving. The moment the survivor's
+// score passes the score the crashed player finished on, the match is decided —
+// nothing the survivor does afterwards can lose it, because the winner is the
+// higher score and theirs can only climb. Ending here saves the survivor
+// driving out a match they have already won.
+//
+// Equal scores deliberately do NOT end it: the tiebreak is survival time, and
+// the survivor is still adding to theirs, so letting it run costs nothing and
+// keeps the rule "more points wins" literally true.
+async function checkOvertake(io, supabase, roomId) {
+  const room = getCarDashRoom(roomId);
+  if (!room || room.state !== 'active' || !room.startedAt) return;
+  if (room.players.length !== 2) return;
+  const key = (p) => (p.isBot ? _botKey(room) : p.socketId);
+  const out = room.players.filter(p => room.times[key(p)] != null);
+  if (out.length !== 1) return;                     // nobody out yet, or both
+  const dead = out[0];
+  const alive = room.players.find(p => p !== dead);
+  if (!alive) return;
+  const deadScore = room.scores[key(dead)] ?? 0;
+  const aliveScore = room.scores[key(alive)] ?? 0;
+  if (aliveScore <= deadScore) return;
+  room.times[key(alive)] = Math.min(Date.now() - room.startedAt, MAX_RUN_MS);
+  room.progress[key(alive)] = room.times[key(alive)];
+  await _resolveFromTimes(io, supabase, roomId);
 }
 
 // Resolve once everyone (bot included) has a final time.
@@ -348,4 +386,5 @@ module.exports = {
   getCarDashRoom, deleteCarDashRoom, getCarDashRoomBySocket,
   startCarDashCountdown, trackCarDashProgress, handleCarDashCrash,
   forceResolveCarDash,
+  checkOvertake,
 };

@@ -226,9 +226,14 @@ export default function BlockBlastGame() {
     const handleBeforeUnload = () => {
       if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
     };
+    // pagehide as well as beforeunload: iOS Safari routinely skips
+    // beforeunload when a tab is closed or the app is swiped away, which would
+    // leave the forfeit relying solely on the socket dropping.
     window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handleBeforeUnload);
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handleBeforeUnload);
       // Always emit on SPA navigation (logo click, sidebar links, etc.)
       // Server is a no-op if no active room exists for this socket
       if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');

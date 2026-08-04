@@ -55,9 +55,22 @@ export default function CarDashGame() {
   const isDiamonds = betCurrency === 'diamonds';
   const balance = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
 
-  // Forfeit on unmount (same contract as the other games)
-  useEffect(() => () => {
-    if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
+  // Forfeit on unmount AND on tab close or refresh. Rush Hour was the only game
+  // missing the beforeunload half of this: navigating away inside the app
+  // forfeited correctly, but closing the tab relied entirely on the socket
+  // dropping. The disconnect path does catch it, so this is belt and braces —
+  // it just settles the match immediately instead of after the grace period.
+  useEffect(() => {
+    const bail = () => {
+      if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
+    };
+    window.addEventListener('beforeunload', bail);
+    window.addEventListener('pagehide', bail);
+    return () => {
+      window.removeEventListener('beforeunload', bail);
+      window.removeEventListener('pagehide', bail);
+      bail();
+    };
   }, []);
 
   // Lock the page while the match is live.

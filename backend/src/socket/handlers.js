@@ -12,7 +12,7 @@ const {
   createDirectCarDashRoom,
   getCarDashRoom, deleteCarDashRoom, getCarDashRoomBySocket,
   startCarDashCountdown, trackCarDashProgress, handleCarDashCrash,
-  forceResolveCarDash,
+  forceResolveCarDash, checkOvertake,
 } = require('../services/carDashEngine');
 const {
   addToWordleQueue, removeFromWordleQueue,
@@ -724,6 +724,10 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (verified === null) return;
       const opp = room.players.find(p => p.socketId !== socket.id);
       if (opp && !opp.isBot) io.to(opp.socketId).emit('car_dash_opponent_progress', { ms: verified });
+      // If the opponent has already crashed and this player has just gone past
+      // their score, the match is decided — end it rather than making them
+      // drive on.
+      checkOvertake(io, supabase, roomId);
     });
 
     // Client reports a crash; the SERVER decides how long they survived.

@@ -218,9 +218,19 @@ export default function WordleGame() {
   const [soloSessionId, setSoloSessionId] = useState(null);
   const [soloResult,    setSoloResult]    = useState(null); // { won, payout, currency, entryFee }
 
-  // ── Forfeit on unmount ────────────────────────────────────────────────────
+  // ── Forfeit on unmount, and on tab close or refresh ───────────────────────
+  // This page had only the unmount half, so closing the tab mid-match relied
+  // entirely on the socket dropping. That does still settle it, but not until
+  // the disconnect grace period has run.
   useEffect(() => {
+    const bail = () => {
+      if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
+    };
+    window.addEventListener('beforeunload', bail);
+    window.addEventListener('pagehide', bail);
     return () => {
+      window.removeEventListener('beforeunload', bail);
+      window.removeEventListener('pagehide', bail);
       if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
       // Clear any running countdowns so they don't tick / setState after unmount.
       if (failIntervalRef.current) { clearInterval(failIntervalRef.current); failIntervalRef.current = null; }
