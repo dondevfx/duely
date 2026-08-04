@@ -36,21 +36,21 @@ const PLAYER_YF    = 0.78;   // legacy default; the player line is derived in la
 const SPAWN_Y      = 880;    // > VIEW_AHEAD + longest vehicle, so nothing pops in
 const DESPAWN_Y    = -280;
 
-const SPD_START    = 585;    // u/s
-const SPD_MAX      = 1150;
+const SPD_START    = 660;    // u/s
+const SPD_MAX      = 1260;
 // Seconds to full difficulty. Shortened from 48: the old curve spent most of a
 // minute easing in, so a run only became interesting once it was nearly over.
-const RAMP_S       = 20;
+const RAMP_S       = 14;
 // The first stretch stays a warm-up, matching the old pace to the knee. Past
 // RAMP_KNEE the curve is deliberately steeper than it used to be — by 25s it
 // now runs at ~906 u/s where the old curve gave ~884, and by 30s ~1058 against
 // ~971 — so the run tightens noticeably from that point instead of drifting.
-const RAMP_KNEE    = 6;      // seconds before the difficulty curve steepens
-const KNEE_AT      = 0.40;   // difficulty reached at the knee
+const RAMP_KNEE    = 4;      // seconds before the difficulty curve steepens
+const KNEE_AT      = 0.50;   // difficulty reached at the knee
 // Past RAMP_S the run keeps escalating instead of flat-lining.
-const OD_S         = 70;     // seconds per unit of "overdrive"
+const OD_S         = 42;     // seconds per unit of "overdrive"
 const OD_MAX       = 1.8;
-const OD_SPEED     = 300;    // extra u/s at full overdrive
+const OD_SPEED     = 430;    // extra u/s at full overdrive
 const OD_CLOSE     = 170;    // extra closing speed at full overdrive
 const CLOSE_MIN    = 250;    // closing speed floor (u/s)
 const CLOSE_MAX    = 470;    // closing speed at full difficulty
@@ -81,8 +81,8 @@ const PATH_HORIZON = 14;   // seconds of path kept generated ahead
 // guarantee — not raw density — is what stops a player driving straight. It is
 // the reason the road can be thin and still never let you sit still.
 const COVER_WINDOW   = 2.6;
-const SPAWN_RATE_MIN = 1.15;
-const SPAWN_RATE_MAX = 7.6;
+const SPAWN_RATE_MIN = 0.8;
+const SPAWN_RATE_MAX = 4.2;
 const VISUAL_SCROLL = 1.0;   // road MUST scroll with the world or it slides under the cars
 
 const PTS_DIST     = 0.06;
@@ -136,10 +136,12 @@ const BLUE  = '#1250B4';
 // Chosen from the frame budget, not by eye. Top speed is SPD_MAX + OD_SPEED =
 // 1450 u/s, i.e. ~24.2u of travel per frame at 60fps. A marking cycle shorter
 // than ~6 frames beats against the refresh rate and the road appears to blink
-// out, which is exactly what the previous art did. 70 + 80 = 150u gives 6.2
-// frames per cycle at maximum speed, with margin.
-const MARK_LEN = 70;
-const MARK_GAP = 80;
+// out, which is exactly what the previous art did. Top speed is now SPD_MAX +
+// OD_SPEED = 1690 u/s, i.e. ~28u of travel per frame, so 88 + 102 = 190u keeps
+// a cycle at 6.7 frames with margin. Raising the speed ramp without raising
+// this would have brought the strobing straight back.
+const MARK_LEN = 88;
+const MARK_GAP = 102;
 const MARK_CYCLE = MARK_LEN + MARK_GAP;
 const ICE   = '#9FDCFF';
 
@@ -1025,7 +1027,10 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         for (const o of cars) {
           if (!o.on || Math.round(o.laneF) !== lane) continue;
           const gap = y - o.y;
-          const need = (v.len + VEHICLES[o.kind].len) / 2 + 80;
+          // Generous following distance. A short one let cars stack up nose to
+          // tail and read as a queue rather than as traffic, which is what
+          // "lines of cars" was describing.
+          const need = (v.len + VEHICLES[o.kind].len) / 2 + 300;
           if (Math.abs(gap) < need) { ok = false; break; }
           // gap > 0 means the NEW car is ahead of o, so o must not be able to
           // catch it: the new car has to be at least as fast. gap < 0 is the
