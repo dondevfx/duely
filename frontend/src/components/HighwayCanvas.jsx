@@ -47,10 +47,20 @@ const RAMP_S       = 14;
 // ~971 — so the run tightens noticeably from that point instead of drifting.
 const RAMP_KNEE    = 4;      // seconds before the difficulty curve steepens
 const KNEE_AT      = 0.50;   // difficulty reached at the knee
-// Past RAMP_S the run keeps escalating instead of flat-lining.
-const OD_S         = 42;     // seconds per unit of "overdrive"
-const OD_MAX       = 1.8;
-const OD_SPEED     = 430;    // extra u/s at full overdrive
+// Past RAMP_S the run keeps escalating instead of flat-lining. Overdrive is
+// deliberately steep: at the old rate speed crept up by about 10 u/s per second
+// after the ramp, which is a real increase but far too gradual to feel, so the
+// run seemed to stop accelerating around twenty seconds.
+const OD_S         = 24;     // seconds per unit of "overdrive"
+const OD_MAX       = 2.2;
+// Raw speed keeps climbing long after the DIFFICULTY terms stop. The two are
+// deliberately separate: closing speed and traffic density are what decide how
+// hard the run is, and those cap at OD_MAX, while the speed the world goes past
+// at carries on rising so the run never stops feeling like it is accelerating.
+// Because traffic moves with the player, a higher raw speed blurs the road past
+// without shortening reaction time.
+const OD_SPEED_MAX = 5.5;
+const OD_SPEED     = 700;    // extra u/s at full overdrive
 const OD_CLOSE     = 170;    // extra closing speed at full overdrive
 const CLOSE_MIN    = 250;    // closing speed floor (u/s)
 const CLOSE_MAX    = 470;    // closing speed at full difficulty
@@ -739,7 +749,8 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       return KNEE_AT + (1 - KNEE_AT) * smooth(u);
     };
     const overAt = (t) => clamp((t - RAMP_S) / OD_S, 0, OD_MAX);
-    const speedAt = (t) => SPD_START + (SPD_MAX - SPD_START) * diffAt(t) + overAt(t) * OD_SPEED;
+    const overSpeedAt = (t) => clamp((t - RAMP_S) / OD_S, 0, OD_SPEED_MAX);
+    const speedAt = (t) => SPD_START + (SPD_MAX - SPD_START) * diffAt(t) + overSpeedAt(t) * OD_SPEED;
     const diff = () => diffAt(S.simT);
     // Overdrive keeps speed, density and aggression climbing after the ramp.
     const over = () => overAt(S.simT);
@@ -1109,7 +1120,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     function update(dt) {
       S.simT += dt;
       const d = diff();
-      S.speed = SPD_START + (SPD_MAX - SPD_START) * d + over() * OD_SPEED;
+      S.speed = speedAt(S.simT);
       S.dist += S.speed * dt;
       S.score += S.speed * dt * PTS_DIST + dt * PTS_TIME;
       S.goT += dt; S.hintT += dt;
@@ -1362,17 +1373,35 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       // Same two-layer rule as before, now on the pixel grid: a dim continuous
       // rail so a lane line exists in every frame at any speed, plus bright
       // dashes on the cadence that keeps them clear of the frame rate.
-      const stepPx = Math.max(4, Math.round(MARK_CYCLE * u2p));
+      // The gap between dashes closes as the run speeds up. A fixed cadence has
+      // to be long enough for the highest speed or it strobes, but a cadence
+      // sized for 2600 u/s looks wrong at 900. Shrinking the gap instead lets
+      // the dashes stretch into near-continuous streaks exactly when the speed
+      // would otherwise start beating against the refresh rate — which also
+      // happens to be what fast motion looks like.
+      const spdFrac = clamp((S.speed - SPD_START) / (SPD_MAX + OD_SPEED * OD_SPEED_MAX - SPD_START), 0, 1);
+      const gapU = MARK_GAP * (1 - 0.78 * spdFrac);
+      const stepPx = Math.max(4, Math.round((MARK_LEN + gapU) * u2p));
       const dashPx = Math.max(2, Math.round(MARK_LEN * u2p));
       const off = Math.round(S.dist * VISUAL_SCROLL * u2p) % stepPx;
       const lw = Math.max(1, Math.round(roadW * 0.008));
+      // Once the gap has closed to a couple of pixels the dashes are effectively
+      // a solid line anyway, and at that speed the cycle lasts barely a frame —
+      // drawing them individually would shimmer. Past that point the marking
+      // becomes one continuous streak, which is both stable and what a lane
+      // line actually looks like at speed.
+      const solid = (stepPx - dashPx) < 3;
       for (let i = 1; i < LANES; i++) {
         const x = x0 + laneW * i - Math.floor(lw / 2);
         ctx.fillStyle = light ? '#ffffff' : PAL.lineDim;
         ctx.fillRect(x, 0, lw, H);
         ctx.fillStyle = light ? '#ffffff' : PAL.line;
-        for (let y = off - stepPx; y < H + stepPx; y += stepPx) {
-          ctx.fillRect(x, y, lw, dashPx);
+        if (solid) {
+          ctx.fillRect(x, 0, lw, H);
+        } else {
+          for (let y = off - stepPx; y < H + stepPx; y += stepPx) {
+            ctx.fillRect(x, y, lw, dashPx);
+          }
         }
       }
 
