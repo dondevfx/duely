@@ -102,13 +102,13 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
   return (
     <>
       {/* Fee display row */}
-      <div className="flex items-center justify-center sm:justify-between mb-1.5 sm:mb-3">
-        <span className="hidden sm:inline text-sm text-muted">Min: {fmtFee(fees[0])} {currLabel}</span>
+      <div className="flex items-center justify-between gap-1 mb-1.5 sm:mb-3">
+        <span className="text-[11px] sm:text-sm text-muted whitespace-nowrap">Min: {fmtFee(fees[0])} {currLabel}</span>
         <span className="text-2xl sm:text-2xl font-black text-white">
           <span ref={displayRef}>{fmtFee(entryFee)}</span>{' '}
           <span className="text-primary">{currLabel}</span>
         </span>
-        <span className="hidden sm:inline text-sm text-muted">Max: {fmtFee(fees[fees.length - 1])} {currLabel}</span>
+        <span className="text-[11px] sm:text-sm text-muted whitespace-nowrap">Max: {fmtFee(fees[fees.length - 1])} {currLabel}</span>
       </div>
 
       {/* Slider track.
