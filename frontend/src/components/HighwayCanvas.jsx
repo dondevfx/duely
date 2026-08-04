@@ -36,22 +36,22 @@ const PLAYER_YF    = 0.78;   // legacy default; the player line is derived in la
 const SPAWN_Y      = 880;    // > VIEW_AHEAD + longest vehicle, so nothing pops in
 const DESPAWN_Y    = -280;
 
-const SPD_START    = 660;    // u/s
-const SPD_MAX      = 1260;
+const SPD_START    = 780;    // u/s
+const SPD_MAX      = 1450;
 // Seconds to full difficulty. Shortened from 48: the old curve spent most of a
 // minute easing in, so a run only became interesting once it was nearly over.
-const RAMP_S       = 14;
+const RAMP_S       = 10;
 // The first stretch stays a warm-up, matching the old pace to the knee. Past
 // RAMP_KNEE the curve is deliberately steeper than it used to be — by 25s it
 // now runs at ~906 u/s where the old curve gave ~884, and by 30s ~1058 against
 // ~971 — so the run tightens noticeably from that point instead of drifting.
-const RAMP_KNEE    = 4;      // seconds before the difficulty curve steepens
-const KNEE_AT      = 0.50;   // difficulty reached at the knee
+const RAMP_KNEE    = 3;      // seconds before the difficulty curve steepens
+const KNEE_AT      = 0.58;   // difficulty reached at the knee
 // Past RAMP_S the run keeps escalating instead of flat-lining. Overdrive is
 // deliberately steep: at the old rate speed crept up by about 10 u/s per second
 // after the ramp, which is a real increase but far too gradual to feel, so the
 // run seemed to stop accelerating around twenty seconds.
-const OD_S         = 24;     // seconds per unit of "overdrive"
+const OD_S         = 18;     // seconds per unit of "overdrive"
 const OD_MAX       = 2.2;
 // Raw speed keeps climbing long after the DIFFICULTY terms stop. The two are
 // deliberately separate: closing speed and traffic density are what decide how
@@ -59,8 +59,12 @@ const OD_MAX       = 2.2;
 // at carries on rising so the run never stops feeling like it is accelerating.
 // Because traffic moves with the player, a higher raw speed blurs the road past
 // without shortening reaction time.
-const OD_SPEED_MAX = 5.5;
-const OD_SPEED     = 700;    // extra u/s at full overdrive
+// Top speed works out at SPD_MAX + OD_SPEED * OD_SPEED_MAX = 5350 u/s. That
+// ceiling is not arbitrary: score accrues at PTS_DIST per unit travelled, so at
+// 5350 the run earns 329 points a second against the server's 380/s anti-cheat
+// clamp. Raising it much further would start clamping honest players.
+const OD_SPEED_MAX = 5.0;
+const OD_SPEED     = 780;    // extra u/s at full overdrive
 const OD_CLOSE     = 170;    // extra closing speed at full overdrive
 const CLOSE_MIN    = 250;    // closing speed floor (u/s)
 const CLOSE_MAX    = 470;    // closing speed at full difficulty
