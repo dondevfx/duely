@@ -40,13 +40,13 @@ const SPD_START    = 585;    // u/s
 const SPD_MAX      = 1150;
 // Seconds to full difficulty. Shortened from 48: the old curve spent most of a
 // minute easing in, so a run only became interesting once it was nearly over.
-const RAMP_S       = 26;
+const RAMP_S       = 20;
 // The first stretch stays a warm-up, matching the old pace to the knee. Past
 // RAMP_KNEE the curve is deliberately steeper than it used to be — by 25s it
 // now runs at ~906 u/s where the old curve gave ~884, and by 30s ~1058 against
 // ~971 — so the run tightens noticeably from that point instead of drifting.
-const RAMP_KNEE    = 10;     // seconds before the difficulty curve steepens
-const KNEE_AT      = 0.30;   // difficulty reached at the knee
+const RAMP_KNEE    = 6;      // seconds before the difficulty curve steepens
+const KNEE_AT      = 0.40;   // difficulty reached at the knee
 // Past RAMP_S the run keeps escalating instead of flat-lining.
 const OD_S         = 70;     // seconds per unit of "overdrive"
 const OD_MAX       = 1.8;
@@ -76,11 +76,13 @@ const PATH_PAD     = 0.30;
 const PATH_HORIZON = 14;   // seconds of path kept generated ahead
 
 // Spawn attempts per second, and how many lanes an attempt may retry.
-// How soon every non-path lane must have traffic arriving. This is the cap
-// on idle time.
+// How soon every non-path lane must have traffic arriving. With traffic this
+// sparse the random scatter alone leaves lanes open for a long time, so this
+// guarantee — not raw density — is what stops a player driving straight. It is
+// the reason the road can be thin and still never let you sit still.
 const COVER_WINDOW   = 2.6;
-const SPAWN_RATE_MIN = 4.5;
-const SPAWN_RATE_MAX = 14;
+const SPAWN_RATE_MIN = 1.15;
+const SPAWN_RATE_MAX = 7.6;
 const VISUAL_SCROLL = 1.0;   // road MUST scroll with the world or it slides under the cars
 
 const PTS_DIST     = 0.06;
@@ -960,6 +962,14 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       // appearing late in a run while the early game stayed packed. Scaling the
       // rate by closing speed keeps cars-per-mile constant instead.
       const closingNow = CLOSE_MIN + (CLOSE_MAX - CLOSE_MIN) * d + over() * OD_CLOSE;
+      // Density is defined in SPACE, not time: a fixed number of cars per second
+      // thins the road out as the run speeds up, because each car sweeps past
+      // sooner. Scaling by closing speed keeps cars-per-mile constant instead.
+      //
+      // The visible count settles around eight from roughly ten seconds in.
+      // That is the road's physical capacity at the spacing traffic keeps —
+      // pushing the rate higher simply gets the extra cars rejected for want of
+      // room, which was measured rather than assumed.
       const rate = (SPAWN_RATE_MIN + (SPAWN_RATE_MAX - SPAWN_RATE_MIN) * d)
                  * (closingNow / CLOSE_MIN);
       S.spawnAcc += rate * dt;
