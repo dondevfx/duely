@@ -182,6 +182,30 @@ function shade(hex, amt) {
 }
 
 // Baked glow disc (runtime bloom without shadowBlur)
+// Underglow shaped like the thing it is under.
+//
+// bakeGlow below produces square rings, which is fine for a small point source
+// like a lamp but reads as a glowing rectangle parked beneath the car. This
+// builds the glow from the car's OWN silhouette instead: the sprite is stamped
+// a few times at increasing size and low alpha, then the accumulation is
+// tinted, so the light hugs the bodywork.
+function bakeShapedGlow(sprite, hex, pad) {
+  const w = sprite.width, l = sprite.height;
+  const W2 = w + pad * 2, H2 = l + pad * 2;
+  return bake(W2, H2, (g) => {
+    const STEPS = 3;
+    for (let i = STEPS; i >= 1; i--) {
+      const grow = (pad * i) / STEPS;
+      g.globalAlpha = 0.16 + 0.10 * (STEPS - i);
+      g.drawImage(sprite, pad - grow, pad - grow, w + grow * 2, l + grow * 2);
+    }
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-in';
+    g.fillStyle = hex;
+    g.fillRect(0, 0, W2, H2);
+  });
+}
+
 function bakeGlow(hex, r) {
   const n = parseInt(hex.slice(1), 16);
   const rc = (n >> 16) & 255, gc = (n >> 8) & 255, bc = n & 255;
@@ -194,7 +218,9 @@ function bakeGlow(hex, r) {
       const t = i / STEPS;
       const rad = Math.round((w / 2) * t);
       g.fillStyle = `rgba(${rc},${gc},${bc},${(0.42 * (1 - t) + 0.10).toFixed(3)})`;
-      g.fillRect(Math.round(w / 2 - rad), Math.round(h / 2 - rad), rad * 2, rad * 2);
+      // Rounded rather than square: a hard-cornered box never reads as light.
+      rr(g, Math.round(w / 2 - rad), Math.round(h / 2 - rad), rad * 2, rad * 2, Math.max(1, Math.round(rad * 0.55)));
+      g.fill();
     }
   });
 }
@@ -612,6 +638,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
           return vs[k];
         },
         player: bakePlayer(playerW, playerL),
+        playerGlow: bakeShapedGlow(bakePlayer(playerW, playerL), CYAN, Math.max(2, Math.round(playerW * 0.16))),
         playerW, playerL,
         shadow: bakeSoftShadow(140, 210),
         glowCyan: bakeGlow(CYAN, 60),
@@ -1237,9 +1264,11 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       // should never have to search for.
       // Underglow, kept low: on the pixel grid a strong one shows up as an
       // obvious rectangle behind the car rather than as light.
-      const pulse = 0.20 + Math.sin(nowMs * 0.006) * 0.05;
+      const pulse = 0.34 + Math.sin(nowMs * 0.006) * 0.07;
       ctx.globalAlpha = pulse;
-      ctx.drawImage(sp.glowCyan, px - pw * 0.85, playerY - pl * 0.4, pw * 1.7, pl * 0.9);
+      ctx.drawImage(sp.playerGlow,
+        px - sp.playerGlow.width / 2, playerY - sp.playerGlow.height / 2,
+        sp.playerGlow.width, sp.playerGlow.height);
       ctx.globalAlpha = 1;
       ctx.globalAlpha = 0.45;
       ctx.drawImage(sp.shadow, px - pw * 0.66, playerY - pl * 0.5, pw * 1.32, pl * 1.04);

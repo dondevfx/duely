@@ -10,12 +10,14 @@ const GAME_ROUTES = {
   'coin-flip': '/game/coin-flip',
   scrabble:    '/game/word-vs',
   blockBlast:  '/game/block-blast',
+  carDash:     '/game/car-dash',
 };
 const GAME_NAMES = {
   blackjack:   'Blackjack',
   'coin-flip': 'Coin Flip',
   scrabble:    'Word VS',
   blockBlast:  'Block Burst',
+  carDash:     'Rush Hour',
 };
 
 // Global top-right stack of incoming friend game invites. Newest sits on top;

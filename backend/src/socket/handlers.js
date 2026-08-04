@@ -782,7 +782,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       const fromId = authenticatedUser.userId;
       const fail = (message) => socket.emit('invite_failed', { message });
       if (!friendId || friendId === fromId) return fail("You can't invite yourself.");
-      if (!['blackjack', 'coin-flip', 'scrabble', 'blockBlast'].includes(gameType)) return fail('Invalid game.');
+      if (!['blackjack', 'coin-flip', 'scrabble', 'blockBlast', 'carDash'].includes(gameType)) return fail('Invalid game.');
       if (!isValidFee(entryFee, currency)) return fail('Invalid entry fee.');
       if (inMatchOrQueue(fromId)) return fail('Finish your current game first.');
       if (!_isUserOnline(friendId)) return fail('That friend is offline.');
