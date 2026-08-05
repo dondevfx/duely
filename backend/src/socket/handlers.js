@@ -39,6 +39,8 @@ const {
 const { checkSocketClickRate, cleanupSocket } = require('../middleware/rateLimit');
 const { createBotPlayer } = require('../services/botService');
 const { isDemo: isDemoAccount, randomFunnyName } = require('../services/demoAccounts');
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const {
   settleMatch, settleCoinFlip, settleMatchDiamonds, forfeitSettleDiamonds, forfeitSettleCoins,
   deductCoins, deductDiamonds, deductMatchFees, creditDiamonds, creditCoins,
@@ -832,6 +834,14 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       const fromId = authenticatedUser.userId;
       const fail = (message) => socket.emit('invite_failed', { message });
       if (!friendId || friendId === fromId) return fail("You can't invite yourself.");
+      // friendId is interpolated into a PostgREST .or() filter below, which is a
+      // raw filter string rather than a bound parameter. Nothing exploitable
+      // reaches it today — _isUserOnline compares against verified user ids, so
+      // a non-UUID fails there first — but that is check ORDER protecting it,
+      // not the filter itself. Anyone reordering these guards, or relaxing the
+      // online requirement to allow offline invites, would open an
+      // authorization bypass. Validate the shape here so it cannot regress.
+      if (!UUID_RE.test(String(friendId))) return fail('Invalid friend.');
       if (!['blackjack', 'coin-flip', 'scrabble', 'blockBlast', 'carDash'].includes(gameType)) return fail('Invalid game.');
       if (!isValidFee(entryFee, currency)) return fail('Invalid entry fee.');
       if (inMatchOrQueue(fromId)) return fail('Finish your current game first.');

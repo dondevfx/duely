@@ -1,4 +1,3 @@
-const jwt = require('jsonwebtoken');
 const { createClient } = require('@supabase/supabase-js');
 
 // Singleton anon client — reused across requests.
