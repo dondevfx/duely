@@ -1855,7 +1855,21 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
   // ── Spectator mode ────────────────────────────────────────────────────────
   io.on('connection', (socket) => {
   socket.on('spectate_game', ({ gameId }) => {
-    if (!gameId) return;
+    // Deliberately NOT gated on authentication: /spectate/:gameId is a public
+    // route and the socket only authenticates when a session exists, so
+    // requiring auth here would break spectating for logged-out visitors. It
+    // would also buy nothing — every room-wide broadcast is a result, a
+    // countdown or a shared seed. Hands, guesses and per-player progress are all
+    // sent to individual sockets, so joining a room reveals nothing private.
+    //
+    // What IS worth bounding is how many rooms one socket can attach to.
+    if (!gameId || typeof gameId !== 'string' || gameId.length > 100) return;
+
+    // One spectated room at a time, so a socket cannot accumulate memberships.
+    if (socket._spectating && socket._spectating !== gameId) {
+      socket.leave(socket._spectating);
+    }
+    socket._spectating = gameId;
     socket.join(gameId);
 
     // Try to find the room in supported engines and send a snapshot

@@ -11,6 +11,7 @@ const {
 const { getOrCreateAddress } = require('../services/addressService');
 const { sendCrypto }         = require('../services/chainSend');
 const { createWithdrawalSwap, estimateWithdrawal, SS_TICKERS } = require('../services/simpleSwapService');
+const { isValidAddressFor } = require('../services/addressValidator');
 const { swapUsdcToSol }      = require('../services/jupiterService');
 const { isLocked } = require('../services/lockService');
 
@@ -41,9 +42,11 @@ const DEPOSIT_MINS = {
 };
 
 // Basic address validation — Plisio/SimpleSwap do real validation
-const ADDRESS_RE = /^[a-zA-Z0-9_:.\-]{10,128}$/;
-function validateAddress(addr) {
-  return addr && typeof addr === 'string' && ADDRESS_RE.test(addr.trim());
+// Address validation is per-chain and checksum-verified — see addressValidator.
+// The old check was a single character-class regex, which happily accepted a
+// Bitcoin address as a Solana destination or an address with a typo in it.
+function validateAddress(addr, coin) {
+  return isValidAddressFor(coin, addr);
 }
 function validateMemo(val) {
   if (!val) return true;
@@ -166,8 +169,10 @@ module.exports = function walletRoutes(supabase, io) {
     if (!coin || !SS_TICKERS[coin.toLowerCase()]) {
       return res.status(400).json({ error: 'Invalid or unsupported withdrawal coin' });
     }
-    if (!validateAddress(address)) {
-      return res.status(400).json({ error: 'Invalid wallet address' });
+    if (!validateAddress(address, coin)) {
+      return res.status(400).json({
+        error: `That does not look like a valid ${coin.toUpperCase()} address. Check it and try again.`,
+      });
     }
     if (!validateMemo(memo)) {
       return res.status(400).json({ error: 'Invalid memo / destination tag' });
