@@ -77,24 +77,9 @@ module.exports = function webhookRoutes(supabase) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
 
-      // Idempotency — don't process the same Cryptomus transaction twice.
-      // The deposit row stores the SimpleSwap exchangeId in tx_hash, so we key
-      // dedup on the Cryptomus uuid saved in extra_id (below). Previously this
-      // matched on tx_hash, which never held the uuid, so a webhook retry would
-      // re-process — creating a duplicate swap + payout.
-      const { data: dup } = await supabase
-        .from('transactions')
-        .select('id')
-        .eq('extra_id', uuid)
-        .maybeSingle();
-      if (dup) {
-        console.log(`[cryptomus webhook] uuid=${uuid} already processed — skipping`);
-        return res.json({ ok: true });
-      }
-
-      const netCrypto   = parseFloat(merchant_amount  || 0);
+      const netCrypto    = parseFloat(merchant_amount  || 0);
       const estimatedUsd = parseFloat(payment_amount_usd || 0);
-      const coinId      = toCoinId(payer_currency, payer_network);
+      const coinId       = toCoinId(payer_currency, payer_network);
 
       console.log(`[cryptomus webhook] userId=${userId} coin=${coinId} net=${netCrypto} ~$${estimatedUsd}`);
 
@@ -109,32 +94,78 @@ module.exports = function webhookRoutes(supabase) {
         return res.status(500).json({ error: 'Server misconfigured' });
       }
 
-      // Create SimpleSwap exchange: coin → USDC SPL → our wallet
-      const swap = await createDepositSwap({
-        coin:             coinId,
-        amount:           netCrypto,
-        ourStableAddress: OUR_USDC_ADDRESS,
-        refundAddress:    '',
-      });
-
-      // Record as 'converting' — swapPoller updates to 'confirmed' when done
-      await supabase.from('transactions').insert({
+      // ── Claim this uuid BEFORE doing anything irreversible ──────────────
+      //
+      // This used to SELECT for an existing row, then create the swap, then
+      // insert. Gateways retry aggressively, and two retries in flight together
+      // both passed the SELECT, both created a swap, and both issued a payout —
+      // sending real crypto twice for one deposit.
+      //
+      // Inserting first turns the check into an atomic claim: the unique index
+      // on extra_id means exactly one request can win, and only the winner goes
+      // on to move funds. This is the same claim-then-act pattern the chain
+      // monitor and swap poller already use.
+      //
+      // Requires: CREATE UNIQUE INDEX ... ON transactions (extra_id)
+      //           WHERE extra_id IS NOT NULL;
+      // Without that index this is still a plain insert and the race remains.
+      const { error: claimErr } = await supabase.from('transactions').insert({
         user_id:       userId,
         type:          'deposit',
         amount_c:      0,
         crypto_amount: netCrypto,
         crypto_symbol: payer_currency,
-        tx_hash:       swap.exchangeId,
-        extra_id:      uuid,   // Cryptomus uuid — used for webhook idempotency
-        status:        'converting',
+        extra_id:      uuid,        // the gateway's id — our idempotency key
+        status:        'claiming',
       });
+      if (claimErr) {
+        // 23505 = unique violation = another delivery of this same webhook has
+        // it. Anything else is a real DB fault and must not silently drop a
+        // deposit, so it is surfaced for the gateway to retry.
+        if (claimErr.code === '23505') {
+          console.log(`[cryptomus webhook] uuid=${uuid} already claimed — skipping`);
+          return res.json({ ok: true });
+        }
+        console.error('[cryptomus webhook] claim insert failed:', claimErr.message);
+        return res.status(500).json({ error: 'Could not record deposit' });
+      }
+
+      // Create SimpleSwap exchange: coin → USDC SPL → our wallet
+      let swap;
+      try {
+        swap = await createDepositSwap({
+          coin:             coinId,
+          amount:           netCrypto,
+          ourStableAddress: OUR_USDC_ADDRESS,
+          refundAddress:    '',
+        });
+      } catch (swapErr) {
+        // No funds have moved yet, so release the claim and let the gateway
+        // retry. Leaving it claimed would strand the deposit permanently.
+        console.error('[cryptomus webhook] swap creation failed, releasing claim:', swapErr.message);
+        await supabase.from('transactions').delete().eq('extra_id', uuid).eq('status', 'claiming');
+        return res.status(500).json({ error: 'Swap creation failed' });
+      }
+
+      await supabase.from('transactions')
+        .update({ tx_hash: swap.exchangeId, status: 'converting' })
+        .eq('extra_id', uuid);
 
       // Forward received crypto from our Cryptomus balance to SimpleSwap
-      await createPayout({
-        address: swap.depositAddress,
-        coin:    coinId,
-        amount:  netCrypto,
-      });
+      try {
+        await createPayout({
+          address: swap.depositAddress,
+          coin:    coinId,
+          amount:  netCrypto,
+        });
+      } catch (payErr) {
+        // The claim is deliberately KEPT here. Funds may already be moving, so
+        // a retry could double-send; this needs a human, not an automatic retry.
+        console.error(`[cryptomus webhook] CRITICAL payout failed after claim uuid=${uuid} exchange=${swap.exchangeId}:`, payErr.message);
+        await supabase.from('transactions')
+          .update({ status: 'payout_failed' }).eq('extra_id', uuid);
+        return res.status(500).json({ error: 'Payout failed' });
+      }
 
       // Start polling SimpleSwap — credits player when USDC arrives
       watch(swap.exchangeId, userId);

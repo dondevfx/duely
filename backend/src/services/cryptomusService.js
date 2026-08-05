@@ -98,7 +98,13 @@ function verifyWebhook(body) {
   }, {});
   const b64      = Buffer.from(JSON.stringify(sorted)).toString('base64');
   const expected = crypto.createHash('md5').update(b64 + PAYMENT_KEY).digest('hex');
-  return expected === sign;
+  // Constant-time compare. MD5 is Cryptomus's spec so the digest itself is not
+  // our choice, but a plain === leaks how many leading characters matched via
+  // timing, which is the standard way to forge a signature one byte at a time.
+  const a = Buffer.from(expected, 'utf8');
+  const b = Buffer.from(String(sign), 'utf8');
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
 }
 
 module.exports = { getDepositAddress, createPayout, verifyWebhook, COINS };
