@@ -5,11 +5,16 @@ import { useAuth } from '../context/AuthContext';
 // Landing page for a shared challenge link: /challenge/:gameType/:code
 // Signed in  → drop straight into the game and auto-join the room.
 // Signed out → remember the challenge, send to login, resume right after.
+// Every gameType that can produce a challenge link must appear here, or the
+// link lands on this page and silently redirects home. Rush Hour was missing:
+// its lobby passes gameType="carDash" to the room modal, so a shared Rush Hour
+// link was generated and then went nowhere.
 const GAME_ROUTES = {
   blackjack:   '/game/blackjack',
   'coin-flip': '/game/coin-flip',
   scrabble:    '/game/word-vs',
   blockBlast:  '/game/block-blast',
+  carDash:     '/game/car-dash',
 };
 
 export const PENDING_CHALLENGE_KEY = 'duely_pending_challenge';

@@ -9,16 +9,20 @@ import { useEffect, useRef } from 'react';
  * A pending forfeit is therefore only cancelled when a client that is genuinely
  * still rendering an active match says so — which is this hook.
  *
- * Pass `active` as true only while a match is actually being played. If it is
- * false when the socket reconnects, the forfeit runs and the opponent wins,
- * which is the intended outcome for a refresh, a closed tab, or a navigation
- * away.
+ * Pass `active` as a FUNCTION returning true only while a match is actually on
+ * screen. It is evaluated lazily at reconnect time, so this hook can sit
+ * anywhere in a component without caring whether the state it reads has been
+ * declared yet — passing the value directly reads it during render and throws
+ * if the hook is above the declaration, which is how three game pages once
+ * broke.
  *
- * `active` is a FUNCTION, not a boolean, on purpose: it is evaluated lazily at
- * reconnect time, so this hook can be called anywhere in a component without
- * caring whether the state it reads has been declared yet. Passing the value
- * directly reads it during render and throws if the hook sits above the
- * declaration — which is exactly how three game pages got broken once.
+ * Timing matters here. The claim is sent on the server's `authenticated`
+ * event, NOT on `connect`. The server's authenticate handler is async — it
+ * verifies the token and loads the profile — while its resume_match handler
+ * checks for an authenticated user synchronously and silently returns if there
+ * is not one yet. Claiming on `connect` therefore raced ahead of
+ * authentication, got dropped, and the forfeit ran regardless: a player with a
+ * brief connection blip lost a match they were still playing.
  *
  * @param {import('socket.io-client').Socket|null} socket
  * @param {() => boolean} active — returns true while a live match is on screen
@@ -29,17 +33,22 @@ export function useResumeMatch(socket, active) {
 
   useEffect(() => {
     if (!socket) return;
+
     const claim = () => {
       const on = typeof activeRef.current === 'function' ? activeRef.current() : activeRef.current;
       if (on) socket.emit('resume_match');
     };
-    // 'connect' covers a dropped-and-restored socket. Authentication is emitted
-    // by the socket layer on the same event, and the server tolerates the two
-    // arriving in either order.
-    socket.on('connect', claim);
-    // Also claim on mount, to cover a socket that reconnected while this page
-    // was still initialising.
+
+    // The server confirms authentication with this event, so by the time it
+    // arrives the socket is known and a claim will be honoured.
+    socket.on('authenticated', claim);
+
+    // Also claim once on mount: if the socket authenticated before this page
+    // mounted — the common case when navigating into a game — the event above
+    // has already been and gone. Harmless if it is early, because the listener
+    // will fire again once authentication completes.
     if (socket.connected) claim();
-    return () => { socket.off('connect', claim); };
+
+    return () => { socket.off('authenticated', claim); };
   }, [socket]);
 }

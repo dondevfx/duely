@@ -1839,6 +1839,18 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         setTimeout(() => resolveCoinFlip(io, supabase, roomId), 6000);
         break;
       }
+      // Rush Hour was never wired into private rooms: the lobby offered
+      // "Challenge a Friend", the server minted a code, and then nothing
+      // happened for either player because this switch had no case for it.
+      case 'carDash': {
+        ({ roomId } = createDirectCarDashRoom(p1, p2));
+        if (entryFee > 0) { const r = getCarDashRoom(roomId); if (r) r.feesDeducted = true; }
+        s1.join(roomId); s2.join(roomId);
+        s1.emit('car_dash_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency });
+        s2.emit('car_dash_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency });
+        startCarDashCountdown(io, supabase, roomId);
+        break;
+      }
       case 'blackjack': {
         ({ roomId } = createDirectBlackjackRoom(p1, p2));
         if (entryFee > 0) { const r = getBlackjackRoom(roomId); if (r) r.feesDeducted = true; }

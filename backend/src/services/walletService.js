@@ -94,6 +94,13 @@ async function deductMatchFees(supabase, p1Id, p2Id, entryFee, currency) {
     const { error: e2 } = await supabase.rpc('deduct_coins', { user_id: p2Id, amount: fee });
     if (e2) {
       await supabase.rpc('credit_coins', { user_id: p1Id, amount: fee }).then().catch(() => {});
+      // Tell p1's client the money came back. The clients deduct the entry fee
+      // optimistically the moment a match is found, so without this push their
+      // balance reads low for a fee that was never actually taken — until some
+      // unrelated event happens to refresh it. The diamonds path above already
+      // notifies because it goes through creditDiamonds; this one calls the RPC
+      // directly and was silently skipping it.
+      notifyBalance(p1Id);
       throw new Error(e2.message || 'Opponent has insufficient balance');
     }
   }

@@ -324,6 +324,10 @@ export default function BlockBlastGame() {
     });
 
     socket.on('match_cancelled', ({ message }) => {
+      // The entry fee is deducted optimistically when a match is found, but a
+      // cancellation means it was never actually taken — pull the real balance
+      // so the player is not left looking at money that did not move.
+      refreshProfile();
       setPhase('lobby');
       setStatusMsg(message || 'Match cancelled. Please try again.');
     });

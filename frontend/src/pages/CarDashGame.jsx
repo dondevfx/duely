@@ -10,6 +10,7 @@ import { usePageReady } from '../hooks/usePageReady';
 import { useResumeMatch } from '../hooks/useResumeMatch';
 import { playMatchFound, playCountdown, playGo } from '../utils/sound';
 import HighwayCanvas from '../components/HighwayCanvas';
+import ChallengeLinkBox from '../components/ChallengeLinkBox';
 
 function fmtTime(ms) {
   const s = (ms ?? 0) / 1000;
@@ -38,6 +39,8 @@ export default function CarDashGame() {
   const [oppCrashed, setOppCrashed] = useState(false);
   const [crashed, setCrashed] = useState(false);
   const [result, setResult] = useState(null);
+  const [privateCode, setPrivateCode] = useState('');
+  const [invitedFriend, setInvitedFriend] = useState(null);
 
   const roomIdRef = useRef(null);
   const crashedRef = useRef(false);
@@ -130,7 +133,14 @@ export default function CarDashGame() {
 
     socket.on('car_dash_queue_joined', () => { setPhase('queue'); setStatusMsg('Waiting for opponent…'); });
     socket.on('car_dash_queue_left',   () => { setPhase('lobby'); setStatusMsg(''); });
-    socket.on('match_cancelled', ({ message }) => { setPhase('lobby'); setStatusMsg(message || 'Match cancelled.'); });
+    socket.on('match_cancelled', ({ message }) => {
+      setPhase('lobby');
+      setStatusMsg(message || 'Match cancelled.');
+      // The entry fee is deducted optimistically when a match is found, but a
+      // cancellation means it was never actually taken — pull the real balance
+      // so the player is not left looking at money that did not move.
+      refreshProfile();
+    });
 
     socket.on('car_dash_match_found', ({ roomId: rid, opponent: opp, entryFee: fee, currency }) => {
       roomIdRef.current = rid;
@@ -145,6 +155,14 @@ export default function CarDashGame() {
           : { c_coins: Math.max(0, (profile?.c_coins ?? 0) - fee) });
       }
     });
+
+    // Private rooms and friend invites. Rush Hour emitted create_private_room
+    // but never listened for the reply, so "Challenge a Friend" produced a code
+    // on the server that the player was never shown.
+    socket.on('private_room_created', ({ code }) => { setPrivateCode(code); setInvitedFriend(null); setPhase('private_waiting'); });
+    socket.on('invite_sent', ({ friendUsername }) => { setPrivateCode(''); setInvitedFriend(friendUsername || 'your friend'); setStatusMsg(''); setPhase('private_waiting'); });
+    socket.on('invite_declined', ({ byUsername }) => { setInvitedFriend(null); setStatusMsg(`${byUsername || 'They'} declined your invite.`); setPhase('lobby'); });
+    socket.on('invite_expired', () => { setInvitedFriend(null); setStatusMsg('Invite expired — no response.'); setPhase('lobby'); });
 
     socket.on('car_dash_countdown', ({ count }) => { setCountdown(count); playCountdown(); });
 
@@ -189,6 +207,7 @@ export default function CarDashGame() {
         'car_dash_queue_joined','car_dash_queue_left','match_cancelled','car_dash_match_found',
         'car_dash_countdown','car_dash_start','car_dash_opponent_progress','car_dash_opponent_crashed',
         'car_dash_crashed','car_dash_result','opponent_disconnected','error',
+        'private_room_created','invite_sent','invite_declined','invite_expired',
       ].forEach(e => socket.off(e));
     };
   }, [socket]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -227,9 +246,15 @@ export default function CarDashGame() {
     if (roomIdRef.current) socket?.emit('car_dash_crash', { roomId: roomIdRef.current, score, ms });
   };
 
+  function cancelPrivate() {
+    socket?.emit('cancel_private_room');
+    setPhase('lobby'); setPrivateCode(''); setInvitedFriend(null); setStatusMsg('');
+  }
+
   function reset() {
     setPhase('lobby'); setResult(null); setSeed(null);
-    setMyMs(0); setOppMs(0); setCrashed(false); setOppCrashed(false); setStatusMsg(''); crashedRef.current = false;
+    setMyMs(0); setOppMs(0); setCrashed(false); setOppCrashed(false); setStatusMsg('');
+    setPrivateCode(''); setInvitedFriend(null); crashedRef.current = false;
   }
 
   // Play Again re-enters whatever mode was just played (PvP queue, paid bot or
@@ -293,6 +318,26 @@ export default function CarDashGame() {
         onProgress={onProgress}
         onCrash={onCrash}
       />
+    );
+  }
+
+  // ── Waiting on a private room or a friend invite ──
+  if (phase === 'private_waiting') {
+    return (
+      <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
+        <div className="text-center animate-fade-in w-full max-w-md">
+          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-6" />
+          {invitedFriend ? (
+            <p className="text-muted text-sm mb-6">Waiting for {invitedFriend} to accept…</p>
+          ) : (
+            <>
+              <ChallengeLinkBox code={privateCode} gameType="carDash" />
+              <p className="text-muted text-sm mb-6">Waiting for opponent to join…</p>
+            </>
+          )}
+          <GlowButton variant="ghost" onClick={cancelPrivate}>Cancel</GlowButton>
+        </div>
+      </div>
     );
   }
 
