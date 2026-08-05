@@ -95,9 +95,23 @@ function _makeRoom(roomId, p1, p2) {
 
 // Called by the score_ping socket handler. Returns the clamped, validated score
 // that should be forwarded to the opponent (and stored as the authoritative score).
+// Only a player IN this room may act on it.
+//
+// Every gameplay handler passes the server-assigned socket id, which cannot be
+// spoofed, but none of them checked that the socket actually belongs to the room
+// named in the message. Winners and payouts were never at risk — all resolution
+// is keyed off room.players, so stray entries were ignored — but an outsider
+// could still write into the room's score and timing maps, which grows without
+// bound, and in Rush Hour could push fabricated progress at a real opponent.
+function _isPlayer(room, socketId) {
+  return !!room && Array.isArray(room.players)
+    && room.players.some(p => p.socketId === socketId);
+}
+
 function trackBlockBlastScorePing(roomId, socketId, rawScore) {
   const room = getBlockBlastRoom(roomId);
   if (!room || room.state !== 'active') return null;
+  if (!_isPlayer(room, socketId)) return null;
 
   const now       = Date.now();
   const prev      = room.pingScores[socketId] ?? 0;
@@ -174,6 +188,7 @@ async function startBlockBlastCountdown(io, supabase, roomId) {
 async function handleBlockBlastStuck(io, supabase, roomId, socketId, score = 0) {
   const room = getBlockBlastRoom(roomId);
   if (!room || room.state !== 'active') return;
+  if (!_isPlayer(room, socketId)) return;
 
   // Solo mode: end immediately using final ping score vs bot's display score
   if (room.isSolo) {
@@ -229,6 +244,7 @@ async function handleBlockBlastStuck(io, supabase, roomId, socketId, score = 0) 
 async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 0) {
   const room = getBlockBlastRoom(roomId);
   if (!room || room.state !== 'active') return;
+  if (!_isPlayer(room, socketId)) return;
   // Use server-tracked ping score as authoritative — ignores client's submitted value
   const verifiedScore = room.pingScores[socketId] ?? 0;
   room.scores[socketId] = verifiedScore;

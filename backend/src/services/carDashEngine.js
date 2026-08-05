@@ -180,10 +180,24 @@ const _botKey = (room) => {
   return bot ? (bot.socketId || 'bot') : 'bot';
 };
 
+// Only a player IN this room may act on it.
+//
+// Every gameplay handler passes the server-assigned socket id, which cannot be
+// spoofed, but none of them checked that the socket actually belongs to the room
+// named in the message. Winners and payouts were never at risk — all resolution
+// is keyed off room.players, so stray entries were ignored — but an outsider
+// could still write into the room's score and timing maps, which grows without
+// bound, and in Rush Hour could push fabricated progress at a real opponent.
+function _isPlayer(room, socketId) {
+  return !!room && Array.isArray(room.players)
+    && room.players.some(p => p.socketId === socketId);
+}
+
 // ── Live progress (clamped to wall clock — can't be inflated) ────────────────
 function trackCarDashProgress(roomId, socketId, claimedMs, claimedScore) {
   const room = getCarDashRoom(roomId);
   if (!room || room.state !== 'active' || !room.startedAt) return null;
+  if (!_isPlayer(room, socketId)) return null;
   const elapsed = Date.now() - room.startedAt;
   const ms = Math.max(0, Math.min(Number(claimedMs) || 0, elapsed, MAX_RUN_MS));
   room.progress[socketId] = ms;
@@ -196,6 +210,7 @@ function trackCarDashProgress(roomId, socketId, claimedMs, claimedScore) {
 async function handleCarDashCrash(io, supabase, roomId, socketId, claimedScore) {
   const room = getCarDashRoom(roomId);
   if (!room || room.state !== 'active' || !room.startedAt) return;
+  if (!_isPlayer(room, socketId)) return;
   if (room.times[socketId] != null) return; // already crashed
   const survived = Math.min(Date.now() - room.startedAt, MAX_RUN_MS);
   room.times[socketId] = survived;

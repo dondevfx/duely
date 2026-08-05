@@ -232,9 +232,19 @@ function startWordleGame(io, supabase, roomId) {
 }
 
 // ── Guess handling ────────────────────────────────────────────────────────────
+// Only a player IN this room may act on it. See the note in carDashEngine:
+// resolution is keyed off room.players so outcomes were never at risk, but an
+// outsider naming a room they are not in should not be able to touch its state
+// at all.
+function _isPlayer(room, socketId) {
+  return !!room && Array.isArray(room.players)
+    && room.players.some(p => p.socketId === socketId);
+}
+
 async function handleWordleGuess(io, supabase, roomId, socketId, guessRaw) {
   const room = rooms.get(roomId);
   if (!room || room.settled) return;
+  if (!_isPlayer(room, socketId)) return;
 
   const guess = (guessRaw || '').toUpperCase().trim();
   if (guess.length !== WORD_LENGTH || !/^[A-Z]+$/.test(guess)) {

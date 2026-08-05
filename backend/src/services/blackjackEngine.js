@@ -284,9 +284,19 @@ function _botAction(io, supabase, roomId, botSocketId) {
   _checkAllDone(io, roomId, supabase);
 }
 
+// Only a player IN this room may act on it. See the note in carDashEngine:
+// resolution is keyed off room.players so outcomes were never at risk, but an
+// outsider naming a room they are not in should not be able to touch its state
+// at all.
+function _isPlayer(room, socketId) {
+  return !!room && Array.isArray(room.players)
+    && room.players.some(p => p.socketId === socketId);
+}
+
 function handleBlackjackHit(io, supabase, roomId, socketId) {
   const room = getBlackjackRoom(roomId);
   if (!room || room.state !== 'active') return;
+  if (!_isPlayer(room, socketId)) return;
   if (room.stood[socketId] || room.busted[socketId]) return;
 
   // Demo game: rig the demo's hit cards so it climbs toward 20/21 without busting.
@@ -330,6 +340,7 @@ function handleBlackjackHit(io, supabase, roomId, socketId) {
 function handleBlackjackStand(io, supabase, roomId, socketId) {
   const room = getBlackjackRoom(roomId);
   if (!room || room.state !== 'active') return;
+  if (!_isPlayer(room, socketId)) return;
   if (room.stood[socketId]) return;
 
   // If on hand1 and has pending hand2, transition instead of standing
@@ -346,6 +357,7 @@ function handleBlackjackStand(io, supabase, roomId, socketId) {
 function handleBlackjackSplit(io, supabase, roomId, socketId) {
   const room = getBlackjackRoom(roomId);
   if (!room || room.state !== 'active') return;
+  if (!_isPlayer(room, socketId)) return;
   if (room.stood[socketId] || room.busted[socketId]) return;
 
   const currentHand = room.hands[socketId];
