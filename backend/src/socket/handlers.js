@@ -5,7 +5,7 @@ const {
   addToBlockBlastQueue, removeFromBlockBlastQueue,
   getBlockBlastRoom, deleteBlockBlastRoom, getBlockBlastRoomBySocket,
   startBlockBlastCountdown, handleBlockBlastComplete, handleBlockBlastStuck,
-  trackBlockBlastScorePing,
+  trackBlockBlastScorePing, checkBlockBlastOvertake,
 } = require('../services/blockBlastEngine');
 const {
   addToCarDashQueue, removeFromCarDashQueue,
@@ -617,6 +617,9 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (verified === null) return;
       const opp = room.players.find(p => p.socketId !== socket.id);
       if (opp && !opp.isBot) io.to(opp.socketId).emit('block_blast_opponent_score', { score: verified });
+      // If this ping just passed the score they were chasing, end it now rather
+      // than making them play out the rest of the window.
+      checkBlockBlastOvertake(io, supabase, roomId);
       if (!room.isSolo) {
         const [rp1, rp2] = room.players;
         const s1 = socket.id === rp1.socketId ? verified : (room.pingScores[rp1.socketId] || 0);

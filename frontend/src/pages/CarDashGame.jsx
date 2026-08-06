@@ -27,11 +27,11 @@ function CatchupBanner({ endsAt, target }) {
   }, [endsAt]);
   const secs = (left / 1000).toFixed(1);
   return (
-    <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-24 text-center z-20">
-      <div className="px-4 py-2 rounded-xl bg-black/70 border border-danger/60">
-        <div className="text-danger font-black text-2xl tabular-nums leading-none">{secs}s</div>
-        <div className="text-[11px] text-white/80 font-bold mt-1">
-          BEAT {Number(target).toLocaleString()} TO WIN
+    <div className="pointer-events-none absolute left-3 top-3 z-20">
+      <div className="px-3 py-1.5 rounded-lg bg-black/70 border border-danger/60">
+        <div className="text-danger font-black text-xl tabular-nums leading-none">{secs}s</div>
+        <div className="text-[10px] text-white/80 font-bold mt-0.5 whitespace-nowrap">
+          BEAT {Number(target).toLocaleString()}
         </div>
       </div>
     </div>

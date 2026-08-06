@@ -8,7 +8,16 @@ const gameEvents = require('./gameEvents');
 
 const MAX_GUESSES  = 6;
 const WORD_LENGTH  = 5;
-const FAIL_TIMER_MS = 60 * 1000;
+// Once one player has used all their guesses, the other gets this long to
+// finish. 60s was tight for someone mid-word.
+const FAIL_TIMER_MS = 90 * 1000;
+
+// Nothing used to end a match where BOTH players simply stopped playing: the
+// fail timer only starts when someone exhausts their guesses, so two idle
+// clients left the room open forever. This is an inactivity cap — it resets on
+// every accepted guess from either player, so it only ever fires on a genuinely
+// abandoned match, never on someone thinking.
+const IDLE_LIMIT_MS = 90 * 1000;
 
 // ── Answer word list ─────────────────────────────────────────────────────────
 // Curated common 5-letter English words used as the secret answer.
@@ -166,6 +175,7 @@ function _makeRoom(roomId, p1, p2) {
     currency:    p1.currency || 'coins',
     feesDeducted: false,
     failTimer:   null,
+    idleTimer:   null,
     settled:     false,
     startedAt:   null,
     // Demo account vs bot: demo always wins (bot never solves first).
@@ -225,10 +235,23 @@ function startWordleGame(io, supabase, roomId) {
   const room = rooms.get(roomId);
   if (!room) return;
   room.startedAt = Date.now();
+  _armIdle(io, supabase, room);
   io.to(roomId).emit('wordle_start', {
     wordLength: WORD_LENGTH,
     maxGuesses: MAX_GUESSES,
   });
+}
+
+// Resolve an abandoned match. Compares greens exactly as a normal finish does,
+// so an idle-out is scored, not voided.
+function _armIdle(io, supabase, room) {
+  if (room.idleTimer) clearTimeout(room.idleTimer);
+  room.idleTimer = setTimeout(async () => {
+    const r = rooms.get(room.roomId);
+    if (!r || r.settled) return;
+    r.idleTimer = null;
+    await _settleWordle(io, supabase, r, null).catch(() => {});
+  }, IDLE_LIMIT_MS);
 }
 
 // ── Guess handling ────────────────────────────────────────────────────────────
@@ -258,6 +281,9 @@ async function handleWordleGuess(io, supabase, roomId, socketId, guessRaw) {
 
   const ps = room.pstate[socketId];
   if (!ps || ps.finished || ps.guesses.length >= MAX_GUESSES) return;
+
+  // A real guess means the match is alive — push the inactivity cap back.
+  _armIdle(io, supabase, room);
 
   const feedback = evaluateGuess(room.word, guess);
   ps.guesses.push(feedback);
@@ -300,7 +326,10 @@ async function handleWordleGuess(io, supabase, roomId, socketId, guessRaw) {
       await _settleWordle(io, supabase, room, null);
     } else {
       // Give opponent 60 seconds to finish
-      io.to(opp.socketId).emit('wordle_opponent_failed', { timeLimit: 60 });
+      // The fail timer now bounds the match; the inactivity cap would otherwise
+      // race it and could settle first.
+      if (room.idleTimer) { clearTimeout(room.idleTimer); room.idleTimer = null; }
+      io.to(opp.socketId).emit('wordle_opponent_failed', { timeLimit: FAIL_TIMER_MS / 1000 });
       room.failTimer = setTimeout(async () => {
         if (room.settled) return;
         await _settleWordle(io, supabase, room, null);
@@ -314,6 +343,7 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
   if (room.settled) return;
   room.settled = true;
   if (room.failTimer) { clearTimeout(room.failTimer); room.failTimer = null; }
+  if (room.idleTimer) { clearTimeout(room.idleTimer); room.idleTimer = null; }
 
   const [p1, p2]   = room.players;
   const s1          = room.pstate[p1.socketId];

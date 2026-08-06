@@ -25,6 +25,10 @@ const gameEvents = require('./gameEvents');
 const blockBlastRooms = new Map();
 const blockBlastQueue = [];
 
+// How long the surviving player gets to beat a finished score. Same value as
+// Rush Hour's catch-up window, so the two games do not teach different rules.
+const CATCHUP_MS = 15_000;
+
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function addToBlockBlastQueue(player) {
@@ -227,17 +231,36 @@ async function handleBlockBlastStuck(io, supabase, roomId, socketId, score = 0) 
     return;
   }
 
-  // Opponent is behind or tied — give them 30 seconds to try and beat the stuck player's score
+  // Opponent is behind or tied — a fixed window to beat the finished score.
   if (otherPlayer) {
-    io.to(otherPlayer.socketId).emit('block_blast_keep_playing', { seconds: 30 });
+    room.catchupTarget = trackedScore;
+    io.to(otherPlayer.socketId).emit('block_blast_keep_playing', { seconds: CATCHUP_MS / 1000 });
     room.stuckTimer = setTimeout(async () => {
       const r = getBlockBlastRoom(roomId);
       if (!r || r.state !== 'active') return;
       await _resolveFromScores(io, supabase, roomId);
-    }, 30000);
+    }, CATCHUP_MS);
   } else {
     await _resolveFromScores(io, supabase, roomId);
   }
+}
+
+// The chaser has passed the score they were chasing. Nothing they do afterwards
+// can lose it, so end the match rather than making them play out the clock.
+// Mirrors checkOvertake in carDashEngine.
+async function checkBlockBlastOvertake(io, supabase, roomId) {
+  const room = getBlockBlastRoom(roomId);
+  if (!room || room.state !== 'active') return;
+  if (!room.stuckTimer || room.catchupTarget == null) return;
+
+  const chaser = room.players.find(p => !p.isBot && !room.stuck.has(p.socketId));
+  if (!chaser) return;
+  if ((room.pingScores[chaser.socketId] ?? 0) <= room.catchupTarget) return;
+
+  clearTimeout(room.stuckTimer);
+  room.stuckTimer = null;
+  room.scores[chaser.socketId] = room.pingScores[chaser.socketId];
+  await _resolveFromScores(io, supabase, roomId);
 }
 
 // Player submitted their final score (timer ran out)
@@ -428,6 +451,7 @@ module.exports = {
   getBlockBlastRoom, deleteBlockBlastRoom, getBlockBlastRoomBySocket,
   startBlockBlastCountdown, handleBlockBlastComplete, handleBlockBlastStuck,
   trackBlockBlastScorePing,
+  checkBlockBlastOvertake,
 };
 
 
