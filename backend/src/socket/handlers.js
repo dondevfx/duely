@@ -184,6 +184,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
   // in the room so game events keep flowing — no rejoin UI, no extra events.
   const DISCONNECT_GRACE_MS = 8_000;
   const disconnectTimers = new Map(); // userId → { timer, jobs: [{ forfeitFn, updateSocketFn, cancelled }] }
+  const resumeCounts = new Map();     // userId → reconnect claims used in the current match
 
   // ── Live player count tracking ────────────────────────────────
   // socketGameMap is the single source of truth.
@@ -326,10 +327,27 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     // ── Explicit match re-claim after a dropped connection ───────────
     // Only a client that is still actually rendering an active game sends
     // this. It is what separates "my connection blipped" from "I left".
+    // How many times a single player may drop and re-claim before the grace
+    // period stops being offered. Without a cap, disconnecting just before the
+    // 8s forfeit and reconnecting resets the clock, so it can be repeated
+    // forever to dodge a loss. The per-game timers (Rush Hour's stall watchdog,
+    // Blackjack's 20s turn timer, Word VS's fail timer) already stop the
+    // OPPONENT being frozen — they run server-side regardless of anyone's
+    // connection — so this is about the leaver, not the stayer.
+    const MAX_RESUMES = 3;
+
     socket.on('resume_match', () => {
       if (!authenticatedUser) return;
       const pending = disconnectTimers.get(authenticatedUser.userId);
       if (!pending) return;
+
+      const used = (resumeCounts.get(authenticatedUser.userId) || 0) + 1;
+      resumeCounts.set(authenticatedUser.userId, used);
+      if (used > MAX_RESUMES) {
+        // Out of grace. Let the pending forfeit run rather than cancelling it.
+        socket.emit('resume_denied', { reason: 'Too many reconnects this match.' });
+        return;
+      }
       clearTimeout(pending.timer);
       disconnectTimers.delete(authenticatedUser.userId);
       for (const job of pending.jobs) {
@@ -417,6 +435,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
       if (_inLiveRoom(socket.id))
         return socket.emit('error', { message: 'Finish your current game first.' });
+      resumeCounts.delete(authenticatedUser.userId);   // fresh match, fresh grace
       if (!isValidFee(entryFee, currency)) return socket.emit('error', { message: 'Invalid entry fee' });
       if (inMatchOrQueue(authenticatedUser.userId))
         return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
@@ -543,6 +562,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
       if (_inLiveRoom(socket.id))
         return socket.emit('error', { message: 'Finish your current game first.' });
+      resumeCounts.delete(authenticatedUser.userId);   // fresh match, fresh grace
       socket._startingGame = 'block_blast';
       try {
         if (currency !== 'diamonds') entryFee = 0; // bot games are free for coins
@@ -625,6 +645,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
       if (_inLiveRoom(socket.id))
         return socket.emit('error', { message: 'Finish your current game first.' });
+      resumeCounts.delete(authenticatedUser.userId);   // fresh match, fresh grace
       if (!isValidFee(entryFee, currency)) return socket.emit('error', { message: 'Invalid entry fee' });
       if (inMatchOrQueue(authenticatedUser.userId))
         return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
@@ -733,6 +754,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
       if (_inLiveRoom(socket.id))
         return socket.emit('error', { message: 'Finish your current game first.' });
+      resumeCounts.delete(authenticatedUser.userId);   // fresh match, fresh grace
       socket._startingGame = 'car_dash';
       try {
         if (currency !== 'diamonds') entryFee = 0; // bot games are free for coins
@@ -950,6 +972,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
       if (_inLiveRoom(socket.id))
         return socket.emit('error', { message: 'Finish your current game first.' });
+      resumeCounts.delete(authenticatedUser.userId);   // fresh match, fresh grace
       if (!isValidFee(entryFee, currency)) return socket.emit('error', { message: 'Invalid entry fee' });
       if (inMatchOrQueue(authenticatedUser.userId))
         return socket.emit('error', { message: 'Already in a queue' });
@@ -1083,6 +1106,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
       if (_inLiveRoom(socket.id))
         return socket.emit('error', { message: 'Finish your current game first.' });
+      resumeCounts.delete(authenticatedUser.userId);   // fresh match, fresh grace
       socket._startingGame = 'scrabble';
       try {
         if (currency !== 'diamonds') entryFee = 0; // bot games free for coins
@@ -1204,6 +1228,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
       if (_inLiveRoom(socket.id))
         return socket.emit('error', { message: 'Finish your current game first.' });
+      resumeCounts.delete(authenticatedUser.userId);   // fresh match, fresh grace
       if (!['heads', 'tails'].includes(side)) return socket.emit('error', { message: 'Pick heads or tails' });
       if (!isValidFee(entryFee, currency)) return socket.emit('error', { message: 'Invalid entry fee' });
       if (inMatchOrQueue(authenticatedUser.userId))
@@ -1290,6 +1315,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
       if (_inLiveRoom(socket.id))
         return socket.emit('error', { message: 'Finish your current game first.' });
+      resumeCounts.delete(authenticatedUser.userId);   // fresh match, fresh grace
       if (!['heads', 'tails'].includes(side)) return socket.emit('error', { message: 'Pick heads or tails' });
       socket._startingGame = 'coin_flip';
       try {
@@ -1334,6 +1360,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
       if (_inLiveRoom(socket.id))
         return socket.emit('error', { message: 'Finish your current game first.' });
+      resumeCounts.delete(authenticatedUser.userId);   // fresh match, fresh grace
       if (!isValidFee(entryFee, currency)) return socket.emit('error', { message: 'Invalid entry fee' });
       if (userQueues.has(authenticatedUser.userId)) return socket.emit('error', { message: 'Already in a queue' });
       socket._startingGame = 'blackjack';
@@ -1499,6 +1526,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
       if (_inLiveRoom(socket.id))
         return socket.emit('error', { message: 'Finish your current game first.' });
+      resumeCounts.delete(authenticatedUser.userId);   // fresh match, fresh grace
       socket._startingGame = 'blackjack';
       try {
         if (currency !== 'diamonds') entryFee = 0;

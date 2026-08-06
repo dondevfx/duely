@@ -17,6 +17,27 @@ function fmtTime(ms) {
   return s.toFixed(1) + 's';
 }
 
+// Shown when the opponent has crashed ahead: the score to beat and the time
+// left to beat it. Without this the player has no idea they are on a clock.
+function CatchupBanner({ endsAt, target }) {
+  const [left, setLeft] = useState(Math.max(0, endsAt - Date.now()));
+  useEffect(() => {
+    const t = setInterval(() => setLeft(Math.max(0, endsAt - Date.now())), 100);
+    return () => clearInterval(t);
+  }, [endsAt]);
+  const secs = (left / 1000).toFixed(1);
+  return (
+    <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-24 text-center z-20">
+      <div className="px-4 py-2 rounded-xl bg-black/70 border border-danger/60">
+        <div className="text-danger font-black text-2xl tabular-nums leading-none">{secs}s</div>
+        <div className="text-[11px] text-white/80 font-bold mt-1">
+          BEAT {Number(target).toLocaleString()} TO WIN
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CarDashGame() {
   const ready = usePageReady();
   const location = useLocation();
@@ -37,6 +58,7 @@ export default function CarDashGame() {
   const [myMs, setMyMs] = useState(0);
   const [oppMs, setOppMs] = useState(0);
   const [oppCrashed, setOppCrashed] = useState(false);
+  const [catchup, setCatchup] = useState(null);   // { endsAt, targetScore }
   const [crashed, setCrashed] = useState(false);
   const [result, setResult] = useState(null);
   const [privateCode, setPrivateCode] = useState('');
@@ -175,6 +197,10 @@ export default function CarDashGame() {
 
     socket.on('car_dash_opponent_progress', ({ ms }) => setOppMs(ms));
     socket.on('car_dash_opponent_crashed', ({ ms }) => { setOppMs(ms); setOppCrashed(true); });
+    // The opponent crashed while ahead: a fixed window to beat their score.
+    socket.on('car_dash_catchup', ({ seconds, targetScore }) => {
+      setCatchup({ endsAt: Date.now() + seconds * 1000, targetScore });
+    });
     socket.on('car_dash_crashed', ({ ms }) => { setMyMs(ms); setCrashed(true); });
 
     socket.on('car_dash_result', (data) => {
@@ -206,7 +232,7 @@ export default function CarDashGame() {
       [
         'car_dash_queue_joined','car_dash_queue_left','match_cancelled','car_dash_match_found',
         'car_dash_countdown','car_dash_start','car_dash_opponent_progress','car_dash_opponent_crashed',
-        'car_dash_crashed','car_dash_result','opponent_disconnected','error',
+        'car_dash_crashed','car_dash_result','opponent_disconnected','error','car_dash_catchup',
         'private_room_created','invite_sent','invite_declined','invite_expired',
       ].forEach(e => socket.off(e));
     };
@@ -254,7 +280,7 @@ export default function CarDashGame() {
   function reset() {
     setPhase('lobby'); setResult(null); setSeed(null);
     setMyMs(0); setOppMs(0); setCrashed(false); setOppCrashed(false); setStatusMsg('');
-    setPrivateCode(''); setInvitedFriend(null); crashedRef.current = false;
+    setPrivateCode(''); setInvitedFriend(null); setCatchup(null); crashedRef.current = false;
   }
 
   // Play Again re-enters whatever mode was just played (PvP queue, paid bot or
@@ -313,11 +339,14 @@ export default function CarDashGame() {
   // ── Playing ──
   if (phase === 'playing') {
     return (
-      <HighwayCanvas
-        seed={seed}
-        onProgress={onProgress}
-        onCrash={onCrash}
-      />
+      <div className="relative">
+        <HighwayCanvas
+          seed={seed}
+          onProgress={onProgress}
+          onCrash={onCrash}
+        />
+        {catchup && <CatchupBanner endsAt={catchup.endsAt} target={catchup.targetScore} />}
+      </div>
     );
   }
 

@@ -31,6 +31,10 @@ const MAX_RUN_MS = 15 * 60_000; // sanity ceiling — no run is 15 minutes
 // crash. Either way the opponent must not be left hanging: after STALL_MS we
 // finalise that player at their last verified progress.
 const STALL_MS   = 10_000;
+// When a player crashes while AHEAD, the survivor gets this long to beat their
+// score. Pass it and they win immediately; let it run out and they lose. Before
+// this the survivor could drive indefinitely, so a match had no defined end.
+const CATCHUP_MS = 15_000;
 const WATCH_MS   = 2_000;
 // Anti-cheat: score is client-computed, so it is capped against server-measured
 // elapsed time. Ceiling mirrors the client formula (distance + time + a generous
@@ -101,6 +105,7 @@ function _makeRoom(roomId, p1, p2) {
     // last live progress ping per player, for the opponent bar
     progress: {},
     lastPingAt: {},   // socketId -> ms, for the stall watchdog
+    catchupTimer: null, catchupTarget: null, catchupEndsAt: null,
     isSolo,
     demoWin,
     // Non-demo solo: the bot crashes at a fixed, believable time.
@@ -232,6 +237,52 @@ async function handleCarDashCrash(io, supabase, roomId, socketId, claimedScore) 
   }
 
   await _maybeResolve(io, supabase, roomId);
+  _armCatchup(io, supabase, roomId);
+}
+
+// The survivor is chasing a score that can no longer move. Give them a fixed
+// window to beat it rather than letting the match run on forever.
+function _armCatchup(io, supabase, roomId) {
+  const room = getCarDashRoom(roomId);
+  if (!room || room.state !== 'active' || room.catchupTimer) return;
+  if (room.players.length !== 2) return;
+
+  const key = (p) => (p.isBot ? _botKey(room) : p.socketId);
+  const out = room.players.filter(p => room.times[key(p)] != null);
+  if (out.length !== 1) return;                       // nobody out, or both
+
+  const dead = out[0];
+  const alive = room.players.find(p => p !== dead);
+  if (!alive || alive.isBot) return;
+
+  const target = room.scores[key(dead)] ?? 0;
+  // Already ahead? Then there is nothing to chase — checkOvertake ends it on the
+  // next ping instead.
+  if ((room.scores[key(alive)] ?? 0) > target) return;
+
+  room.catchupTarget = target;
+  room.catchupEndsAt = Date.now() + CATCHUP_MS;
+  io.to(alive.socketId).emit('car_dash_catchup', {
+    seconds: CATCHUP_MS / 1000,
+    targetScore: target,
+  });
+
+  room.catchupTimer = setTimeout(async () => {
+    const r = getCarDashRoom(roomId);
+    if (!r || r.state !== 'active') return;
+    r.catchupTimer = null;
+    // Time is up. Finalise the survivor where they stand — if they had passed
+    // the target, checkOvertake would already have ended the match.
+    const k = (p) => (p.isBot ? _botKey(r) : p.socketId);
+    if (r.times[k(alive)] == null) {
+      r.times[k(alive)] = Math.min(Date.now() - r.startedAt, MAX_RUN_MS);
+      r.progress[k(alive)] = r.times[k(alive)];
+    }
+    await _resolveFromTimes(io, supabase, roomId).catch(() => {});
+  }, CATCHUP_MS);
+  // Registered here so the central cleanup in _resolve clears it — otherwise a
+  // match that ends early leaves a timer that fires into a finished room.
+  (room.botTimers ||= []).push(room.catchupTimer);
 }
 
 // One player is out, the other is still driving. The moment the survivor's
@@ -256,6 +307,7 @@ async function checkOvertake(io, supabase, roomId) {
   const deadScore = room.scores[key(dead)] ?? 0;
   const aliveScore = room.scores[key(alive)] ?? 0;
   if (aliveScore <= deadScore) return;
+  if (room.catchupTimer) { clearTimeout(room.catchupTimer); room.catchupTimer = null; }
   room.times[key(alive)] = Math.min(Date.now() - room.startedAt, MAX_RUN_MS);
   room.progress[key(alive)] = room.times[key(alive)];
   await _resolveFromTimes(io, supabase, roomId);
