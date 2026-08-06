@@ -39,7 +39,27 @@ const WATCH_MS   = 2_000;
 // Anti-cheat: score is client-computed, so it is capped against server-measured
 // elapsed time. Ceiling mirrors the client formula (distance + time + a generous
 // near-miss rate) plus headroom, so honest runs are never clipped.
-const maxScoreFor = (ms) => Math.floor((ms / 1000) * 380 + 500);
+// ── Anti-cheat score ceiling ────────────────────────────────────────────────
+// Score is computed on the client, so the server clamps it against elapsed time.
+// The ceiling is derived from the client's own scoring constants rather than
+// picked by feel, so the two cannot drift apart:
+//
+//   distance   PTS_DIST(0.06) x top speed(1450 + 780*5.0 = 5350)  = 321/s
+//   survival   PTS_TIME                                           =   8/s
+//   near miss  NEAR_RATE(1.5/s) x PTS_NEAR(75) x COMBO_MAX(10)    = 1125/s
+//
+// The near-miss term is what forced this up. At the old 380/s, distance alone at
+// top speed was already 329/s — 87% of the ceiling — so once the combo cap went
+// to 10 a skilled player chaining near misses would have had their score
+// silently clipped and lost matches they had actually won. Clipping an honest
+// player is far worse than a looser bound on a cheater, and the clamp still
+// holds a fabricated score to something proportional to time played.
+//
+// NEAR_RATE is the one estimate here: 1.5 near misses a second is generous for
+// real play, since each one needs the player lined up behind a car first. If the
+// combo ceiling or the speed ramp changes again, revisit this.
+const SCORE_RATE_CAP = 1500;   // points per second, see derivation above
+const maxScoreFor = (ms) => Math.floor((ms / 1000) * SCORE_RATE_CAP + 500);
 const GAME_NAME  = 'Rush Hour';
 
 const carDashRooms = new Map();

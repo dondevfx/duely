@@ -61,10 +61,42 @@ test('Word VS: a stranger\'s guess is ignored', () => {
 test('Rush Hour: an absurd score is clamped to what the clock allows', () => {
   const { roomId, room } = activeCarDash('c1', 'c2', 10_000);
   carDash.trackCarDashProgress(roomId, 'c1', 10_000, 99_999_999);
-  const cap = 10 * 380 + 500;                       // mirrors maxScoreFor
-  assert.ok(room.scores.c1 <= cap + 400,
-    `claimed 99,999,999 and kept ${room.scores.c1}, cap is about ${cap}`);
+  const cap = 10 * 1500 + 500;                      // mirrors maxScoreFor
+  assert.ok(room.scores.c1 <= cap,
+    `claimed 99,999,999 and kept ${room.scores.c1}, cap is ${cap}`);
+  assert.ok(room.scores.c1 < 99_999_999 / 100,
+    'a fabricated score must still be cut down by orders of magnitude');
   carDash.deleteCarDashRoom(roomId);
+});
+
+test('the score ceiling leaves room for the fastest legitimate play', () => {
+  // Distance alone at top speed, plus a chained near miss, must fit under the
+  // clamp — otherwise an honest player loses matches they won.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const client = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'src', 'components', 'HighwayCanvas.jsx'), 'utf8');
+  const num = (re) => Number(String(client.match(re)[1]).replace(/_/g, ''));
+
+  const ptsDist  = num(/const PTS_DIST\s*=\s*([\d._]+);/);
+  const ptsTime  = num(/const PTS_TIME\s*=\s*([\d._]+);/);
+  const ptsNear  = num(/const PTS_NEAR\s*=\s*([\d._]+);/);
+  const comboMax = num(/const COMBO_MAX\s*=\s*([\d._]+);/);
+  const spdMax   = num(/const SPD_MAX\s*=\s*([\d._]+);/);
+  const odSpeed  = num(/const OD_SPEED\s*=\s*([\d._]+);/);
+  const odMax    = num(/const OD_SPEED_MAX\s*=\s*([\d._]+);/);
+
+  const topSpeed = spdMax + odSpeed * odMax;
+  const perSec   = ptsDist * topSpeed + ptsTime + 1.5 * ptsNear * comboMax;
+
+  const server = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'services', 'carDashEngine.js'), 'utf8');
+  const capRate = Number(
+    server.match(/const SCORE_RATE_CAP = ([\d_]+);/)[1].replace(/_/g, ''));
+
+  assert.ok(capRate >= perSec,
+    `server clamps at ${capRate}/s but legitimate play can reach ${Math.round(perSec)}/s ` +
+    '— honest scores would be clipped');
 });
 
 test('Rush Hour: survival time cannot exceed the wall clock', () => {

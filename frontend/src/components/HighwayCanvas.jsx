@@ -102,6 +102,11 @@ const VISUAL_SCROLL = 1.0;   // road MUST scroll with the world or it slides und
 const PTS_DIST     = 0.06;
 const PTS_TIME     = 8;
 const PTS_NEAR     = 75;
+// Near misses chain: each one inside COMBO_WINDOW of the last raises the
+// multiplier. The ceiling is what a run of perfect driving is worth, so it also
+// sets the fastest anyone can legitimately earn — the server's score clamp has
+// to leave room for it (see maxScoreFor in carDashEngine).
+const COMBO_MAX    = 10;
 // How far outside the hitboxes still counts as a near miss, in world units.
 // Widening this makes the bonus easier to earn without touching collisions —
 // the hitbox itself is unchanged, so nothing about crashing gets more lenient.
@@ -1241,7 +1246,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         if (!c.near && c.armed && S.simT - c.armedAt < NEAR_WINDOW
             && !S.dead && behindRear && dx >= sumW && dx < sumW + NEAR_BAND) {
           c.near = true;
-          S.combo = (S.simT - S.comboT < 1.5) ? Math.min(S.combo + 1, 4) : 1;
+          S.combo = (S.simT - S.comboT < 1.5) ? Math.min(S.combo + 1, COMBO_MAX) : 1;
           S.comboT = S.simT;
           const pts = PTS_NEAR * S.combo;
           S.score += pts;
