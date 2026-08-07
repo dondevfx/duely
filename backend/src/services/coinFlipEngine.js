@@ -179,6 +179,14 @@ async function resolveCoinFlip(io, supabase, roomId) {
     winnerStreak: winnerStreak ?? 0,
     isFirstWin: isFirstWin ?? false,
   });
+
+  // Drop the room now that it is settled. Marking it 'finished' is what stops a
+  // second payout, but leaving the entry in the map meant it lived until some
+  // disconnect sweep happened to collect it — a slow leak, and worse, a stale
+  // room shadows a live one in getCoinFlipRoomBySocket (it returns the first
+  // match for a socket), so a leaver's *current* match could be skipped by the
+  // forfeit sweep. The 'finished' latch stays the payout guard; this is cleanup.
+  deleteCoinFlipRoom(roomId);
 }
 
 module.exports = {
