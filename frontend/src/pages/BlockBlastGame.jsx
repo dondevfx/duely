@@ -895,6 +895,12 @@ export default function BlockBlastGame() {
               50% { transform: scale(1.08); filter: brightness(1.35); }
             }
           `}</style>
+          {/*
+            Blast Mode and line clears used amber (#facc15/#f97316), which washed
+            the whole board warm — it read as the screen going red. Both are the
+            site blue now. BLAST is the bright cyan end so it still separates
+            clearly from the filling bar, which runs deep blue → cyan.
+          */}
           {/* HUD */}
           <div className="flex items-center justify-between w-full max-w-lg gap-2">
             {/* My score */}
@@ -949,7 +955,7 @@ export default function BlockBlastGame() {
           {/* Energy bar */}
           <div className="w-full max-w-lg px-1">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-bold" style={{ color: blastMode ? '#facc15' : '#888' }}>
+              <span className="text-xs font-bold" style={{ color: blastMode ? '#00ccff' : '#888' }}>
                 {blastMode ? `⚡ BLAST MODE — ${blastSecondsLeft}s` : '⚡ Energy'}
               </span>
               {!blastMode && <span className="text-xs text-muted">{energy}/100</span>}
@@ -960,14 +966,14 @@ export default function BlockBlastGame() {
                 style={{
                   width: blastMode ? '100%' : `${energy}%`,
                   background: blastMode
-                    ? 'linear-gradient(90deg, #facc15, #f97316)'
+                    ? 'linear-gradient(90deg, #00ccff, #7dd3fc)'
                     : 'linear-gradient(90deg, #1250B4, #00ccff)',
-                  boxShadow: blastMode ? '0 0 12px #facc15' : energy > 70 ? '0 0 8px #1250B4' : 'none',
+                  boxShadow: blastMode ? '0 0 12px #00ccff' : energy > 70 ? '0 0 8px #1250B4' : 'none',
                   animation: blastMode ? 'powerUpPulse 0.5s ease-in-out infinite' : undefined,
                 }}
               />
             </div>
-            {blastMode && <p className="text-xs text-yellow-400 text-center mt-1 font-bold animate-pulse">Click any row to clear it!</p>}
+            {blastMode && <p className="text-xs text-center mt-1 font-bold animate-pulse" style={{ color: '#00ccff' }}>Click any row to clear it!</p>}
           </div>
 
           {/* Grid */}
@@ -993,29 +999,29 @@ export default function BlockBlastGame() {
                       borderRadius: 6,
                       cursor: blastMode ? 'crosshair' : dragging ? (canDrop ? 'copy' : 'no-drop') : 'default',
                       background: isFlash
-                        ? 'radial-gradient(circle at 40% 30%, #ffffff, #facc15)'
+                        ? 'radial-gradient(circle at 40% 30%, #ffffff, #00ccff)'
                         : cell
                           ? `linear-gradient(135deg, ${cell}ff 0%, ${cell}cc 100%)`
                           : isPreview
                             ? (canDrop ? (activePiece?.color + 'aa') : '#ff444466')
                             : isBlastRow
-                              ? 'linear-gradient(135deg, #1a1200 0%, #0d0a00 100%)'
+                              ? 'linear-gradient(135deg, #001426 0%, #000a14 100%)'
                               : 'linear-gradient(135deg, #111827 0%, #0d1420 100%)',
                       border: isFlash
-                        ? '2px solid #facc15'
+                        ? '2px solid #00ccff'
                         : cell
                           ? `1px solid ${cell}88`
                           : isPreview
                             ? (canDrop ? `1px solid ${activePiece?.color}` : '1px solid #ff4444')
                             : isBlastRow
-                              ? '1px solid rgba(250,204,21,0.15)'
+                              ? '1px solid rgba(0,204,255,0.15)'
                               : '1px solid rgba(255,255,255,0.07)',
                       boxShadow: isFlash
-                        ? `0 0 28px #facc15, 0 0 56px #facc1566`
+                        ? `0 0 28px #00ccff, 0 0 56px #00ccff66`
                         : cell
                           ? `0 0 12px ${cell}cc, 0 0 24px ${cell}55, inset 0 1px 0 rgba(255,255,255,0.15)`
                           : isBlastRow
-                            ? '0 0 4px rgba(250,204,21,0.1)'
+                            ? '0 0 4px rgba(0,204,255,0.1)'
                             : 'none',
                       transition: isFlash ? 'none' : 'background 0.08s, box-shadow 0.12s',
                       position: 'relative', overflow: 'hidden',
@@ -1113,8 +1119,8 @@ export default function BlockBlastGame() {
               transform: 'translate(-50%, -50%)',
               pointerEvents: 'none', zIndex: 9999,
               animation: 'floatUp 1s ease-out forwards',
-              fontSize: 28, fontWeight: 900, color: '#facc15',
-              textShadow: '0 0 16px #facc15, 0 2px 4px #000',
+              fontSize: 28, fontWeight: 900, color: '#00ccff',
+              textShadow: '0 0 16px #00ccff, 0 2px 4px #000',
             }}>{p.text}</div>
           ))}
 

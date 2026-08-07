@@ -1540,10 +1540,18 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         const a = 1 - f.age / f.life;
         ctx.globalAlpha = clamp(a * 1.4, 0, 1);
         ctx.font = `900 ${18 + (1 - a) * 3}px Inter, system-ui, sans-serif`;
+        // Keep the popup on the asphalt. It is centred on the car that earned
+        // it, so in an outside lane a wide one like "+750 ×10" ran off the road
+        // edge and got clipped. Measured after the font is set, because the
+        // text grows as it fades.
+        const half = ctx.measureText(f.txt).width / 2;
+        const lo = roadX + half + 3, hi = roadX + roadW - half - 3;
+        // Wider than the road itself: centre it rather than pinning to an edge.
+        const x = lo > hi ? roadX + roadW / 2 : clamp(f.x, lo, hi);
         ctx.fillStyle = '#04070D';
-        ctx.fillText(f.txt, f.x + 1.5, f.y + 1.5);
+        ctx.fillText(f.txt, x + 1.5, f.y + 1.5);
         ctx.fillStyle = CYAN;
-        ctx.fillText(f.txt, f.x, f.y);
+        ctx.fillText(f.txt, x, f.y);
       }
       ctx.globalAlpha = 1;
     }
