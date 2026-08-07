@@ -665,7 +665,7 @@ export default function CoinFlipGame() {
               <div className="grid grid-cols-2 gap-1.5 sm:gap-3">
                 {['heads', 'tails'].map(s => (
                   <button key={s} onClick={() => setSide(s)}
-                    className={`py-1.5 sm:py-3 rounded-xl text-center font-black border-2 transition-all ${
+                    className={`py-4 sm:py-5 rounded-xl text-center font-black border-2 transition-all ${
                       side === s ? 'border-primary bg-primary/20 text-white' : 'border-border text-muted hover:border-primary/50 hover:text-white'
                     }`}>
                     <div className="text-base sm:text-2xl mb-0 sm:mb-0.5">{s === 'heads' ? '🔵' : '⚪'}</div>
