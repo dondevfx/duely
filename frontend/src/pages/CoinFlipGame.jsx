@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { playMatchFound, playCountdown, playGo, playCoinFlip, playCoinLand, stopAllSounds } from '../utils/sound';
+import { holdBalance } from '../utils/balanceHold';
 import { useSocket } from '../context/SocketContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { COIN_FEES, DIAMOND_FEES, SMALL_BTN } from '../components/GameLobby';
@@ -225,6 +226,7 @@ export default function CoinFlipGame() {
   const rafRef    = useRef(null);
   const lastTRef  = useRef(null);
   const pendingResultRef = useRef(null);
+  const releaseBalanceRef = useRef(null);
 
   const stopSpin = useCallback(() => {
     if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
@@ -364,6 +366,12 @@ export default function CoinFlipGame() {
       setFlipResult(data.result);
       landCoin(data.result);
 
+      // The server has already settled the money. Hold only the DISPLAY until
+      // the coin lands, or the navbar balance changes mid-spin and gives the
+      // result away before the animation does.
+      releaseBalanceRef.current?.();
+      releaseBalanceRef.current = holdBalance();
+
       // After transition completes show label for 2s, then result screen
       fxTimersRef.current.push(setTimeout(() => { setResultLanded(true); playCoinLand(); }, 4200));
       fxTimersRef.current.push(setTimeout(() => {
@@ -380,6 +388,8 @@ export default function CoinFlipGame() {
         }
         setResultData(res);
         setPhase('result');
+        releaseBalanceRef.current?.();
+        releaseBalanceRef.current = null;
         refreshProfile();
       }, 6200));
     });
@@ -436,6 +446,10 @@ export default function CoinFlipGame() {
       socket.off('coin_flip_queue_joined');
       socket.off('coin_flip_match_found');
       socket.off('match_cancelled');
+      // Leaving mid-flip must not strand the hold, or the displayed balance
+      // stops updating everywhere until the safety timer expires.
+      releaseBalanceRef.current?.();
+      releaseBalanceRef.current = null;
       socket.off('coin_flip_result');
       socket.off('opponent_disconnected');
       socket.off('private_room_created');
