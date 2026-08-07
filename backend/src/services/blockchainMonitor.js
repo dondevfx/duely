@@ -308,6 +308,41 @@ async function fetchTxs(coin, address) {
 // Prevents repeated DB lookups and log spam for old/dust transactions.
 const _seenTxs = new Set();
 
+/**
+ * Atomically claim a deposit before doing anything irreversible with it.
+ *
+ * The claim is an INSERT. The unique index on transactions.tx_hash is what makes
+ * it atomic: exactly one caller can win, everyone else gets 23505 and backs off.
+ * That index is load-bearing — without it this degrades to a plain insert that
+ * always succeeds, and two monitor passes could both credit the same deposit.
+ * See PENDING_SQL.sql.
+ *
+ * A previous attempt that gave up (pending_retry / failed) left funds sitting in
+ * the deposit wallet, so those rows may be taken over — but only by whoever wins
+ * the conditional UPDATE, which is atomic for the same reason.
+ *
+ * @returns {'claimed'|'taken'|'error'} 'taken' = someone else owns it, skip
+ *          quietly. 'error' = could not record it, so do NOT credit; leaving it
+ *          unclaimed lets the next poll retry cleanly.
+ */
+async function claimDeposit(supabase, row) {
+  const { error } = await supabase.from('transactions').insert(row);
+  if (!error) return 'claimed';
+
+  if (error.code === '23505') {
+    const { data: retaken } = await supabase
+      .from('transactions')
+      .update({ status: row.status })
+      .eq('tx_hash', row.tx_hash)
+      .in('status', ['pending_retry', 'failed'])
+      .select('id');
+    return (retaken && retaken.length) ? 'claimed' : 'taken';
+  }
+
+  console.error(`[monitor] claim failed for ${row.tx_hash} — not crediting:`, error.message);
+  return 'error';
+}
+
 async function processDeposit(supabase, { userId, coin, address, txHash, amount }) {
   if (_seenTxs.has(txHash)) return; // already handled this poll cycle or prior
 
@@ -350,18 +385,19 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
       return;
     }
     const credited = Math.floor(amount * (1 - OUR_FEE) * 100) / 100;
-    // Record the deposit row BEFORE crediting. The idempotency check above keys
-    // on tx_hash, so if we credited first and crashed before inserting, a restart
-    // would re-credit the same deposit (minting money). Recording first flips the
-    // only failure window to a recorded-but-uncredited row (safe, reconcilable).
-    const { error: recErr } = await supabase.from('transactions').insert({
+    // Claim BEFORE crediting. If we credited first and crashed before recording,
+    // a restart would re-credit the same deposit (minting money). Claiming first
+    // flips the only failure window to a recorded-but-uncredited row — safe, and
+    // reconcilable by hand.
+    const claim = await claimDeposit(supabase, {
       user_id: userId, type: 'deposit', amount_c: credited,
       crypto_amount: amount, crypto_symbol: 'USDC', tx_hash: txHash, status: 'confirmed',
     });
-    if (recErr) {
-      console.error(`[monitor] USDC record insert failed for ${txHash} — NOT crediting to avoid a double:`, recErr.message);
-      return; // don't add to _seenTxs — allow a clean retry next poll
-    }
+    // 'taken' — already credited by an earlier pass; stop looking at it.
+    if (claim === 'taken') { _seenTxs.add(txHash); return; }
+    // 'error' — do NOT add to _seenTxs, so the next poll retries cleanly.
+    if (claim !== 'claimed') return;
+
     await creditCoins(supabase, userId, credited);
     await recordDeposit(supabase, userId, credited, 'crypto');
     console.log(`[monitor] USDC deposit — received $${amount}, credited $${credited} (0.1% fee) to user ${userId}`);
@@ -383,11 +419,20 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     if (!usdcAddress) { console.error('[monitor] USDC_SPL_ADDRESS not set'); return; }
     const { privKey } = getAddress(userId, coin);
 
-    // Record tx first to prevent reprocessing on next poll (upsert handles retries)
-    await supabase.from('transactions').upsert({
+    // Claim before swapping, so a restart mid-swap cannot credit this twice.
+    //
+    // This used to be an upsert with { onConflict: 'tx_hash' }. Postgres cannot
+    // infer a PARTIAL unique index from a bare ON CONFLICT (tx_hash), so against
+    // uniq_deposit_tx_hash that upsert errors — and the error was swallowed by a
+    // bare .catch(). The row was never written: missing from the user's history,
+    // and invisible to the restart dup-check that is supposed to stop a second
+    // credit. An insert-and-inspect claim needs no conflict target at all.
+    const claim = await claimDeposit(supabase, {
       user_id: userId, type: 'deposit', amount_c: 0,
       crypto_amount: amount, crypto_symbol: 'SOL', tx_hash: txHash, status: 'converting',
-    }, { onConflict: 'tx_hash' }).then().catch(() => {});
+    });
+    if (claim === 'taken') { _seenTxs.add(txHash); return; }
+    if (claim !== 'claimed') return;   // unrecorded — retry next poll, never credit
 
     // Swap SOL → USDC (awaited so we get the real output amount)
     let usdcReceived = 0;
@@ -406,16 +451,15 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
         usdcReceived = netUsd;
       } catch (e2) {
         console.error(`[monitor] fallback failed:`, e2.message);
-        // Mark pending_retry — SOL still in deposit wallet, will retry next poll
-        await supabase.from('transactions')
+        // Mark pending_retry — the SOL is still in the deposit wallet, so a later
+        // poll can take the claim back over and try again. The row is guaranteed
+        // to exist here because we claimed it above, so one update is enough.
+        const { error: retryErr } = await supabase.from('transactions')
           .update({ status: 'pending_retry' })
-          .eq('tx_hash', txHash)
-          .then().catch(() => {});
-        // Also upsert in case the initial insert above was the first attempt
-        await supabase.from('transactions').upsert({
-          user_id: userId, type: 'deposit', amount_c: 0,
-          crypto_amount: amount, crypto_symbol: 'SOL', tx_hash: txHash, status: 'pending_retry',
-        }, { onConflict: 'tx_hash' }).then().catch(() => {});
+          .eq('tx_hash', txHash);
+        if (retryErr) {
+          console.error(`[monitor] CRITICAL: could not mark ${txHash} pending_retry — deposit is stranded as 'converting':`, retryErr.message);
+        }
         return; // do NOT add to _seenTxs — allow retry next poll
       }
     }
@@ -459,11 +503,27 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
   if (!usdcAddress) { console.error('[monitor] USDC_SPL_ADDRESS not set'); return; }
   const { privKey } = getAddress(userId, coin);
 
+  // Claim the on-chain tx BEFORE creating the swap. The old order created the
+  // exchange first and only recorded afterwards, so two passes over the same
+  // deposit could both open an exchange and both forward funds — the same race
+  // the Cryptomus webhook was fixed for.
+  const rawClaim = await claimDeposit(supabase, {
+    user_id: userId, type: 'deposit_raw', amount_c: 0,
+    crypto_amount: amount, crypto_symbol: coin.toUpperCase(),
+    tx_hash: txHash, status: 'forwarded',
+  });
+  if (rawClaim === 'taken') { _seenTxs.add(txHash); return; }
+  if (rawClaim !== 'claimed') return;
+
   let swap;
   try {
     swap = await createDepositSwap({ coin, amount: netAmount, ourStableAddress: usdcAddress, refundAddress: '' });
   } catch (e) {
-    console.error(`[monitor] ChangeNow error for ${txHash}:`, e.message);
+    // Nothing has moved yet, so release the claim rather than stranding the
+    // deposit — the next poll retries from scratch.
+    console.error(`[monitor] ChangeNow error for ${txHash}, releasing claim:`, e.message);
+    await supabase.from('transactions').delete()
+      .eq('tx_hash', txHash).eq('type', 'deposit_raw').eq('status', 'forwarded');
     return;
   }
 
@@ -474,18 +534,19 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     tx_hash: swap.exchangeId, status: 'converting',
     extra_id: creditUser ? 'credit' : 'no_credit',
   });
-  // Mark original tx to prevent reprocessing
-  await supabase.from('transactions').insert({
-    user_id: userId, type: 'deposit_raw', amount_c: 0,
-    crypto_amount: amount, crypto_symbol: coin.toUpperCase(),
-    tx_hash: txHash, status: 'forwarded',
-  }).then().catch(() => {});
 
   try {
     const sendTx = await sendCrypto({ coin, privKey, toAddress: swap.depositAddress, amount: netAmount });
     console.log(`[monitor] forwarded ${netAmount} ${coin} → ChangeNow exchange=${swap.exchangeId} creditUser=${creditUser} tx=${sendTx}`);
   } catch (e) {
+    // Funds never left the deposit wallet. Hand the claim back so a later poll
+    // can take it over, and close out the exchange row so swapPoller stops
+    // waiting on USDC that will never arrive.
     console.error(`[monitor] sendCrypto failed for ${txHash}:`, e.message);
+    await supabase.from('transactions')
+      .update({ status: 'pending_retry' }).eq('tx_hash', txHash).eq('type', 'deposit_raw');
+    await supabase.from('transactions')
+      .update({ status: 'failed' }).eq('tx_hash', swap.exchangeId);
     return;
   }
 
@@ -546,4 +607,4 @@ function init(supabase) {
   setTimeout(loop, 10_000);
 }
 
-module.exports = { init };
+module.exports = { init, claimDeposit };

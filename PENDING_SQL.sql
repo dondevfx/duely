@@ -42,7 +42,7 @@ ALTER TABLE profiles
 
 SELECT tx_hash, count(*) AS rows, sum(amount_c) AS total_credited
 FROM transactions
-WHERE type = 'deposit' AND tx_hash IS NOT NULL
+WHERE type IN ('deposit', 'deposit_raw') AND tx_hash IS NOT NULL
 GROUP BY tx_hash
 HAVING count(*) > 1
 ORDER BY count(*) DESC;
@@ -50,7 +50,35 @@ ORDER BY count(*) DESC;
 -- STEP B — only when step A returns nothing. A partial unique index, so it
 -- constrains deposits only: withdrawals and swap records may legitimately
 -- share or omit a tx_hash and are left alone.
+--
+-- 'deposit_raw' is covered as well as 'deposit'. Non-SOL coins claim the
+-- on-chain tx as a deposit_raw row before forwarding funds to ChangeNow, so
+-- without it in the predicate that claim is unconstrained and two passes could
+-- both forward the same deposit.
 
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_deposit_tx_hash
   ON transactions (tx_hash)
-  WHERE type = 'deposit' AND tx_hash IS NOT NULL;
+  WHERE type IN ('deposit', 'deposit_raw') AND tx_hash IS NOT NULL;
+
+-- If you already created uniq_deposit_tx_hash with the older, deposit-only
+-- predicate, replace it:
+--
+--   DROP INDEX IF EXISTS uniq_deposit_tx_hash;
+--   -- then run the CREATE above
+
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- 3. DO NOT RUN — a unique index on transactions.extra_id
+--
+-- An earlier note in chat suggested one, to make the Cryptomus webhook's
+-- claim-then-act pattern atomic. Do not add it. Two reasons:
+--
+--   a) The Cryptomus deposit path is dead code — nothing calls
+--      cryptomusService.getDepositAddress, so no wallet exists that could
+--      produce the order_id the webhook parses. It cannot fire.
+--   b) blockchainMonitor stores the literal strings 'credit' / 'no_credit' in
+--      extra_id on every ChangeNow deposit row (swapPoller reads them back), and
+--      wallet.js stores withdrawal memos there. A unique index would reject the
+--      second such deposit outright — breaking live deposits to protect a path
+--      that cannot run.
+-- ───────────────────────────────────────────────────────────────────────────
