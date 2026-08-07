@@ -120,10 +120,15 @@ const COMBO_MAX    = 10;
 // counts at all. This was 150 — a lane and a half back, so a player could arm
 // it while still far away, drift across, and be paid for an ordinary pass. At
 // 52 the nose is genuinely on the car's bumper before it arms.
-const NEAR_ARM     = 52;
+// How far back, IN THE CAR'S OWN LANE, still counts as lining up on its tail.
+// 52 was tight enough that swerving into a lane just behind a car often failed
+// to arm at all, so the swerve back out scored nothing.
+const NEAR_ARM     = 95;
 // And the swerve has to be a reaction to that, not a leisurely drift: the move
 // must complete within this many seconds of arming.
-const NEAR_WINDOW  = 0.85;
+// Time allowed between arming and completing the move. A lane change takes
+// ~90ms, but lining up and then committing takes longer than 0.85s in practice.
+const NEAR_WINDOW  = 1.4;
 const NEAR_BAND    = 88;
 const NEAR_TAIL    = 74;
 
@@ -1222,7 +1227,16 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         // ahead of the player, so this is only meaningful while the player is
         // behind the car.
         const rearGap = (c.y - (v.len * HIT_FORGIVE) / 2) - pl / 2;
-        const behindRear = rearGap > -2 && rearGap < NEAR_TAIL;
+        // Once ARMED, the window stays open through the pass itself. Requiring
+        // the player still be strictly behind the tail meant that cutting it
+        // fine — exactly the thing worth rewarding — often missed: by the time
+        // the car had cleared sideways, the player had already drawn level and
+        // the gap had gone negative. Arming already proved they came up behind
+        // it in its own lane, so nothing here re-opens the side-pass loophole.
+        const passWindow = -(v.len * HIT_FORGIVE + pl) / 2;
+        const behindRear = c.armed
+          ? (rearGap > passWindow && rearGap < NEAR_TAIL)
+          : (rearGap > -2 && rearGap < NEAR_TAIL);
 
         // Closing on this car IN ITS OWN LANE arms it. Without this, simply
         // driving up an adjacent lane satisfied "behind and laterally clear"

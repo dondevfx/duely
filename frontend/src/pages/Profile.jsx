@@ -13,15 +13,24 @@ import CoinIcon from '../components/CoinIcon';
 import { ProfilePopup } from '../components/ChatSidebar';
 import { isMuted, setMuted, playMatchFound } from '../utils/sound';
 
+// Keyed by the game_type stored on MATCHES. The personal-best table uses its own
+// keys, which do not all agree — Word VS records matches as 'scrabble' but high
+// scores as 'wordVS' — so `bestKey` bridges the two where they differ. Rush Hour
+// was simply absent from this map, which is why it never appeared at all.
 const GAME_INFO = {
-  scrabble:      { emoji: '🔤', name: 'Word VS' },
+  scrabble:      { emoji: '🔤', name: 'Word VS',     bestKey: 'wordVS' },
   blockBlast:    { emoji: '🟦', name: 'Block Burst' },
+  carDash:       { emoji: '🚗', name: 'Rush Hour' },
   blackjack:     { emoji: '🃏', name: 'Blackjack' },
   coin_flip:     { emoji: '🟡', name: 'Coin Flip' },
 };
 
+// Games with a meaningful personal best. Without a label the best is not shown,
+// so a missing entry here silently hides a score that is being recorded.
 const HIGHSCORE_LABELS = {
   blockBlast: 'Score',
+  scrabble:   'Score',
+  carDash:    'Score',
 };
 
 const SOLO_GAME_TYPES = new Set(['blockBlast']);
@@ -1552,7 +1561,7 @@ export default function Profile() {
                   const rows = Object.entries(GAME_INFO).map(([key, info]) => ({
                     key, info,
                     stats: statsMap[key] || { played: 0, wins: 0 },
-                    best: bestsMap[key] || null,
+                    best: bestsMap[info.bestKey || key] || null,
                   }))
                   .filter(({ stats, best }) => stats.played > 0 || best !== null)
                   .sort((a, b) => b.stats.played - a.stats.played);

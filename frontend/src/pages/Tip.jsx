@@ -7,8 +7,6 @@ import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
 import { fmtCoins, fmtDiamonds, fmtExact } from '../utils/format';
 
-const COIN_AMOUNTS    = [1, 5, 10, 25, 50, 100];
-const DIAMOND_AMOUNTS = [50, 100, 250, 500, 1000];
 
 export default function Tip() {
   const ready = usePageReady();
@@ -21,7 +19,6 @@ export default function Tip() {
   const [result, setResult]       = useState(null); // { type: 'success'|'error', text }
 
   const isDiamonds    = currency === 'diamonds';
-  const quickAmounts  = isDiamonds ? DIAMOND_AMOUNTS : COIN_AMOUNTS;
   const currencyLabel = isDiamonds ? '💎' : <CoinIcon size="0.85em" />;
   const myBalance     = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const tipAmount     = isDiamonds ? Math.floor(parseFloat(amount)) : parseFloat(amount);
@@ -137,22 +134,6 @@ export default function Tip() {
               step={isDiamonds ? '1' : '1'}
               className="w-full bg-bg border border-surfaceLight rounded-lg px-4 py-3 text-white placeholder-muted text-sm focus:outline-none focus:border-primary transition-colors mb-3"
             />
-            {/* Quick amounts */}
-            <div className="flex flex-wrap gap-2">
-              {quickAmounts.map(q => (
-                <button
-                  key={q}
-                  onClick={() => setAmount(String(q))}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                    tipAmount === q
-                      ? 'bg-primary border-primary text-white shadow-glow'
-                      : 'border-surfaceLight text-muted hover:border-primary hover:text-white'
-                  }`}
-                >
-                  {q} {currencyLabel}
-                </button>
-              ))}
-            </div>
           </div>
 
           {insufficient && (

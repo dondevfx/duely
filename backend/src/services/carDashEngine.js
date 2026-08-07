@@ -28,9 +28,11 @@ const MAX_RUN_MS = 15 * 60_000; // sanity ceiling — no run is 15 minutes
 // A live client pings progress ~3x/second. If pings stop while the player is
 // still "alive" they have either closed/frozen the tab (backgrounding is the
 // remaining way to pause a run) or are running a client that never reports a
-// crash. Either way the opponent must not be left hanging: after STALL_MS we
+// crash — or switched apps on a phone, which suspends the animation loop and
+// therefore the progress pings entirely. Either way the opponent must not be
+// left hanging: after STALL_MS we
 // finalise that player at their last verified progress.
-const STALL_MS   = 10_000;
+const STALL_MS   = 15_000;
 // When a player crashes while AHEAD, the survivor gets this long to beat their
 // score. Pass it and they win immediately; let it run out and they lose. Before
 // this the survivor could drive indefinitely, so a match had no defined end.
@@ -166,6 +168,23 @@ async function startCarDashCountdown(io, supabase, roomId) {
       }
     }
     if (stalled) {
+      // Solo and bot rooms have no second human to wait for, and the bot only
+      // gets a final time when the PLAYER crashes. So _maybeResolve below would
+      // wait forever: the human is finalised, the bot never is, and the room
+      // hangs. Switching apps mid-run on a phone hit this every time — the run
+      // was already over server-side, so the eventual crash was ignored and the
+      // match simply never ended. Pin the bot and settle it here instead.
+      if (r.isSolo) {
+        clearInterval(watch);
+        const human = r.players.find(p => !p.isBot);
+        const hT = human ? (r.times[human.socketId] ?? 0) : 0;
+        const hS = human ? (r.scores[human.socketId] ?? 0) : 0;
+        r.times[_botKey(r)]  = Math.max(0, Math.floor(hT * 0.85) - 200);
+        r.scores[_botKey(r)] = Math.max(0, Math.floor(hS * 0.85) - 10);
+        _resolveFromTimes(io, supabase, roomId).catch(() => {});
+        return;
+      }
+
       // A stalled player is treated exactly as if they had crashed: their run
       // ends at their last verified progress and THEIR OPPONENT PLAYS ON.
       //

@@ -746,8 +746,11 @@ export default function BlockBlastGame() {
     <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-3 sm:px-4" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
 
       {/* ── RESULT ── */}
+      {/* Result screens sit BELOW the navbar, like every other game's. These were
+          `fixed inset-0 z-50`, which covered the top bar so the player could not
+          see their balance or navigate away from the result. */}
       {phase === 'result' && result && !result.isSolo && (
-        <div className="fixed inset-0 z-50 bg-bg flex items-center justify-center overflow-y-auto p-4">
+        <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center overflow-y-auto px-3 sm:px-4 py-2">
           <ResultScreen
             isWinner={isWinner}
             isDraw={result.draw}
@@ -774,7 +777,7 @@ export default function BlockBlastGame() {
         </div>
       )}
       {phase === 'result' && result && result.isSolo && result.humanWon !== null && (
-        <div className="fixed inset-0 z-50 bg-bg flex items-center justify-center overflow-y-auto p-4">
+        <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center overflow-y-auto px-3 sm:px-4 py-2">
           <ResultScreen
             isWinner={result.humanWon}
             winnerUsername={result.humanWon ? profile?.username : 'Duely Bot'}
