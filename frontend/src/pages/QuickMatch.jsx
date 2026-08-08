@@ -9,13 +9,18 @@ import { useCurrency } from '../context/CurrencyContext';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
+import { chooseGame } from '../utils/quickMatchPool';
 
+// `queueKey` matches the game id the server uses in its bet_counts map
+// (handlers.js incrementCount), so we can tell who is waiting where.
 const POOL = [
-  { route: '/game/block-blast', name: 'Block Burst',  icon: '🟦' },
-  { route: '/game/coin-flip',   name: 'Coin Flip',    icon: '🟡', coinsOnly: true },
-  { route: '/game/blackjack',   name: 'Blackjack',    icon: '🃏' },
-  { route: '/game/word-vs',     name: 'Word VS',       icon: '🔤' },
+  { route: '/game/block-blast', name: 'Block Burst',  icon: '🟦', queueKey: 'block-blast' },
+  { route: '/game/coin-flip',   name: 'Coin Flip',    icon: '🟡', coinsOnly: true, queueKey: 'coin-flip' },
+  { route: '/game/blackjack',   name: 'Blackjack',    icon: '🃏', queueKey: 'blackjack' },
+  { route: '/game/word-vs',     name: 'Word VS',       icon: '🔤', queueKey: 'scrabble' },
 ];
+
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 function fmtFee(fee) {
   if (fee >= 1000) return `${(fee / 1000).toLocaleString()}k`;
@@ -25,7 +30,7 @@ function fmtFee(fee) {
 export default function QuickMatch() {
   const ready      = usePageReady();
   const { profile, session } = useAuth();
-  const { authenticated } = useSocket();
+  const { authenticated, queueCounts } = useSocket();
   const navigate   = useNavigate();
 
   const { displayCurrency: betCurrency, setDisplayCurrency: setBetCurrency } = useCurrency();
@@ -61,17 +66,27 @@ export default function QuickMatch() {
     setRolling(true);
     setPicked(null);
 
-    // Flash through games quickly for visual excitement
     // Filter out coin flip for diamond matches
     const pool = isDiamonds ? POOL.filter(g => !g.coinsOnly) : POOL;
+
+    // Decide the destination up front, from who is actually queued at this bet
+    // right now. Quick Match used to pick uniformly at random, so it would
+    // happily drop you into an empty queue while someone sat waiting in the game
+    // next to it. Chosen before the animation starts, so the roll cannot land on
+    // a game whose queue emptied while the reels were spinning.
+    // Falls back to a plain random pick when nobody is waiting anywhere, which
+    // at low traffic is the common case and behaves exactly as before.
+    const final = chooseGame(pool, queueCounts, entryFee, betCurrency);
+    if (!final) { setRolling(false); return; }
+
+    // Flash through games quickly for visual excitement
     let count = 0;
     const flashes = 12;
     const interval = setInterval(() => {
-      setPicked(pool[Math.floor(Math.random() * pool.length)]);
+      setPicked(pick(pool));
       count++;
       if (count >= flashes) {
         clearInterval(interval);
-        const final = pool[Math.floor(Math.random() * pool.length)];
         setPicked(final);
         setRolling(false);
         setTimeout(() => {

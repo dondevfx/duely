@@ -16,6 +16,9 @@ export function SocketProvider({ children }) {
   const [forfeitWin, setForfeitWin] = useState(null); // kept for backward compat, unused after migration
   const [playerCounts, setPlayerCounts] = useState({});
   const [betCounts, setBetCounts] = useState({});
+  // Same data as betCounts but never blanked by SHOW_LIVE_COUNTS — matchmaking
+  // only, never rendered. See the bet_counts handler below.
+  const [queueCounts, setQueueCounts] = useState({});
   const [queueEntries, setQueueEntries] = useState([]);
   const [activeGames, setActiveGames] = useState([]);
 
@@ -60,7 +63,14 @@ export function SocketProvider({ children }) {
     // count is > 0 — so feeding them empty hides them all without removing any
     // display code. Flip SHOW_LIVE_COUNTS back to true to bring them all back.
     socket.on('player_counts', ({ counts }) => setPlayerCounts(SHOW_LIVE_COUNTS ? counts : {}));
-    socket.on('bet_counts', ({ counts }) => setBetCounts(SHOW_LIVE_COUNTS ? counts : {}));
+    socket.on('bet_counts', ({ counts }) => {
+      setBetCounts(SHOW_LIVE_COUNTS ? counts : {});
+      // Kept ungated: Quick Match uses this to land you in a game where someone
+      // is already waiting at your bet. SHOW_LIVE_COUNTS is about not SHOWING
+      // counts, and blanking this too would silently make Quick Match random
+      // again. Nothing renders from it.
+      setQueueCounts(counts || {});
+    });
 
     socket.on('queue_entry_added', (entry) => {
       setQueueEntries(prev => {
@@ -112,6 +122,7 @@ export function SocketProvider({ children }) {
       clearForfeitWin,
       playerCounts,
       betCounts,
+      queueCounts,
       queueEntries,
       activeGames,
     }}>
