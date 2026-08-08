@@ -14,9 +14,10 @@ const canNativeShare = () =>
 
 export default function ShareLinkButton({
   link,
-  title = 'Add me on Duely',
+  title = 'Duely',
   text,
   className = '',
+  noun = 'Invite Link',
   label,
 }) {
   const [state, setState] = useState(null);   // 'copied' | 'failed' | null
@@ -46,7 +47,7 @@ export default function ShareLinkButton({
     setTimeout(() => setState(null), 2200);
   }
 
-  const defaultLabel = canNativeShare() ? '📤 Share Invite Link' : '📋 Copy Invite Link';
+  const defaultLabel = canNativeShare() ? `📤 Share ${noun}` : `📋 Copy ${noun}`;
 
   return (
     <>

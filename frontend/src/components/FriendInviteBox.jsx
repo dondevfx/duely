@@ -27,6 +27,7 @@ export default function FriendInviteBox({ username }) {
           otherwise be no way to get at it. */}
       <ShareLinkButton
         link={link}
+        title="Add me on Duely"
         text={`Add me on Duely — I'm ${username}. 1v1 me!`}
         className="!py-2 !text-xs !rounded-xl"
       />
