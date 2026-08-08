@@ -11,6 +11,7 @@ import { getRank } from '../utils/ranks';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
 import { ProfilePopup } from '../components/ChatSidebar';
+import FriendInviteBox from '../components/FriendInviteBox';
 import { isMuted, setMuted, playMatchFound } from '../utils/sound';
 
 // Keyed by the game_type stored on MATCHES. The personal-best table uses its own
@@ -1024,7 +1025,7 @@ function CoinHistorySection({ userId }) {
 
 // ── Friends Panel ─────────────────────────────────────────────────────────────
 
-function FriendsPanel({ myId, activeGames }) {
+function FriendsPanel({ myId, myUsername, activeGames }) {
   const navigate = useNavigate();
   const [friendships, setFriendships] = useState([]);
   const [addInput, setAddInput] = useState('');
@@ -1070,6 +1071,8 @@ function FriendsPanel({ myId, activeGames }) {
     <>
     <div className="bg-surface border border-surfaceLight rounded-2xl p-5 sticky top-20">
       <div className="text-base font-black text-white mb-4">👥 Friends</div>
+
+      <FriendInviteBox username={myUsername} />
 
       {/* Friend Requests button */}
       <button
@@ -1639,7 +1642,7 @@ export default function Profile() {
 
         {/* Friends panel — below main content on mobile, floats right on desktop */}
         <div className="mt-6 lg:hidden">
-          <FriendsPanel myId={profile.id} activeGames={activeGames} />
+          <FriendsPanel myId={profile.id} myUsername={profile.username} activeGames={activeGames} />
         </div>
         {/* Terms of Service — bottom of the page (below Friends on mobile) */}
         <div className="text-center mt-6">
@@ -1648,7 +1651,7 @@ export default function Profile() {
           </Link>
         </div>
         <div className="absolute top-0 left-full ml-4 w-64 hidden lg:block">
-          <FriendsPanel myId={profile.id} activeGames={activeGames} />
+          <FriendsPanel myId={profile.id} myUsername={profile.username} activeGames={activeGames} />
         </div>
         </div>{/* end relative container */}
       </div>

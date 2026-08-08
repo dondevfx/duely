@@ -36,6 +36,7 @@ import Wallet from './pages/Wallet';
 import Tip from './pages/Tip';
 import BlockBlastGame from './pages/BlockBlastGame';
 import QuickMatch from './pages/QuickMatch';
+import AddFriend from './pages/AddFriend';
 import WordleGame from './pages/WordleGame';
 import CoinFlipGame from './pages/CoinFlipGame';
 import BlackjackGame from './pages/BlackjackGame';
@@ -145,6 +146,10 @@ function Shell() {
           <Route path="/game/car-dash"      element={<CarDashGame />} />
           <Route path="/game/word-vs"       element={<WordleGame />} />
           <Route path="/spectate/:gameId"   element={<SpectateView />} />
+          {/* Friend invite link. Deliberately NOT wrapped in ProtectedRoute —
+              it is shared with people who have no account yet, and the page
+              itself handles sign-in and finishes the add on return. */}
+          <Route path="/add-friend/:username" element={<AddFriend />} />
           <Route path="/game/random"        element={<Navigate to="/game/quick-match" replace />} />
           <Route path="/transactions"       element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
           <Route path="/rewards"            element={<Rewards />} />

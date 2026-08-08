@@ -283,6 +283,73 @@ module.exports = function authRoutes(supabase) {
     res.json({ ok: true });
   });
 
+  // ── Friend invite links ─────────────────────────────────────────────
+  //
+  // A player shares https://<site>/add-friend/<username>. Whoever opens it and
+  // is signed in becomes their friend immediately — no pending request, because
+  // both sides have already consented: one published the link, the other chose
+  // to open it. That is what makes a link invite different from a cold request.
+  //
+  // Keyed by username rather than a generated code so no migration is needed and
+  // the link is readable. The trade-off is that a link breaks if the user
+  // renames, which is self-explanatory to whoever opens it.
+
+  // Public: who is behind this link? Lets a logged-out visitor see who invited
+  // them before they sign up. Returns only what a profile page already shows.
+  router.get('/friend-invite/:username', async (req, res) => {
+    const { data: p } = await supabase.from('profiles')
+      .select('id, username, elo, profile_color, current_streak')
+      .eq('username', String(req.params.username || '').trim())
+      .maybeSingle();
+    if (!p || p.id === ADMIN_ID || isDemo(p.id)) return res.status(404).json({ error: 'Invite not found' });
+    const { id, ...safe } = p;   // don't hand out the user id to anonymous callers
+    res.json(safe);
+  });
+
+  router.post('/friend-invite/:username', requireAuth, async (req, res) => {
+    const myId = req.user.id;
+    const username = String(req.params.username || '').trim();
+    if (!username) return res.status(400).json({ error: 'Invalid invite link' });
+
+    const { data: inviter } = await supabase.from('profiles')
+      .select('id, username').eq('username', username).maybeSingle();
+    if (!inviter || inviter.id === ADMIN_ID || (isDemo(inviter.id) && !isDemo(myId))) {
+      return res.status(404).json({ error: 'That invite link is no longer valid.' });
+    }
+    if (inviter.id === myId) {
+      return res.status(400).json({ error: 'That is your own invite link — share it with someone else!' });
+    }
+
+    const { data: existing } = await supabase.from('friends').select('id,status')
+      .or(`and(requester_id.eq.${myId},addressee_id.eq.${inviter.id}),and(requester_id.eq.${inviter.id},addressee_id.eq.${myId})`)
+      .maybeSingle();
+
+    if (existing?.status === 'accepted') {
+      return res.json({ ok: true, alreadyFriends: true, username: inviter.username });
+    }
+    if (existing) {
+      // A request was already open in one direction or the other. Opening the
+      // link accepts it either way — nobody is left waiting on a second click.
+      const { error } = await supabase.from('friends')
+        .update({ status: 'accepted' }).eq('id', existing.id);
+      if (error) return res.status(400).json({ error: error.message });
+      return res.json({ ok: true, username: inviter.username });
+    }
+
+    const { error } = await supabase.from('friends')
+      .insert({ requester_id: inviter.id, addressee_id: myId, status: 'accepted' });
+    if (error) {
+      // Two tabs opening the same link at once: the other one won, which is the
+      // outcome we wanted anyway.
+      const { data: now } = await supabase.from('friends').select('id')
+        .or(`and(requester_id.eq.${myId},addressee_id.eq.${inviter.id}),and(requester_id.eq.${inviter.id},addressee_id.eq.${myId})`)
+        .maybeSingle();
+      if (now) return res.json({ ok: true, username: inviter.username });
+      return res.status(400).json({ error: 'Could not add friend' });
+    }
+    res.json({ ok: true, username: inviter.username });
+  });
+
   router.post('/friend-accept/:id', requireAuth, async (req, res) => {
     const { error } = await supabase.from('friends')
       .update({ status: 'accepted' })

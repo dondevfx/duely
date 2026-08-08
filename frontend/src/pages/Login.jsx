@@ -6,6 +6,7 @@ import { supabase } from '../utils/supabase';
 import { PENDING_CHALLENGE_KEY } from './ChallengeJoin';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
+import { takePendingInvite } from '../utils/pendingInvite';
 
 // If the user arrived from a shared challenge link, resume it after login.
 const GAME_ROUTES = {
@@ -14,6 +15,13 @@ const GAME_ROUTES = {
   scrabble:    '/game/word-vs',
   blockBlast:  '/game/block-blast',
 };
+// Where to send the user once they are signed in. A pending friend invite wins
+// over a pending challenge: the invite is why they created the account, and it
+// completes in one step rather than dropping them into a live match.
+function postLoginTarget() {
+  return takePendingInvite() || pendingChallengeTarget();
+}
+
 function pendingChallengeTarget() {
   try {
     const raw = sessionStorage.getItem(PENDING_CHALLENGE_KEY);
@@ -90,10 +98,10 @@ export default function Login() {
         if (sessionStorage.getItem('rd_pending_username')) {
           setNeedsUsername(true);
         } else {
-          { const t = pendingChallengeTarget(); if (t) navigate(t.route, { state: t.state }); else navigate('/'); }
+          { const t = postLoginTarget(); if (t) navigate(t.route, { state: t.state }); else navigate('/'); }
         }
       } else {
-        { const t = pendingChallengeTarget(); if (t) navigate(t.route, { state: t.state }); else navigate('/'); }
+        { const t = postLoginTarget(); if (t) navigate(t.route, { state: t.state }); else navigate('/'); }
       }
     } catch (err) {
       setError(err.message);
@@ -110,7 +118,7 @@ export default function Login() {
     try {
       await completeMfaLogin(mfaState.factorId, mfaCode);
       // MFA passed — navigate regardless of profile fetch result
-      { const t = pendingChallengeTarget(); if (t) navigate(t.route, { state: t.state }); else navigate('/'); }
+      { const t = postLoginTarget(); if (t) navigate(t.route, { state: t.state }); else navigate('/'); }
     } catch (err) {
       console.error('[MFA verify error]', err);
       const msg = String(err?.message || err?.error_description || err || '').toLowerCase();
@@ -143,7 +151,7 @@ export default function Login() {
     try {
       await api.post('/auth/profile', { username: username.trim() });
       await refreshProfile();
-      { const t = pendingChallengeTarget(); if (t) navigate(t.route, { state: t.state }); else navigate('/'); }
+      { const t = postLoginTarget(); if (t) navigate(t.route, { state: t.state }); else navigate('/'); }
     } catch (err) {
       setError(err.message || 'Failed to create profile. Try a different username.');
     } finally {

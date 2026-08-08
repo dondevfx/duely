@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
+import { takePendingInvite } from '../utils/pendingInvite';
 
 export default function Signup() {
   const ready = usePageReady();
@@ -24,8 +25,10 @@ export default function Signup() {
       const data = await signUp(email, password, username.trim());
 
       if (data.session) {
-        // Email confirmation is OFF — logged in immediately
-        navigate('/');
+        // Email confirmation is OFF — logged in immediately. If they got here
+        // from a friend invite link, finish that instead of dumping them home.
+        const invite = takePendingInvite();
+        navigate(invite ? invite.route : '/');
       } else {
         // Email confirmation is ON — tell user to check inbox
         setAwaitingConfirmation(true);
