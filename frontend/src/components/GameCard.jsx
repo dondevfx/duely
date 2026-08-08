@@ -21,7 +21,8 @@ export default function GameCard({ title, description, icon, route, available = 
       <div className="text-2xl md:text-4xl">{icon}</div>
 
       <div>
-        <h3 className="text-sm md:text-xl font-bold text-white mb-0.5 md:mb-1 leading-tight group-hover:text-primary transition-colors">
+        {/* Mobile title bumped 14px → 16px; the md: size is unchanged. */}
+        <h3 className="text-base md:text-xl font-bold text-white mb-0.5 md:mb-1 leading-tight group-hover:text-primary transition-colors">
           {title}
         </h3>
         <p className="text-[11px] md:text-sm text-muted leading-snug md:leading-relaxed line-clamp-3 md:line-clamp-none">{description}</p>

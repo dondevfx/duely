@@ -78,7 +78,8 @@ export default function Games() {
                     </span>
                   )}
                 </div>
-                <h2 className="text-sm sm:text-lg font-black text-white mb-0.5 sm:mb-1 leading-tight">{game.title}</h2>
+                {/* Mobile title bumped 14px → 16px; the sm: size is unchanged. */}
+                <h2 className="text-base sm:text-lg font-black text-white mb-0.5 sm:mb-1 leading-tight">{game.title}</h2>
                 <p className="text-[11px] sm:text-sm text-muted leading-snug sm:leading-relaxed mb-2 sm:mb-5 flex-1 line-clamp-3 sm:line-clamp-none">{game.description}</p>
                 <Link
                   to={game.route}

@@ -674,15 +674,18 @@ export default function CoinFlipGame() {
               ) : null; })()}
             </div>
 
-            <div className="mb-1.5 sm:mb-4 bg-surface border border-border rounded-2xl p-2 sm:p-4">
-              <p className="hidden sm:block text-sm font-bold text-white mb-3">Pick Your Side</p>
-              <div className="grid grid-cols-2 gap-1.5 sm:gap-3">
+            {/* Desktop values are trimmed so the whole betting screen clears a
+                1080p viewport without scrolling. Only the sm: side moves —
+                mobile spacing is unchanged. */}
+            <div className="mb-1.5 sm:mb-3 bg-surface border border-border rounded-2xl p-2 sm:p-3">
+              <p className="hidden sm:block text-sm font-bold text-white mb-2">Pick Your Side</p>
+              <div className="grid grid-cols-2 gap-1.5 sm:gap-2.5">
                 {['heads', 'tails'].map(s => (
                   <button key={s} onClick={() => setSide(s)}
-                    className={`py-4 sm:py-5 rounded-xl text-center font-black border-2 transition-all ${
+                    className={`py-4 sm:py-3 rounded-xl text-center font-black border-2 transition-all ${
                       side === s ? 'border-primary bg-primary/20 text-white' : 'border-border text-muted hover:border-primary/50 hover:text-white'
                     }`}>
-                    <div className="text-base sm:text-2xl mb-0 sm:mb-0.5">{s === 'heads' ? '🔵' : '⚪'}</div>
+                    <div className="text-base sm:text-xl mb-0 sm:mb-0.5">{s === 'heads' ? '🔵' : '⚪'}</div>
                     <div className="capitalize text-[11px] sm:text-sm leading-none">{s}</div>
                   </button>
                 ))}

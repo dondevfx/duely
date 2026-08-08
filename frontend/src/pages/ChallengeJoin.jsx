@@ -146,12 +146,6 @@ export default function ChallengeJoin() {
               </div>
             </div>
 
-            {!isFree && (
-              <p className="text-warning text-xs mb-4">
-                Accepting deducts your entry fee and starts the match.
-              </p>
-            )}
-
             <div className="flex gap-2">
               <button
                 onClick={decline}
