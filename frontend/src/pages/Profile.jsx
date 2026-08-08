@@ -1069,7 +1069,10 @@ function FriendsPanel({ myId, myUsername, activeGames }) {
 
   return (
     <>
-    <div className="bg-surface border border-surfaceLight rounded-2xl p-5 sticky top-20">
+    {/* Sticky only on desktop, where this is the floating right column. On
+        mobile it sits in the page flow under the profile card, and sticking
+        would pin it over the sections below as you scroll past. */}
+    <div className="bg-surface border border-surfaceLight rounded-2xl p-5 lg:sticky lg:top-20">
       <div className="text-base font-black text-white mb-4">👥 Friends</div>
 
       {/* Friend Requests button */}
@@ -1529,6 +1532,13 @@ export default function Profile() {
           </div>
         </div>
 
+        {/* Friends — on mobile this sits directly under the profile card, above
+            the affiliate/stats/history stack. On desktop it is the floating
+            right column instead, so this copy is hidden there. */}
+        <div className="mb-6 lg:hidden">
+          <FriendsPanel myId={profile.id} myUsername={profile.username} activeGames={activeGames} />
+        </div>
+
         {/* Affiliate code card */}
         <AffiliateCodeCard />
 
@@ -1640,11 +1650,7 @@ export default function Profile() {
 
         </div>{/* end main content */}
 
-        {/* Friends panel — below main content on mobile, floats right on desktop */}
-        <div className="mt-6 lg:hidden">
-          <FriendsPanel myId={profile.id} myUsername={profile.username} activeGames={activeGames} />
-        </div>
-        {/* Terms of Service — bottom of the page (below Friends on mobile) */}
+        {/* Terms of Service — bottom of the page */}
         <div className="text-center mt-6">
           <Link to="/tos" className="text-xs text-muted hover:text-white transition-colors underline underline-offset-2">
             Terms of Service
