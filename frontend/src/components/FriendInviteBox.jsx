@@ -21,22 +21,15 @@ export default function FriendInviteBox({ username }) {
         Invite Link
       </div>
 
+      {/* The raw link is not shown — the button carries it. It is revealed only
+          if copying actually fails (blocked clipboard on insecure origins or in
+          some in-app browsers), which is the one case where there would
+          otherwise be no way to get at it. */}
       <ShareLinkButton
         link={link}
         text={`Add me on Duely — I'm ${username}. 1v1 me!`}
         className="!py-2 !text-xs !rounded-xl"
       />
-
-      {/* Always visible, so the link is recoverable if the clipboard is blocked
-          (insecure origins, some in-app browsers) or the share sheet is cancelled. */}
-      <button
-        onClick={() => navigator.clipboard?.writeText(link).catch(() => {})}
-        className="w-full text-left mt-1.5"
-      >
-        <code className="block text-[9px] leading-tight font-mono text-muted/70 break-all bg-bg border border-border rounded-lg px-2 py-1.5 hover:border-primary transition-colors">
-          {link}
-        </code>
-      </button>
 
       <p className="text-[10px] text-muted/70 mt-1.5">
         They're added instantly — no request to accept.

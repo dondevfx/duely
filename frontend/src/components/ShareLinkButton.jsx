@@ -38,9 +38,10 @@ export default function ShareLinkButton({
       setState('copied');
     } catch {
       // Clipboard is blocked on insecure origins and in some in-app browsers.
-      // The link is on screen next to this button, so say so rather than
-      // pretending it worked.
+      // Reveal the link so it can still be selected by hand — otherwise this
+      // button is the only route to it and the user is stuck.
       setState('failed');
+      return;   // stays revealed; no timeout, or the link vanishes mid-select
     }
     setTimeout(() => setState(null), 2200);
   }
@@ -48,13 +49,21 @@ export default function ShareLinkButton({
   const defaultLabel = canNativeShare() ? '📤 Share Invite Link' : '📋 Copy Invite Link';
 
   return (
-    <button
-      onClick={share}
-      className={`w-full bg-primary hover:bg-blue-500 text-white font-black py-4 rounded-xl transition-all text-base ${className}`}
-    >
-      {state === 'copied' ? '✓ Link Copied!'
-        : state === 'failed' ? 'Copy failed — select the link below'
-        : (label || defaultLabel)}
-    </button>
+    <>
+      <button
+        onClick={share}
+        className={`w-full bg-primary hover:bg-blue-500 text-white font-black py-4 rounded-xl transition-all text-base ${className}`}
+      >
+        {state === 'copied' ? '✓ Link Copied!'
+          : state === 'failed' ? 'Copy blocked — select it below'
+          : (label || defaultLabel)}
+      </button>
+
+      {state === 'failed' && (
+        <code className="block select-all text-[9px] leading-tight font-mono text-muted break-all bg-bg border border-border rounded-lg px-2 py-1.5 mt-1.5">
+          {link}
+        </code>
+      )}
+    </>
   );
 }
