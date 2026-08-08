@@ -5,6 +5,7 @@
 // these use crypto.randomInt instead. Cosmetic randomness elsewhere (bot names,
 // timing jitter) is deliberately left alone.
 const { randomInt } = require('node:crypto');
+const { findRoomBySocket } = require('./roomLookup');
 /**
  * carDashEngine.js — "Rush Hour"
  *
@@ -93,11 +94,9 @@ function removeFromCarDashQueue(socketId) {
 
 function getCarDashRoom(roomId)    { return carDashRooms.get(roomId); }
 function deleteCarDashRoom(roomId) { carDashRooms.delete(roomId); }
+// Prefers a live room over a settled-but-not-yet-swept one. See roomLookup.
 function getCarDashRoomBySocket(socketId) {
-  for (const [roomId, room] of carDashRooms) {
-    if (room.players.some(p => p.socketId === socketId)) return { roomId, room };
-  }
-  return null;
+  return findRoomBySocket(carDashRooms, socketId);
 }
 
 function createDirectCarDashRoom(p1, p2) {

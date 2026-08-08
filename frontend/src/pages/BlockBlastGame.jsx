@@ -714,11 +714,20 @@ export default function BlockBlastGame() {
     setStuck(false); setOppStuck(false);
     setStatusMsg('Waiting for opponent...');
   }
-  function backToLobby() {
-    setPhase('lobby'); setResult(null);
+  // Clears the finished match without choosing a phase, so callers decide where
+  // the player lands.
+  function clearMatch() {
+    setResult(null);
     setOpponent(null); setRoomId(null); setGameOver(false);
     setStuck(false); setOppStuck(false); setStatusMsg('');
   }
+
+  function backToLobby() { clearMatch(); setPhase('lobby'); }
+
+  // Play Again used to call joinQueue/playVsBot directly, which left result,
+  // gameOver and stuck set from the run that just ended — so the next match
+  // started against state that already said it was over.
+  function playAgain(start) { clearMatch(); start(); }
 
   const isWinner = result && result.winnerId === profile?.id;
   const CELL_PX  = cellPx;
@@ -771,7 +780,7 @@ export default function BlockBlastGame() {
               label: 'Score',
               value: `${(isWinner ? (result.winnerScore ?? 0) : (result.loserScore ?? 0)).toLocaleString()} — ${(isWinner ? (result.loserScore ?? 0) : (result.winnerScore ?? 0)).toLocaleString()}`,
             }]}
-            onPlayAgain={joinQueue}
+            onPlayAgain={() => playAgain(joinQueue)}
             onBackToLobby={backToLobby}
           />
         </div>
@@ -791,7 +800,7 @@ export default function BlockBlastGame() {
               { label: 'Your Score', value: (result.playerScore ?? 0).toLocaleString() },
               { label: 'Bot Score', value: (result.botScore ?? 0).toLocaleString() },
             ]}
-            onPlayAgain={playVsBot}
+            onPlayAgain={() => playAgain(playVsBot)}
             onBackToLobby={backToLobby}
           />
         </div>
@@ -806,7 +815,7 @@ export default function BlockBlastGame() {
               <div className="text-sm text-muted">Final Score</div>
             </div>
             <div className="flex flex-col gap-3">
-              <GlowButton onClick={playVsBotFree} variant="primary" size="lg" className="w-full">Play Again</GlowButton>
+              <GlowButton onClick={() => playAgain(playVsBotFree)} variant="primary" size="lg" className="w-full">Play Again</GlowButton>
               <GlowButton variant="ghost" onClick={() => { window.location.href = '/'; }} className="w-full border border-border">Home</GlowButton>
             </div>
           </div>

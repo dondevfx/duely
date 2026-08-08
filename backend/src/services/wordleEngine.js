@@ -1,4 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
+const { findRoomBySocket } = require('./roomLookup');
 const { isValidWord } = require('./wordValidator');
 const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
@@ -223,11 +224,9 @@ function deleteWordleRoom(roomId) { rooms.delete(roomId); }
 // undefined and the very next line — `room.state` — threw. The practical effect
 // was that leaving a Word VS match never forfeited it, and the exception took
 // out the rest of the disconnect sweep with it.
+// Prefers a live room over a settled-but-not-yet-swept one. See roomLookup.
 function getWordleRoomBySocket(socketId) {
-  for (const [roomId, room] of rooms) {
-    if (room.players.some(p => p.socketId === socketId)) return { roomId, room };
-  }
-  return null;
+  return findRoomBySocket(rooms, socketId);
 }
 
 // ── Game lifecycle ────────────────────────────────────────────────────────────

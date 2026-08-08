@@ -1,4 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
+const { findRoomBySocket } = require('./roomLookup');
 
 // queue: [{ socketId, userId, username, elo, entryFee, currency }]
 const queue = [];
@@ -100,13 +101,9 @@ function deleteRoom(roomId) {
   rooms.delete(roomId);
 }
 
+// Prefers a live room over a settled-but-not-yet-swept one. See roomLookup.
 function getRoomBySocket(socketId) {
-  for (const [roomId, room] of rooms) {
-    if (room.players.some(p => p.socketId === socketId)) {
-      return { roomId, room };
-    }
-  }
-  return null;
+  return findRoomBySocket(rooms, socketId);
 }
 
 module.exports = {

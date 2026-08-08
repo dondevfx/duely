@@ -5,6 +5,7 @@
 // these use crypto.randomInt instead. Cosmetic randomness elsewhere (bot names,
 // timing jitter) is deliberately left alone.
 const { randomInt } = require('node:crypto');
+const { findRoomBySocket } = require('./roomLookup');
 const { v4: uuidv4 } = require('uuid');
 const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
 const { settleMatch, settleCoinFlip, settleMatchDiamonds, settleBotMatch } = require('./walletService');
@@ -63,11 +64,9 @@ function removeFromCoinFlipQueue(socketId) {
 
 function getCoinFlipRoom(roomId) { return coinFlipRooms.get(roomId); }
 function deleteCoinFlipRoom(roomId) { coinFlipRooms.delete(roomId); }
+// Prefers a live room over a settled-but-not-yet-swept one. See roomLookup.
 function getCoinFlipRoomBySocket(socketId) {
-  for (const [roomId, room] of coinFlipRooms) {
-    if (room.players.some(p => p.socketId === socketId)) return { roomId, room };
-  }
-  return null;
+  return findRoomBySocket(coinFlipRooms, socketId);
 }
 
 function createDirectCoinFlipRoom(p1, p2) {

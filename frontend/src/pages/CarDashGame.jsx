@@ -277,22 +277,32 @@ export default function CarDashGame() {
     setPhase('lobby'); setPrivateCode(''); setInvitedFriend(null); setStatusMsg('');
   }
 
-  function reset() {
-    setPhase('lobby'); setResult(null); setSeed(null);
+  // Clears everything from the last match WITHOUT choosing a phase, so callers
+  // decide where the player lands.
+  function clearMatch() {
+    setResult(null); setSeed(null);
     setMyMs(0); setOppMs(0); setCrashed(false); setOppCrashed(false); setStatusMsg('');
     setPrivateCode(''); setInvitedFriend(null); setCatchup(null); crashedRef.current = false;
   }
 
+  function reset() { clearMatch(); setPhase('lobby'); }
+
   // Play Again re-enters whatever mode was just played (PvP queue, paid bot or
   // free bot) instead of dumping the player back at the lobby.
+  //
+  // It goes straight to 'queue'. It used to call reset() first, which parks the
+  // player on 'lobby' — the betting screen. For PvP that was invisible because
+  // React batched the two updates, but the bot path waits for the server's
+  // match_found to move the phase on, so the betting screen was on screen for
+  // the whole round trip and you watched it flash past every time.
   function playAgain() {
     const mode = lastModeRef.current;
     const { entryFee: fee, currency: cur } = lastSettingsRef.current;
-    reset();
-    if (!socket || !mode) return;
+    clearMatch();
+    if (!socket || !mode) { setPhase('lobby'); return; }
+    setPhase('queue');
     eloBeforeRef.current = profile?.elo ?? 1000;
     if (mode === 'pvp') {
-      setPhase('queue');
       socket.emit('join_car_dash_queue', { entryFee: fee, currency: cur });
     } else {
       socket.emit('play_car_dash_vs_bot', mode === 'bot_free'
