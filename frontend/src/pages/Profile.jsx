@@ -1072,8 +1072,6 @@ function FriendsPanel({ myId, myUsername, activeGames }) {
     <div className="bg-surface border border-surfaceLight rounded-2xl p-5 sticky top-20">
       <div className="text-base font-black text-white mb-4">👥 Friends</div>
 
-      <FriendInviteBox username={myUsername} />
-
       {/* Friend Requests button */}
       <button
         onClick={() => setShowRequests(v => !v)}
@@ -1203,6 +1201,8 @@ function FriendsPanel({ myId, myUsername, activeGames }) {
           ))}
         </div>
       )}
+
+      <FriendInviteBox username={myUsername} />
     </div>
 
     {/* Unadd confirmation modal */}
