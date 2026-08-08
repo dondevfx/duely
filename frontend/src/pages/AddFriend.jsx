@@ -5,6 +5,7 @@ import { api } from '../utils/api';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
 import { savePendingInvite } from '../utils/pendingInvite';
+import InAppBrowserNotice from '../components/InAppBrowserNotice';
 
 // Landing page for /add-friend/:username — the friend invite link.
 //
@@ -53,6 +54,8 @@ export default function AddFriend() {
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}
     >
       <div className="w-full max-w-sm bg-surface border border-border rounded-2xl p-6 text-center animate-slide-up">
+
+        <InAppBrowserNotice />
 
         {status === 'loading' && <p className="text-muted py-8">Loading invite…</p>}
 

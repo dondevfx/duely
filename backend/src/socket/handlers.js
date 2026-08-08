@@ -936,6 +936,30 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       socket.emit('online_status', { online });
     });
 
+    // Read-only look at a private room, so a shared challenge link can show the
+    // host and the stake on an accept/decline screen BEFORE anyone commits.
+    // Joining deducts a real entry fee, so clicking a link must never be the
+    // thing that spends money.
+    //
+    // Mutates nothing and never joins. Auth is required to match
+    // join_private_room — codes are only 6 characters, and without a gate this
+    // would let anyone sweep the space and read off open rooms and their stakes.
+    socket.on('peek_private_room', ({ code }) => {
+      if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      const key = (code || '').toUpperCase().trim();
+      const pending = pendingPrivateRooms.get(key);
+      if (!pending) return socket.emit('error', { message: 'Room not found. Check the code and try again.' });
+      socket.emit('private_room_info', {
+        code: key,
+        gameType:     pending.gameType,
+        hostUsername: pending.p1?.username || 'A player',
+        hostElo:      pending.p1?.elo ?? null,
+        entryFee:     pending.p1?.entryFee || 0,
+        currency:     pending.p1?.currency || 'coins',
+        isHost:       pending.p1?.userId === authenticatedUser.userId,
+      });
+    });
+
     socket.on('join_private_room', async ({ gameType, code }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
       if (inMatchOrQueue(authenticatedUser.userId))
