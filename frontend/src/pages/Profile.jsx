@@ -21,7 +21,10 @@ import { isMuted, setMuted, playMatchFound } from '../utils/sound';
 const GAME_INFO = {
   scrabble:      { emoji: '🔤', name: 'Word VS',     bestKey: 'wordVS' },
   blockBlast:    { emoji: '🟦', name: 'Block Burst' },
-  carDash:       { emoji: '🚗', name: 'Rush Hour' },
+  // timeKey: a companion best stored as its own game_type row. Rush Hour records
+  // the survival time of the same run that set the score (see
+  // highscoreService.updateHighscorePair), so the two always describe one run.
+  carDash:       { emoji: '🚗', name: 'Rush Hour', timeKey: 'carDashMs' },
   blackjack:     { emoji: '🃏', name: 'Blackjack' },
   coin_flip:     { emoji: '🟡', name: 'Coin Flip' },
 };
@@ -35,6 +38,17 @@ const HIGHSCORE_LABELS = {
 };
 
 const SOLO_GAME_TYPES = new Set(['blockBlast']);
+
+// Survival time for a Rush Hour best, stored in ms. Runs are short, so seconds
+// stay readable to one decimal; minutes only appear once they exist.
+function fmtAlive(ms) {
+  // Round to tenths BEFORE choosing a format, or 59.999s takes the seconds
+  // branch and then rounds up to a nonsensical "60.0s".
+  const s = Math.round((Number(ms) || 0) / 100) / 10;
+  if (s < 60) return `${s.toFixed(1)}s`;
+  const m = Math.floor(s / 60);
+  return `${m}m ${(s - m * 60).toFixed(1)}s`;
+}
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -1575,12 +1589,13 @@ export default function Profile() {
                     key, info,
                     stats: statsMap[key] || { played: 0, wins: 0 },
                     best: bestsMap[info.bestKey || key] || null,
+                    bestTime: info.timeKey ? (bestsMap[info.timeKey] || null) : null,
                   }))
                   .filter(({ stats, best }) => stats.played > 0 || best !== null)
                   .sort((a, b) => b.stats.played - a.stats.played);
                   return (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      {rows.map(({ key, info, stats, best }) => {
+                      {rows.map(({ key, info, stats, best, bestTime }) => {
                         const wr = stats.played > 0 ? ((stats.wins / stats.played) * 100).toFixed(0) : null;
                         const scoreLabel = HIGHSCORE_LABELS[key];
                         return (
@@ -1595,8 +1610,19 @@ export default function Profile() {
                             )}
                             {best && scoreLabel && (
                               <div className="mt-1 pt-1 border-t border-surfaceLight/50">
-                                <span className="text-xs text-primary font-bold">{Number(best.score).toLocaleString()}</span>
-                                <span className="text-xs text-muted ml-1">best {scoreLabel.toLowerCase()}</span>
+                                <div>
+                                  <span className="text-xs text-primary font-bold">{Number(best.score).toLocaleString()}</span>
+                                  <span className="text-xs text-muted ml-1">best {scoreLabel.toLowerCase()}</span>
+                                </div>
+                                {/* Survival time from that same run. Only rendered when a
+                                    companion row exists, so older bests recorded before it
+                                    was stored simply show the score alone. */}
+                                {bestTime && (
+                                  <div>
+                                    <span className="text-xs text-primary font-bold">{fmtAlive(bestTime.score)}</span>
+                                    <span className="text-xs text-muted ml-1">alive</span>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
