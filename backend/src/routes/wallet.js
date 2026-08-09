@@ -14,6 +14,7 @@ const { createWithdrawalSwap, estimateWithdrawal, SS_TICKERS } = require('../ser
 const { isValidAddressFor } = require('../services/addressValidator');
 const { swapUsdcToSol }      = require('../services/jupiterService');
 const { isLocked } = require('../services/lockService');
+const moonpay = require('../services/moonpayService');
 
 const WITHDRAW_COOLDOWN_MS = 60 * 1000;   // 60s between withdrawals
 const activeWithdrawals = new Set();       // in-memory per-user lock to prevent concurrent withdrawals
@@ -116,6 +117,52 @@ module.exports = function walletRoutes(supabase, io) {
     } catch (err) {
       console.error(`[deposit] get-address failed coin=${coin}:`, err.message);
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Card on-ramp (MoonPay) ────────────────────────────────────────────
+  //
+  // Returns a signed widget URL pointed at the caller's OWN usdc deposit
+  // address. The address is resolved server-side from the session rather than
+  // accepted from the client, so a request cannot direct a purchase anywhere
+  // else, and the signing secret never leaves the server.
+  //
+  // Nothing is credited here. MoonPay sends USDC on-chain and blockchainMonitor
+  // credits it on its next poll like any other deposit.
+  router.get('/onramp-config', requireAuth, async (req, res) => {
+    res.json({
+      enabled:  moonpay.isConfigured() && !isDemo(req.user.id),
+      provider: 'moonpay',
+      sandbox:  moonpay.isConfigured() ? moonpay.isTestKey() : null,
+      minUsd:   DEPOSIT_MINS.usdc,
+    });
+  });
+
+  router.get('/onramp-url', requireAuth, async (req, res) => {
+    if (isDemo(req.user.id)) return res.status(403).json({ error: 'Demo accounts cannot deposit.' });
+    if (!moonpay.isConfigured()) return res.status(501).json({ error: 'Card deposits are not enabled yet.' });
+
+    let amountUsd = null;
+    if (req.query.amountUsd != null && req.query.amountUsd !== '') {
+      try { amountUsd = sanitizeAmount(req.query.amountUsd, DEPOSIT_MINS.usdc, DEPOSIT_MAX_SINGLE); }
+      catch (e) { return res.status(400).json({ error: e.message }); }
+    }
+
+    try {
+      const { address } = await getOrCreateAddress(req.user.id, 'usdc', supabase);
+      const url = moonpay.buildBuyUrl({
+        address,
+        email: req.user.email,
+        amountUsd,
+        // Lets a MoonPay dashboard row be traced back to a user without
+        // exposing anything about them in the URL.
+        externalId: `dep_${req.user.id}`,
+        redirectURL: process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/wallet` : undefined,
+      });
+      res.json({ url, address, minUsd: DEPOSIT_MINS.usdc });
+    } catch (err) {
+      console.error('[onramp] url build failed:', err.message);
+      res.status(500).json({ error: 'Could not start card purchase.' });
     }
   });
 

@@ -121,10 +121,16 @@ export default function Wallet() {
   const [witMfaCode, setWitMfaCode]     = useState('');
   const [hasMfa, setHasMfa]             = useState(false);
   const [transactions, setTransactions] = useState([]);
+  // Card on-ramp — null until the config request answers, so the button never
+  // flashes in and out on load.
+  const [onramp, setOnramp] = useState(null);
+  const [onrampLoading, setOnrampLoading] = useState(false);
   const pollRef = useRef(null); // deposit balance-poll interval
 
   useEffect(() => {
     api.get('/wallet/transactions?limit=50').then(setTransactions).catch(() => {});
+    // Failure here just means no card button — never block the crypto flow on it.
+    api.get('/wallet/onramp-config').then(setOnramp).catch(() => setOnramp({ enabled: false }));
     supabase.auth.mfa.listFactors()
       .then(({ data }) => setHasMfa(data?.totp?.some(f => f.status === 'verified') ?? false))
       .catch(() => {});
@@ -136,6 +142,27 @@ export default function Wallet() {
   function stopPolling() {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     setDepPolling(false);
+  }
+
+  // ── Card on-ramp ──────────────────────────────────────────────────────
+  async function handleBuyWithCard() {
+    setOnrampLoading(true);
+    setDepMsg(null);
+    try {
+      const { url } = await api.get('/wallet/onramp-url');
+      // New tab, not a redirect: MoonPay's flow includes KYC and can take a
+      // while, and sending them away would lose the page they came from.
+      // noopener so the widget cannot reach back into this window.
+      window.open(url, '_blank', 'noopener,noreferrer');
+      // The USDC lands on-chain, so the existing deposit poll picks it up the
+      // same as a manual send — no separate success path to maintain.
+      startPolling();
+      setDepMsg({ type: 'success', text: 'Complete your purchase in the new tab — your balance updates here automatically.' });
+    } catch (err) {
+      setDepMsg({ type: 'error', text: err.message });
+    } finally {
+      setOnrampLoading(false);
+    }
   }
 
   // ── Get deposit address ───────────────────────────────────────────────
@@ -256,6 +283,30 @@ export default function Wallet() {
         <div className="bg-surface border border-surfaceLight rounded-2xl p-6 mb-6">
           <h2 className="text-lg font-bold text-white mb-1">Deposit</h2>
           <p className="text-sm text-muted mb-4">Select a coin and send to your deposit address.</p>
+
+          {/* Card on-ramp. Hidden entirely unless the server reports it
+              configured, so nothing appears before the keys are set. MoonPay
+              sells USDC to the player and sends it to their own deposit
+              address — from there it is an ordinary deposit and the chain
+              monitor credits it, which is why this reuses startPolling(). */}
+          {onramp?.enabled && (
+            <div className="mb-4 pb-4 border-b border-surfaceLight">
+              <GlowButton
+                variant="primary"
+                size="lg"
+                className="w-full"
+                onClick={handleBuyWithCard}
+                disabled={onrampLoading}
+              >
+                {onrampLoading ? 'Opening…' : '💳 Buy with Card'}
+              </GlowButton>
+              <p className="text-xs text-muted mt-2 text-center">
+                Card, Apple Pay or Google Pay → USDC, credited automatically.
+                {onramp.sandbox && <span className="text-warning"> (test mode)</span>}
+              </p>
+              <p className="text-xs text-muted mt-3 text-center">or send crypto yourself</p>
+            </div>
+          )}
 
           <div className="flex flex-col gap-4">
             <div>
