@@ -40,7 +40,7 @@ export default function Privacy() {
           },
           {
             title: '5. Card Purchases',
-            body: 'If you buy cryptocurrency with a card, that purchase is handled entirely by our payment partner, MoonPay. They are the seller and they process the payment. We never see or store your card number, billing address, or the identity documents they may ask you for. We tell them only which address to send your purchase to. Their handling of your data is governed by their own privacy policy, which we recommend reading before you buy.',
+            body: 'If you buy cryptocurrency with a card, that purchase is handled entirely by a third-party payment provider. They are the seller and they process the payment. We never see or store your card number, billing address, or the identity documents they may ask you for. We tell them only which address to send your purchase to. Their handling of your data is governed by their own privacy policy, which is shown to you before you buy and which we recommend reading.',
           },
           {
             title: '6. Technical Information',
@@ -56,7 +56,7 @@ export default function Privacy() {
           },
           {
             title: '9. Who We Share It With',
-            body: 'We share only what each partner needs to do its job: our authentication and database provider stores your account; our hosting providers run the site; MoonPay processes card purchases; cryptocurrency exchange partners convert funds during deposits and withdrawals; and public blockchain services are queried using your deposit addresses to detect incoming payments. We may also disclose information where we are legally required to, or where it is necessary to investigate fraud or protect the platform and its users.',
+            body: 'We share only what each provider needs to do its job: our authentication and database provider stores your account; our hosting providers run the site; a payment provider processes card purchases; cryptocurrency exchange partners convert funds during deposits and withdrawals; and public blockchain services are queried using your deposit addresses to detect incoming payments. We may also disclose information where we are legally required to, or where it is necessary to investigate fraud or protect the platform and its users.',
           },
           {
             title: '10. Public Information',
