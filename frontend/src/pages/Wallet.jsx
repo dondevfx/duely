@@ -6,7 +6,6 @@ import { supabase } from '../utils/supabase';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
-import BuyCryptoGuide from '../components/BuyCryptoGuide';
 import { fmtCoins, fmtExact } from '../utils/format';
 
 // ── Supported deposit coins ───────────────────────────────────────────
@@ -126,10 +125,6 @@ export default function Wallet() {
   // flashes in and out on load.
   const [onramp, setOnramp] = useState(null);
   const [onrampLoading, setOnrampLoading] = useState(false);
-  // USDC address for the buy-it-yourself guide, fetched independently of the
-  // coin picker below so the guide works whatever coin is selected there.
-  const [usdcAddr, setUsdcAddr] = useState(null);
-  const [usdcLoading, setUsdcLoading] = useState(false);
   const pollRef = useRef(null); // deposit balance-poll interval
 
   useEffect(() => {
@@ -167,21 +162,6 @@ export default function Wallet() {
       setDepMsg({ type: 'error', text: err.message });
     } finally {
       setOnrampLoading(false);
-    }
-  }
-
-  async function fetchUsdcAddress() {
-    setUsdcLoading(true);
-    try {
-      const data = await api.post('/wallet/get-address', { coin: 'usdc' });
-      setUsdcAddr(data.address);
-      // Same 20s balance poll the manual flow uses — the money arrives on-chain
-      // either way, so there is nothing bespoke to watch for.
-      startPolling();
-    } catch (err) {
-      setDepMsg({ type: 'error', text: err.message });
-    } finally {
-      setUsdcLoading(false);
     }
   }
 
@@ -309,16 +289,6 @@ export default function Wallet() {
               sells USDC to the player and sends it to their own deposit
               address — from there it is an ordinary deposit and the chain
               monitor credits it, which is why this reuses startPolling(). */}
-          {/* No provider approved yet — show the buy-it-yourself route instead.
-              Replaced by the real button the moment keys exist, never both. */}
-          {onramp && !onramp.enabled && (
-            <BuyCryptoGuide
-              address={usdcAddr}
-              onGetAddress={fetchUsdcAddress}
-              loading={usdcLoading}
-            />
-          )}
-
           {onramp?.enabled && (
             <div className="mb-4 pb-4 border-b border-surfaceLight">
               <GlowButton
