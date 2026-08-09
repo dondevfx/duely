@@ -45,6 +45,38 @@ async function post(path, body, isPayout = false) {
   return data.result;
 }
 
+function isConfigured() {
+  return Boolean(MERCHANT_ID && PAYMENT_KEY && PAYOUT_KEY);
+}
+
+/**
+ * Hosted checkout for a card purchase.
+ *
+ * Unlike a consumer on-ramp, Cryptomus settles into OUR merchant balance rather
+ * than sending straight to the player. `to_currency: USDC` makes it settle in
+ * USDC, and the IPN handler then pays that out to the player's own USDC-SPL
+ * deposit address — from which the existing chain monitor credits them. So the
+ * player still ends up funded by the same audited path; there is just one extra
+ * hop compared with a direct on-ramp.
+ *
+ * order_id carries the user id in the same `dep_{userId}_{coin}` shape the
+ * static-wallet flow uses, because the IPN handler already parses that.
+ */
+async function createInvoice({ amountUsd, userId, returnUrl }) {
+  if (!isConfigured()) throw new Error('Cryptomus is not configured');
+  const result = await post('/payment', {
+    amount:       String(amountUsd),
+    currency:     'USD',      // priced in fiat — the card is charged this
+    to_currency:  'USDC',     // settled to us in USDC
+    order_id:     `dep_${userId}_usdcspl`,
+    url_callback: `${process.env.BACKEND_URL}/api/webhooks/cryptomus`,
+    url_return:   returnUrl,
+    url_success:  returnUrl,
+    lifetime:     3600,
+  });
+  return { url: result.url, uuid: result.uuid };
+}
+
 // Get (or create) a permanent static deposit address for a user+coin.
 // Cryptomus returns the same address for the same order_id, so this is idempotent.
 async function getDepositAddress(coin, userId) {
@@ -107,4 +139,4 @@ function verifyWebhook(body) {
   return crypto.timingSafeEqual(a, b);
 }
 
-module.exports = { getDepositAddress, createPayout, verifyWebhook, COINS };
+module.exports = { isConfigured, createInvoice, getDepositAddress, createPayout, verifyWebhook, COINS };

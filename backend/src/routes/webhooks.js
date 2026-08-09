@@ -130,6 +130,45 @@ module.exports = function webhookRoutes(supabase) {
         return res.status(500).json({ error: 'Could not record deposit' });
       }
 
+      // ── Already USDC on Solana: no conversion needed ────────────────────
+      //
+      // Card purchases settle to us in USDC (see cryptomusService.createInvoice),
+      // so routing them through an exchange would swap USDC for USDC and pay a
+      // spread and two network fees for nothing. Instead pay it straight to the
+      // player's own USDC deposit address — from there blockchainMonitor credits
+      // it exactly like any other deposit, on the path that is already audited
+      // and idempotent.
+      if (coinId === 'usdcspl') {
+        let dest;
+        try {
+          const { getOrCreateAddress } = require('../services/addressService');
+          ({ address: dest } = await getOrCreateAddress(userId, 'usdc', supabase));
+        } catch (e) {
+          console.error('[cryptomus webhook] could not resolve deposit address, releasing claim:', e.message);
+          await supabase.from('transactions').delete().eq('extra_id', uuid).eq('status', 'claiming');
+          return res.status(500).json({ error: 'Could not resolve destination' });
+        }
+
+        try {
+          await createPayout({ address: dest, coin: 'usdcspl', amount: netCrypto });
+        } catch (payErr) {
+          // Funds are sitting in the merchant balance and have not moved. Keep
+          // the claim so a retry cannot double-send; this needs a human.
+          console.error(`[cryptomus webhook] CRITICAL payout failed uuid=${uuid}:`, payErr.message);
+          await supabase.from('transactions')
+            .update({ status: 'payout_failed' }).eq('extra_id', uuid);
+          return res.status(500).json({ error: 'Payout failed' });
+        }
+
+        // The monitor writes the row that actually credits the player, keyed on
+        // the on-chain hash. This row is only the idempotency claim, so close it
+        // out rather than leaving it stuck at 'claiming'.
+        await supabase.from('transactions')
+          .update({ status: 'forwarded' }).eq('extra_id', uuid);
+        console.log(`[cryptomus webhook] card purchase ${netCrypto} USDC → ${dest} (monitor will credit)`);
+        return res.json({ ok: true });
+      }
+
       // Create SimpleSwap exchange: coin → USDC SPL → our wallet
       let swap;
       try {

@@ -15,6 +15,7 @@ const { isValidAddressFor } = require('../services/addressValidator');
 const { swapUsdcToSol }      = require('../services/jupiterService');
 const { isLocked } = require('../services/lockService');
 const moonpay = require('../services/moonpayService');
+const cryptomus = require('../services/cryptomusService');
 
 const WITHDRAW_COOLDOWN_MS = 60 * 1000;   // 60s between withdrawals
 const activeWithdrawals = new Set();       // in-memory per-user lock to prevent concurrent withdrawals
@@ -129,21 +130,33 @@ module.exports = function walletRoutes(supabase, io) {
   //
   // Nothing is credited here. MoonPay sends USDC on-chain and blockchainMonitor
   // credits it on its next poll like any other deposit.
+  // Whichever provider has keys wins. MoonPay first only because it is the
+  // cheaper route for the player when it is available; Cryptomus is the
+  // fallback and is the one that actually onboards gaming. Neither configured
+  // means the button never renders.
+  function onrampProvider() {
+    if (moonpay.isConfigured()) return 'moonpay';
+    if (cryptomus.isConfigured()) return 'cryptomus';
+    return null;
+  }
+
   router.get('/onramp-config', requireAuth, async (req, res) => {
+    const provider = onrampProvider();
     res.json({
-      enabled:  moonpay.isConfigured() && !isDemo(req.user.id),
-      provider: 'moonpay',
-      sandbox:  moonpay.isConfigured() ? moonpay.isTestKey() : null,
+      enabled:  Boolean(provider) && !isDemo(req.user.id),
+      provider,
+      sandbox:  provider === 'moonpay' ? moonpay.isTestKey() : false,
       // Sandbox can run without a secret; live cannot. Surfaced so an unsigned
       // setup is visible in the UI rather than silently shipping.
-      signed:   moonpay.canSign(),
+      signed:   provider === 'moonpay' ? moonpay.canSign() : true,
       minUsd:   DEPOSIT_MINS.usdc,
     });
   });
 
   router.get('/onramp-url', requireAuth, async (req, res) => {
     if (isDemo(req.user.id)) return res.status(403).json({ error: 'Demo accounts cannot deposit.' });
-    if (!moonpay.isConfigured()) return res.status(501).json({ error: 'Card deposits are not enabled yet.' });
+    const provider = onrampProvider();
+    if (!provider) return res.status(501).json({ error: 'Card deposits are not enabled yet.' });
 
     let amountUsd = null;
     if (req.query.amountUsd != null && req.query.amountUsd !== '') {
@@ -151,7 +164,21 @@ module.exports = function walletRoutes(supabase, io) {
       catch (e) { return res.status(400).json({ error: e.message }); }
     }
 
+    const returnUrl = process.env.FRONTEND_URL
+      ? `${process.env.FRONTEND_URL.split(',')[0]}/wallet` : undefined;
+
     try {
+      if (provider === 'cryptomus') {
+        // Cryptomus prices the checkout up front, so an amount is required —
+        // unlike MoonPay, where the user can choose inside the widget.
+        const { url } = await cryptomus.createInvoice({
+          amountUsd: amountUsd || DEPOSIT_MINS.usdc,
+          userId: req.user.id,
+          returnUrl,
+        });
+        return res.json({ url, provider, minUsd: DEPOSIT_MINS.usdc });
+      }
+
       const { address } = await getOrCreateAddress(req.user.id, 'usdc', supabase);
       const url = moonpay.buildBuyUrl({
         address,
@@ -160,9 +187,9 @@ module.exports = function walletRoutes(supabase, io) {
         // Lets a MoonPay dashboard row be traced back to a user without
         // exposing anything about them in the URL.
         externalId: `dep_${req.user.id}`,
-        redirectURL: process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/wallet` : undefined,
+        redirectURL: returnUrl,
       });
-      res.json({ url, address, minUsd: DEPOSIT_MINS.usdc });
+      res.json({ url, address, provider, minUsd: DEPOSIT_MINS.usdc });
     } catch (err) {
       console.error('[onramp] url build failed:', err.message);
       res.status(500).json({ error: 'Could not start card purchase.' });
