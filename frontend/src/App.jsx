@@ -47,6 +47,7 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import ResetPassword from './pages/ResetPassword';
 import ToS from './pages/ToS';
+import Privacy from './pages/Privacy';
 import Admin from './pages/Admin';
 import SpectateView from './pages/SpectateView';
 import ForfeitToast from './components/ForfeitToast';
@@ -155,6 +156,7 @@ function Shell() {
           <Route path="/rewards"            element={<Rewards />} />
           <Route path="/reset-password"      element={<ResetPassword />} />
           <Route path="/tos"                element={<ToS />} />
+          <Route path="/privacy"            element={<Privacy />} />
           <Route path="/admin"              element={<ProtectedRoute><Admin /></ProtectedRoute>} />
           <Route path="*"                   element={<Navigate to="/" replace />} />
         </Routes>

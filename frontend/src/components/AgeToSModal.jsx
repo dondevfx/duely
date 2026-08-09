@@ -50,7 +50,9 @@ export default function AgeToSModal({ onAccept }) {
             <span className="text-sm text-white leading-relaxed">
               I agree to the{' '}
               <Link to="/tos" target="_blank" className="font-bold text-primary hover:underline">Terms of Service</Link>
-              {' '}and understand that all wagers are final, no chargebacks, and the platform takes a 5% fee on coin matches.
+              {' '}and{' '}
+              <Link to="/privacy" target="_blank" className="font-bold text-primary hover:underline">Privacy Policy</Link>
+              , and understand that all wagers are final, no chargebacks, and the platform takes a 5% fee on coin matches.
             </span>
           </label>
         </div>
