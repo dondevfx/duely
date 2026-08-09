@@ -52,7 +52,7 @@ export default function AgeToSModal({ onAccept }) {
               <Link to="/tos" target="_blank" className="font-bold text-primary hover:underline">Terms of Service</Link>
               {' '}and{' '}
               <Link to="/privacy" target="_blank" className="font-bold text-primary hover:underline">Privacy Policy</Link>
-              , and understand that all wagers are final, no chargebacks, and the platform takes a 5% fee on coin matches.
+              , and understand that all wagers are final and there are no chargebacks.
             </span>
           </label>
         </div>
