@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import GameCard from '../components/GameCard';
 import DailyBonus from '../components/DailyBonus';
 import SpinWheel from '../components/SpinWheel';
+import MatchTicker from '../components/MatchTicker';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import CoinIcon from '../components/CoinIcon';
@@ -129,6 +130,13 @@ export default function Home() {
               <DailySpinWidget profile={profile} />
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Live match ticker */}
+      <section className="border-y border-surfaceLight bg-surface/40 py-3 md:py-5 mt-0 mb-5 md:mb-8">
+        <div className="max-w-7xl mx-auto px-4">
+          <MatchTicker />
         </div>
       </section>
 
