@@ -98,6 +98,41 @@ test('the address is not taken from the query string', () => {
     'the destination must be derived from the authenticated user only');
 });
 
+test('a test key with no secret works, unsigned, for sandbox testing', () => {
+  // MoonPay may not issue a secret until KYB is approved, so the sandbox must
+  // still be testable — but the URL is unsigned and that has to be visible.
+  const keep = process.env.MOONPAY_SECRET;
+  delete process.env.MOONPAY_SECRET;
+  process.env.MOONPAY_KEY = 'pk_test_abc123';
+  delete require.cache[require.resolve('../src/services/moonpayService')];
+  const m = require('../src/services/moonpayService');
+
+  assert.equal(m.isConfigured(), true, 'sandbox testing must not be blocked on a missing secret');
+  assert.equal(m.canSign(), false, 'and the UI must be able to tell that it is unsigned');
+  const url = m.buildBuyUrl({ address: ADDR });
+  assert.ok(url.startsWith('https://buy-sandbox.moonpay.com'));
+  assert.ok(!url.includes('signature='));
+
+  process.env.MOONPAY_SECRET = keep;
+  delete require.cache[require.resolve('../src/services/moonpayService')];
+});
+
+test('a LIVE key with no secret is refused outright', () => {
+  // This is the case that must never ship: an unsigned live URL has an editable
+  // walletAddress, so a real card purchase could be redirected to any address.
+  const keep = { k: process.env.MOONPAY_KEY, s: process.env.MOONPAY_SECRET };
+  process.env.MOONPAY_KEY = 'pk_live_abc123';
+  delete process.env.MOONPAY_SECRET;
+  delete require.cache[require.resolve('../src/services/moonpayService')];
+  const m = require('../src/services/moonpayService');
+
+  assert.equal(m.isConfigured(), false, 'live without a secret must not report enabled');
+  assert.throws(() => m.buildBuyUrl({ address: ADDR }), /required for live keys/i);
+
+  process.env.MOONPAY_KEY = keep.k; process.env.MOONPAY_SECRET = keep.s;
+  delete require.cache[require.resolve('../src/services/moonpayService')];
+});
+
 test('an unconfigured install reports disabled instead of half-working', () => {
   // Fresh module with no env, so a missing key is a clean "not enabled" rather
   // than a broken URL.

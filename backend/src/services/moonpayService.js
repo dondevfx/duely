@@ -31,8 +31,18 @@ const HOST = () => (isTestKey() ? 'https://buy-sandbox.moonpay.com' : 'https://b
 // MoonPay account — the widget errors on a code your account cannot sell.
 const CURRENCY = process.env.MOONPAY_CURRENCY || 'usdc_sol';
 
+// The secret is required to sign, and signing is required in production. In the
+// sandbox MoonPay may not have issued a secret yet (it can arrive with KYB
+// approval), so testing is allowed unsigned rather than blocked outright — but
+// a LIVE key with no secret is refused, because an unsigned URL has an editable
+// walletAddress and a real purchase could be redirected to any address.
 function isConfigured() {
-  return Boolean(KEY && SECRET);
+  if (!KEY) return false;
+  return Boolean(SECRET) || isTestKey();
+}
+
+function canSign() {
+  return Boolean(SECRET);
 }
 
 /**
@@ -46,7 +56,11 @@ function isConfigured() {
  * @param {string} [o.redirectURL] where MoonPay returns them when finished
  */
 function buildBuyUrl({ address, email, amountUsd, externalId, redirectURL }) {
-  if (!isConfigured()) throw new Error('MoonPay is not configured');
+  if (!KEY) throw new Error('MoonPay is not configured');
+  if (!SECRET && !isTestKey()) {
+    // Hard stop. Never serve an unsigned URL against live keys.
+    throw new Error('MOONPAY_SECRET is required for live keys — refusing to build an unsigned URL');
+  }
   if (!address) throw new Error('Destination address required');
 
   const params = new URLSearchParams({
@@ -62,9 +76,16 @@ function buildBuyUrl({ address, email, amountUsd, externalId, redirectURL }) {
   if (externalId)  params.set('externalTransactionId', externalId);
   if (redirectURL) params.set('redirectURL', redirectURL);
 
+  const query = '?' + params.toString();
+  if (!SECRET) {
+    // Sandbox only — guarded above. Warns every call so this cannot quietly
+    // become the normal state of affairs.
+    console.warn('[moonpay] no MOONPAY_SECRET — serving an UNSIGNED sandbox URL (walletAddress is editable)');
+    return `${HOST()}${query}`;
+  }
+
   // MoonPay signs the query string INCLUDING the leading '?', and the signature
   // is appended afterwards (it is not itself part of the signed payload).
-  const query = '?' + params.toString();
   const signature = crypto.createHmac('sha256', SECRET).update(query).digest('base64');
 
   return `${HOST()}${query}&signature=${encodeURIComponent(signature)}`;
@@ -82,4 +103,4 @@ function verifyUrl(url) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-module.exports = { isConfigured, buildBuyUrl, verifyUrl, CURRENCY, isTestKey };
+module.exports = { isConfigured, canSign, buildBuyUrl, verifyUrl, CURRENCY, isTestKey };

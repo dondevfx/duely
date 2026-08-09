@@ -134,6 +134,9 @@ module.exports = function walletRoutes(supabase, io) {
       enabled:  moonpay.isConfigured() && !isDemo(req.user.id),
       provider: 'moonpay',
       sandbox:  moonpay.isConfigured() ? moonpay.isTestKey() : null,
+      // Sandbox can run without a secret; live cannot. Surfaced so an unsigned
+      // setup is visible in the UI rather than silently shipping.
+      signed:   moonpay.canSign(),
       minUsd:   DEPOSIT_MINS.usdc,
     });
   });

@@ -303,6 +303,7 @@ export default function Wallet() {
               <p className="text-xs text-muted mt-2 text-center">
                 Card, Apple Pay or Google Pay → USDC, credited automatically.
                 {onramp.sandbox && <span className="text-warning"> (test mode)</span>}
+                {onramp.signed === false && <span className="text-warning"> · unsigned</span>}
               </p>
               <p className="text-xs text-muted mt-3 text-center">or send crypto yourself</p>
             </div>
