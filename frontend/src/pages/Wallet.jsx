@@ -150,9 +150,9 @@ export default function Wallet() {
     setDepMsg(null);
     try {
       const { url } = await api.get('/wallet/onramp-url');
-      // New tab, not a redirect: MoonPay's flow includes KYC and can take a
-      // while, and sending them away would lose the page they came from.
-      // noopener so the widget cannot reach back into this window.
+      // New tab, not a redirect: the provider's flow includes KYC and can take
+      // a while, and sending them away would lose the page they came from.
+      // noopener so the checkout cannot reach back into this window.
       window.open(url, '_blank', 'noopener,noreferrer');
       // The USDC lands on-chain, so the existing deposit poll picks it up the
       // same as a manual send — no separate success path to maintain.
@@ -284,11 +284,12 @@ export default function Wallet() {
           <h2 className="text-lg font-bold text-white mb-1">Deposit</h2>
           <p className="text-sm text-muted mb-4">Select a coin and send to your deposit address.</p>
 
-          {/* Card on-ramp. Hidden entirely unless the server reports it
-              configured, so nothing appears before the keys are set. MoonPay
-              sells USDC to the player and sends it to their own deposit
-              address — from there it is an ordinary deposit and the chain
-              monitor credits it, which is why this reuses startPolling(). */}
+          {/* Card on-ramp. Hidden entirely unless the server reports a provider
+              configured, so nothing appears before the keys are set. The USDC
+              ends up at the player's own deposit address either way, so from
+              there it is an ordinary deposit and the chain monitor credits it —
+              which is why this reuses startPolling() rather than having its own
+              success path. */}
           {onramp?.enabled && (
             <div className="mb-4 pb-4 border-b border-surfaceLight">
               <GlowButton
@@ -303,7 +304,6 @@ export default function Wallet() {
               <p className="text-xs text-muted mt-2 text-center">
                 Card, Apple Pay or Google Pay → USDC, credited automatically.
                 {onramp.sandbox && <span className="text-warning"> (test mode)</span>}
-                {onramp.signed === false && <span className="text-warning"> · unsigned</span>}
               </p>
               <p className="text-xs text-muted mt-3 text-center">or send crypto yourself</p>
             </div>

@@ -14,7 +14,6 @@ const { createWithdrawalSwap, estimateWithdrawal, SS_TICKERS } = require('../ser
 const { isValidAddressFor } = require('../services/addressValidator');
 const { swapUsdcToSol }      = require('../services/jupiterService');
 const { isLocked } = require('../services/lockService');
-const moonpay = require('../services/moonpayService');
 const cryptomus = require('../services/cryptomusService');
 
 const WITHDRAW_COOLDOWN_MS = 60 * 1000;   // 60s between withdrawals
@@ -121,21 +120,16 @@ module.exports = function walletRoutes(supabase, io) {
     }
   });
 
-  // ── Card on-ramp (MoonPay) ────────────────────────────────────────────
+  // ── Card on-ramp ──────────────────────────────────────────────────────
   //
-  // Returns a signed widget URL pointed at the caller's OWN usdc deposit
-  // address. The address is resolved server-side from the session rather than
-  // accepted from the client, so a request cannot direct a purchase anywhere
-  // else, and the signing secret never leaves the server.
+  // Nothing is credited here. The provider sends USDC on-chain to the player's
+  // own deposit address and blockchainMonitor credits it on its next poll, like
+  // any other deposit — so a new provider only ever needs a URL builder, never
+  // a new money path.
   //
-  // Nothing is credited here. MoonPay sends USDC on-chain and blockchainMonitor
-  // credits it on its next poll like any other deposit.
-  // Whichever provider has keys wins. MoonPay first only because it is the
-  // cheaper route for the player when it is available; Cryptomus is the
-  // fallback and is the one that actually onboards gaming. Neither configured
-  // means the button never renders.
+  // Whichever provider has keys wins; none configured means the button never
+  // renders. MoonPay was removed after they declined onboarding.
   function onrampProvider() {
-    if (moonpay.isConfigured()) return 'moonpay';
     if (cryptomus.isConfigured()) return 'cryptomus';
     return null;
   }
@@ -145,10 +139,6 @@ module.exports = function walletRoutes(supabase, io) {
     res.json({
       enabled:  Boolean(provider) && !isDemo(req.user.id),
       provider,
-      sandbox:  provider === 'moonpay' ? moonpay.isTestKey() : false,
-      // Sandbox can run without a secret; live cannot. Surfaced so an unsigned
-      // setup is visible in the UI rather than silently shipping.
-      signed:   provider === 'moonpay' ? moonpay.canSign() : true,
       minUsd:   DEPOSIT_MINS.usdc,
     });
   });
@@ -164,32 +154,19 @@ module.exports = function walletRoutes(supabase, io) {
       catch (e) { return res.status(400).json({ error: e.message }); }
     }
 
+    // FRONTEND_URL is a comma-separated CORS allowlist, so take the first origin
+    // or the return URL is malformed whenever more than one is listed.
     const returnUrl = process.env.FRONTEND_URL
       ? `${process.env.FRONTEND_URL.split(',')[0]}/wallet` : undefined;
 
     try {
-      if (provider === 'cryptomus') {
-        // Cryptomus prices the checkout up front, so an amount is required —
-        // unlike MoonPay, where the user can choose inside the widget.
-        const { url } = await cryptomus.createInvoice({
-          amountUsd: amountUsd || DEPOSIT_MINS.usdc,
-          userId: req.user.id,
-          returnUrl,
-        });
-        return res.json({ url, provider, minUsd: DEPOSIT_MINS.usdc });
-      }
-
-      const { address } = await getOrCreateAddress(req.user.id, 'usdc', supabase);
-      const url = moonpay.buildBuyUrl({
-        address,
-        email: req.user.email,
-        amountUsd,
-        // Lets a MoonPay dashboard row be traced back to a user without
-        // exposing anything about them in the URL.
-        externalId: `dep_${req.user.id}`,
-        redirectURL: returnUrl,
+      const { url } = await cryptomus.createInvoice({
+        // Cryptomus prices the checkout up front, so an amount is required.
+        amountUsd: amountUsd || DEPOSIT_MINS.usdc,
+        userId: req.user.id,
+        returnUrl,
       });
-      res.json({ url, address, provider, minUsd: DEPOSIT_MINS.usdc });
+      res.json({ url, provider, minUsd: DEPOSIT_MINS.usdc });
     } catch (err) {
       console.error('[onramp] url build failed:', err.message);
       res.status(500).json({ error: 'Could not start card purchase.' });
