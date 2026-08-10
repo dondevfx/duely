@@ -58,6 +58,7 @@ import SaveLoginPrompt from './components/SaveLoginPrompt';
 import ErrorBoundary from './components/ErrorBoundary';
 import InviteToasts from './components/InviteToasts';
 import BalanceSync from './components/BalanceSync';
+import ReferralCapture from './components/ReferralCapture';
 
 function ProtectedRoute({ children }) {
   const { session, loading, mfaPending } = useAuth();
@@ -181,6 +182,7 @@ export default function App() {
             <CurrencyProvider>
               <NotifyToast />
               <BalanceSync />
+              <ReferralCapture />
               <Shell />
             </CurrencyProvider>
           </WalletProvider>

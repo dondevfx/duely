@@ -10,10 +10,14 @@ import ShareLinkButton from './ShareLinkButton';
 // Sized to match the rows above it rather than the page: this is a footer on a
 // narrow sidebar panel, so it uses the same [10px]/xs type and tight padding as
 // the friends list, and sits behind a divider instead of its own card.
-export default function FriendInviteBox({ username }) {
+export default function FriendInviteBox({ username, referralCode }) {
   if (!username) return null;
 
-  const link = `${window.location.origin}/add-friend/${encodeURIComponent(username)}`;
+  // Carries the referral code as well, so one shared link both adds them as a
+  // friend and attributes the referral — otherwise the two live on separate
+  // links and the referral one, being the less obvious ask, never gets sent.
+  const link = `${window.location.origin}/add-friend/${encodeURIComponent(username)}`
+    + (referralCode ? `?ref=${encodeURIComponent(referralCode)}` : '');
 
   return (
     <div className="mt-4 pt-4 border-t border-surfaceLight">

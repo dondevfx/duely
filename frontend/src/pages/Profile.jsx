@@ -1039,7 +1039,7 @@ function CoinHistorySection({ userId }) {
 
 // ── Friends Panel ─────────────────────────────────────────────────────────────
 
-function FriendsPanel({ myId, myUsername, activeGames }) {
+function FriendsPanel({ myId, myUsername, myReferralCode, activeGames }) {
   const navigate = useNavigate();
   const [friendships, setFriendships] = useState([]);
   const [addInput, setAddInput] = useState('');
@@ -1219,7 +1219,7 @@ function FriendsPanel({ myId, myUsername, activeGames }) {
         </div>
       )}
 
-      <FriendInviteBox username={myUsername} />
+      <FriendInviteBox username={myUsername} referralCode={myReferralCode} />
     </div>
 
     {/* Unadd confirmation modal */}
@@ -1550,7 +1550,7 @@ export default function Profile() {
             the affiliate/stats/history stack. On desktop it is the floating
             right column instead, so this copy is hidden there. */}
         <div className="mb-6 lg:hidden">
-          <FriendsPanel myId={profile.id} myUsername={profile.username} activeGames={activeGames} />
+          <FriendsPanel myId={profile.id} myUsername={profile.username} myReferralCode={profile.affiliate_code} activeGames={activeGames} />
         </div>
 
         {/* Affiliate code card */}
@@ -1687,7 +1687,7 @@ export default function Profile() {
           </Link>
         </div>
         <div className="absolute top-0 left-full ml-4 w-64 hidden lg:block">
-          <FriendsPanel myId={profile.id} myUsername={profile.username} activeGames={activeGames} />
+          <FriendsPanel myId={profile.id} myUsername={profile.username} myReferralCode={profile.affiliate_code} activeGames={activeGames} />
         </div>
         </div>{/* end relative container */}
       </div>
