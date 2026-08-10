@@ -145,6 +145,15 @@ async function settleMatch(supabase, winnerId, loserId, entryFee, meta = {}) {
 
     await creditRakeback(supabase, winnerId, loserId, prizePool, 'coins').catch(() => {});
 
+    // Referral progress. Deliberately hooked here and NOT in settleCoinFlip:
+    // this is the 5%-rake path, and Coin Flip's 2% does not generate enough to
+    // fund the reward. Both players' stakes count — each paid the entry fee.
+    if (!isDemo(winnerId) && !isDemo(loserId)) {
+      const { trackWager } = require('./referralService');
+      trackWager(supabase, winnerId, fee).catch(() => {});
+      trackWager(supabase, loserId,  fee).catch(() => {});
+    }
+
     supabase.from('transactions').insert([
       { user_id: winnerId, type: 'match_win',  amount_c: payout, status: 'confirmed', notes: matchNote(meta.game, meta.loserUsername) },
       { user_id: loserId,  type: 'match_loss', amount_c: fee,    status: 'confirmed', notes: matchNote(meta.game, meta.winnerUsername) },

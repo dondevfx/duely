@@ -83,9 +83,19 @@ module.exports = function affiliateRoutes(supabase) {
 
     const expiresAt = new Date(Date.now() + CODE_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
+    // referred_by is the PERMANENT link, used by the referral reward. It is set
+    // once and never overwritten: applied_affiliate_code expires and can be
+    // swapped for someone else's, and if the referral credit moved with it a
+    // player could be re-referred repeatedly and pay out over and over.
+    const { data: existing } = await supabase
+      .from('profiles').select('referred_by').eq('id', req.user.id).single();
+
+    const patch = { applied_affiliate_code: raw, applied_code_expires_at: expiresAt };
+    if (!existing?.referred_by) patch.referred_by = owner.id;
+
     const { error } = await supabase
       .from('profiles')
-      .update({ applied_affiliate_code: raw, applied_code_expires_at: expiresAt })
+      .update(patch)
       .eq('id', req.user.id);
 
     if (error) return res.status(500).json({ error: error.message });

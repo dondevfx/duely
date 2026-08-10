@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { isRanked, placementMatches } from '../utils/ranks';
 import DailyBonus from '../components/DailyBonus';
 import SpinWheel from '../components/SpinWheel';
+import ReferralCard from '../components/ReferralCard';
 import { playWheelSpin, playWin } from '../utils/sound';
 
 // ── Tier definitions ───────────────────────────────────────────────────────
@@ -552,6 +553,9 @@ export default function Rewards() {
             Spin your rank wheels and the daily wheel once every 24 hours to win Diamonds
           </p>
         </div>
+
+        {/* Referral rewards — signed-in only, since it shows your own progress */}
+        {session && <ReferralCard myCode={profile?.affiliate_code} />}
 
         {/* Guest login prompt */}
         {!session && (

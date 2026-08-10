@@ -82,3 +82,56 @@ CREATE UNIQUE INDEX IF NOT EXISTS uniq_deposit_tx_hash
 --      second such deposit outright — breaking live deposits to protect a path
 --      that cannot run.
 -- ───────────────────────────────────────────────────────────────────────────
+
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- 4. REQUIRED — referral rewards
+--
+-- 2 coins to the referrer once a referred player deposits $10 and wagers $50
+-- in 5%-rake matches. Self-funding: $50 wagered earns the platform ~$4 against
+-- a $2 reward, and makes farming cost $5 of rake to unlock $2.
+-- ───────────────────────────────────────────────────────────────────────────
+
+-- Permanent referral link. profiles.applied_affiliate_code EXPIRES, so it
+-- cannot anchor a lifetime referral — this is set once at signup and kept.
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS referred_by uuid REFERENCES profiles(id);
+CREATE INDEX IF NOT EXISTS idx_profiles_referred_by ON profiles(referred_by);
+
+-- Running total of stakes that count toward the bar. Coin Flip never reaches
+-- here: it settles through settleCoinFlip, and only settleMatch calls trackWager.
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS qualifying_wagered_c numeric NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS referral_rewards (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  referrer_id uuid NOT NULL REFERENCES profiles(id),
+  referred_id uuid NOT NULL REFERENCES profiles(id),
+  amount_c    numeric NOT NULL,
+  status      text NOT NULL DEFAULT 'pending',  -- pending | paid | clawed_back
+  mature_at   timestamptz NOT NULL,
+  paid_at     timestamptz,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- THE load-bearing constraint. One reward per referred account, ever — without
+-- it, every match a qualified player finishes would insert another reward row
+-- and pay the referrer again.
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_referral_reward_referred
+  ON referral_rewards (referred_id);
+
+CREATE INDEX IF NOT EXISTS idx_referral_rewards_due
+  ON referral_rewards (status, mature_at);
+
+-- Atomic increment, so two matches settling at once cannot lose a stake to a
+-- read-modify-write race. Returns the new total for the caller to test.
+CREATE OR REPLACE FUNCTION increment_qualifying_wagered(user_id uuid, amount numeric)
+RETURNS numeric AS $$
+  UPDATE profiles
+     SET qualifying_wagered_c = COALESCE(qualifying_wagered_c, 0) + amount
+   WHERE id = user_id
+  RETURNING qualifying_wagered_c;
+$$ LANGUAGE sql;
+
+ALTER TABLE referral_rewards ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "referral_rewards_select" ON referral_rewards;
+CREATE POLICY "referral_rewards_select" ON referral_rewards
+  FOR SELECT USING (auth.uid() = referrer_id);

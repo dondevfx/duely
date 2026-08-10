@@ -108,6 +108,17 @@ swapPoller.init(supabase);
 blockchainMonitor.init(supabase);
 tickerService.init(io, supabase);
 
+// Pay referral rewards whose 7-day hold has elapsed. Hourly is ample for a
+// 7-day timer, and each payout claims its row before crediting, so a restart
+// mid-sweep cannot pay the same reward twice.
+{
+  const { payMaturedRewards } = require('./services/referralService');
+  const sweep = () => payMaturedRewards(supabase).catch(e =>
+    console.error('[referral] sweep error:', e.message));
+  setTimeout(sweep, 30_000);          // after boot settles
+  setInterval(sweep, 60 * 60 * 1000);
+}
+
 // Refund any match that was interrupted by the previous process exiting —
 // entry fees were taken but the in-memory room died, so nobody was ever paid.
 require('./services/escrowService').refundAbandonedEscrows(supabase).catch(e =>

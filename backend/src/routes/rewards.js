@@ -45,6 +45,17 @@ function getTierForElo(elo) {
 module.exports = function rewardsRoutes(supabase) {
   const router = Router();
 
+  // Referral progress for the rewards page.
+  router.get('/referrals', requireAuth, async (req, res) => {
+    try {
+      const { getReferralStats } = require('../services/referralService');
+      res.json(await getReferralStats(supabase, req.user.id));
+    } catch (err) {
+      console.error('[referral] stats:', err.message);
+      res.status(500).json({ error: 'Could not load referrals' });
+    }
+  });
+
   // GET /api/rewards/spin-status
   // Returns per-tier spin status for all tiers the user has unlocked
   router.get('/spin-status', requireAuth, async (req, res) => {
