@@ -11,11 +11,17 @@ const path = require('node:path');
 
 const ref = require('../src/services/referralService');
 
-// Fee structure, from walletService/affiliateService:
-//   pool = 2 x stake; total rake 5% of pool; of that, admin 4.0% when an
-//   affiliate code is applied (which a referred player always has).
-const PLATFORM_PER_DOLLAR_WAGERED = 0.04 * 2;   // 8c per $1 staked
-const COINFLIP_PER_DOLLAR         = 0.015 * 2;  // 3c — coin flip rakes 2% of pool
+// Fee structure, from walletService/affiliateService: pool = 2 x stake, total
+// rake 5% of pool, admin 4.0% when an affiliate code is applied (which a
+// referred player always has). That is 8c per $1 the player stakes.
+//
+// The bar is set on HALF of that. The other half of every pool is the
+// opponent's money, and the opponent would mostly have found a match anyway, so
+// crediting the referred player with all of it overstates what they brought in.
+// Testing against the conservative figure means the reward stays funded even
+// when their matches displace ones that would have happened regardless.
+const PLATFORM_PER_DOLLAR_WAGERED = 0.04;        // 4c per $1 staked, conservative
+const COINFLIP_PER_DOLLAR         = 0.015;       // coin flip rakes 2% of pool
 
 test('the reward is funded by the rake it requires', () => {
   const earned = ref.MIN_WAGERED_USD * PLATFORM_PER_DOLLAR_WAGERED;
@@ -29,7 +35,7 @@ test('the reward is funded by the rake it requires', () => {
 test('farming it costs more than it pays', () => {
   // A throwaway account must wager the bar to unlock the reward. Rake is 10c
   // per $1 staked, all of which the farmer loses.
-  const rakeBurned = ref.MIN_WAGERED_USD * 0.10;
+  const rakeBurned = ref.MIN_WAGERED_USD * 0.10;   // full rake — the farmer pays it all
   assert.ok(rakeBurned > ref.REWARD_COINS,
     `farming burns $${rakeBurned.toFixed(2)} to collect $${ref.REWARD_COINS} — must be a loss`);
 });
@@ -117,12 +123,12 @@ test('the reward is held, not paid on qualification', async () => {
     `hold is ${heldDays.toFixed(2)} days, expected ${ref.HOLD_DAYS}`);
 });
 
-test('the payout claims a row before crediting it', () => {
+test('collecting claims a row before crediting it', () => {
   // Same ordering as the deposit claim: flip pending->paid first, credit only
   // the row you actually flipped, roll back if the credit fails.
   const src = fs.readFileSync(
     path.join(__dirname, '..', 'src', 'services', 'referralService.js'), 'utf8');
-  const fn = src.slice(src.indexOf('async function payMaturedRewards'));
+  const fn = src.slice(src.indexOf('async function collectReferralEarnings'));
   const claimIdx  = fn.indexOf("status: 'paid'");
   // The CALL, not the identifier — the destructuring require at the top of the
   // function also contains the name and sits before the claim.
@@ -130,7 +136,7 @@ test('the payout claims a row before crediting it', () => {
   assert.ok(claimIdx > 0 && creditIdx > claimIdx,
     'the row must be claimed BEFORE the coins are credited');
   assert.match(fn, /if \(!claimed\?\.length\) continue;/,
-    'only the run that won the flip may credit');
+    'only the request that won the flip may credit');
   assert.match(fn, /status: 'pending', paid_at: null/,
     'a failed credit must roll the claim back so it retries');
 });

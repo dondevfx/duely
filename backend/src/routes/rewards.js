@@ -56,6 +56,21 @@ module.exports = function rewardsRoutes(supabase) {
     }
   });
 
+  // Collect matured referral rewards into the coin balance.
+  router.post('/referrals/collect', requireAuth, async (req, res) => {
+    try {
+      const { collectReferralEarnings, getReferralStats } = require('../services/referralService');
+      const collected = await collectReferralEarnings(supabase, req.user.id);
+      // Return fresh stats too, so the card updates from one round trip and
+      // cannot briefly show a balance it has already banked.
+      const stats = await getReferralStats(supabase, req.user.id);
+      res.json({ collected, ...stats });
+    } catch (err) {
+      console.error('[referral] collect:', err.message);
+      res.status(500).json({ error: 'Could not collect earnings' });
+    }
+  });
+
   // GET /api/rewards/spin-status
   // Returns per-tier spin status for all tiers the user has unlocked
   router.get('/spin-status', requireAuth, async (req, res) => {

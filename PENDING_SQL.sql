@@ -87,9 +87,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS uniq_deposit_tx_hash
 -- ───────────────────────────────────────────────────────────────────────────
 -- 4. REQUIRED — referral rewards
 --
--- 2 coins to the referrer once a referred player deposits $10 and wagers $50
--- in 5%-rake matches. Self-funding: $50 wagered earns the platform ~$4 against
--- a $2 reward, and makes farming cost $5 of rake to unlock $2.
+-- 2 coins to the referrer once a referred player deposits $10 and wagers $100
+-- in 5%-rake matches. Self-funding on a conservative half-attribution basis:
+-- $100 wagered earns ~$4 against a $2 reward, and farming costs $10 of rake.
 -- ───────────────────────────────────────────────────────────────────────────
 
 -- Permanent referral link. profiles.applied_affiliate_code EXPIRES, so it
