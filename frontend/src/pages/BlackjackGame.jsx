@@ -952,7 +952,12 @@ function BlackjackGame() {
                     {score != null && <ScoreBadge score={score} bust={score > 21} isLight={isLight} />}
                     {/* HIT / STAND live under the hand they act on */}
                     {active && phase === 'playing' && !splitPending && (
-                      <div style={{ width: '100%', maxWidth: 340, marginTop: 4 }}>
+                      // Fixed width, not 100%. This column is a shrink-to-fit flex
+                      // item sized by the cards above it — which are scaled 0.82 and
+                      // overlapped — so `width: 100%` resolved to roughly the width
+                      // of two cards and squashed HIT/STAND to about half their
+                      // normal size. A real width makes the column grow instead.
+                      <div style={{ width: 300, maxWidth: '100%', marginTop: 8 }}>
                         {actionButtons()}
                       </div>
                     )}
@@ -1016,7 +1021,12 @@ function BlackjackGame() {
               💥 Bust — waiting for opponent…
             </p>
           )}
-          {phase === 'playing' && bust && splitData && (
+          {/* Suppressed while splitPending, because the hand column above is
+              already showing its own "Bust — moving to Hand 2" line for that
+              same 1.2s pause. Both rendered at once, which is where the two
+              stacked bust messages came from. Busting on the LAST hand does not
+              set splitPending, so that case still gets this banner. */}
+          {phase === 'playing' && bust && splitData && !splitPending && (
             <p style={{ marginTop: 14, fontSize: 13, color: '#f97316', fontWeight: 700 }}>
               💥 Bust on Hand {splitData.activeHand === 1 ? '1' : '2'} — moving to {splitData.activeHand === 1 ? 'Hand 2' : 'next'}…
             </p>
