@@ -3,6 +3,7 @@ import { api } from '../utils/api';
 import ShareLinkButton from './ShareLinkButton';
 import CoinIcon from './CoinIcon';
 import { getCachedCode, setCachedCode } from '../utils/referralCode';
+import SetCodeModal from './SetCodeModal';
 
 // Referral offer. Two variants:
 //   full    — Rewards page: offer, link, counts, collect button
@@ -24,6 +25,7 @@ export default function ReferralCard({ variant = 'full' }) {
   // landed handed out a link with no code — invisible, because a bare site link
   // looks completely normal.
   const [code, setCode] = useState(getCachedCode);
+  const [showSetCode, setShowSetCode] = useState(false);
   const [collecting, setCollecting] = useState(false);
   const [justGot, setJustGot] = useState(0);
   const compact = variant === 'compact';
@@ -80,9 +82,10 @@ export default function ReferralCard({ variant = 'full' }) {
         </p>
       </div>
 
-      {/* Never share a link that has no code on it. A bare site link looks
-          perfectly normal, so the loss would be invisible — the referrer would
-          think they had shared their link and simply never get credited. */}
+      {/* Never share a link with no code on it — a bare site link looks
+          completely normal, so the loss would be invisible and the referrer
+          would simply never get credited. Until a code exists the button asks
+          for one instead, which is also how people discover the link at all. */}
       {link ? (
         <ShareLinkButton
           link={link}
@@ -91,16 +94,32 @@ export default function ReferralCard({ variant = 'full' }) {
           text="Come 1v1 me on Duely 🎮"
           className={compact ? '!py-2.5 !text-xs' : ''}
         />
-      ) : (
+      ) : data === null ? (
         <button
           disabled
           className={`w-full bg-primary/40 text-white/70 font-black rounded-xl cursor-wait ${
             compact ? 'py-2.5 text-xs' : 'py-4 text-base'
           }`}
         >
-          {data?.failed ? 'Link unavailable — reload' : 'Preparing your link…'}
+          Loading…
+        </button>
+      ) : (
+        <button
+          onClick={() => setShowSetCode(true)}
+          className={`w-full bg-primary text-white font-black rounded-xl hover:bg-blue-500 transition-all ${
+            compact ? 'py-2.5 text-xs' : 'py-4 text-base'
+          }`}
+          style={{ boxShadow: '0 0 18px rgba(18,80,180,0.35)' }}
+        >
+          Set Code
         </button>
       )}
+
+      <SetCodeModal
+        open={showSetCode}
+        onClose={() => setShowSetCode(false)}
+        onSet={setCode}
+      />
 
       {!compact && (
         <>

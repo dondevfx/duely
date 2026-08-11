@@ -45,19 +45,19 @@ function getTierForElo(elo) {
 module.exports = function rewardsRoutes(supabase) {
   const router = Router();
 
-  // Just the caller's invite code, issuing one if they have never had it.
+  // The caller's invite code, or null if they have not chosen one yet.
   //
   // Separate from /referrals so the app can warm the code at boot without
-  // pulling reward stats it is not going to show. Without this the code only
-  // existed once a ReferralCard mounted, so sharing from anywhere else — or
-  // fast enough on first load — produced a link with no code on it.
+  // pulling reward stats it is not going to show — otherwise the code only
+  // exists once a ReferralCard has mounted and answered, and a share button
+  // elsewhere has nothing to build a link from.
   router.get('/referral-code', requireAuth, async (req, res) => {
     try {
-      const { ensureReferralCode } = require('../services/referralService');
-      res.json({ code: await ensureReferralCode(supabase, req.user.id) });
+      const { getReferralCode } = require('../services/referralService');
+      res.json({ code: await getReferralCode(supabase, req.user.id) });
     } catch (err) {
       console.error('[referral] code:', err.message);
-      res.status(500).json({ error: 'Could not issue a referral code' });
+      res.status(500).json({ error: 'Could not load your referral code' });
     }
   });
 

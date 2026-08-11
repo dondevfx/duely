@@ -59,6 +59,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import InviteToasts from './components/InviteToasts';
 import BalanceSync from './components/BalanceSync';
 import ReferralCapture from './components/ReferralCapture';
+import ScrollToTop from './components/ScrollToTop';
 
 function ProtectedRoute({ children }) {
   const { session, loading, mfaPending } = useAuth();
@@ -180,6 +181,7 @@ export default function App() {
         <SocketProvider>
           <WalletProvider>
             <CurrencyProvider>
+              <ScrollToTop />
               <NotifyToast />
               <BalanceSync />
               <ReferralCapture />
