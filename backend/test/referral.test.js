@@ -202,3 +202,19 @@ test('the bank transfer is a single atomic statement pair', () => {
   assert.ok(fn.indexOf('c_coins = COALESCE(c_coins, 0) + amount') > fn.indexOf('IF moved = 0'),
     'the credit must come after the guarded deduct');
 });
+
+test('collecting platform fees reserves what referrals are owed', () => {
+  // Rewards are paid OUT of fee_balance, so sweeping it to zero would leave
+  // earned rewards uncollectable — the referrer sees "nothing to collect"
+  // while genuinely being owed coins.
+  const sql = fs.readFileSync(path.join(__dirname, '..', '..', 'PENDING_SQL.sql'), 'utf8');
+  const fn = sql.slice(sql.lastIndexOf('CREATE OR REPLACE FUNCTION collect_admin_fees'));
+  assert.match(fn, /FROM referral_rewards WHERE status = 'pending'/,
+    'the sweep must know what is owed');
+  assert.match(fn, /v_take := v_fee - v_owed/,
+    'and take only the surplus');
+  assert.ok(!/fee_balance = 0/.test(fn),
+    'it must no longer zero the balance outright');
+  assert.match(fn, /IF v_take <= 0 THEN RETURN 0/,
+    'when the whole balance is owed, collect nothing rather than going negative');
+});

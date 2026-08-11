@@ -163,3 +163,39 @@ BEGIN
   RETURN true;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Reserve outstanding referral rewards when collecting platform fees.
+--
+-- collect_admin_fees swept fee_balance to zero. Referral rewards are paid OUT
+-- of that balance, so a sweep could leave earned rewards uncollectable — the
+-- referrer would see "nothing to collect" while genuinely being owed coins.
+--
+-- Rewards that have qualified but not been collected are a liability against
+-- the balance, so they are held back. Income still outpaces payouts roughly
+-- 2:1 ($4 of rake per $2 reward), so this reduces what is collectable now
+-- rather than blocking collection.
+CREATE OR REPLACE FUNCTION collect_admin_fees(admin_id uuid)
+RETURNS numeric LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_fee  numeric;
+  v_owed numeric;
+  v_take numeric;
+BEGIN
+  SELECT fee_balance INTO v_fee FROM profiles WHERE id = admin_id FOR UPDATE;
+  IF v_fee IS NULL OR v_fee <= 0 THEN RETURN 0; END IF;
+
+  -- Every pending reward, including those still inside the 7-day hold: they
+  -- are already earned, so the money must stay put.
+  SELECT COALESCE(SUM(amount_c), 0) INTO v_owed
+    FROM referral_rewards WHERE status = 'pending';
+
+  v_take := v_fee - v_owed;
+  IF v_take <= 0 THEN RETURN 0; END IF;
+
+  UPDATE profiles
+     SET c_coins     = c_coins + v_take,
+         fee_balance = fee_balance - v_take
+   WHERE id = admin_id;
+  RETURN v_take;
+END;
+$$;

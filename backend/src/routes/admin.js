@@ -54,6 +54,18 @@ module.exports = function adminRoutes(supabase) {
       supabase.from('profiles').select('diamonds'),
     ]);
 
+    // Referral rewards earned but not yet collected. These are held back from
+    // fee collection (see collect_admin_fees), so the number is shown alongside
+    // fee_balance rather than left to look like a shortfall. Separate query so
+    // a missing referral_rewards table before the migration degrades to 0
+    // rather than breaking the whole admin dashboard.
+    let referralReserved = 0;
+    try {
+      const { data: owed } = await supabase
+        .from('referral_rewards').select('amount_c').eq('status', 'pending');
+      referralReserved = (owed || []).reduce((s, r) => s + (parseFloat(r.amount_c) || 0), 0);
+    } catch { /* table not migrated yet */ }
+
     // Sum prize_pool_c — fallback to entry_fee_c * 2 if prize_pool_c not set
     const totalWagered = (matchData || []).reduce((s, m) => {
       const pp = Number(m.prize_pool_c) || 0;
@@ -97,6 +109,12 @@ module.exports = function adminRoutes(supabase) {
       fees_coins:         parseFloat((adminProfile?.c_coins ?? 0).toFixed(2)),
       fees_diamonds:      adminProfile?.diamonds ?? 0,
       fee_balance:        parseFloat((adminProfile?.fee_balance ?? 0).toFixed(4)),
+      // Referral rewards already earned but not yet collected. Held back from
+      // fee collection, so surfaced here — otherwise collecting appears to
+      // short-change you for no visible reason.
+      referral_reserved:  parseFloat((referralReserved ?? 0).toFixed(4)),
+      fee_balance_available: parseFloat(
+        Math.max(0, (adminProfile?.fee_balance ?? 0) - (referralReserved ?? 0)).toFixed(4)),
       total_wagered:       parseFloat(totalWagered.toFixed(2)),
       total_fees_claimed:  parseFloat(totalFeesClaimed.toFixed(4)),
       pending_withdrawals: pendingWithdrawals ?? 0,
