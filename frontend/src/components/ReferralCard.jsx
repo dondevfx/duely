@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 import ShareLinkButton from './ShareLinkButton';
 import CoinIcon from './CoinIcon';
 import { getCachedCode, setCachedCode } from '../utils/referralCode';
@@ -19,6 +21,8 @@ import SetCodeModal from './SetCodeModal';
 // a code. It is nullable in the schema and was only ever set manually, so most
 // accounts had none and their link referred nobody.
 export default function ReferralCard({ variant = 'full' }) {
+  const { session } = useAuth();
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   // Seeded from the cache that ReferralCapture warms at app boot, so the link
   // is correct on the FIRST paint. Without it, tapping share before the request
@@ -31,6 +35,10 @@ export default function ReferralCard({ variant = 'full' }) {
   const compact = variant === 'compact';
 
   useEffect(() => {
+    // Logged out there is nothing to fetch — the endpoint requires auth, and
+    // the offer is worth showing to a visitor regardless. It is a reason to
+    // sign up, so hiding it from exactly the people who have not is backwards.
+    if (!session) return;
     let alive = true;
     api.get('/rewards/referrals')
       .then(d => {
@@ -40,7 +48,7 @@ export default function ReferralCard({ variant = 'full' }) {
       })
       .catch(() => { if (alive) setData({ failed: true }); });
     return () => { alive = false; };
-  }, []);
+  }, [session]);
 
   const rewardCoins = data?.rewardCoins ?? 2;
   const qualified   = data?.qualified ?? 0;
@@ -86,7 +94,17 @@ export default function ReferralCard({ variant = 'full' }) {
           completely normal, so the loss would be invisible and the referrer
           would simply never get credited. Until a code exists the button asks
           for one instead, which is also how people discover the link at all. */}
-      {link ? (
+      {!session ? (
+        <button
+          onClick={() => navigate('/login')}
+          className={`w-full bg-primary text-white font-black rounded-xl hover:bg-blue-500 transition-all ${
+            compact ? 'py-2.5 text-xs' : 'py-4 text-base'
+          }`}
+          style={{ boxShadow: '0 0 18px rgba(18,80,180,0.35)' }}
+        >
+          Log In to Invite
+        </button>
+      ) : link ? (
         <ShareLinkButton
           link={link}
           noun="Invite Link"
@@ -121,7 +139,7 @@ export default function ReferralCard({ variant = 'full' }) {
         onSet={setCode}
       />
 
-      {!compact && (
+      {!compact && session && (
         <>
           <div className="flex gap-2 mt-3">
             <div className="flex-1 bg-bg border border-border rounded-xl px-3 py-2.5 text-center">

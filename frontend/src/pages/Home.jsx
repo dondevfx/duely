@@ -176,6 +176,13 @@ export default function Home() {
               ))}
             </div>
 
+            {/* Invite — mobile only, above the daily spin. The desktop copy lives
+                in the sidebar below How It Works; the two are complementary so
+                exactly one renders at any width. */}
+            <div className="lg:hidden mt-5 max-w-sm mx-auto sm:mx-0 sm:max-w-none">
+              <ReferralCard variant="compact" />
+            </div>
+
             {/* Daily spin — mobile/tablet only; desktop shows it in the hero instead */}
             <div className="lg:hidden mt-5 max-w-sm mx-auto sm:mx-0 sm:max-w-none">
               <DailySpinWidget profile={profile} />
@@ -222,10 +229,11 @@ export default function Home() {
               </Link>
             </div>
 
-            {/* Fills the empty space below How It Works on desktop. This column
-                stacks under the game grid on mobile, so one placement covers
-                both. Signed-in only — the link is personal to the account. */}
-            {profile && <ReferralCard variant="compact" />}
+            {/* Fills the empty space below How It Works. Desktop only — on
+                mobile the copy above the daily spin is shown instead. */}
+            <div className="hidden lg:block">
+              <ReferralCard variant="compact" />
+            </div>
           </div>
         </div>
       </section>
