@@ -70,18 +70,18 @@ export default function ReferralCard({ variant = 'full' }) {
   }
 
   return (
-    <div className={`bg-surface border rounded-2xl ${compact ? 'p-4' : 'p-5 mb-5'} ${
+    <div className={`bg-surface border rounded-2xl ${compact ? 'p-5' : 'p-5 mb-5'} ${
       compact ? 'border-surfaceLight' : 'border-primary/40'
     }`}>
       {/* The offer, sized to be the thing you actually notice. */}
-      <div className={compact ? 'mb-3' : 'mb-4'}>
-        <h2 className={`font-black text-white leading-tight ${compact ? 'text-base mb-1' : 'text-xl sm:text-2xl mb-1.5'}`}>
+      <div className={compact ? 'mb-4' : 'mb-4'}>
+        <h2 className={`font-black text-white leading-tight ${compact ? 'text-lg mb-1.5' : 'text-xl sm:text-2xl mb-1.5'}`}>
           Invite friends, earn{' '}
           <span className="text-primary inline-flex items-center gap-1">
             {rewardCoins} <CoinIcon size="0.9em" />
           </span>
         </h2>
-        <p className={`text-muted leading-snug ${compact ? 'text-xs' : 'text-sm sm:text-base'}`}>
+        <p className={`text-muted leading-snug ${compact ? 'text-sm' : 'text-sm sm:text-base'}`}>
           Get{' '}
           <span className="text-white font-bold inline-flex items-center gap-0.5">
             {rewardCoins} <CoinIcon size="0.85em" />
@@ -98,7 +98,7 @@ export default function ReferralCard({ variant = 'full' }) {
         <button
           onClick={() => navigate('/login')}
           className={`w-full bg-primary text-white font-black rounded-xl hover:bg-blue-500 transition-all ${
-            compact ? 'py-2.5 text-xs' : 'py-4 text-base'
+            compact ? 'py-3.5 text-sm' : 'py-4 text-base'
           }`}
           style={{ boxShadow: '0 0 18px rgba(18,80,180,0.35)' }}
         >
@@ -110,13 +110,13 @@ export default function ReferralCard({ variant = 'full' }) {
           noun="Invite Link"
           title="Play me on Duely"
           text="Come 1v1 me on Duely 🎮"
-          className={compact ? '!py-2.5 !text-xs' : ''}
+          className={compact ? '!py-3.5 !text-sm' : ''}
         />
       ) : data === null ? (
         <button
           disabled
           className={`w-full bg-primary/40 text-white/70 font-black rounded-xl cursor-wait ${
-            compact ? 'py-2.5 text-xs' : 'py-4 text-base'
+            compact ? 'py-3.5 text-sm' : 'py-4 text-base'
           }`}
         >
           Loading…
@@ -125,7 +125,7 @@ export default function ReferralCard({ variant = 'full' }) {
         <button
           onClick={() => setShowSetCode(true)}
           className={`w-full bg-primary text-white font-black rounded-xl hover:bg-blue-500 transition-all ${
-            compact ? 'py-2.5 text-xs' : 'py-4 text-base'
+            compact ? 'py-3.5 text-sm' : 'py-4 text-base'
           }`}
           style={{ boxShadow: '0 0 18px rgba(18,80,180,0.35)' }}
         >
