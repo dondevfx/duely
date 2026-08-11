@@ -230,3 +230,32 @@ UNION ALL SELECT 'collect_admin_fees() reserves rewards',
               WHERE proname='collect_admin_fees'
                 AND pg_get_functiondef(oid) LIKE '%referral_rewards%')
             THEN 'OK' ELSE 'OLD VERSION — fee sweep would strand owed rewards' END;
+
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- 5. RECOMMENDED — backfill referred_by for codes applied before it existed
+--
+-- referred_by is what the referral reward keys on, and it was only added with
+-- the reward. Anyone who applied a code before that has applied_affiliate_code
+-- set and referred_by null, so their referrer can never be credited no matter
+-- how much they play.
+--
+-- Run the SELECT first to see how many rows it would touch.
+-- ───────────────────────────────────────────────────────────────────────────
+
+SELECT count(*) AS would_backfill
+FROM profiles p
+JOIN profiles owner ON owner.affiliate_code = p.applied_affiliate_code
+WHERE p.referred_by IS NULL
+  AND p.applied_affiliate_code IS NOT NULL
+  AND owner.id <> p.id;
+
+-- Then, to apply it. Only fills nulls, so it cannot overwrite an attribution
+-- that already exists, and self-referrals are excluded.
+UPDATE profiles p
+   SET referred_by = owner.id
+  FROM profiles owner
+ WHERE p.referred_by IS NULL
+   AND p.applied_affiliate_code IS NOT NULL
+   AND owner.affiliate_code = p.applied_affiliate_code
+   AND owner.id <> p.id;
