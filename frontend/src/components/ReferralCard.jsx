@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../utils/api';
 import ShareLinkButton from './ShareLinkButton';
 import CoinIcon from './CoinIcon';
+import { getCachedCode, setCachedCode } from '../utils/referralCode';
 
 // Referral offer. Two variants:
 //   full    — Rewards page: offer, link, counts, collect button
@@ -16,19 +17,13 @@ import CoinIcon from './CoinIcon';
 // The code comes from the server, which issues one if the account has never had
 // a code. It is nullable in the schema and was only ever set manually, so most
 // accounts had none and their link referred nobody.
-// Last known code, so the very first paint on any page already has the right
-// link rather than waiting a round trip for it.
-const CODE_KEY = 'duely.referralCode';
-
 export default function ReferralCard({ variant = 'full' }) {
   const [data, setData] = useState(null);
-  // Seeded from the last known code so the link is correct on the FIRST paint.
-  // Without this, opening Home and tapping share before the request landed gave
-  // out a link with no code — the share silently referred nobody, and it looked
-  // fine because a bare site link is still a valid link.
-  const [code, setCode] = useState(() => {
-    try { return localStorage.getItem(CODE_KEY) || null; } catch { return null; }
-  });
+  // Seeded from the cache that ReferralCapture warms at app boot, so the link
+  // is correct on the FIRST paint. Without it, tapping share before the request
+  // landed handed out a link with no code — invisible, because a bare site link
+  // looks completely normal.
+  const [code, setCode] = useState(getCachedCode);
   const [collecting, setCollecting] = useState(false);
   const [justGot, setJustGot] = useState(0);
   const compact = variant === 'compact';
@@ -39,10 +34,7 @@ export default function ReferralCard({ variant = 'full' }) {
       .then(d => {
         if (!alive) return;
         setData(d);
-        if (d?.code) {
-          setCode(d.code);
-          try { localStorage.setItem(CODE_KEY, d.code); } catch { /* private mode */ }
-        }
+        if (d?.code) { setCode(d.code); setCachedCode(d.code); }
       })
       .catch(() => { if (alive) setData({ failed: true }); });
     return () => { alive = false; };
