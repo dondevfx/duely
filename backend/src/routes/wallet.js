@@ -325,12 +325,41 @@ module.exports = function walletRoutes(supabase, io) {
 
       } catch (payoutErr) {
         console.error(`[withdraw] payout failed user=${req.user.id} amount=${amount}:`, payoutErr.message);
-        // Refund the deducted coins. If this also fails, throw so the caller
-        // gets a 500 and the CRITICAL log is visible for manual recovery.
+
+        // A failed withdrawal must leave a ROW, not just a log line.
+        //
+        // Previously the only trace was console output: the refund path wrote
+        // nothing, so a withdrawal that failed was invisible to any query and
+        // recoverable only by scrolling Railway logs. Which also meant the
+        // admin dashboard's "pending withdrawals" counter — which looks for
+        // status 'pending' — was permanently zero, because nothing ever wrote
+        // that status.
+        //
+        // Best-effort inserts: if the database is itself the reason the payout
+        // failed, this will not land either. The console line therefore stays
+        // as the last resort.
+        const recordFailure = (status, err) =>
+          supabase.from('transactions').insert({
+            user_id:       req.user.id,
+            type:          'withdrawal',
+            amount_c:      amount,
+            crypto_symbol: coin.toUpperCase(),
+            extra_id:      address.trim().slice(0, 64),
+            status,
+            notes:         String(err).slice(0, 300),
+          }).then().catch(e => console.error('[withdraw] failure row insert failed:', e.message));
+
         try {
           await creditCoins(supabase, req.user.id, amount);
+          // Refunded — the player is whole. Recorded so support can explain
+          // what happened rather than guessing from a missing row.
+          await recordFailure('failed', payoutErr.message);
         } catch (refundErr) {
+          // The bad one: coins deducted, payout failed, refund failed. This is
+          // real money owed to a real person, so it gets its own status and
+          // shows at the top of the admin attention queue.
           console.error(`CRITICAL: refund failed user=${req.user.id} amount=${amount} — manual credit required:`, refundErr.message);
+          await recordFailure('refund_failed', `payout: ${payoutErr.message} | refund: ${refundErr.message}`);
           throw new Error(`Payout failed and refund failed — contact support. Payout error: ${payoutErr.message}`);
         }
         return res.status(500).json({ error: `Payout failed: ${payoutErr.message}` });

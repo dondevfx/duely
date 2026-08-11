@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const { requireAuth } = require('../middleware/auth');
-const { creditDiamonds } = require('../services/walletService');
+const { creditDiamonds, creditCoins } = require('../services/walletService');
 
 module.exports = function adminRoutes(supabase) {
   const router = Router();
@@ -46,7 +46,11 @@ module.exports = function adminRoutes(supabase) {
       supabase.from('matches').select('id', { count: 'exact', head: true }).gte('played_at', thirtyDaysAgo.toISOString()),
       supabase.from('profiles').select('c_coins, diamonds, fee_balance').eq('id', process.env.ADMIN_USER_ID).single(),
       supabase.from('matches').select('prize_pool_c, entry_fee_c'),
-      supabase.from('transactions').select('id', { count: 'exact', head: true }).eq('type', 'withdrawal').eq('status', 'pending'),
+      // Was .eq('status','pending'), a status nothing ever wrote — so this read
+      // zero forever while real failures went unnoticed. Counts the attention
+      // queue instead, which is the number that actually needs watching.
+      supabase.from('transactions').select('id', { count: 'exact', head: true })
+        .in('status', ['refund_failed', 'payout_failed', 'stuck', 'pending_retry']),
       supabase.from('transactions').select('amount_c').eq('type', 'fee_collection').eq('user_id', process.env.ADMIN_USER_ID),
       supabase.from('matches').select('game_type'),
       supabase.from('matches').select('player1_id, player2_id').gte('played_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
@@ -117,23 +121,115 @@ module.exports = function adminRoutes(supabase) {
         Math.max(0, (adminProfile?.fee_balance ?? 0) - (referralReserved ?? 0)).toFixed(4)),
       total_wagered:       parseFloat(totalWagered.toFixed(2)),
       total_fees_claimed:  parseFloat(totalFeesClaimed.toFixed(4)),
+      // Kept under the old key so the existing dashboard tile keeps working;
+      // it now means "rows needing a human" rather than a status that was
+      // never written.
       pending_withdrawals: pendingWithdrawals ?? 0,
+      needs_attention:     pendingWithdrawals ?? 0,
     });
   });
 
   // ── Recent transactions ───────────────────────────────────────────────
+  // Statuses that mean money is stuck and a human has to look.
+  //
+  // Ordered by how bad they are, which is also the order they should be worked:
+  //   refund_failed  coins taken, payout failed, refund failed — money owed
+  //   payout_failed  funds may be in flight; verify on-chain before touching
+  //   stuck          the swap gave up after an hour
+  //   pending_retry  funds still in the deposit wallet; usually self-heals
+  //   converting     normal in the short term, a problem when it is hours old
+  const ATTENTION_STATUSES = ['refund_failed', 'payout_failed', 'stuck', 'pending_retry', 'converting'];
+  const ATTENTION_RANK = Object.fromEntries(ATTENTION_STATUSES.map((s, i) => [s, i]));
+  // 'converting' is transient by design, so only count it once it has clearly
+  // outlived a normal swap. Without this the queue is permanently full of
+  // deposits that are simply in progress, and a real problem hides among them.
+  const CONVERTING_STALE_MS = 60 * 60 * 1000;
+
   router.get('/transactions', requireAuth, requireAdmin, async (req, res) => {
     const limit  = Math.min(parseInt(req.query.limit) || 50, 200);
     const offset = parseInt(req.query.offset) || 0;
 
-    const { data, error } = await supabase
+    let q = supabase
       .from('transactions')
       .select('*, profiles(username, profile_color)')
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+      .order('created_at', { ascending: false });
 
+    if (req.query.needsAttention === '1') {
+      q = q.in('status', ATTENTION_STATUSES).limit(200);
+    } else if (req.query.status) {
+      q = q.eq('status', req.query.status).range(offset, offset + limit - 1);
+    } else {
+      q = q.range(offset, offset + limit - 1);
+    }
+
+    const { data, error } = await q;
     if (error) return res.status(500).json({ error: error.message });
-    res.json(data || []);
+
+    if (req.query.needsAttention !== '1') return res.json(data || []);
+
+    const now = Date.now();
+    const rows = (data || [])
+      .filter(t => t.status !== 'converting'
+        || now - new Date(t.created_at).getTime() > CONVERTING_STALE_MS)
+      // Worst first, then oldest — a row that has been broken for three days
+      // matters more than one that broke a minute ago.
+      .sort((a, b) => (ATTENTION_RANK[a.status] - ATTENTION_RANK[b.status])
+        || (new Date(a.created_at) - new Date(b.created_at)));
+
+    res.json(rows);
+  });
+
+  // Resolve one stuck transaction, optionally making the player whole.
+  //
+  // creditCoins is deliberately opt-in per row rather than automatic: some of
+  // these states mean the money DID reach the player, and crediting those would
+  // pay twice. The operator decides after checking, and the note records what
+  // they concluded.
+  router.post('/transactions/:id/resolve', requireAuth, requireAdmin, async (req, res) => {
+    const { creditAmount, note } = req.body || {};
+    try {
+      const { data: tx } = await supabase
+        .from('transactions').select('*').eq('id', req.params.id).maybeSingle();
+      if (!tx) return res.status(404).json({ error: 'Transaction not found' });
+      if (tx.status === 'resolved') return res.status(400).json({ error: 'Already resolved' });
+
+      // Claim the row FIRST, so two admins clicking at once cannot both credit.
+      // Same ordering as every other payout path here.
+      const { data: claimed } = await supabase
+        .from('transactions')
+        .update({
+          status: 'resolved',
+          notes: [tx.notes, `resolved by admin: ${String(note || '').slice(0, 200)}`]
+            .filter(Boolean).join(' | ').slice(0, 500),
+        })
+        .eq('id', req.params.id)
+        .neq('status', 'resolved')
+        .select('id');
+      if (!claimed?.length) return res.status(409).json({ error: 'Already being resolved' });
+
+      let credited = 0;
+      const amt = parseFloat(creditAmount);
+      if (amt > 0) {
+        try {
+          await creditCoins(supabase, tx.user_id, amt);
+          credited = amt;
+          await supabase.from('transactions').insert({
+            user_id: tx.user_id, type: 'deposit', amount_c: amt, status: 'confirmed',
+            notes: `manual credit for transaction ${tx.id}`,
+          }).then().catch(() => {});
+        } catch (e) {
+          // Put the row back so it stays in the queue rather than looking dealt
+          // with when nothing was paid.
+          await supabase.from('transactions')
+            .update({ status: tx.status }).eq('id', req.params.id).then().catch(() => {});
+          return res.status(500).json({ error: `Credit failed: ${e.message}` });
+        }
+      }
+      res.json({ ok: true, credited });
+    } catch (err) {
+      console.error('[admin] resolve failed:', err.message);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // ── Users list ────────────────────────────────────────────────────────

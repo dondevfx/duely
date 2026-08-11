@@ -39,6 +39,75 @@ function StatCard({ label, value, sub, color = 'text-white' }) {
   );
 }
 
+
+// One stuck transaction, with what an operator needs to decide: who, how much,
+// which failure, when, and the error the code recorded.
+//
+// Credit is a separate field from Resolve on purpose. Several of these states
+// mean the money already reached the player, so a single "fix it" button that
+// always credited would pay twice.
+const SEVERITY = {
+  refund_failed: { label: 'Money owed',      cls: 'text-danger border-danger/50 bg-danger/10' },
+  payout_failed: { label: 'Payout failed',   cls: 'text-danger border-danger/50 bg-danger/10' },
+  stuck:         { label: 'Swap gave up',    cls: 'text-warning border-warning/50 bg-warning/10' },
+  pending_retry: { label: 'Retrying',        cls: 'text-warning border-warning/40 bg-warning/5' },
+  converting:    { label: 'Converting >1h',  cls: 'text-muted border-border' },
+};
+
+function AttentionRow({ tx, busy, onResolve }) {
+  const [credit, setCredit] = useState('');
+  const [note, setNote]     = useState('');
+  const sev = SEVERITY[tx.status] || { label: tx.status, cls: 'text-muted border-border' };
+  const ageH = Math.floor((Date.now() - new Date(tx.created_at)) / 3600000);
+
+  return (
+    <div className="bg-bg border border-border rounded-xl p-3">
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${sev.cls}`}>
+          {sev.label}
+        </span>
+        <span className="text-sm font-bold text-white">{tx.profiles?.username || tx.user_id?.slice(0, 8)}</span>
+        <span className="text-sm text-white font-mono">
+          {tx.type} · {Number(tx.amount_c || 0).toFixed(2)} {tx.crypto_symbol || ''}
+        </span>
+        <span className="text-xs text-muted ml-auto">
+          {ageH < 1 ? 'under an hour' : `${ageH}h old`}
+        </span>
+      </div>
+
+      {tx.notes && (
+        <p className="text-[11px] text-muted font-mono break-all mb-2">{tx.notes}</p>
+      )}
+      {tx.tx_hash && (
+        <p className="text-[10px] text-muted/70 font-mono break-all mb-2">tx: {tx.tx_hash}</p>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <input
+          value={credit}
+          onChange={e => setCredit(e.target.value)}
+          placeholder="Credit coins (optional)"
+          inputMode="decimal"
+          className="flex-1 min-w-[140px] bg-surface border border-border rounded-lg px-2 py-1.5 text-xs text-white placeholder-muted focus:outline-none focus:border-primary"
+        />
+        <input
+          value={note}
+          onChange={e => setNote(e.target.value)}
+          placeholder="What you found"
+          className="flex-1 min-w-[140px] bg-surface border border-border rounded-lg px-2 py-1.5 text-xs text-white placeholder-muted focus:outline-none focus:border-primary"
+        />
+        <button
+          onClick={() => onResolve(credit, note)}
+          disabled={busy}
+          className="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-bold hover:bg-blue-500 disabled:opacity-40"
+        >
+          {busy ? '…' : credit ? `Credit ${credit} & Resolve` : 'Resolve'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Admin() {
   const ready = usePageReady();
   const { profile, refreshProfile } = useAuth();
@@ -46,6 +115,8 @@ export default function Admin() {
 
   const [stats, setStats]           = useState(null);
   const [txs, setTxs]               = useState([]);
+  const [attention, setAttention]   = useState([]);
+  const [resolving, setResolving]   = useState(null);
   const [users, setUsers]           = useState([]);
   const [userSearch, setUserSearch] = useState('');
   const [tab, setTab]               = useState('overview');
@@ -79,18 +150,38 @@ export default function Admin() {
   async function load() {
     setLoading(true);
     try {
-      const [s, t, u] = await Promise.all([
+      const [s, t, u, a] = await Promise.all([
         api.get('/admin/stats'),
         api.get('/admin/transactions?limit=100'),
         api.get('/admin/users?limit=100'),
+        // Separate call rather than filtering the list above: the queue is
+        // sorted by severity server-side, and a stuck row from last week would
+        // never appear in the most recent 100 transactions.
+        api.get('/admin/transactions?needsAttention=1').catch(() => []),
       ]);
       setStats(s);
       setTxs(t);
       setUsers(u);
+      setAttention(a);
     } catch (e) {
       console.error('Admin load error:', e.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Resolve one stuck row. creditAmount is optional — several of these states
+  // mean the money DID reach the player, and crediting those would pay twice,
+  // so the operator decides after checking rather than the UI assuming.
+  async function resolveTx(tx, creditAmount, note) {
+    setResolving(tx.id);
+    try {
+      await api.post(`/admin/transactions/${tx.id}/resolve`, { creditAmount, note });
+      await load();
+    } catch (e) {
+      alert(`Could not resolve: ${e.message}`);
+    } finally {
+      setResolving(null);
     }
   }
 
@@ -474,15 +565,38 @@ export default function Admin() {
 
             {/* Tabs */}
             <div className="flex gap-2 mb-6">
-              {['transactions', 'users'].map(t => (
+              {['attention', 'transactions', 'users'].map(t => (
                 <button key={t} onClick={() => setTab(t)}
                   className={`px-4 py-2 rounded-xl text-sm font-semibold capitalize transition-all ${
-                    tab === t ? 'bg-primary text-white' : 'text-muted border border-border hover:border-primary hover:text-white'
+                    tab === t ? 'bg-primary text-white'
+                      : t === 'attention' && attention.length > 0
+                        ? 'text-danger border border-danger/50 hover:bg-danger/10'
+                        : 'text-muted border border-border hover:border-primary hover:text-white'
                   }`}>
-                  {t === 'transactions' ? `Transactions (${txs.length})` : `Users (${users.length})`}
+                  {t === 'attention'    ? `⚠ Needs Attention (${attention.length})`
+                    : t === 'transactions' ? `Transactions (${txs.length})`
+                    : `Users (${users.length})`}
                 </button>
               ))}
             </div>
+
+            {/* Needs-attention queue */}
+            {tab === 'attention' && (
+              <div className="bg-surface border border-border rounded-2xl p-4">
+                {attention.length === 0 ? (
+                  <p className="text-sm text-muted text-center py-8">
+                    Nothing stuck — every deposit and withdrawal has settled.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {attention.map(t => (
+                      <AttentionRow key={t.id} tx={t} busy={resolving === t.id}
+                        onResolve={(creditAmount, note) => resolveTx(t, creditAmount, note)} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Transactions table */}
             {tab === 'transactions' && (
