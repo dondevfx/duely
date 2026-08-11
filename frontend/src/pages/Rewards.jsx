@@ -546,6 +546,9 @@ export default function Rewards() {
     <div className="min-h-[calc(100vh-56px)] px-4 py-8">
       <div className="max-w-6xl mx-auto flex flex-col gap-8">
 
+        {/* Referral offer — first thing on the page, on every screen size. */}
+        {session && <ReferralCard />}
+
         {/* Page title */}
         <div className="text-center">
           <h1 className="text-2xl font-black text-white tracking-widest uppercase">Daily Rewards</h1>
@@ -553,9 +556,6 @@ export default function Rewards() {
             Spin your rank wheels and the daily wheel once every 24 hours to win Diamonds
           </p>
         </div>
-
-        {/* Referral rewards — signed-in only, since it shows your own progress */}
-        {session && <ReferralCard myCode={profile?.affiliate_code} />}
 
         {/* Guest login prompt */}
         {!session && (

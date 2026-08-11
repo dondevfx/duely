@@ -204,7 +204,38 @@ async function clawback(supabase, referredId, reason = 'clawed_back') {
  * QUALIFIED, so there is nothing partial to show and no need to expose the
  * thresholds to the referrer.
  */
+/**
+ * The referrer's own code, issuing one if they have never set it.
+ *
+ * affiliate_code is nullable and was only ever set by choosing one manually, so
+ * most accounts have none — and an invite link without a code refers nobody.
+ * The whole feature silently did nothing for those users, which is the worst
+ * kind of broken: no error, just no attribution.
+ *
+ * Codes are [A-Z0-9]{4,12} and UNIQUE, so a collision is possible; retry a few
+ * times and give up rather than looping. Returns null on failure, and the card
+ * falls back to a plain link.
+ */
+async function ensureReferralCode(supabase, userId) {
+  const { data: profile } = await supabase
+    .from('profiles').select('affiliate_code').eq('id', userId).single();
+  if (profile?.affiliate_code) return profile.affiliate_code;
+
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no O/0/I/1 — these get read aloud
+  for (let attempt = 0; attempt < 5; attempt++) {
+    let code = '';
+    for (let i = 0; i < 6; i++) code += alphabet[Math.floor(Math.random() * alphabet.length)];
+    const { error } = await supabase
+      .from('profiles').update({ affiliate_code: code }).eq('id', userId);
+    if (!error) return code;
+    if (error.code !== '23505') break;   // not a collision — stop retrying
+  }
+  console.error(`[referral] could not issue a code for ${userId}`);
+  return null;
+}
+
 async function getReferralStats(supabase, userId) {
+  const code = await ensureReferralCode(supabase, userId).catch(() => null);
   const { data: rewards } = await supabase
     .from('referral_rewards')
     .select('status, amount_c, mature_at')
@@ -219,6 +250,7 @@ async function getReferralStats(supabase, userId) {
   const holding     = pending.filter(r => new Date(r.mature_at).getTime() > now);
 
   return {
+    code,
     qualified:   rows.filter(r => r.status !== 'clawed_back').length,
     collectable: sum(collectable),
     holding:     sum(holding),
@@ -229,6 +261,7 @@ async function getReferralStats(supabase, userId) {
 }
 
 module.exports = {
-  trackWager, claimReferralReward, collectReferralEarnings, clawback, getReferralStats,
+  trackWager, claimReferralReward, collectReferralEarnings, clawback,
+  getReferralStats, ensureReferralCode,
   MIN_DEPOSIT_USD, MIN_WAGERED_USD, REWARD_COINS, HOLD_DAYS,
 };

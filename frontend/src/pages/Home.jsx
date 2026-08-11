@@ -6,6 +6,7 @@ import MatchTicker from '../components/MatchTicker';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import CoinIcon from '../components/CoinIcon';
+import ReferralCard from '../components/ReferralCard';
 import { fmtCoins, fmtExact } from '../utils/format';
 
 const GAMES = [
@@ -220,6 +221,11 @@ export default function Home() {
                 Open Wallet →
               </Link>
             </div>
+
+            {/* Fills the empty space below How It Works on desktop. This column
+                stacks under the game grid on mobile, so one placement covers
+                both. Signed-in only — the link is personal to the account. */}
+            {profile && <ReferralCard variant="compact" />}
           </div>
         </div>
       </section>
