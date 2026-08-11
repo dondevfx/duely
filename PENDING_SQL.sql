@@ -199,3 +199,34 @@ BEGIN
   RETURN v_take;
 END;
 $fn_collect$;
+
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- VERIFY — run after section 4. Every row should say OK.
+-- ───────────────────────────────────────────────────────────────────────────
+SELECT 'profiles.referred_by' AS item,
+       CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns
+              WHERE table_name='profiles' AND column_name='referred_by')
+            THEN 'OK' ELSE 'MISSING' END AS status
+UNION ALL SELECT 'profiles.qualifying_wagered_c',
+       CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns
+              WHERE table_name='profiles' AND column_name='qualifying_wagered_c')
+            THEN 'OK' ELSE 'MISSING' END
+UNION ALL SELECT 'referral_rewards table',
+       CASE WHEN to_regclass('public.referral_rewards') IS NOT NULL
+            THEN 'OK' ELSE 'MISSING' END
+UNION ALL SELECT 'uniq_referral_reward_referred',
+       CASE WHEN EXISTS (SELECT 1 FROM pg_indexes
+              WHERE indexname='uniq_referral_reward_referred')
+            THEN 'OK' ELSE 'MISSING — rewards could pay more than once' END
+UNION ALL SELECT 'increment_qualifying_wagered()',
+       CASE WHEN EXISTS (SELECT 1 FROM pg_proc WHERE proname='increment_qualifying_wagered')
+            THEN 'OK' ELSE 'MISSING' END
+UNION ALL SELECT 'pay_referral_from_bank()',
+       CASE WHEN EXISTS (SELECT 1 FROM pg_proc WHERE proname='pay_referral_from_bank')
+            THEN 'OK' ELSE 'MISSING — payouts will fail' END
+UNION ALL SELECT 'collect_admin_fees() reserves rewards',
+       CASE WHEN EXISTS (SELECT 1 FROM pg_proc
+              WHERE proname='collect_admin_fees'
+                AND pg_get_functiondef(oid) LIKE '%referral_rewards%')
+            THEN 'OK' ELSE 'OLD VERSION — fee sweep would strand owed rewards' END;
