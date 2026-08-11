@@ -218,3 +218,55 @@ test('collecting platform fees reserves what referrals are owed', () => {
   assert.match(fn, /IF v_take <= 0 THEN RETURN 0/,
     'when the whole balance is owed, collect nothing rather than going negative');
 });
+
+// ── The referral is permanent and fires exactly once ──────────────────────
+// Stated requirements: one per account ever; the first code applied wins;
+// changing or removing the applied code does not move it; and it keeps
+// tracking with no deadline until the reward is earned.
+
+test('changing the applied code does NOT move the referral', () => {
+  // applied_affiliate_code can be swapped freely — that is the affiliate cut.
+  // referred_by is the reward attribution and must survive the swap, or a
+  // player could be re-referred and pay out repeatedly.
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'routes', 'affiliate.js'), 'utf8');
+  const patch = src.slice(src.indexOf('const patch = { applied_affiliate_code'),
+                          src.indexOf('const { error } = await supabase'));
+  assert.match(patch, /if \(!existing\?\.referred_by\) patch\.referred_by = owner\.id;/,
+    'referred_by may only be written when it is currently empty');
+  assert.ok(!/patch\.referred_by = owner\.id;\s*$/m.test(patch.replace(/if \(![^\n]*\n/, '')),
+    'there must be no unconditional assignment');
+});
+
+test('removing the applied code does NOT clear the referral', () => {
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'routes', 'affiliate.js'), 'utf8');
+  const del = src.slice(src.indexOf("applied_affiliate_code: null"));
+  const stmt = del.slice(0, del.indexOf(';'));
+  assert.ok(!/referred_by/.test(stmt),
+    'clearing the code must leave referred_by intact — the referral still happened');
+});
+
+test('there is exactly one place that writes referred_by', () => {
+  // Any second writer is a way for an attribution to move after the fact.
+  const files = ['src/routes/affiliate.js', 'src/services/referralService.js',
+                 'src/services/walletService.js', 'src/routes/auth.js'];
+  let writes = 0;
+  for (const f of files) {
+    const src = fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+    writes += (src.match(/referred_by\s*[:=]\s*(owner\.id|[a-zA-Z_$][\w$]*)/g) || [])
+      .filter(m => !/referred_by\s*:\s*null/.test(m)).length;
+  }
+  assert.equal(writes, 1, `${writes} places assign referred_by — there must be exactly one`);
+});
+
+test('tracking never expires', () => {
+  // The reward may take months to earn. Nothing may quietly time it out.
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'services', 'referralService.js'), 'utf8');
+  const fn = src.slice(src.indexOf('async function trackWager'),
+                       src.indexOf('async function claimReferralReward'));
+  const code = fn.split('\n').filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+  assert.ok(!/created_at|expires|Date\.now\(\)\s*-|days|since/i.test(code),
+    'trackWager must not filter on any date — qualification has no deadline');
+});
