@@ -124,12 +124,12 @@ CREATE INDEX IF NOT EXISTS idx_referral_rewards_due
 -- Atomic increment, so two matches settling at once cannot lose a stake to a
 -- read-modify-write race. Returns the new total for the caller to test.
 CREATE OR REPLACE FUNCTION increment_qualifying_wagered(user_id uuid, amount numeric)
-RETURNS numeric AS $$
+RETURNS numeric AS $fn_wagered$
   UPDATE profiles
      SET qualifying_wagered_c = COALESCE(qualifying_wagered_c, 0) + amount
    WHERE id = user_id
   RETURNING qualifying_wagered_c;
-$$ LANGUAGE sql;
+$fn_wagered$ LANGUAGE sql;
 
 ALTER TABLE referral_rewards ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "referral_rewards_select" ON referral_rewards;
@@ -148,7 +148,7 @@ CREATE POLICY "referral_rewards_select" ON referral_rewards
 -- deferred instead of failing loudly or, worse, overdrawing. profiles.fee_balance
 -- also carries CHECK (fee_balance >= 0) as a second line of defence.
 CREATE OR REPLACE FUNCTION pay_referral_from_bank(admin_id uuid, referrer_id uuid, amount numeric)
-RETURNS boolean AS $$
+RETURNS boolean AS $fn_paybank$
 DECLARE moved int;
 BEGIN
   UPDATE profiles
@@ -162,7 +162,7 @@ BEGIN
    WHERE id = referrer_id;
   RETURN true;
 END;
-$$ LANGUAGE plpgsql;
+$fn_paybank$ LANGUAGE plpgsql;
 
 -- Reserve outstanding referral rewards when collecting platform fees.
 --
@@ -175,7 +175,7 @@ $$ LANGUAGE plpgsql;
 -- 2:1 ($4 of rake per $2 reward), so this reduces what is collectable now
 -- rather than blocking collection.
 CREATE OR REPLACE FUNCTION collect_admin_fees(admin_id uuid)
-RETURNS numeric LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS numeric LANGUAGE plpgsql SECURITY DEFINER AS $fn_collect$
 DECLARE
   v_fee  numeric;
   v_owed numeric;
@@ -198,4 +198,4 @@ BEGIN
    WHERE id = admin_id;
   RETURN v_take;
 END;
-$$;
+$fn_collect$;
