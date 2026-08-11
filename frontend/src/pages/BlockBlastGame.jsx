@@ -826,7 +826,7 @@ export default function BlockBlastGame() {
       {phase === 'lobby' && (
         <GameLobby
           title="🟦 Block Burst"
-          description="Drag blocks onto the grid to fill rows and columns. Fill rows and columns to clear them and earn points. Fill the energy bar to unlock 5-second Blast Mode — click any row to instantly clear it!"
+          description="Drag blocks onto the grid to fill rows and columns and clear them for points. Fill the energy bar to unlock Blast Mode — tap any row to clear it instantly."
           controls="Drag blocks from tray onto the grid · Fill full rows/columns to clear them"
           betCurrency={betCurrency} setBetCurrency={setBetCurrency}
           entryFee={entryFee} setEntryFee={setEntryFee}
