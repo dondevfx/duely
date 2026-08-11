@@ -16,8 +16,19 @@ import CoinIcon from './CoinIcon';
 // The code comes from the server, which issues one if the account has never had
 // a code. It is nullable in the schema and was only ever set manually, so most
 // accounts had none and their link referred nobody.
+// Last known code, so the very first paint on any page already has the right
+// link rather than waiting a round trip for it.
+const CODE_KEY = 'duely.referralCode';
+
 export default function ReferralCard({ variant = 'full' }) {
   const [data, setData] = useState(null);
+  // Seeded from the last known code so the link is correct on the FIRST paint.
+  // Without this, opening Home and tapping share before the request landed gave
+  // out a link with no code — the share silently referred nobody, and it looked
+  // fine because a bare site link is still a valid link.
+  const [code, setCode] = useState(() => {
+    try { return localStorage.getItem(CODE_KEY) || null; } catch { return null; }
+  });
   const [collecting, setCollecting] = useState(false);
   const [justGot, setJustGot] = useState(0);
   const compact = variant === 'compact';
@@ -25,7 +36,14 @@ export default function ReferralCard({ variant = 'full' }) {
   useEffect(() => {
     let alive = true;
     api.get('/rewards/referrals')
-      .then(d => { if (alive) setData(d); })
+      .then(d => {
+        if (!alive) return;
+        setData(d);
+        if (d?.code) {
+          setCode(d.code);
+          try { localStorage.setItem(CODE_KEY, d.code); } catch { /* private mode */ }
+        }
+      })
       .catch(() => { if (alive) setData({ failed: true }); });
     return () => { alive = false; };
   }, []);
@@ -35,11 +53,7 @@ export default function ReferralCard({ variant = 'full' }) {
   const collectable = data?.collectable ?? 0;
   const holding     = data?.holding ?? 0;
 
-  // Falls back to the bare origin only if the server could not issue a code.
-  // That link still works as a site link; it just does not attribute.
-  const link = data?.code
-    ? `${window.location.origin}/?ref=${encodeURIComponent(data.code)}`
-    : window.location.origin;
+  const link = code ? `${window.location.origin}/?ref=${encodeURIComponent(code)}` : null;
 
   async function collect() {
     if (collecting || collectable <= 0) return;
@@ -74,13 +88,27 @@ export default function ReferralCard({ variant = 'full' }) {
         </p>
       </div>
 
-      <ShareLinkButton
-        link={link}
-        noun="Invite Link"
-        title="Play me on Duely"
-        text="Come 1v1 me on Duely 🎮"
-        className={compact ? '!py-2.5 !text-xs' : ''}
-      />
+      {/* Never share a link that has no code on it. A bare site link looks
+          perfectly normal, so the loss would be invisible — the referrer would
+          think they had shared their link and simply never get credited. */}
+      {link ? (
+        <ShareLinkButton
+          link={link}
+          noun="Invite Link"
+          title="Play me on Duely"
+          text="Come 1v1 me on Duely 🎮"
+          className={compact ? '!py-2.5 !text-xs' : ''}
+        />
+      ) : (
+        <button
+          disabled
+          className={`w-full bg-primary/40 text-white/70 font-black rounded-xl cursor-wait ${
+            compact ? 'py-2.5 text-xs' : 'py-4 text-base'
+          }`}
+        >
+          {data?.failed ? 'Link unavailable — reload' : 'Preparing your link…'}
+        </button>
+      )}
 
       {!compact && (
         <>
