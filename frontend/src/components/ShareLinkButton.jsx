@@ -25,22 +25,17 @@ export default function ShareLinkButton({
   async function share() {
     if (canNativeShare()) {
       try {
-        // The URL goes in `text` as well as `url`, deliberately.
+        // No `text` field, deliberately.
         //
         // The Web Share spec lets the target app use any SUBSET of these
-        // fields, and several messaging apps take only `text` and discard
-        // `url`. When that happens the recipient gets the message with no link
-        // — or the app substitutes a bare link of its own — so an invite
-        // arrives with the referral code silently stripped off it.
+        // fields. Passing the link in both `text` and `url` guaranteed it
+        // survived, but any app honouring both then pasted the URL twice.
         //
-        // The cost of including it twice is that an app honouring both shows
-        // the URL twice. That is cosmetic. Losing the code is not: the referral
-        // simply never gets attributed and nobody can tell why.
-        await navigator.share({
-          title,
-          text: text ? `${text}\n${link}` : link,
-          url: link,
-        });
+        // So the message rides in `title` and the link lives only in `url` —
+        // one link, always. Every share target understands a `url`; it is the
+        // one field an OS share sheet is built around, and apps that want text
+        // fall back to the URL itself rather than dropping it.
+        await navigator.share({ title: text || title, url: link });
         return;
       } catch (err) {
         // AbortError = the user dismissed the sheet. That is a normal outcome,
