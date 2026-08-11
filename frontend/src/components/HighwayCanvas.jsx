@@ -51,8 +51,13 @@ const KNEE_AT      = 0.58;   // difficulty reached at the knee
 // deliberately steep: at the old rate speed crept up by about 10 u/s per second
 // after the ramp, which is a real increase but far too gradual to feel, so the
 // run seemed to stop accelerating around twenty seconds.
-const OD_S         = 18;     // seconds per unit of "overdrive"
-const OD_MAX       = 2.2;
+const OD_S         = 15;     // seconds per unit of "overdrive"
+// Difficulty used to cap at 2.2, which it reached at 50s — so a run that got
+// past a minute stopped getting harder at all, and the speed still climbing
+// underneath was too small a share of the total to feel (13% per 10s at that
+// point, against 86% in the first ten seconds). At 5.0 the traffic keeps
+// thickening to ~85s, well past where most runs end.
+const OD_MAX       = 5.0;
 // Raw speed keeps climbing long after the DIFFICULTY terms stop. The two are
 // deliberately separate: closing speed and traffic density are what decide how
 // hard the run is, and those cap at OD_MAX, while the speed the world goes past
@@ -63,7 +68,7 @@ const OD_MAX       = 2.2;
 // ceiling is not arbitrary: score accrues at PTS_DIST per unit travelled, so at
 // 5350 the run earns 329 points a second against the server's 380/s anti-cheat
 // clamp. Raising it much further would start clamping honest players.
-const OD_SPEED_MAX = 5.0;
+const OD_SPEED_MAX = 9.0;
 const OD_SPEED     = 780;    // extra u/s at full overdrive
 const OD_CLOSE     = 170;    // extra closing speed at full overdrive
 const CLOSE_MIN    = 250;    // closing speed floor (u/s)
@@ -157,13 +162,15 @@ const PAL = {
 const BLUE  = '#1250B4';
 
 // ── Lane marking cadence ────────────────────────────────────────────────────
-// Chosen from the frame budget, not by eye. Top speed is SPD_MAX + OD_SPEED =
-// 1450 u/s, i.e. ~24.2u of travel per frame at 60fps. A marking cycle shorter
-// than ~6 frames beats against the refresh rate and the road appears to blink
-// out, which is exactly what the previous art did. Top speed is now SPD_MAX +
-// OD_SPEED = 1690 u/s, i.e. ~28u of travel per frame, so 88 + 102 = 190u keeps
-// a cycle at 6.7 frames with margin. Raising the speed ramp without raising
-// this would have brought the strobing straight back.
+// Chosen from the frame budget, not by eye. A marking cycle shorter than ~6
+// frames beats against the refresh rate and the road appears to blink out,
+// which is exactly what the previous art did.
+//
+// A fixed cadence cannot serve the whole range, so the gap CLOSES with speed
+// (see spdFrac in the draw code) and the dashes merge into one streak at the
+// top — stable, and what a lane line actually looks like at speed. spdFrac is
+// normalised on SPD_MAX + OD_SPEED * OD_SPEED_MAX, so raising the speed ramp
+// rescales it automatically instead of bringing the strobing back.
 const MARK_LEN = 88;
 const MARK_GAP = 102;
 const MARK_CYCLE = MARK_LEN + MARK_GAP;
@@ -537,18 +544,50 @@ function createAudio() {
   if (!actx) return null;
   const master = actx.createGain(); master.gain.value = 0.5; master.connect(actx.destination);
 
+  // ── Engine ────────────────────────────────────────────────────────────
+  // It used to be two sawtooths at 58 and 89 Hz — a 1.53 ratio, which is not a
+  // harmonic interval, so they beat against each other into a steady dissonant
+  // drone. Under a fixed lowpass and a wide band of noise, that is a vacuum
+  // cleaner. Three things fix it:
+  //
+  //   harmonics  — the voices are now f, 2f and 3f, so they fuse into one note
+  //                instead of two arguing ones
+  //   firing     — an LFO chops the amplitude at half the fundamental, which is
+  //                what gives an engine its chug. A constant tone never sounds
+  //                like combustion, however well it is filtered
+  //   resonance  — Q on the lowpass gives the body a throat rather than a
+  //                blanket over the speaker
   const eg = actx.createGain(); eg.gain.value = 0;
-  const ef = actx.createBiquadFilter(); ef.type = 'lowpass'; ef.frequency.value = 480;
-  const o1 = actx.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = 58;
-  const o2 = actx.createOscillator(); o2.type = 'sawtooth'; o2.frequency.value = 89;
-  o1.connect(ef); o2.connect(ef); ef.connect(eg); eg.connect(master);
-  o1.start(); o2.start();
+  const ef = actx.createBiquadFilter();
+  ef.type = 'lowpass'; ef.frequency.value = 520; ef.Q.value = 5;
+
+  const o1 = actx.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = 52;
+  const o2 = actx.createOscillator(); o2.type = 'square';   o2.frequency.value = 104;
+  const o3 = actx.createOscillator(); o3.type = 'sawtooth'; o3.frequency.value = 156;
+  // The upper harmonics are support, not voices — at equal gain they turn it
+  // into a buzz again.
+  const g1 = actx.createGain(); g1.gain.value = 1.0;
+  const g2 = actx.createGain(); g2.gain.value = 0.28;
+  const g3 = actx.createGain(); g3.gain.value = 0.14;
+  o1.connect(g1); o2.connect(g2); o3.connect(g3);
+  g1.connect(ef); g2.connect(ef); g3.connect(ef);
+  ef.connect(eg); eg.connect(master);
+  o1.start(); o2.start(); o3.start();
+
+  // Firing pulse. Modulates the engine gain, so it rides on top of whatever
+  // setSpeed has set rather than replacing it.
+  const lfo = actx.createOscillator(); lfo.type = 'sawtooth'; lfo.frequency.value = 26;
+  const lfoAmt = actx.createGain(); lfoAmt.gain.value = 0.035;
+  lfo.connect(lfoAmt); lfoAmt.connect(eg.gain);
+  lfo.start();
 
   const nBuf = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate);
   const nd = nBuf.getChannelData(0);
   for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
   const wind = actx.createBufferSource(); wind.buffer = nBuf; wind.loop = true;
-  const wf = actx.createBiquadFilter(); wf.type = 'bandpass'; wf.frequency.value = 850; wf.Q.value = 0.7;
+  // Lowpass, not bandpass. A band around 850 Hz is hiss, and hiss over a drone
+  // is exactly the vacuum. Rolled off low it reads as tyre roar instead.
+  const wf = actx.createBiquadFilter(); wf.type = 'lowpass'; wf.frequency.value = 620; wf.Q.value = 0.9;
   const wg = actx.createGain(); wg.gain.value = 0;
   wind.connect(wf); wf.connect(wg); wg.connect(master);
   wind.start();
@@ -557,12 +596,24 @@ function createAudio() {
     resume() { if (actx.state === 'suspended') actx.resume().catch(() => {}); },
     setSpeed(t) {
       const now = actx.currentTime;
-      eg.gain.setTargetAtTime(0.05 + t * 0.055, now, 0.15);
-      o1.frequency.setTargetAtTime(56 + t * 78, now, 0.2);
-      o2.frequency.setTargetAtTime(86 + t * 116, now, 0.2);
-      ef.frequency.setTargetAtTime(420 + t * 1600, now, 0.25);
-      wg.gain.setTargetAtTime(0.012 + t * 0.08, now, 0.2);
-      wf.frequency.setTargetAtTime(720 + t * 1200, now, 0.25);
+      // One fundamental drives everything, so the harmonics stay locked as it
+      // revs. Tracking them separately is what let the old pair drift apart.
+      const f = 52 + t * 86;
+      eg.gain.setTargetAtTime(0.05 + t * 0.05, now, 0.15);
+      o1.frequency.setTargetAtTime(f,     now, 0.2);
+      o2.frequency.setTargetAtTime(f * 2, now, 0.2);
+      o3.frequency.setTargetAtTime(f * 3, now, 0.2);
+      // Firing rate rises with revs — a chug that stayed put would sound like a
+      // tremolo pedal rather than an engine.
+      lfo.frequency.setTargetAtTime(f * 0.5, now, 0.2);
+      // Opens up under load, and the resonance eases off so it does not whistle
+      // at the top end.
+      ef.frequency.setTargetAtTime(430 + t * 1500, now, 0.25);
+      ef.Q.setTargetAtTime(5 - t * 2.5, now, 0.3);
+      // Road roar, kept well under the engine — this is the layer that turned
+      // the whole thing into a vacuum when it was loud and bright.
+      wg.gain.setTargetAtTime(0.008 + t * 0.045, now, 0.2);
+      wf.frequency.setTargetAtTime(560 + t * 900, now, 0.25);
     },
     duck() {
       eg.gain.setTargetAtTime(0, actx.currentTime, 0.06);

@@ -47,7 +47,7 @@ const WATCH_MS   = 2_000;
 // The ceiling is derived from the client's own scoring constants rather than
 // picked by feel, so the two cannot drift apart:
 //
-//   distance   PTS_DIST(0.06) x top speed(1450 + 780*5.0 = 5350)  = 321/s
+//   distance   PTS_DIST(0.06) x top speed(1450 + 780*9.0 = 8470)  = 508/s
 //   survival   PTS_TIME                                           =   8/s
 //   near miss  NEAR_RATE(1.5/s) x PTS_NEAR(75) x COMBO_MAX(10)    = 1125/s
 //
@@ -61,7 +61,13 @@ const WATCH_MS   = 2_000;
 // NEAR_RATE is the one estimate here: 1.5 near misses a second is generous for
 // real play, since each one needs the player lined up behind a car first. If the
 // combo ceiling or the speed ramp changes again, revisit this.
-const SCORE_RATE_CAP = 1500;   // points per second, see derivation above
+//
+// Revisited when OD_SPEED_MAX went 5.0 -> 9.0 so the run keeps accelerating past
+// a minute. Top speed rose to 8470 u/s, taking the distance term from 321/s to
+// 508/s and the total to 1641 — over the old 1500 ceiling, which would have
+// started clipping honest players at exactly the speeds the change exists to
+// reach. 1700 restores the same headroom the 1500 had.
+const SCORE_RATE_CAP = 1700;   // points per second, see derivation above
 const maxScoreFor = (ms) => Math.floor((ms / 1000) * SCORE_RATE_CAP + 500);
 const GAME_NAME  = 'Rush Hour';
 
@@ -499,4 +505,7 @@ module.exports = {
   startCarDashCountdown, trackCarDashProgress, handleCarDashCrash,
   forceResolveCarDash,
   checkOvertake,
+  // Exported so tests assert against the real ceiling instead of a copy of the
+  // number, which silently goes stale the moment the speed ramp changes.
+  SCORE_RATE_CAP,
 };

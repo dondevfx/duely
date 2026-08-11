@@ -61,7 +61,11 @@ test('Word VS: a stranger\'s guess is ignored', () => {
 test('Rush Hour: an absurd score is clamped to what the clock allows', () => {
   const { roomId, room } = activeCarDash('c1', 'c2', 10_000);
   carDash.trackCarDashProgress(roomId, 'c1', 10_000, 99_999_999);
-  const cap = 10 * 1500 + 500;                      // mirrors maxScoreFor
+  // Derived from the engine, not copied. A hardcoded mirror of SCORE_RATE_CAP
+  // fails the moment the speed ramp moves — which is a stale test, not a real
+  // regression. The assertion that carries weight is the one below: a fabricated
+  // score must still be cut down by orders of magnitude whatever the ceiling is.
+  const cap = 10 * carDash.SCORE_RATE_CAP + 500;    // mirrors maxScoreFor
   assert.ok(room.scores.c1 <= cap,
     `claimed 99,999,999 and kept ${room.scores.c1}, cap is ${cap}`);
   assert.ok(room.scores.c1 < 99_999_999 / 100,
