@@ -130,9 +130,9 @@ test('collecting claims a row before crediting it', () => {
     path.join(__dirname, '..', 'src', 'services', 'referralService.js'), 'utf8');
   const fn = src.slice(src.indexOf('async function collectReferralEarnings'));
   const claimIdx  = fn.indexOf("status: 'paid'");
-  // The CALL, not the identifier — the destructuring require at the top of the
-  // function also contains the name and sits before the claim.
-  const creditIdx = fn.indexOf('await creditCoins(');
+  // The bank transfer IS the credit now — coins move out of fee_balance rather
+  // than being minted, so this is what must not run before the claim.
+  const creditIdx = fn.indexOf("rpc('pay_referral_from_bank'");
   assert.ok(claimIdx > 0 && creditIdx > claimIdx,
     'the row must be claimed BEFORE the coins are credited');
   assert.match(fn, /if \(!claimed\?\.length\) continue;/,
@@ -148,4 +148,57 @@ test('the permanent referral link is never overwritten', () => {
     path.join(__dirname, '..', 'src', 'routes', 'affiliate.js'), 'utf8');
   assert.match(src, /if \(!existing\?\.referred_by\) patch\.referred_by = owner\.id;/,
     'referred_by must only be set when it is not already set');
+});
+
+test('the reward is paid from the bank, never minted', () => {
+  // creditCoins() creates new coins. Using it here would put coins into
+  // circulation with no deposit behind them, so withdrawable balances would
+  // drift above the USDC actually held and the bonus would drain the bank.
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'services', 'referralService.js'), 'utf8');
+  const fn = src.slice(src.indexOf('async function collectReferralEarnings'),
+                       src.indexOf('/** Cancel a pending reward'));
+  // Comments explain why creditCoins is NOT used, so strip them before testing.
+  const code = fn.split('\n').filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+  assert.ok(!/creditCoins\(/.test(code),
+    'must not mint — move coins out of the fee balance instead');
+  assert.match(fn, /rpc\('pay_referral_from_bank'/,
+    'payout must go through the bank transfer');
+});
+
+test('an underfunded bank defers the reward instead of overdrawing', async () => {
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'services', 'referralService.js'), 'utf8');
+  const fn = src.slice(src.indexOf('async function collectReferralEarnings'),
+                       src.indexOf('/** Cancel a pending reward'));
+  assert.match(fn, /if \(ok === false\)/,
+    'a false return means the bank is short and must be handled');
+  const shortBranch = fn.slice(fn.indexOf('if (ok === false)'));
+  assert.match(shortBranch.slice(0, 400), /rollback\(/,
+    'the reward must go back to collectable, not be silently consumed');
+});
+
+test('with no ADMIN_USER_ID nothing is paid and nothing is lost', async () => {
+  const keep = process.env.ADMIN_USER_ID;
+  delete process.env.ADMIN_USER_ID;
+  let touched = false;
+  const db = { from: () => { touched = true; return { select: () => ({}) }; } };
+  assert.equal(await ref.collectReferralEarnings(db, 'alice'), 0);
+  assert.equal(touched, false, 'must bail before touching any reward rows');
+  process.env.ADMIN_USER_ID = keep;
+});
+
+test('the bank transfer is a single atomic statement pair', () => {
+  // Deduct-then-credit across two round trips could credit after a failed
+  // deduct. The SQL function does both inside one transaction and refuses
+  // rather than letting fee_balance go negative.
+  const sql = fs.readFileSync(path.join(__dirname, '..', '..', 'PENDING_SQL.sql'), 'utf8');
+  const fn = sql.slice(sql.indexOf('CREATE OR REPLACE FUNCTION pay_referral_from_bank'));
+  assert.match(fn, /fee_balance = fee_balance - amount/);
+  assert.match(fn, /COALESCE\(fee_balance, 0\) >= amount/,
+    'the deduct must be conditional on sufficient funds');
+  assert.match(fn, /IF moved = 0 THEN RETURN false/,
+    'an underfunded bank must return false, not raise');
+  assert.ok(fn.indexOf('c_coins = COALESCE(c_coins, 0) + amount') > fn.indexOf('IF moved = 0'),
+    'the credit must come after the guarded deduct');
 });

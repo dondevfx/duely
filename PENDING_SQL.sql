@@ -135,3 +135,31 @@ ALTER TABLE referral_rewards ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "referral_rewards_select" ON referral_rewards;
 CREATE POLICY "referral_rewards_select" ON referral_rewards
   FOR SELECT USING (auth.uid() = referrer_id);
+
+-- Referral rewards are paid OUT OF the platform's fee balance, not minted.
+--
+-- creditCoins() creates new coins. Using it for the bonus would put coins into
+-- circulation with no deposit backing them, so withdrawable balances would
+-- exceed the USDC actually held — the bank quietly drains with every payout.
+-- This moves the coins from the fee balance instead, leaving total supply
+-- unchanged and every coin still traceable to a real deposit or real rake.
+--
+-- Returns false rather than raising when the bank is short, so a payout can be
+-- deferred instead of failing loudly or, worse, overdrawing. profiles.fee_balance
+-- also carries CHECK (fee_balance >= 0) as a second line of defence.
+CREATE OR REPLACE FUNCTION pay_referral_from_bank(admin_id uuid, referrer_id uuid, amount numeric)
+RETURNS boolean AS $$
+DECLARE moved int;
+BEGIN
+  UPDATE profiles
+     SET fee_balance = fee_balance - amount
+   WHERE id = admin_id AND COALESCE(fee_balance, 0) >= amount;
+  GET DIAGNOSTICS moved = ROW_COUNT;
+  IF moved = 0 THEN RETURN false; END IF;
+
+  UPDATE profiles
+     SET c_coins = COALESCE(c_coins, 0) + amount
+   WHERE id = referrer_id;
+  RETURN true;
+END;
+$$ LANGUAGE plpgsql;

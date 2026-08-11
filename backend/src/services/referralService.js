@@ -122,7 +122,15 @@ async function claimReferralReward(supabase, referrerId, referredId) {
  * Returns the number of coins credited.
  */
 async function collectReferralEarnings(supabase, referrerId) {
-  const { creditCoins } = require('./walletService');
+  const { notifyBalance } = require('./walletService');
+  const adminId = process.env.ADMIN_USER_ID;
+  // Without an admin id there is no bank to pay from. Refusing here keeps the
+  // rewards collectable rather than failing per-row and churning their status.
+  if (!adminId) {
+    console.error('[referral] ADMIN_USER_ID not set — cannot pay from the fee balance');
+    return 0;
+  }
+
   const { data: due } = await supabase
     .from('referral_rewards')
     .select('id, amount_c')
@@ -142,20 +150,38 @@ async function collectReferralEarnings(supabase, referrerId) {
       .select('id');
     if (!claimed?.length) continue;   // a concurrent request took it
 
-    try {
-      await creditCoins(supabase, referrerId, row.amount_c);
-      total += parseFloat(row.amount_c) || 0;
-    } catch (e) {
-      // Roll the claim back so it stays collectable. Nothing credited, nothing lost.
+    // Paid OUT OF the fee balance, never minted. creditCoins() would create new
+    // coins with no deposit backing them, so withdrawable balances would grow
+    // past the USDC actually held — the bonus would slowly drain the bank. This
+    // moves coins that rake already collected, leaving total supply unchanged.
+    const rollback = async (why) => {
       await supabase.from('referral_rewards')
         .update({ status: 'pending', paid_at: null })
         .eq('id', row.id).eq('status', 'paid')
         .then().catch(() => {});
-      console.error('[referral] collect credit failed, rolled back:', e.message);
+      console.error(`[referral] collect rolled back (${why})`);
+    };
+
+    try {
+      const { data: ok, error } = await supabase.rpc('pay_referral_from_bank', {
+        admin_id: adminId, referrer_id: referrerId, amount: row.amount_c,
+      });
+      if (error) { await rollback(error.message); continue; }
+      if (ok === false) {
+        // Bank is short. Leave the reward collectable rather than overdrawing —
+        // it is owed either way, and paying from an empty bank is what the
+        // whole arrangement exists to prevent.
+        await rollback('platform fee balance too low');
+        continue;
+      }
+      total += parseFloat(row.amount_c) || 0;
+    } catch (e) {
+      await rollback(e.message);
     }
   }
 
   if (total > 0) {
+    notifyBalance(referrerId);
     await supabase.from('transactions').insert({
       user_id: referrerId, type: 'referral_bonus',
       amount_c: total, status: 'confirmed',

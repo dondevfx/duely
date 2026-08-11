@@ -470,6 +470,7 @@ async function settleDrawMatchDiamonds(supabase, p1Id, p2Id, entryFee) {
 
 module.exports = {
   VALID_COINS,
+  notifyBalance,
   PLATFORM_FEE_PERCENT,
   MAX_SINGLE_AMOUNT,
   MIN_TIP_COINS,
