@@ -449,7 +449,7 @@ export default function CarDashGame() {
         onQueue={joinQueue}
         onBot={playVsBot}
         onBotFree={playVsBotFree}
-        botLabel="🚗 Solo Endless"
+        botLabel="🎮 Solo Endless"
         onCreatePrivate={createPrivate}
         onJoinPrivate={joinPrivate}
         statusMsg={statusMsg}
