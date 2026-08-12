@@ -178,7 +178,11 @@ export default function SpinWheel({ locked = false }) {
         {/* Spin ring glow */}
         {spinning && (
           <div className="absolute rounded-full animate-pulse" style={{
-            width: '104%', aspectRatio: '1 / 1',
+            // Sits just outside the wheel rim, not the SVG box. The outer
+            // border ends at r = R + 6 = 136 of a 150 half-width, so the art
+            // stops at ~91% while this was drawn at 104% — the gap was the
+            // viewBox padding, not part of the wheel.
+            width: '94%', aspectRatio: '1 / 1',
             background: 'transparent',
             border: '2px solid rgba(255,255,255,0.12)',
             boxShadow: '0 0 30px rgba(255,255,255,0.08)',

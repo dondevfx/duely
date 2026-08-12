@@ -311,7 +311,10 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
           <div
             className="absolute rounded-full animate-pulse"
             style={{
-              width:     '104%',
+              // Matches SpinWheel: the rim ends at ~91% of the SVG box, so 104%
+              // left a ring hanging in the viewBox padding rather than hugging
+              // the wheel.
+              width:     '94%',
               aspectRatio: '1 / 1',
               background: 'transparent',
               border:    `2px solid ${tier.color}55`,
