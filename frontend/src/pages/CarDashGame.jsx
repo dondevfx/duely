@@ -311,6 +311,34 @@ export default function CarDashGame() {
     }
   }
 
+  // ── Solo run result ──
+  // A practice run has no opponent, so a win/loss screen would be inventing one.
+  // Shows what you actually did: how long you lasted and what you scored.
+  if (phase === 'result' && result?.soloRun) {
+    return (
+      <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-4">
+        <div className="bg-surface border border-surfaceLight rounded-2xl p-8 text-center max-w-sm w-full animate-slide-up">
+          <div className="text-5xl mb-3">🚗</div>
+          <h2 className="text-3xl font-black text-white mb-5">Run Over</h2>
+          <div className="flex gap-3 mb-6">
+            <div className="flex-1 bg-bg rounded-xl p-4">
+              <div className="text-3xl font-black text-primary">{fmtTime(result.ms)}</div>
+              <div className="text-xs text-muted mt-0.5">Survived</div>
+            </div>
+            <div className="flex-1 bg-bg rounded-xl p-4">
+              <div className="text-3xl font-black text-white">{(result.score ?? 0).toLocaleString()}</div>
+              <div className="text-xs text-muted mt-0.5">Score</div>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3">
+            <GlowButton onClick={playAgain} variant="primary" size="lg" className="w-full">Run Again</GlowButton>
+            <GlowButton variant="ghost" onClick={reset} className="w-full border border-border">Back</GlowButton>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ── Result ──
   if (phase === 'result' && result) {
     const isWinner = result.winnerId === profile?.id;
@@ -421,6 +449,7 @@ export default function CarDashGame() {
         onQueue={joinQueue}
         onBot={playVsBot}
         onBotFree={playVsBotFree}
+        botLabel="Solo Mode"
         onCreatePrivate={createPrivate}
         onJoinPrivate={joinPrivate}
         statusMsg={statusMsg}

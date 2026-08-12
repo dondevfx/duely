@@ -13,6 +13,38 @@ function calculateNewRatings(winnerElo, loserElo) {
  *
  * @returns {{ winnerStreak: number, isFirstWin: boolean }}
  */
+/**
+ * Apply a win streak for a settled match — the ONLY place streaks change.
+ *
+ * Streaks are a PvP record. A bot is not an opponent you beat, so a bot match
+ * neither builds a streak nor breaks one. Previously the increment was guarded
+ * by !winner.isBot and the reset separately by !loser.isBot, which meant losing
+ * to a bot wiped a real streak while the bot match itself counted for nothing —
+ * the worst of both. Two guards in five engines is also two things to keep in
+ * step, so the rule lives here instead.
+ *
+ * @param {object} winner  { userId, isBot }
+ * @param {object} loser   { userId, isBot }
+ * @returns {{winnerStreak:number, isFirstWin:boolean, applied:boolean}}
+ */
+async function applyMatchStreaks(supabase, winner, loser) {
+  const isPvp = winner && loser && !winner.isBot && !loser.isBot;
+  if (!isPvp) return { winnerStreak: 0, isFirstWin: false, applied: false };
+
+  let result = { winnerStreak: 0, isFirstWin: false };
+  try {
+    result = await updateStreaks(supabase, winner.userId, null);
+  } catch (e) {
+    console.error('[streaks] increment failed:', e.message);
+  }
+  try {
+    await supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId);
+  } catch (e) {
+    console.error('[streaks] reset failed:', e.message);
+  }
+  return { ...result, applied: true };
+}
+
 async function updateStreaks(supabase, winnerId, loserId) {
   try {
     // Try atomic RPC first
@@ -108,4 +140,4 @@ async function applyEloUpdate(supabase, userId, newElo, force = false) {
   }
 }
 
-module.exports = { calculateNewRatings, updateElo, updateStreaks, applyEloUpdate };
+module.exports = { applyMatchStreaks, calculateNewRatings, updateElo, updateStreaks, applyEloUpdate };

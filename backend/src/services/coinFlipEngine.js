@@ -7,7 +7,7 @@
 const { randomInt } = require('node:crypto');
 const { findRoomBySocket } = require('./roomLookup');
 const { v4: uuidv4 } = require('uuid');
-const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
+const { calculateNewRatings, applyMatchStreaks, applyEloUpdate } = require('./eloService');
 const { settleMatch, settleCoinFlip, settleMatchDiamonds, settleBotMatch } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const gameEvents = require('./gameEvents');
@@ -139,15 +139,11 @@ async function resolveCoinFlip(io, supabase, roomId) {
         try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch {}
         try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch {}
       }
-      if (!winner.isBot) {
-        // Human won: increment their streak
-        try { ({ winnerStreak, isFirstWin } = await updateStreaks(supabase, winner.userId, null)); } catch {}
-      }
+      // Streaks are PvP-only; applyMatchStreaks is a no-op when either side
+      // is a bot, so no guard is needed here.
+      try { ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser)); } catch {}
     }
-    // Always reset human loser's streak — any game, free or paid, vs bot or human
-    if (!loser.isBot) {
-      try { await supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId); } catch {}
-    }
+
     try {
       await supabase.from('matches').insert({
         player1_id: winner.isBot ? null : winner.userId,

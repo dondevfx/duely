@@ -7,7 +7,7 @@
 const { randomInt } = require('node:crypto');
 const { findRoomBySocket } = require('./roomLookup');
 const { v4: uuidv4 } = require('uuid');
-const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
+const { calculateNewRatings, applyMatchStreaks, applyEloUpdate } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const gameEvents = require('./gameEvents');
@@ -501,15 +501,11 @@ async function _resolveGame(io, supabase, roomId) {
         try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch (eloLoseErr) { console.error('[blackjackEngine] elo loser update failed:', eloLoseErr.message); }
         try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch (e) { console.error('[blackjackEngine] increment_loss:', e.message); }
       }
-      if (!winner.isBot) {
-        // Human won: increment their streak
-        try { ({ winnerStreak, isFirstWin } = await updateStreaks(supabase, winner.userId, null)); } catch (e) { console.error('[blackjackEngine] updateStreaks:', e.message); }
-      }
+      // Streaks are PvP-only — applyMatchStreaks no-ops on bot matches, and
+      // handles both the winner's increment and the loser's reset.
+      try { ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser)); } catch (e) { console.error('[blackjackEngine] streaks:', e.message); }
     }
-    // Always reset human loser's streak — any game, free or paid, vs bot or human
-    if (!loser.isBot) {
-      try { await supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId); } catch (e) { console.error('[blackjackEngine] reset streak:', e.message); }
-    }
+
     try {
       await supabase.from('matches').insert({
         player1_id: winner.isBot ? null : winner.userId,

@@ -1,7 +1,7 @@
 const { v4: uuidv4 } = require('uuid');
 const { findRoomBySocket } = require('./roomLookup');
 const { isValidWord } = require('./wordValidator');
-const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
+const { calculateNewRatings, applyMatchStreaks, applyEloUpdate } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const { updateHighscore } = require('./highscoreService');
@@ -416,7 +416,8 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
         await supabase.from('profiles').update({ elo: newWinnerElo }).eq('id', winner.userId).catch(() => {});
         await supabase.rpc('increment_win', { uid: winner.userId }).catch(() => {});
         try {
-          const sd = await updateStreaks(supabase, winner.userId, loser.isBot ? null : loser.userId);
+          // Streaks are PvP-only — no-ops on bot matches, and resets the loser.
+          const sd = await applyMatchStreaks(supabase, winner, loser);
           winnerStreak = sd.winnerStreak;
           isFirstWin   = sd.isFirstWin;
         } catch {}
@@ -425,9 +426,7 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
         await supabase.from('profiles').update({ elo: newLoserElo }).eq('id', loser.userId).catch(() => {});
         await supabase.rpc('increment_loss', { uid: loser.userId }).catch(() => {});
       }
-      if (!loser.isBot) {
-        supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId).then().catch(() => {});
-      }
+
       for (const [p, ps] of [[p1, s1], [p2, s2]]) {
         if (!p.isBot) {
           const score = ps.solved ? (MAX_GUESSES - ps.guesses.length + 1) : 0;

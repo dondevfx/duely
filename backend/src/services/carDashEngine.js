@@ -20,7 +20,7 @@ const { findRoomBySocket } = require('./roomLookup');
  */
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
 const { unlockUser } = require('./lockService');
-const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
+const { calculateNewRatings, applyMatchStreaks, applyEloUpdate } = require('./eloService');
 const { updateHighscorePair } = require('./highscoreService');
 const gameEvents = require('./gameEvents');
 const { v4: uuidv4 } = require('uuid');
@@ -38,6 +38,9 @@ const STALL_MS   = 15_000;
 // score. Pass it and they win immediately; let it run out and they lose. Before
 // this the survivor could drive indefinitely, so a match had no defined end.
 const CATCHUP_MS = 15_000;
+// Survive at least this long to beat a bot. Without a floor, a bot match paid
+// out on a two-second run, which made a wagered bot game a free win.
+const BOT_WIN_MIN_MS = 25_000;
 const WATCH_MS   = 2_000;
 // Anti-cheat: score is client-computed, so it is capped against server-measured
 // elapsed time. Ceiling mirrors the client formula (distance + time + a generous
@@ -113,6 +116,10 @@ function createDirectCarDashRoom(p1, p2) {
 
 function _makeRoom(roomId, p1, p2) {
   const isSolo = !!(p1.isBot || p2.isBot);
+  // A free bot game is not a match, it is a practice run. There is no stake, so
+  // there is nothing to win — inventing an opponent to beat only makes the
+  // result meaningless. Wagered bot games stay a match, with the 25s floor.
+  const soloRun = isSolo && !(parseFloat(p1.entryFee) > 0);
   // Demo accounts always win vs a bot — the bot's time is pinned just under the
   // demo's at resolve time (see _resolveFromTimes).
   const demoWin = isSolo && [p1, p2].some(p => p.isDemo && !p.isBot);
@@ -134,6 +141,7 @@ function _makeRoom(roomId, p1, p2) {
     lastPingAt: {},   // socketId -> ms, for the stall watchdog
     catchupTimer: null, catchupTarget: null, catchupEndsAt: null,
     isSolo,
+    soloRun,
     demoWin,
     // Non-demo solo: the bot crashes at a fixed, believable time.
     botTargetMs: isSolo && !demoWin ? 18_000 + Math.floor(Math.random() * 40_000) : 0,
@@ -181,11 +189,10 @@ async function startCarDashCountdown(io, supabase, roomId) {
       // match simply never ended. Pin the bot and settle it here instead.
       if (r.isSolo) {
         clearInterval(watch);
-        const human = r.players.find(p => !p.isBot);
-        const hT = human ? (r.times[human.socketId] ?? 0) : 0;
-        const hS = human ? (r.scores[human.socketId] ?? 0) : 0;
-        r.times[_botKey(r)]  = Math.max(0, Math.floor(hT * 0.85) - 200);
-        r.scores[_botKey(r)] = Math.max(0, Math.floor(hS * 0.85) - 10);
+        // The bot is pinned by _resolveFromTimes, not here — a stalled run has
+        // to face the same 25s floor as a crash, and pinning in two places is
+        // how one path ends up skipping it. A player who backgrounds the tab at
+        // ten seconds now loses, exactly as if they had crashed there.
         _resolveFromTimes(io, supabase, roomId).catch(() => {});
         return;
       }
@@ -274,8 +281,9 @@ async function handleCarDashCrash(io, supabase, roomId, socketId, claimedScore) 
   if (room.isSolo && !room.players.find(p => p.socketId === socketId)?.isBot) {
     (room.botTimers || []).forEach(t => clearInterval(t));
     room.botTimers = [];
-    room.times[_botKey(room)]  = Math.max(0, Math.floor(survived * 0.85) - 200);
-    room.scores[_botKey(room)] = Math.max(0, Math.floor((room.scores[socketId] || 0) * 0.85) - 10);
+    // Deliberately does NOT pin the bot here — _resolveFromTimes owns that, and
+    // pinning in two places is how the 25s floor would get applied in one path
+    // and skipped in the other.
     await _resolveFromTimes(io, supabase, roomId);
     return;
   }
@@ -384,16 +392,51 @@ async function _resolveFromTimes(io, supabase, roomId) {
     room.scores[_botKey(room)] = Math.floor((bt / 1000) * 50);
   }
 
-  // Any solo/bot room (including demo accounts): pin the bot just behind on BOTH
-  // time and score so the human always wins.
+  // Bot rooms: the bot has no real run, so its time and score are pinned either
+  // side of the human's depending on whether they cleared the bar.
+  //
+  // Before this the bot was ALWAYS pinned behind, so a bot match was a
+  // guaranteed win no matter how briefly you survived — you could crash at two
+  // seconds and still take the pot. BOT_WIN_MIN_MS is the line: clear it and
+  // the bot trails, miss it and the bot takes it.
+  //
+  // Demo accounts keep winning regardless; that rig exists so a demo can be
+  // shown off without depending on how well someone drives.
   if (room.isSolo && bot) {
     const human = room.players.find(p => !p.isBot);
     if (human) {
       const hT = room.times[human.socketId] ?? room.progress[human.socketId] ?? 0;
       const hS = room.scores[human.socketId] ?? 0;
-      room.times[_botKey(room)]  = Math.max(0, Math.floor(hT * 0.85) - 200);
-      room.scores[_botKey(room)] = Math.max(0, Math.floor(hS * 0.85) - 10);
+      const cleared = room.demoWin || hT >= BOT_WIN_MIN_MS;
+      if (cleared) {
+        room.times[_botKey(room)]  = Math.max(0, Math.floor(hT * 0.85) - 200);
+        room.scores[_botKey(room)] = Math.max(0, Math.floor(hS * 0.85) - 10);
+      } else {
+        // Pinned ahead on both, since score decides and time breaks a tie —
+        // setting only one would let a short run with a high combo still win.
+        room.times[_botKey(room)]  = hT + 1_000;
+        room.scores[_botKey(room)] = hS + 100;
+      }
     }
+  }
+
+  // A practice run just reports how it went. No stake was taken, so there is
+  // nothing to settle, no ELO to move and no streak to touch.
+  if (room.soloRun) {
+    const human = room.players.find(p => !p.isBot);
+    if (human) {
+      room.state = 'finished';
+      const ms    = room.times[human.socketId] ?? room.progress[human.socketId] ?? 0;
+      const score = room.scores[human.socketId] ?? 0;
+      (room.botTimers || []).forEach(t => clearInterval(t));
+      try { await updateHighscorePair(supabase, human.userId, 'carDash', score, 'carDashMs', ms); } catch {}
+      unlockUser(human.userId);
+      io.emit('active_game_ended', { id: roomId });
+      gameEvents.emit('game_ended', { socketIds: [human.socketId] });
+      setTimeout(() => deleteCarDashRoom(roomId), 5_000);
+      io.to(roomId).emit('car_dash_result', { soloRun: true, ms, score });
+    }
+    return;
   }
 
   // Highest SCORE wins; survival time breaks a tie.
@@ -470,11 +513,10 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
     if (ranked && !winner.isBot) {
       try { await applyEloUpdate(supabase, winner.userId, newWinnerElo, true); } catch {}
       try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch {}
-      try { await updateStreaks(supabase, winner.userId, null); } catch {}
+      // Streaks are PvP-only — applyMatchStreaks no-ops on bot matches.
+      try { await applyMatchStreaks(supabase, winner, loser); } catch {}
     }
-    if (!loser.isBot) {
-      try { await supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId); } catch {}
-    }
+
     if (ranked && !loser.isBot) {
       try { await applyEloUpdate(supabase, loser.userId, newLoserElo, true); } catch {}
       try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch {}

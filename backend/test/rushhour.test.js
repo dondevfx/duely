@@ -92,3 +92,51 @@ test('equal scores do not end the match early', async () => {
   assert.notEqual(room.state, 'finished', 'a tie must not resolve as an overtake');
   carDash.deleteCarDashRoom(roomId);
 });
+
+// ── Beating a bot needs a real run ────────────────────────────────────────
+// The bot used to be pinned behind the player unconditionally, so a bot match
+// was a guaranteed win however briefly you survived — crash at two seconds and
+// still take the pot.
+
+test('the bot is pinned in exactly one place', () => {
+  // Two pinning sites is how a floor gets applied on the crash path and skipped
+  // on the stall path, which is the same bug in a different disguise.
+  const src = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '..', 'src', 'services', 'carDashEngine.js'), 'utf8');
+  const pins = (src.match(/room\.times\[_botKey\(room\)\]\s*=/g) || []).length
+             + (src.match(/r\.times\[_botKey\(r\)\]\s*=/g) || []).length;
+  assert.equal(pins, 2,
+    'expected exactly the two branches inside _resolveFromTimes (cleared / not cleared)');
+  const fn = src.slice(src.indexOf('async function _resolveFromTimes'));
+  assert.match(fn, /const cleared = room\.demoWin \|\| hT >= BOT_WIN_MIN_MS;/);
+});
+
+test('under 25 seconds the bot takes it', () => {
+  const src = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '..', 'src', 'services', 'carDashEngine.js'), 'utf8');
+  assert.match(src, /const BOT_WIN_MIN_MS = 25_000;/);
+  const fn = src.slice(src.indexOf('const cleared = room.demoWin'));
+  const elseBranch = fn.slice(fn.indexOf('} else {'), fn.indexOf('} else {') + 400);
+  // Both must move, because score decides and time only breaks a tie — pinning
+  // one would let a short run with a big combo still win.
+  assert.match(elseBranch, /room\.times\[_botKey\(room\)\]\s*=\s*hT \+ /);
+  assert.match(elseBranch, /room\.scores\[_botKey\(room\)\]\s*=\s*hS \+ /);
+});
+
+test('demo accounts still win regardless', () => {
+  // The demo rig exists so the platform can be shown off without depending on
+  // how well someone drives; the floor must not break it.
+  const src = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '..', 'src', 'services', 'carDashEngine.js'), 'utf8');
+  assert.match(src, /room\.demoWin \|\| hT >= BOT_WIN_MIN_MS/,
+    'demoWin must short-circuit the floor');
+});
+
+test('a stalled solo run faces the same floor', () => {
+  const src = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '..', 'src', 'services', 'carDashEngine.js'), 'utf8');
+  const watch = src.slice(src.indexOf('const watch = setInterval'), src.indexOf('}, WATCH_MS);'));
+  assert.ok(!/_botKey\(r\)\]\s*=/.test(watch),
+    'the watchdog must not pin the bot itself, or backgrounding the tab dodges the floor');
+  assert.match(watch, /_resolveFromTimes/);
+});

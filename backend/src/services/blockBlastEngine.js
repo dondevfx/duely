@@ -6,7 +6,7 @@
 // timing jitter) is deliberately left alone.
 const { randomInt } = require('node:crypto');
 const { findRoomBySocket } = require('./roomLookup');
-﻿const { calculateNewRatings, updateStreaks, applyEloUpdate } = require('./eloService');
+﻿const { calculateNewRatings, applyMatchStreaks, applyEloUpdate } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const { v4: uuidv4 } = require('uuid');
@@ -298,9 +298,10 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
         const humanNewElo = humanWon ? newWinnerElo : newLoserElo;
         try { await supabase.from('profiles').update({ elo: humanNewElo }).eq('id', player.userId); } catch (e) { console.error('[blockBlastEngine] elo update:', e.message); }
         try { await supabase.rpc(humanWon ? 'increment_win' : 'increment_loss', { uid: player.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
-        if (humanWon) {
+        // Beating a bot no longer builds a streak — streaks are a PvP record.
+        if (false) {
           try {
-            await updateStreaks(supabase, player.userId, null);
+            await Promise.resolve();
           } catch { /* silent — streak is best-effort */ }
         }
         try {
@@ -418,11 +419,10 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
     if (supabase && !isFree && !winner.isBot) {
       try { await applyEloUpdate(supabase, winner.userId, newWinnerElo, true); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
       try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
-      try { ({ winnerStreak, isFirstWin } = await updateStreaks(supabase, winner.userId, null)); } catch {}
+      // Streaks are PvP-only — applyMatchStreaks no-ops on bot matches.
+      try { ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser)); } catch {}
     }
-    if (supabase && !loser.isBot) {
-      try { await supabase.from('profiles').update({ current_streak: 0 }).eq('id', loser.userId); } catch {}
-    }
+
     if (supabase && !isFree && !loser.isBot) {
       try { await applyEloUpdate(supabase, loser.userId, newLoserElo, true); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
       try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
