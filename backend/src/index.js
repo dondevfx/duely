@@ -18,6 +18,7 @@ const adminRoutes = require('./routes/admin');
 const webhookRoutes = require('./routes/webhooks');
 const affiliateRoutes = require('./routes/affiliate');
 const rakebackRoutes = require('./routes/rakeback');
+const supportRoutes = require('./routes/support');
 const { apiLimiter, authLimiter } = require('./middleware/rateLimit');
 const registerSocketHandlers = require('./socket/handlers');
 const swapPoller        = require('./services/swapPoller');
@@ -80,7 +81,8 @@ app.use('/api/leaderboard', leaderboardRoutes(supabase));
 app.use('/api/match', matchRoutes(supabase));
 app.use('/api/bonus', bonusRoutes(supabase));
 app.use('/api/rewards', rewardsRoutes(supabase));
-app.use('/api/admin', adminRoutes(supabase));
+app.use('/api/admin', adminRoutes(supabase, io));
+app.use('/api/support', supportRoutes(supabase, io));
 app.use('/api/affiliate', affiliateRoutes(supabase));
 app.use('/api/rakeback', rakebackRoutes(supabase));
 
@@ -107,6 +109,7 @@ app.use((err, _req, res, _next) => {
 swapPoller.init(supabase);
 blockchainMonitor.init(supabase);
 tickerService.init(io, supabase);
+require('./services/alertService').init(supabase);
 
 // Refund any match that was interrupted by the previous process exiting —
 // entry fees were taken but the in-memory room died, so nobody was ever paid.

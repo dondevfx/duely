@@ -254,7 +254,13 @@ export default function Wallet() {
     <div className="min-h-[calc(100vh-56px)] bg-bg flex items-center justify-center px-4">
       <div className="text-center">
         <div className="text-5xl mb-4">💰</div>
-        <h2 className="text-2xl font-black text-white mb-2">Wallet</h2>
+        <div className="flex items-baseline justify-between mb-2">
+          <h2 className="text-2xl font-black text-white">Wallet</h2>
+          {/* The page where money goes wrong is the page to ask about it from. */}
+          <Link to="/support" className="text-xs text-muted hover:text-primary underline underline-offset-2">
+            Problem with a deposit or withdrawal?
+          </Link>
+        </div>
         <p className="text-muted mb-6">Login to deposit, withdraw, and manage your balance.</p>
         <Link to="/login" className="px-6 py-3 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl transition-all">Login to Access</Link>
       </div>

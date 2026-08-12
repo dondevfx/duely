@@ -259,3 +259,58 @@ UPDATE profiles p
    AND p.applied_affiliate_code IS NOT NULL
    AND owner.affiliate_code = p.applied_affiliate_code
    AND owner.id <> p.id;
+
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- 6. REQUIRED — support tickets
+--
+-- A player raises a ticket, staff replies, the player can write back. Messages
+-- are a separate table so a ticket is a thread rather than one field that gets
+-- overwritten, and so "who said what, when" survives.
+-- ───────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS support_tickets (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id        uuid NOT NULL REFERENCES profiles(id),
+  subject        text NOT NULL,
+  -- open           = player is waiting on staff
+  -- awaiting_user  = staff replied, ball is with the player
+  -- closed         = done
+  status         text NOT NULL DEFAULT 'open',
+  -- Optional link to the transaction being disputed, so "where is my
+  -- withdrawal" arrives already attached to the row instead of being matched
+  -- up by hand.
+  transaction_id uuid REFERENCES transactions(id),
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  updated_at     timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS support_messages (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  ticket_id  uuid NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+  sender_id  uuid NOT NULL REFERENCES profiles(id),
+  is_staff   boolean NOT NULL DEFAULT false,
+  body       text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Sorted by activity in the admin inbox, and by thread order in a ticket.
+CREATE INDEX IF NOT EXISTS idx_tickets_status_updated ON support_tickets (status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tickets_user           ON support_tickets (user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ticket_messages        ON support_messages (ticket_id, created_at);
+
+ALTER TABLE support_tickets  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE support_messages ENABLE ROW LEVEL SECURITY;
+
+-- Players read their own tickets only. Staff go through the service key, which
+-- bypasses RLS, so no policy is needed for them.
+DROP POLICY IF EXISTS "tickets_own" ON support_tickets;
+CREATE POLICY "tickets_own" ON support_tickets
+  FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "ticket_messages_own" ON support_messages;
+CREATE POLICY "ticket_messages_own" ON support_messages
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM support_tickets t
+             WHERE t.id = support_messages.ticket_id AND t.user_id = auth.uid())
+  );

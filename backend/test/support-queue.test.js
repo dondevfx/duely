@@ -52,6 +52,11 @@ test('recording a failure cannot itself throw away the response', () => {
 });
 
 // ── Phase 2: the queue ────────────────────────────────────────────────────
+//
+// The claim-before-credit ordering and the opt-in nature of crediting are
+// asserted in support-tickets.test.js against the action-based resolve endpoint
+// that replaced the original. Duplicating them here would mean two tests of the
+// same property, one of them written for a signature that no longer exists.
 
 test('the attention queue covers every stuck state', () => {
   // Any status written by a failure path but missing here is money that is
@@ -91,30 +96,11 @@ test('in-progress swaps are not treated as stuck', () => {
   assert.match(adminSrc, /t\.status !== 'converting'\s*\|\|/);
 });
 
-test('resolving claims the row before crediting', () => {
-  // Two admins clicking at once must not both pay out. Same ordering as every
-  // other payout path in the codebase.
-  const fn = adminSrc.slice(adminSrc.indexOf("router.post('/transactions/:id/resolve'"));
-  const claim  = fn.indexOf("status: 'resolved'");
-  const credit = fn.indexOf('await creditCoins(');
-  assert.ok(claim > 0 && credit > claim, 'claim first, credit second');
-  assert.match(fn, /neq\('status', 'resolved'\)/, 'only one resolve may win');
-  assert.match(fn, /if \(!claimed\?\.length\) return res\.status\(409\)/);
-});
-
 test('a failed credit puts the row back in the queue', () => {
   const fn = adminSrc.slice(adminSrc.indexOf("router.post('/transactions/:id/resolve'"));
   const catchBlock = fn.slice(fn.indexOf('} catch (e) {'));
   assert.match(catchBlock.slice(0, 400), /update\(\{ status: tx\.status \}\)/,
     'otherwise it looks dealt with when nothing was paid');
-});
-
-test('crediting is opt-in, never automatic', () => {
-  // Some of these states mean the money DID reach the player. Auto-crediting
-  // them would pay twice.
-  const fn = adminSrc.slice(adminSrc.indexOf("router.post('/transactions/:id/resolve'"));
-  assert.match(fn, /const amt = parseFloat\(creditAmount\);/);
-  assert.match(fn, /if \(amt > 0\)/, 'no amount means resolve without paying');
 });
 
 test('the dashboard counter no longer reads a status nothing writes', () => {

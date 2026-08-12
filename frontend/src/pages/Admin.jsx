@@ -55,55 +55,174 @@ const SEVERITY = {
 };
 
 function AttentionRow({ tx, busy, onResolve }) {
-  const [credit, setCredit] = useState('');
+  const [ctx, setCtx]   = useState(null);
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState(String(tx.amount_c ?? ''));
   const [note, setNote]     = useState('');
   const sev = SEVERITY[tx.status] || { label: tx.status, cls: 'text-muted border-border' };
   const ageH = Math.floor((Date.now() - new Date(tx.created_at)) / 3600000);
 
+  // Loaded on expand rather than for every row — the queue would otherwise fire
+  // a query per row on every dashboard load.
+  async function expand() {
+    setOpen(o => !o);
+    if (!ctx) {
+      try { setCtx(await api.get(`/admin/transactions/${tx.id}/context`)); }
+      catch { setCtx({ failed: true }); }
+    }
+  }
+
   return (
     <div className="bg-bg border border-border rounded-xl p-3">
-      <div className="flex flex-wrap items-center gap-2 mb-2">
+      <div className="flex flex-wrap items-center gap-2">
         <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${sev.cls}`}>
           {sev.label}
         </span>
-        <span className="text-sm font-bold text-white">{tx.profiles?.username || tx.user_id?.slice(0, 8)}</span>
+        <span className="text-sm font-bold text-white">
+          {tx.profiles?.username || tx.user_id?.slice(0, 8)}
+        </span>
         <span className="text-sm text-white font-mono">
           {tx.type} · {Number(tx.amount_c || 0).toFixed(2)} {tx.crypto_symbol || ''}
         </span>
         <span className="text-xs text-muted ml-auto">
           {ageH < 1 ? 'under an hour' : `${ageH}h old`}
         </span>
-      </div>
-
-      {tx.notes && (
-        <p className="text-[11px] text-muted font-mono break-all mb-2">{tx.notes}</p>
-      )}
-      {tx.tx_hash && (
-        <p className="text-[10px] text-muted/70 font-mono break-all mb-2">tx: {tx.tx_hash}</p>
-      )}
-
-      <div className="flex flex-wrap gap-2">
-        <input
-          value={credit}
-          onChange={e => setCredit(e.target.value)}
-          placeholder="Credit coins (optional)"
-          inputMode="decimal"
-          className="flex-1 min-w-[140px] bg-surface border border-border rounded-lg px-2 py-1.5 text-xs text-white placeholder-muted focus:outline-none focus:border-primary"
-        />
-        <input
-          value={note}
-          onChange={e => setNote(e.target.value)}
-          placeholder="What you found"
-          className="flex-1 min-w-[140px] bg-surface border border-border rounded-lg px-2 py-1.5 text-xs text-white placeholder-muted focus:outline-none focus:border-primary"
-        />
-        <button
-          onClick={() => onResolve(credit, note)}
-          disabled={busy}
-          className="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-bold hover:bg-blue-500 disabled:opacity-40"
-        >
-          {busy ? '…' : credit ? `Credit ${credit} & Resolve` : 'Resolve'}
+        <button onClick={expand}
+          className="text-xs px-2 py-1 rounded-lg border border-border text-muted hover:text-white hover:border-primary">
+          {open ? 'Hide' : 'Investigate'}
         </button>
       </div>
+
+      {tx.notes && <p className="text-[11px] text-danger/80 font-mono break-all mt-2">{tx.notes}</p>}
+
+      {open && (
+        <div className="mt-3 pt-3 border-t border-border">
+          {!ctx ? (
+            <p className="text-xs text-muted">Loading…</p>
+          ) : ctx.failed ? (
+            <p className="text-xs text-danger">Could not load context.</p>
+          ) : (
+            <>
+              {/* The question that decides everything: were they already paid? */}
+              <div className={`text-xs font-bold mb-2 ${ctx.alreadyCredited ? 'text-warning' : 'text-muted'}`}>
+                {ctx.alreadyCredited
+                  ? '⚠ A manual credit already references this transaction — check before paying again.'
+                  : 'No manual credit recorded against this transaction yet.'}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                {[
+                  ['Balance now', Number(ctx.balance).toFixed(2)],
+                  ['Deposited',   Number(ctx.deposited).toFixed(2)],
+                  ['Withdrawn',   Number(ctx.withdrawn).toFixed(2)],
+                  ['Diamonds',    ctx.diamonds],
+                ].map(([k, v]) => (
+                  <div key={k} className="bg-surface border border-border rounded-lg px-2 py-1.5">
+                    <div className="text-sm font-black text-white">{v}</div>
+                    <div className="text-[9px] text-muted">{k}</div>
+                  </div>
+                ))}
+              </div>
+
+              {ctx.explorer && (
+                <a href={ctx.explorer} target="_blank" rel="noopener noreferrer"
+                  className="inline-block text-xs text-primary hover:underline mb-3">
+                  Check on-chain ↗
+                </a>
+              )}
+
+              {ctx.related?.length > 0 && (
+                <div className="mb-3 max-h-40 overflow-y-auto">
+                  <div className="text-[10px] text-muted font-bold uppercase mb-1">Their recent activity</div>
+                  {ctx.related.slice(0, 10).map(r => (
+                    <div key={r.id} className="text-[10px] text-muted font-mono flex gap-2 py-0.5">
+                      <span className="w-32 shrink-0">{new Date(r.created_at).toLocaleString()}</span>
+                      <span className="w-24 shrink-0">{r.type}</span>
+                      <span className="w-16 shrink-0 text-white">{Number(r.amount_c || 0).toFixed(2)}</span>
+                      <span className="truncate">{r.status}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2 mb-2">
+                <input value={amount} onChange={e => setAmount(e.target.value)}
+                  placeholder="Amount" inputMode="decimal"
+                  className="w-24 bg-surface border border-border rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-primary" />
+                <input value={note} onChange={e => setNote(e.target.value)}
+                  placeholder="What you found (recorded on the row)"
+                  className="flex-1 min-w-[160px] bg-surface border border-border rounded-lg px-2 py-1.5 text-xs text-white placeholder-muted focus:outline-none focus:border-primary" />
+              </div>
+
+              {/* Each action is separate and says exactly what it does. A single
+                  "fix" button would have to guess, and guessing here pays twice. */}
+              <div className="flex flex-wrap gap-2">
+                <button disabled={busy} onClick={() => onResolve('credit', amount, note)}
+                  className="px-3 py-1.5 rounded-lg bg-success/20 border border-success/50 text-success text-xs font-bold hover:bg-success/30 disabled:opacity-40">
+                  Refund / credit {amount || '…'}
+                </button>
+                <button disabled={busy} onClick={() => onResolve('mark_sent', 0, note)}
+                  className="px-3 py-1.5 rounded-lg bg-primary/20 border border-primary/50 text-primary text-xs font-bold hover:bg-primary/30 disabled:opacity-40">
+                  Money arrived — resolve
+                </button>
+                <button disabled={busy} onClick={() => onResolve('deduct', amount, note)}
+                  className="px-3 py-1.5 rounded-lg bg-warning/20 border border-warning/50 text-warning text-xs font-bold hover:bg-warning/30 disabled:opacity-40">
+                  Claw back {amount || '…'}
+                </button>
+                <button disabled={busy} onClick={() => onResolve('decline', 0, note)}
+                  className="px-3 py-1.5 rounded-lg bg-danger/20 border border-danger/50 text-danger text-xs font-bold hover:bg-danger/30 disabled:opacity-40">
+                  Decline
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// One support thread, with the reply box and a close action.
+function TicketThread({ ticket, onReply, onClose, busy }) {
+  const [body, setBody] = useState('');
+  return (
+    <div className="bg-bg border border-border rounded-xl p-3">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-sm font-bold text-white">{ticket.subject}</span>
+        <span className="text-xs text-muted">
+          {ticket.profiles?.username} · balance {Number(ticket.profiles?.c_coins ?? 0).toFixed(2)}
+        </span>
+        <button onClick={onClose} disabled={busy}
+          className="ml-auto text-xs px-2 py-1 rounded-lg border border-border text-muted hover:text-white">
+          Close
+        </button>
+      </div>
+
+      {ticket.transaction_id && (
+        <p className="text-[10px] text-primary font-mono mb-2">
+          linked transaction: {ticket.transaction_id}
+        </p>
+      )}
+
+      <div className="space-y-2 mb-3 max-h-64 overflow-y-auto">
+        {(ticket.messages || []).map(m => (
+          <div key={m.id} className={`rounded-lg px-2 py-1.5 ${m.is_staff
+            ? 'bg-primary/10 border border-primary/30' : 'bg-surface border border-border'}`}>
+            <div className="text-[9px] text-muted mb-0.5">
+              {m.is_staff ? 'Staff' : 'Player'} · {new Date(m.created_at).toLocaleString()}
+            </div>
+            <p className="text-xs text-white whitespace-pre-wrap break-words">{m.body}</p>
+          </div>
+        ))}
+      </div>
+
+      <textarea value={body} onChange={e => setBody(e.target.value)} rows={2}
+        placeholder="Reply to the player…"
+        className="w-full bg-surface border border-border rounded-lg px-2 py-1.5 text-xs text-white placeholder-muted focus:outline-none focus:border-primary mb-2" />
+      <button onClick={() => { onReply(body); setBody(''); }} disabled={busy || !body.trim()}
+        className="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-bold hover:bg-blue-500 disabled:opacity-40">
+        Send reply
+      </button>
     </div>
   );
 }
@@ -117,6 +236,8 @@ export default function Admin() {
   const [txs, setTxs]               = useState([]);
   const [attention, setAttention]   = useState([]);
   const [resolving, setResolving]   = useState(null);
+  const [tickets, setTickets]       = useState([]);
+  const [openTicket, setOpenTicket] = useState(null);
   const [users, setUsers]           = useState([]);
   const [userSearch, setUserSearch] = useState('');
   const [tab, setTab]               = useState('overview');
@@ -150,7 +271,7 @@ export default function Admin() {
   async function load() {
     setLoading(true);
     try {
-      const [s, t, u, a] = await Promise.all([
+      const [s, t, u, a, tk] = await Promise.all([
         api.get('/admin/stats'),
         api.get('/admin/transactions?limit=100'),
         api.get('/admin/users?limit=100'),
@@ -158,11 +279,15 @@ export default function Admin() {
         // sorted by severity server-side, and a stuck row from last week would
         // never appear in the most recent 100 transactions.
         api.get('/admin/transactions?needsAttention=1').catch(() => []),
+        // Tickets waiting on staff. A list of every ticket ever raised is not a
+        // work queue, so this defaults to the open ones.
+        api.get('/admin/support/tickets').catch(() => []),
       ]);
       setStats(s);
       setTxs(t);
       setUsers(u);
       setAttention(a);
+      setTickets(tk);
     } catch (e) {
       console.error('Admin load error:', e.message);
     } finally {
@@ -173,16 +298,37 @@ export default function Admin() {
   // Resolve one stuck row. creditAmount is optional — several of these states
   // mean the money DID reach the player, and crediting those would pay twice,
   // so the operator decides after checking rather than the UI assuming.
-  async function resolveTx(tx, creditAmount, note) {
+  async function resolveTx(tx, action, amount, note) {
     setResolving(tx.id);
     try {
-      await api.post(`/admin/transactions/${tx.id}/resolve`, { creditAmount, note });
+      await api.post(`/admin/transactions/${tx.id}/resolve`, { action, amount, note });
       await load();
     } catch (e) {
       alert(`Could not resolve: ${e.message}`);
     } finally {
       setResolving(null);
     }
+  }
+
+  async function viewTicket(id) {
+    try { setOpenTicket(await api.get(`/admin/support/tickets/${id}`)); }
+    catch (e) { alert(e.message); }
+  }
+
+  async function replyTicket(body) {
+    if (!body?.trim()) return;
+    setResolving(openTicket.id);
+    try {
+      await api.post(`/admin/support/tickets/${openTicket.id}/reply`, { body });
+      await viewTicket(openTicket.id);
+      await load();
+    } catch (e) { alert(e.message); }
+    finally { setResolving(null); }
+  }
+
+  async function closeTicket(id) {
+    try { await api.post(`/admin/support/tickets/${id}/close`); setOpenTicket(null); await load(); }
+    catch (e) { alert(e.message); }
   }
 
   async function loadCoinSupply() {
@@ -565,7 +711,7 @@ export default function Admin() {
 
             {/* Tabs */}
             <div className="flex gap-2 mb-6">
-              {['attention', 'transactions', 'users'].map(t => (
+              {['attention', 'support', 'transactions', 'users'].map(t => (
                 <button key={t} onClick={() => setTab(t)}
                   className={`px-4 py-2 rounded-xl text-sm font-semibold capitalize transition-all ${
                     tab === t ? 'bg-primary text-white'
@@ -574,6 +720,7 @@ export default function Admin() {
                         : 'text-muted border border-border hover:border-primary hover:text-white'
                   }`}>
                   {t === 'attention'    ? `⚠ Needs Attention (${attention.length})`
+                    : t === 'support'      ? `Support (${tickets.length})`
                     : t === 'transactions' ? `Transactions (${txs.length})`
                     : `Users (${users.length})`}
                 </button>
@@ -591,7 +738,38 @@ export default function Admin() {
                   <div className="space-y-3">
                     {attention.map(t => (
                       <AttentionRow key={t.id} tx={t} busy={resolving === t.id}
-                        onResolve={(creditAmount, note) => resolveTx(t, creditAmount, note)} />
+                        onResolve={(action, amount, note) => resolveTx(t, action, amount, note)} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Support inbox */}
+            {tab === 'support' && (
+              <div className="bg-surface border border-border rounded-2xl p-4">
+                {openTicket ? (
+                  <>
+                    <button onClick={() => setOpenTicket(null)}
+                      className="text-xs text-muted hover:text-white mb-3">← Inbox</button>
+                    <TicketThread ticket={openTicket} busy={resolving === openTicket.id}
+                      onReply={replyTicket} onClose={() => closeTicket(openTicket.id)} />
+                  </>
+                ) : tickets.length === 0 ? (
+                  <p className="text-sm text-muted text-center py-8">No open tickets.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {tickets.map(t => (
+                      <button key={t.id} onClick={() => viewTicket(t.id)}
+                        className="w-full text-left bg-bg border border-border rounded-xl px-3 py-2 hover:border-primary transition-all">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-white truncate flex-1">{t.subject}</span>
+                          {t.transaction_id && <span className="text-[9px] text-primary shrink-0">has transaction</span>}
+                        </div>
+                        <div className="text-[10px] text-muted mt-0.5">
+                          {t.profiles?.username} · {new Date(t.updated_at).toLocaleString()}
+                        </div>
+                      </button>
                     ))}
                   </div>
                 )}

@@ -1685,6 +1685,10 @@ export default function Profile() {
           <Link to="/privacy" className="text-xs text-muted hover:text-white transition-colors underline underline-offset-2">
             Privacy Policy
           </Link>
+          <span className="text-xs text-muted mx-2">·</span>
+          <Link to="/support" className="text-xs text-muted hover:text-white transition-colors underline underline-offset-2">
+            Support
+          </Link>
         </div>
         <div className="absolute top-0 left-full ml-4 w-64 hidden lg:block">
           <FriendsPanel myId={profile.id} myUsername={profile.username} myReferralCode={profile.affiliate_code} activeGames={activeGames} />

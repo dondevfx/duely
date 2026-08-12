@@ -1,8 +1,8 @@
 const { Router } = require('express');
 const { requireAuth } = require('../middleware/auth');
-const { creditDiamonds, creditCoins } = require('../services/walletService');
+const { creditDiamonds, creditCoins, deductCoins } = require('../services/walletService');
 
-module.exports = function adminRoutes(supabase) {
+module.exports = function adminRoutes(supabase, io) {
   const router = Router();
 
   function requireAdmin(req, res, next) {
@@ -179,57 +179,199 @@ module.exports = function adminRoutes(supabase) {
     res.json(rows);
   });
 
-  // Resolve one stuck transaction, optionally making the player whole.
+  // Everything an operator needs to decide what actually happened, before
+  // touching anyone's balance. Guessing is how a stuck deposit becomes a double
+  // credit.
+  router.get('/transactions/:id/context', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { data: tx } = await supabase
+        .from('transactions').select('*, profiles(username)').eq('id', req.params.id).maybeSingle();
+      if (!tx) return res.status(404).json({ error: 'Transaction not found' });
+
+      const [{ data: profile }, { data: related }] = await Promise.all([
+        supabase.from('profiles').select('c_coins, diamonds, crypto_deposited, crypto_withdrawn')
+          .eq('id', tx.user_id).single(),
+        // Everything around the same event: the deposit_raw marker, the swap
+        // row, a manual credit already applied. This is what answers "did the
+        // coins actually land" without reading the whole table.
+        supabase.from('transactions')
+          .select('id, type, amount_c, status, tx_hash, notes, created_at')
+          .eq('user_id', tx.user_id)
+          .order('created_at', { ascending: false })
+          .limit(25),
+      ]);
+
+      // A credit already applied for THIS row is the single most important
+      // signal — it is the difference between owing the player and having
+      // already paid them.
+      const alreadyCredited = (related || []).some(r =>
+        r.id !== tx.id && (r.notes || '').includes(tx.id));
+
+      res.json({
+        tx,
+        balance:   profile?.c_coins ?? 0,
+        diamonds:  profile?.diamonds ?? 0,
+        deposited: profile?.crypto_deposited ?? 0,
+        withdrawn: profile?.crypto_withdrawn ?? 0,
+        alreadyCredited,
+        explorer: explorerUrl(tx),
+        related: related || [],
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Best-effort explorer link, so the operator can confirm on-chain whether the
+  // money actually moved rather than trusting our own row.
+  function explorerUrl(tx) {
+    const h = tx.tx_hash;
+    if (!h) return null;
+    const sym = (tx.crypto_symbol || '').toUpperCase();
+    if (sym === 'BTC')  return 'https://blockstream.info/tx/' + h;
+    if (sym === 'ETH')  return 'https://etherscan.io/tx/' + h;
+    if (sym === 'BNB')  return 'https://bscscan.com/tx/' + h;
+    if (sym === 'TRX')  return 'https://tronscan.org/#/transaction/' + h;
+    if (sym === 'LTC')  return 'https://blockchair.com/litecoin/transaction/' + h;
+    if (sym === 'DOGE') return 'https://blockchair.com/dogecoin/transaction/' + h;
+    if (sym === 'SOL' || sym === 'USDC') return 'https://solscan.io/tx/' + h;
+    return null;
+  }
+
+  // Resolve one stuck transaction.
   //
-  // creditCoins is deliberately opt-in per row rather than automatic: some of
-  // these states mean the money DID reach the player, and crediting those would
-  // pay twice. The operator decides after checking, and the note records what
-  // they concluded.
+  //   credit     the player is owed — pay them and close it
+  //   deduct     we already paid, and paid twice — claw it back
+  //   mark_sent  the money did reach them; nothing to move, just record it
+  //   decline    it never happened and never will; close with a reason
+  //
+  // Money never moves without an explicit action, because several of these
+  // states mean the player was already paid, and a single "fix it" button that
+  // always credited would pay twice.
+  const ACTIONS = new Set(['credit', 'deduct', 'mark_sent', 'decline']);
+
   router.post('/transactions/:id/resolve', requireAuth, requireAdmin, async (req, res) => {
-    const { creditAmount, note } = req.body || {};
+    const { action, amount, note } = req.body || {};
+    if (!ACTIONS.has(action)) {
+      return res.status(400).json({ error: 'action must be one of: ' + [...ACTIONS].join(', ') });
+    }
+    const amt = parseFloat(amount) || 0;
+    if ((action === 'credit' || action === 'deduct') && amt <= 0) {
+      return res.status(400).json({ error: 'A positive amount is required for that action' });
+    }
+
     try {
       const { data: tx } = await supabase
         .from('transactions').select('*').eq('id', req.params.id).maybeSingle();
       if (!tx) return res.status(404).json({ error: 'Transaction not found' });
-      if (tx.status === 'resolved') return res.status(400).json({ error: 'Already resolved' });
 
-      // Claim the row FIRST, so two admins clicking at once cannot both credit.
-      // Same ordering as every other payout path here.
+      const outcome = action === 'decline' ? 'declined' : 'resolved';
+      // Claim the row FIRST so two admins clicking at once cannot both move
+      // money. Same ordering as every other payout path here.
       const { data: claimed } = await supabase
         .from('transactions')
         .update({
-          status: 'resolved',
-          notes: [tx.notes, `resolved by admin: ${String(note || '').slice(0, 200)}`]
+          status: outcome,
+          notes: [tx.notes, action + ' by admin: ' + String(note || '').slice(0, 200)]
             .filter(Boolean).join(' | ').slice(0, 500),
         })
         .eq('id', req.params.id)
-        .neq('status', 'resolved')
+        .not('status', 'in', '("resolved","declined")')
         .select('id');
-      if (!claimed?.length) return res.status(409).json({ error: 'Already being resolved' });
+      if (!claimed?.length) return res.status(409).json({ error: 'Already resolved by someone else' });
 
-      let credited = 0;
-      const amt = parseFloat(creditAmount);
-      if (amt > 0) {
-        try {
-          await creditCoins(supabase, tx.user_id, amt);
-          credited = amt;
-          await supabase.from('transactions').insert({
-            user_id: tx.user_id, type: 'deposit', amount_c: amt, status: 'confirmed',
-            notes: `manual credit for transaction ${tx.id}`,
-          }).then().catch(() => {});
-        } catch (e) {
-          // Put the row back so it stays in the queue rather than looking dealt
-          // with when nothing was paid.
-          await supabase.from('transactions')
-            .update({ status: tx.status }).eq('id', req.params.id).then().catch(() => {});
-          return res.status(500).json({ error: `Credit failed: ${e.message}` });
-        }
+      let moved = 0;
+      try {
+        if (action === 'credit') { await creditCoins(supabase, tx.user_id, amt); moved = amt; }
+        if (action === 'deduct') { await deductCoins(supabase, tx.user_id, amt); moved = -amt; }
+      } catch (e) {
+        // Put it back in the queue rather than leaving a row that looks dealt
+        // with when nothing moved.
+        await supabase.from('transactions')
+          .update({ status: tx.status }).eq('id', req.params.id).then().catch(() => {});
+        return res.status(500).json({ error: action + ' failed: ' + e.message });
       }
-      res.json({ ok: true, credited });
+
+      if (moved !== 0) {
+        // Its own row, referencing the original, so the audit trail shows who
+        // was paid what and why — and so the context view can tell next time
+        // that this one has already been settled.
+        await supabase.from('transactions').insert({
+          user_id: tx.user_id,
+          type: moved > 0 ? 'deposit' : 'withdrawal',
+          amount_c: Math.abs(moved),
+          status: 'confirmed',
+          notes: 'admin ' + action + ' for transaction ' + tx.id + ': ' + String(note || '').slice(0, 150),
+        }).then().catch(() => {});
+      }
+
+      res.json({ ok: true, action, moved });
     } catch (err) {
       console.error('[admin] resolve failed:', err.message);
       res.status(500).json({ error: err.message });
     }
+  });
+
+  // ---- Support inbox --------------------------------------------------
+  router.get('/support/tickets', requireAuth, requireAdmin, async (req, res) => {
+    // Defaults to what is waiting on staff — a list of everything ever raised
+    // is not a work queue.
+    const status = req.query.status || 'open';
+    let q = supabase
+      .from('support_tickets')
+      .select('*, profiles(username, profile_color)')
+      .order('updated_at', { ascending: false })
+      .limit(100);
+    if (status !== 'all') q = q.eq('status', status);
+    const { data, error } = await q;
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data || []);
+  });
+
+  router.get('/support/tickets/:id', requireAuth, requireAdmin, async (req, res) => {
+    const { data: ticket } = await supabase
+      .from('support_tickets').select('*, profiles(username, c_coins)')
+      .eq('id', req.params.id).maybeSingle();
+    if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+    const { data: messages } = await supabase
+      .from('support_messages').select('*')
+      .eq('ticket_id', ticket.id).order('created_at', { ascending: true });
+    res.json({ ...ticket, messages: messages || [] });
+  });
+
+  router.post('/support/tickets/:id/reply', requireAuth, requireAdmin, async (req, res) => {
+    const body = String(req.body?.body ?? '').trim().slice(0, 4000);
+    if (!body) return res.status(400).json({ error: 'Message is required' });
+    const { data: ticket } = await supabase
+      .from('support_tickets').select('id, user_id').eq('id', req.params.id).maybeSingle();
+    if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+
+    await supabase.from('support_messages')
+      .insert({ ticket_id: ticket.id, sender_id: req.user.id, is_staff: true, body });
+    // awaiting_user, not closed: the player may still need to answer, and
+    // closing here would make them raise a fresh ticket to continue.
+    await supabase.from('support_tickets')
+      .update({ status: req.body?.close ? 'closed' : 'awaiting_user', updated_at: new Date().toISOString() })
+      .eq('id', ticket.id);
+
+    // Nudge them if they are online, so a reply is not left sitting unseen.
+    if (io) {
+      for (const [, sock] of io.sockets.sockets) {
+        if (sock._authenticatedUserId === ticket.user_id) {
+          sock.emit('support_reply', { ticketId: ticket.id });
+          break;
+        }
+      }
+    }
+    res.json({ ok: true });
+  });
+
+  router.post('/support/tickets/:id/close', requireAuth, requireAdmin, async (req, res) => {
+    const { error } = await supabase.from('support_tickets')
+      .update({ status: 'closed', updated_at: new Date().toISOString() })
+      .eq('id', req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ ok: true });
   });
 
   // ── Users list ────────────────────────────────────────────────────────
