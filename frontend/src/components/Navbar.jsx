@@ -312,12 +312,12 @@ export default function Navbar() {
               <div className="relative" ref={mobileCurrencyRef}>
                 <button
                   onClick={() => setMobileCurrencyOpen(o => !o)}
-                  className="flex items-center gap-0.5 px-2 py-1 bg-black border border-primary/30 rounded-full font-bold text-white transition-all"
-                  style={{ fontSize: 11 }}
+                  className="flex items-center gap-0.5 px-2.5 py-1 bg-black border border-primary/30 rounded-full font-bold text-white transition-all"
+                  style={{ fontSize: 13 }}
                 >
                   <span className="font-mono">{isDiamonds ? fmtDiamonds(profile.diamonds) : fmtCoins(profile.c_coins)}</span>
                   {isDiamonds ? <span>💎</span> : <CoinIcon size="0.9em" />}
-                  <span className="text-muted" style={{ fontSize: 9 }}>▾</span>
+                  <span className="text-muted" style={{ fontSize: 10 }}>▾</span>
                 </button>
                 {mobileCurrencyOpen && (
                   <div className="absolute top-full mt-2 right-0 bg-surface border border-border rounded-xl shadow-glow-lg z-50 overflow-hidden" style={{ minWidth: 190 }}>
