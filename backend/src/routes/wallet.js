@@ -20,6 +20,21 @@ const WITHDRAW_COOLDOWN_MS = 60 * 1000;   // 60s between withdrawals
 const activeWithdrawals = new Set();       // in-memory per-user lock to prevent concurrent withdrawals
 const DEPOSIT_MAX_SINGLE   = 50_000;      // $50k hard cap per deposit
 
+// ── Tip ceilings ──────────────────────────────────────────────────────────
+// Diamonds are not withdrawable — getWithdrawable only ever reads c_coins — so
+// a diamond tip cannot become money and the ceiling is a UX choice, not a
+// safety one.
+//
+// Coins ARE withdrawable, and a tip is the softest path out of an account:
+// withdrawals require a verified email, an MFA-elevated session when MFA is
+// enabled, and a 60s cooldown, while a tip requires none of those. Whoever
+// takes over an account can move the balance to one they control and withdraw
+// from there under their own MFA, so this ceiling is the blast radius of a
+// single compromised request. The largest coin match is $100; $1,000 leaves
+// generous headroom for real tipping while cutting that radius tenfold.
+const MAX_TIP_COINS    = 1_000;
+const MAX_TIP_DIAMONDS = 100_000_000;
+
 // Per-coin withdrawal minimums
 // SOL/USDC go direct (Jupiter / SPL send) — no ChangeNow minimum
 // Everything else goes through ChangeNow — keep $5 to cover their minimums
@@ -424,8 +439,8 @@ module.exports = function walletRoutes(supabase, io) {
     let tipAmount;
     try {
       tipAmount = isDiamonds
-        ? sanitizeDiamondAmount(req.body.amount, 1, 1_000_000)
-        : sanitizeAmount(req.body.amount, 0.01, MAX_SINGLE_AMOUNT);
+        ? sanitizeDiamondAmount(req.body.amount, 1, MAX_TIP_DIAMONDS)
+        : sanitizeAmount(req.body.amount, 0.01, MAX_TIP_COINS);
     } catch (e) {
       return res.status(400).json({ error: e.message });
     }
