@@ -146,10 +146,11 @@ export default function Navbar() {
           {/* Logo — left-aligned (in flex flow) so a large balance can't overlap it */}
           <div className="relative shrink-0 lg:w-56 flex justify-start pointer-events-auto">
             <Link to="/" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-1.5 pointer-events-auto">
-              <span className="text-2xl lg:text-3xl font-black tracking-tight text-primary" style={{ textShadow: '0 0 22px rgba(18,80,180,0.6)' }}>
+              <span className="text-[27px] lg:text-[34px] font-black tracking-tight text-primary" style={{ textShadow: '0 0 22px rgba(18,80,180,0.6)' }}>
                 Duely
               </span>
-              <span className="w-1.5 h-1.5 lg:w-2 lg:h-2 rounded-full bg-primary animate-pulse" />
+              {/* Dot scales with the wordmark, or it reads as a speck next to it. */}
+              <span className="w-2 h-2 lg:w-2.5 lg:h-2.5 rounded-full bg-primary animate-pulse" />
             </Link>
           </div>
 
