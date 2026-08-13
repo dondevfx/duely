@@ -791,7 +791,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     const S = {
       simT: 0, dist: 0, speed: SPD_START, score: 0,
       laneX: LANE_U * 1.5, laneVel: 0, targetLane: 1,
-      waveN: 0, pathDir: 1, pathRun: 0, path: [], spawnAcc: 0, coverT: 0, laneLast: [0, 0, 0, 0],
+      waveN: 0, pathDir: 1, pathRun: 0, lastWasDouble: false, path: [], spawnAcc: 0, coverT: 0, laneLast: [0, 0, 0, 0],
       changeCooldown: 0,
       combo: 0, comboT: -9,
       flash: 0, shake: 0, scorePop: 0,
@@ -954,21 +954,56 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       }
       let last = S.path[S.path.length - 1];
       while (last.t1 < S.simT + PATH_HORIZON) {
-        // Step one lane. The path must SWEEP across the road rather than
-        // ping-pong between two neighbours: an oscillating path protects both
-        // of those lanes in turn, so both stay empty and the player can simply
-        // sit between them — which is exactly what was happening late in a run.
-        // A reversal therefore needs at least two steps in the current
-        // direction behind it, so the ribbon works its way across all four
-        // lanes and every lane spends most of its time carrying traffic.
+        // The path must SWEEP across the road rather than ping-pong between two
+        // neighbours: an oscillating path protects both of those lanes in turn,
+        // so both stay empty and the player can simply sit between them. A
+        // reversal therefore needs at least two steps in the current direction
+        // behind it.
+        //
+        // But a sweep of single steps is its own problem. Traffic saturates
+        // every lane except the ribbon, so the ribbon's shape IS the game — and
+        // one lane per segment across four lanes is a metronome. You learn to go
+        // left, right, left and stop watching the road.
+        //
+        // So the STEP varies as well as the direction. A double step crosses two
+        // lanes at once and has to be committed to quickly; pairing it with a
+        // shorter segment makes it a dodge rather than a drift. The lane it
+        // crosses is protected for the transition (see pathBlocked), or the jump
+        // would be impossible to make.
         let dir = S.pathDir;
-        if (S.pathRun >= 2 && rand() < 0.3) { dir = -dir; S.pathRun = 0; }
-        let lane = last.lane + dir;
-        if (lane < 0 || lane > LANES - 1) { dir = -dir; lane = last.lane + dir; S.pathRun = 0; }
+        // Turn odds vary rather than sitting at a flat 0.3, so the reversals are
+        // not on a predictable beat either.
+        const turnOdds = 0.22 + rand() * 0.26;
+        // Two steps are normally required before a reversal, because turning
+        // back after one leaves the ribbon oscillating between two neighbours
+        // and both stay empty. After a DOUBLE step that does not apply: three
+        // distinct lanes are involved, so turning back immediately still leaves
+        // the lane behind free to fill with traffic.
+        const minRun = S.lastWasDouble ? 1 : 2;
+        if (S.pathRun >= minRun && rand() < turnOdds) { dir = -dir; S.pathRun = 0; }
+
+        // Only when there is room, and never straight after another — back to
+        // back jumps read as chaos rather than variety.
+        const canDouble = LANES > 2 && !S.lastWasDouble
+          && last.lane + dir * 2 >= 0 && last.lane + dir * 2 <= LANES - 1;
+        const step = (canDouble && rand() < 0.34) ? 2 : 1;
+        S.lastWasDouble = step === 2;
+
+        let lane = last.lane + dir * step;
+        if (lane < 0 || lane > LANES - 1) {
+          dir = -dir; lane = last.lane + dir; S.pathRun = 0; S.lastWasDouble = false;
+        }
         S.pathDir = dir;
         S.pathRun++;
-        const dur = Math.max(2.0, segDuration() * (0.85 + rand() * 0.4));
-        S.path.push({ t0: last.t1, t1: last.t1 + dur, lane: clamp(lane, 0, LANES - 1) });
+        // Wider spread than the old 0.85-1.4, and a double step gets a shorter
+        // window — that is what makes it decisive.
+        const jitter = step === 2 ? (0.62 + rand() * 0.22) : (0.78 + rand() * 0.62);
+        const dur = Math.max(1.7, segDuration() * jitter);
+        S.path.push({
+          t0: last.t1, t1: last.t1 + dur,
+          lane: clamp(lane, 0, LANES - 1),
+          from: last.lane,
+        });
         last = S.path[S.path.length - 1];
       }
       // drop segments that are well behind
@@ -985,10 +1020,22 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     // lanes either side of a step are protected too.
     function pathBlocked(lane, tA, tB) {
       for (const seg of S.path) {
-        if (seg.lane !== lane) continue;
-        if (tB < seg.t0 - PATH_TRANS) continue;
-        if (tA > seg.t1 + PATH_TRANS) continue;
-        return true;
+        // The lane the segment sits in, for its whole duration.
+        if (seg.lane === lane) {
+          if (tB < seg.t0 - PATH_TRANS) continue;
+          if (tA > seg.t1 + PATH_TRANS) continue;
+          return true;
+        }
+        // A double step crosses an intermediate lane, and that lane has to be
+        // clear at the moment of crossing — otherwise the ribbon promises a
+        // route with a car parked halfway through it. Only the transition
+        // window is protected, so the lane still carries traffic either side.
+        if (seg.from != null && Math.abs(seg.lane - seg.from) === 2
+            && (seg.lane + seg.from) / 2 === lane) {
+          if (tB < seg.t0 - PATH_TRANS) continue;
+          if (tA > seg.t0 + PATH_TRANS) continue;
+          return true;
+        }
       }
       return false;
     }
