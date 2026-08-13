@@ -9,15 +9,19 @@ import CoinIcon from '../components/CoinIcon';
 import { fmtCoins, fmtExact } from '../utils/format';
 
 // ── Supported deposit coins ───────────────────────────────────────────
+// Must match DEPOSIT_MINS in backend/src/routes/wallet.js, which explains how
+// each number was derived. BTC is the odd one out: its gas reserve is ~$1.27,
+// so a $5 deposit would land close enough to the $3 credit floor to risk
+// crediting nothing.
 const COINS = [
   { id: 'sol',  label: 'SOL',  network: 'Solana',   minUsd: 5  },
   { id: 'usdc', label: 'USDC', network: 'Solana',   minUsd: 5  },
   { id: 'btc',  label: 'BTC',  network: 'Bitcoin',  minUsd: 10 },
-  { id: 'eth',  label: 'ETH',  network: 'Ethereum', minUsd: 10 },
-  { id: 'bnb',  label: 'BNB',  network: 'BSC',      minUsd: 10 },
-  { id: 'ltc',  label: 'LTC',  network: 'Litecoin', minUsd: 10 },
-  { id: 'doge', label: 'DOGE', network: 'Dogecoin', minUsd: 10 },
-  { id: 'trx',  label: 'TRX',  network: 'TRON',     minUsd: 10 },
+  { id: 'eth',  label: 'ETH',  network: 'Ethereum', minUsd: 5  },
+  { id: 'bnb',  label: 'BNB',  network: 'BSC',      minUsd: 5  },
+  { id: 'ltc',  label: 'LTC',  network: 'Litecoin', minUsd: 5  },
+  { id: 'doge', label: 'DOGE', network: 'Dogecoin', minUsd: 5  },
+  { id: 'trx',  label: 'TRX',  network: 'TRON',     minUsd: 5  },
 ];
 
 // ── Supported withdrawal coins ────────────────────────────────────────

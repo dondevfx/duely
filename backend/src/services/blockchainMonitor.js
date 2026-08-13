@@ -378,7 +378,18 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
 
   // ── Gas reserve check (before any logging so dust txs produce no output) ──────
   // SOL reserve covers: ATA creation rent (~0.00204 SOL) + tx fees (~0.000005 SOL)
-  const gasReserveMap = { btc: 0.00002, eth: 0.0004, bnb: 0.0005, sol: 0.003, ltc: 0.001, trx: 5, doge: 1 };
+  // Held back to pay the fee for forwarding the deposit out of its address.
+  //
+  // TRX was 5 (~$1.68), which is 17% of a $10 deposit. A TRON transfer uses
+  // ~265 bandwidth and every account gets ~600 free bandwidth a day, so a
+  // single forward per address is usually free and 0.267 TRX at worst. 2 is
+  // still roughly 7x the worst case.
+  //
+  // BTC's 2000 sats is deliberately NOT reduced. It covers up to ~8.8 sat/vB
+  // and the network sits at 1 today, but Bitcoin fees spike hard — cutting it
+  // would turn a busy day into failed forwards, which is worse than
+  // over-reserving on a quiet one.
+  const gasReserveMap = { btc: 0.00002, eth: 0.0004, bnb: 0.0005, sol: 0.003, ltc: 0.001, trx: 2, doge: 1 };
   const gasRes    = (coin !== 'usdc') ? (gasReserveMap[coin] || 0) : 0;
   const netAmount = Math.max(0, amount - gasRes);
   if (coin !== 'usdc' && netAmount <= 0) { _seenTxs.add(txHash); return; } // dust — silent

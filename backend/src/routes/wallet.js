@@ -51,10 +51,24 @@ const DEPOSIT_COINS = new Set(['btc','eth','sol','ltc','trx','doge','bnb','usdc'
 // Per-coin deposit minimums shown in UI (must match the frontend coin grid).
 // Actual crediting is more generous — anything that nets >= $3 in USDC is
 // credited (see MIN_CREDIT_USD in blockchainMonitor / swapPoller).
+// Set from the real numbers rather than by feel. Three things eat a deposit:
+// the gas reserve held back to forward it, ChangeNow's spread and output fee
+// (~3%), and their swap minimum — which measured at about $2 per coin, far
+// below any figure here. The binding constraint is MIN_CREDIT_USD ($3): land
+// under it and the player is credited NOTHING, so a minimum must clear $3 with
+// room to spare.
+//
+// At $5, after gas and ~3%, each credits: ETH $4.12, LTC $4.81, DOGE $4.78,
+// TRX $4.20 (with the reduced reserve), BNB $4.55, SOL $4.73.
+//
+// BTC stays at $10. Its reserve alone is ~$1.27, so $5 would credit ~$3.62 —
+// 60c above the floor, and both BTC's price and its fee rate move enough to
+// close that gap. A deposit that credits zero is the worst outcome available.
 const DEPOSIT_MINS = {
-  sol:     5,   // Jupiter on-chain swap
-  usdc:    5,   // direct credit
-  default: 10,  // ChangeNow coins (BTC, ETH, BNB, LTC, TRX, DOGE)
+  sol:     5,
+  usdc:    5,   // direct credit, no swap in the path
+  btc:     10,
+  default: 5,   // ETH, BNB, LTC, TRX, DOGE
 };
 
 // Basic address validation — Plisio/SimpleSwap do real validation
