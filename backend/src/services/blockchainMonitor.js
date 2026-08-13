@@ -15,7 +15,7 @@
 
 const fetch = require('node-fetch');
 const { getAddress }        = require('./addressService');
-const { sendCrypto }        = require('./chainSend');
+const { sendCrypto, sweepUsdc } = require('./chainSend');
 const { createDepositSwap } = require('./simpleSwapService');
 const { swapSolToUsdc }     = require('./jupiterService');
 
@@ -429,6 +429,22 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     console.log(`[monitor] USDC deposit — received $${amount}, credited $${credited} (0.1% fee) to user ${userId}`);
     gameEvents.emit('deposit_credited', { userId, amount: credited, currency: 'coins' });
     _seenTxs.add(txHash);
+
+    // Consolidate into the payout wallet. USDC is the one coin that used to stop
+    // here: it needs no swap, so the forward was never written, and deposits sat
+    // in per-user addresses while withdrawals drained a wallet nothing refilled.
+    //
+    // Deliberately after the credit and deliberately non-fatal. The player is
+    // already paid and the funds are in an address we derive from the master
+    // secret, so a failed sweep costs nothing — and sweepUsdc moves the whole
+    // balance, so the next deposit to this address collects what this run missed.
+    try {
+      const { privKey } = getAddress(userId, 'usdc');
+      const swept = await sweepUsdc(privKey);
+      if (swept) console.log(`[monitor] swept ${swept.amount} USDC to payout wallet tx=${swept.txHash}`);
+    } catch (e) {
+      console.error(`[monitor] USDC sweep failed for user ${userId} (funds are safe in the deposit address):`, e.message);
+    }
     return;
   }
 
@@ -640,9 +656,54 @@ async function pollOnce(supabase) {
   }
 }
 
+// ── Stranded USDC ─────────────────────────────────────────────────────────────
+
+const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
+const SWEEP_MAX_PER_RUN = 25;
+
+/**
+ * Collects USDC left in deposit addresses by the period when the USDC branch had
+ * no forwarding step.
+ *
+ * The per-deposit sweep only fires when an address receives something, so an
+ * address that never sees another deposit would hold its balance forever. This
+ * catches those. It is also the general safety net for a sweep that failed on
+ * arrival — sweepUsdc moves the full balance and no-ops on an empty account, so
+ * running over every address repeatedly is harmless.
+ *
+ * Capped per run because each address costs an RPC round trip or two and there
+ * is no deadline here; anything missed is picked up an hour later.
+ */
+async function sweepStrandedUsdc(supabase) {
+  const { data, error } = await supabase
+    .from('deposit_addresses').select('user_id').eq('coin', 'usdc').limit(500);
+  if (error) {
+    console.error('[monitor] stranded-USDC query failed:', error.message);
+    return;
+  }
+
+  let swept = 0, total = 0;
+  for (const row of data || []) {
+    if (swept >= SWEEP_MAX_PER_RUN) break;
+    try {
+      const { privKey } = getAddress(row.user_id, 'usdc');
+      const res = await sweepUsdc(privKey);
+      if (res) { swept++; total += res.amount; }
+    } catch (e) {
+      console.error(`[monitor] stranded sweep failed for user ${row.user_id}:`, e.message);
+    }
+  }
+  if (swept) console.log(`[monitor] stranded sweep collected ${total} USDC from ${swept} address(es)`);
+}
+
 function init(supabase) {
   supabaseRef = supabase;
   console.log('[monitor] blockchain monitor started');
+
+  const runSweep = () => sweepStrandedUsdc(supabase)
+    .catch(e => console.error('[monitor] stranded sweep error:', e.message));
+  setTimeout(runSweep, 30_000);          // after boot, once the RPC is warm
+  setInterval(runSweep, SWEEP_INTERVAL_MS);
 
   async function loop() {
     await pollOnce(supabase).catch(e => console.error('[monitor] loop error:', e.message));
@@ -653,4 +714,4 @@ function init(supabase) {
   setTimeout(loop, 10_000);
 }
 
-module.exports = { init, claimDeposit };
+module.exports = { init, claimDeposit, sweepStrandedUsdc };

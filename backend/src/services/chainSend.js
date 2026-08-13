@@ -15,6 +15,8 @@ const bs58    = require('bs58');
 
 bitcoin.initEccLib(ecc);
 
+const USDC_MINT = new solWeb3.PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+
 // Actual network fee reserves (realistic)
 const GAS_RESERVE = {
   btc:  0.00002,   // ~$1.30 at $65k — covers typical tx fee
@@ -99,7 +101,7 @@ async function sendUsdcSpl(privKey, toAddress, amount) {
   const rpc        = process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
   const connection = new solWeb3.Connection(rpc, 'confirmed');
   const keypair    = solWeb3.Keypair.fromSeed(new Uint8Array(privKey));
-  const usdcMint   = new solWeb3.PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+  const usdcMint   = USDC_MINT;
   const units      = Math.floor(amount * 1_000_000);   // USDC = 6 decimals
 
   // Source is always the admin keypair's own USDC ATA, derived from its pubkey.
@@ -236,6 +238,77 @@ async function sendUtxoCoin(coin, privKey, toAddress, amount) {
   return sent.tx?.hash;
 }
 
+// ── USDC sweep ────────────────────────────────────────────────────────────────
+
+/**
+ * Moves the entire USDC balance of one derived deposit address into the admin
+ * payout wallet.
+ *
+ * Every other coin forwards on arrival; USDC never did, so deposits accumulated
+ * in per-user addresses while the payout wallet only ever drained.
+ *
+ * Deposit addresses hold no SOL and so cannot pay their own transaction fee.
+ * Rather than dusting every address with SOL, the admin wallet signs as fee
+ * payer while the deposit address signs only as the transfer authority — two
+ * signatures, one transaction. Both keys are ours.
+ *
+ * Sweeps the whole balance rather than the amount of any single deposit, so one
+ * run also collects whatever earlier deposits stranded. Returns null when there
+ * is nothing to move, which makes it safe to call on every deposit and safe to
+ * re-run after a failure.
+ */
+async function sweepUsdc(fromPrivKey) {
+  const splToken   = require('@solana/spl-token');
+  const rpc        = process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
+  const connection = new solWeb3.Connection(rpc, 'confirmed');
+
+  const adminAddress = process.env.USDC_SPL_ADDRESS;
+  const adminSecret  = process.env.ADMIN_PHANTOM_PRIVATE_KEY;
+  if (!adminAddress) throw new Error('USDC_SPL_ADDRESS not set');
+  if (!adminSecret)  throw new Error('ADMIN_PHANTOM_PRIVATE_KEY not set');
+
+  const decoded  = (bs58.default?.decode ?? bs58.decode)(adminSecret);
+  const adminKp  = solWeb3.Keypair.fromSeed(Buffer.from(decoded).slice(0, 32));
+  const adminPub = new solWeb3.PublicKey(adminAddress);
+
+  // These two are set independently and nothing else checks they agree. If they
+  // disagree the sweep would pay a fee from one wallet to fund a different one,
+  // so fail loudly instead — a rotation that only updates one is the likely
+  // cause, and that is worth an alert rather than a silent misdirection.
+  if (!adminKp.publicKey.equals(adminPub)) {
+    throw new Error(
+      `ADMIN_PHANTOM_PRIVATE_KEY controls ${adminKp.publicKey.toBase58()} but ` +
+      `USDC_SPL_ADDRESS is ${adminAddress} — refusing to sweep.`
+    );
+  }
+
+  const fromKp  = solWeb3.Keypair.fromSeed(new Uint8Array(fromPrivKey));
+  const fromAta = splToken.getAssociatedTokenAddressSync(USDC_MINT, fromKp.publicKey);
+  const toAta   = splToken.getAssociatedTokenAddressSync(USDC_MINT, adminPub);
+
+  let units;
+  try {
+    units = (await splToken.getAccount(connection, fromAta)).amount;
+  } catch {
+    return null;   // no token account here — nothing was ever received
+  }
+  if (units <= 0n) return null;
+
+  const tx = new solWeb3.Transaction();
+  if (!(await connection.getAccountInfo(toAta))) {
+    tx.add(splToken.createAssociatedTokenAccountInstruction(
+      adminKp.publicKey, toAta, adminPub, USDC_MINT
+    ));
+  }
+  tx.add(splToken.createTransferInstruction(fromAta, toAta, fromKp.publicKey, units));
+  tx.feePayer = adminKp.publicKey;
+
+  const txHash = await solWeb3.sendAndConfirmTransaction(connection, tx, [adminKp, fromKp]);
+  const amount = Number(units) / 1e6;
+  console.log(`[chainSend] swept ${amount} USDC ${fromKp.publicKey.toBase58()} → ${adminAddress} tx=${txHash}`);
+  return { txHash, amount };
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 async function sendCrypto({ coin, privKey, toAddress, amount }) {
@@ -253,4 +326,4 @@ async function sendCrypto({ coin, privKey, toAddress, amount }) {
   }
 }
 
-module.exports = { sendCrypto, GAS_RESERVE };
+module.exports = { sendCrypto, sweepUsdc, GAS_RESERVE };
