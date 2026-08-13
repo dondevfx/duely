@@ -453,8 +453,13 @@ async function _resolveGame(io, supabase, roomId) {
   }
 
   const isFree = room.entryFee === 0;
+  // Unrated outcomes report null rather than the unchanged rating. Sending
+  // the current value made the result card show "1000 (+0)", which reads as
+  // a rated match that happened to be worth nothing. null means "this mode
+  // does not rate", and the card omits the row entirely. Rush Hour already
+  // did this; the rest did not.
   const { newWinnerElo, newLoserElo } = (isDraw || isFree)
-    ? { newWinnerElo: winner.elo, newLoserElo: loser.elo }
+    ? { newWinnerElo: null, newLoserElo: null }
     : calculateNewRatings(winner.elo, loser.elo);
 
   let balanceChange = null;

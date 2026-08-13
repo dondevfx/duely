@@ -387,8 +387,13 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
   if (room.stuckTimer) { clearTimeout(room.stuckTimer); room.stuckTimer = null; }
 
   const isFree = (room.entryFee || 0) === 0;
+  // Unrated outcomes report null rather than the unchanged rating. Sending
+  // the current value made the result card show "1000 (+0)", which reads as
+  // a rated match that happened to be worth nothing. null means "this mode
+  // does not rate", and the card omits the row entirely. Rush Hour already
+  // did this; the rest did not.
   const { newWinnerElo, newLoserElo } = isFree
-    ? { newWinnerElo: winner.elo, newLoserElo: loser.elo }
+    ? { newWinnerElo: null, newLoserElo: null }
     : calculateNewRatings(winner.elo, loser.elo);
 
   // Settle wallet immediately so payout is accurate in the result

@@ -105,10 +105,17 @@ export default function ResultScreen({
   // Paid matches always update ELO regardless of placement — show the real number
   const showElo = ranked || (entryFee > 0 && elo != null);
 
-  // A free solo run is neither staked nor rated, so both of those rows would be
-  // reporting on something that did not happen — an ELO line with no number, and
-  // a payout of zero. Anything with a stake or a rating attached still shows.
-  const rated = elo != null || entryFee > 0;
+  // The rating row appears only when a rating actually moved.
+  //
+  // The engines report null for every unrated outcome — free play, solo runs,
+  // draws — so a missing value means "this mode does not rate", not "not loaded
+  // yet". Previously they sent the player's UNCHANGED rating instead, which
+  // rendered as "1000 (+0)": a rated match that happened to be worth nothing.
+  const ratingMoved = elo != null;
+
+  // A free solo run is neither staked nor rated, so the payout row would be
+  // reporting on something that did not happen.
+  const rated = ratingMoved || entryFee > 0;
   const showLedger = !solo || rated;
 
   // Play the result sound once when this card mounts.
@@ -212,7 +219,7 @@ export default function ResultScreen({
             ))}
             {/* No ELO and no payout on a solo run — nothing was staked and
                 nothing was rated, and a "0" or "Unranked" row implies otherwise. */}
-            {showLedger && (
+            {showLedger && ratingMoved && (
             <div className="flex justify-between border-t border-surfaceLight/40 pt-2">
               <span className="text-muted">ELO</span>
               {showElo ? (

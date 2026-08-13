@@ -380,8 +380,13 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
   const human    = hasBot ? room.players.find(p => !p.isBot) : null;
 
   // ── Financial + stat settlement ──────────────────────────────────────────
-  let newWinnerElo  = winner?.elo || 1000;
-  let newLoserElo   = loser?.elo  || 1000;
+  // Unrated outcomes report null rather than the unchanged rating. Sending
+  // the current value made the result card show "1000 (+0)", which reads as
+  // a rated match that happened to be worth nothing. null means "this mode
+  // does not rate", and the card omits the row entirely. Rush Hour already
+  // did this; the rest did not.
+  let newWinnerElo  = null;
+  let newLoserElo   = null;
   let balanceChange = null;
   let winnerStreak  = 0;
   let isFirstWin    = false;
@@ -389,7 +394,15 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
   try {
     const isFree = fee === 0;
 
-    if (winner && loser) {
+    // Word VS was the outlier: it computed and WROTE new ratings regardless of
+    // the stake, so a free match moved your rating while the same free match in
+    // any other game did not. Every other engine gates this on the entry fee —
+    // Rush Hour's comment puts it plainly: a free run is practice and must never
+    // move your rating.
+    //
+    // Leaving the rating null for a free match is therefore not just a display
+    // change; it is what makes the write below stop happening.
+    if (winner && loser && !isFree) {
       const ratings = calculateNewRatings(winner.elo || 1000, loser.elo || 1000);
       newWinnerElo  = ratings.newWinnerElo;
       newLoserElo   = ratings.newLoserElo;
@@ -414,7 +427,11 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
 
     if (supabase && winner && loser) {
       if (!winner.isBot) {
-        await supabase.from('profiles').update({ elo: newWinnerElo }).eq('id', winner.userId).catch(() => {});
+        // Gated on the rating existing, so what the card reports and what the
+        // database records can never disagree.
+        if (newWinnerElo != null) {
+          await supabase.from('profiles').update({ elo: newWinnerElo }).eq('id', winner.userId).catch(() => {});
+        }
         await supabase.rpc('increment_win', { uid: winner.userId }).catch(() => {});
         try {
           // Streaks are PvP-only — no-ops on bot matches, and resets the loser.
@@ -424,7 +441,9 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
         } catch {}
       }
       if (!loser.isBot) {
-        await supabase.from('profiles').update({ elo: newLoserElo }).eq('id', loser.userId).catch(() => {});
+        if (newLoserElo != null) {
+          await supabase.from('profiles').update({ elo: newLoserElo }).eq('id', loser.userId).catch(() => {});
+        }
         await supabase.rpc('increment_loss', { uid: loser.userId }).catch(() => {});
       }
 
