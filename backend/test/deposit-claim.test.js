@@ -141,8 +141,13 @@ test('no deposit path uses an unsupported ON CONFLICT target', () => {
 });
 
 test('claims are checked before anything irreversible', () => {
+  // Line endings normalised first. The repo stores LF but Windows checks out
+  // CRLF, so a pattern anchored on a bare newline matches nothing locally —
+  // the test would pass in CI and fail on a dev machine for a reason that has
+  // nothing to do with the code being tested.
   const src = fs.readFileSync(
-    path.join(__dirname, '..', 'src', 'services', 'blockchainMonitor.js'), 'utf8');
+    path.join(__dirname, '..', 'src', 'services', 'blockchainMonitor.js'), 'utf8')
+    .split('\r\n').join('\n');
   // Every claim must be followed by a guard; a claim whose result is ignored is
   // the same as having no claim at all.
   const claims = src.match(/claimDeposit\(supabase, \{[\s\S]*?\}\);\n([\s\S]{0,400})/g) || [];
@@ -151,4 +156,46 @@ test('claims are checked before anything irreversible', () => {
     assert.ok(/!==\s*'claimed'/.test(c),
       `a claim result is not being checked:\n${c.slice(0, 200)}`);
   }
+});
+
+test('a permanently unswappable deposit becomes visible, not an endless retry', () => {
+  // A ChangeNow error is usually transient, but it is ALSO what a deposit under
+  // the exchange's minimum looks like — and that never resolves. Releasing the
+  // claim every time deleted the row, so a stranded deposit left no record at
+  // all: invisible to the admin queue, just a log line twice a minute.
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'services', 'blockchainMonitor.js'), 'utf8');
+  const block = src.slice(src.indexOf('const fails = (_swapFailures.get(txHash)'),
+                          src.indexOf('_swapFailures.delete(txHash);\n  const { watch }'));
+
+  assert.match(block, /if \(fails < SWAP_FAIL_LIMIT\)/,
+    'early failures must still retry — most are transient');
+  assert.match(block, /status: 'stuck'/,
+    'a persistent failure must end up in a status the attention queue lists');
+  assert.match(block, /notes: `swap creation failed/,
+    'without the exchange error an operator cannot tell why');
+
+  // The give-up path must NOT delete the row, or it stays invisible.
+  const giveUp = block.slice(block.indexOf('giving up'));
+  assert.ok(!/\.delete\(\)/.test(giveUp),
+    'the claim must be kept on give-up — deleting it is what hid the problem');
+  assert.match(giveUp, /_seenTxs\.add\(txHash\)/,
+    'and the retry loop must stop');
+});
+
+test('a cleared failure does not count toward a later give-up', () => {
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'services', 'blockchainMonitor.js'), 'utf8');
+  // After the catch block, a success path resets the counter.
+  const after = src.slice(src.indexOf('// Cleared it — do not let a past blip'));
+  assert.match(after.slice(0, 200), /_swapFailures\.delete\(txHash\)/,
+    'two unrelated blips months apart must not add up to a give-up');
+});
+
+test("'stuck' is a status the admin queue actually surfaces", () => {
+  const admin = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'routes', 'admin.js'), 'utf8');
+  const listed = admin.match(/const ATTENTION_STATUSES = \[([^\]]+)\]/)[1];
+  assert.ok(listed.includes("'stuck'"),
+    'marking it stuck only helps if the queue lists stuck');
 });

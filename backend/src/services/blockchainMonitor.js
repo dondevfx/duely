@@ -308,6 +308,21 @@ async function fetchTxs(coin, address) {
 // Prevents repeated DB lookups and log spam for old/dust transactions.
 const _seenTxs = new Set();
 
+// Consecutive swap-creation failures per on-chain tx.
+//
+// A ChangeNow error is usually transient — rate limit, a blip — and retrying on
+// the next poll is right. But it is ALSO what happens when the deposit is below
+// the exchange's own minimum, and that never resolves: the swap is refused
+// every 45 seconds forever while the coin sits in the deposit address.
+//
+// Releasing the claim each time deleted the row, so a permanently stranded
+// deposit left no durable record at all — invisible to the admin queue, with
+// nothing but a log line repeating twice a minute. After SWAP_FAIL_LIMIT tries
+// the claim is KEPT and marked stuck, which both stops the loop and puts it in
+// front of an operator with the exchange's own error attached.
+const _swapFailures = new Map();
+const SWAP_FAIL_LIMIT = 3;
+
 /**
  * Atomically claim a deposit before doing anything irreversible with it.
  *
@@ -519,13 +534,33 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
   try {
     swap = await createDepositSwap({ coin, amount: netAmount, ourStableAddress: usdcAddress, refundAddress: '' });
   } catch (e) {
-    // Nothing has moved yet, so release the claim rather than stranding the
-    // deposit — the next poll retries from scratch.
-    console.error(`[monitor] ChangeNow error for ${txHash}, releasing claim:`, e.message);
-    await supabase.from('transactions').delete()
-      .eq('tx_hash', txHash).eq('type', 'deposit_raw').eq('status', 'forwarded');
+    const fails = (_swapFailures.get(txHash) || 0) + 1;
+    _swapFailures.set(txHash, fails);
+
+    if (fails < SWAP_FAIL_LIMIT) {
+      // Probably transient. Nothing has moved, so release the claim and let the
+      // next poll start over.
+      console.error(`[monitor] ChangeNow error for ${txHash} (${fails}/${SWAP_FAIL_LIMIT}), releasing claim:`, e.message);
+      await supabase.from('transactions').delete()
+        .eq('tx_hash', txHash).eq('type', 'deposit_raw').eq('status', 'forwarded');
+      return;
+    }
+
+    // Persistent — almost always a deposit under the exchange's minimum. Keep
+    // the claim so the row survives, mark it stuck so it reaches the admin
+    // queue, and stop retrying. The coin is still in the player's deposit
+    // address and is recoverable by hand.
+    console.error(`[monitor] ChangeNow error for ${txHash} — giving up after ${fails}, marking stuck:`, e.message);
+    await supabase.from('transactions')
+      .update({ status: 'stuck', notes: `swap creation failed ${fails}x: ${String(e.message).slice(0, 200)}` })
+      .eq('tx_hash', txHash).eq('type', 'deposit_raw')
+      .then().catch(() => {});
+    _seenTxs.add(txHash);
+    _swapFailures.delete(txHash);
     return;
   }
+  // Cleared it — do not let a past blip count toward a future give-up.
+  _swapFailures.delete(txHash);
 
   // Record as 'converting' — swapPoller polls until done then credits (if creditUser)
   await supabase.from('transactions').insert({
