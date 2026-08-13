@@ -7,6 +7,7 @@ import GameLobby from '../components/GameLobby';
 import GlowButton from '../components/GlowButton';
 import ResultScreen from '../components/ResultScreen';
 import { usePageReady } from '../hooks/usePageReady';
+import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import { useResumeMatch } from '../hooks/useResumeMatch';
 import { playMatchFound, playCountdown, playGo } from '../utils/sound';
 import HighwayCanvas from '../components/HighwayCanvas';
@@ -52,6 +53,11 @@ export default function CarDashGame() {
   const [entryFee, setEntryFee] = useState(location.state?.entryFee ?? 1);
   const [statusMsg, setStatusMsg] = useState('');
   const [countdown, setCountdown] = useState(0);
+  // Pin the page for the countdown and the match itself: start at the top,
+  // and no scrolling the board off-screen while it is being played.
+  // Placed after `countdown` is declared — referencing it above would hit
+  // the temporal dead zone and throw on mount.
+  useGameScrollLock(countdown > 0 || phase === 'playing');
   const [opponent, setOpponent] = useState(null);
   const [seed, setSeed] = useState(null);
   const [roomId, setRoomId] = useState(null);
@@ -316,24 +322,19 @@ export default function CarDashGame() {
   if (phase === 'result' && result?.soloRun) {
     return (
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-4">
-        <div className="bg-surface border border-surfaceLight rounded-2xl p-8 text-center max-w-sm w-full animate-slide-up">
-          <div className="text-5xl mb-3">🚗</div>
-          <h2 className="text-3xl font-black text-white mb-5">Run Over</h2>
-          <div className="flex gap-3 mb-6">
-            <div className="flex-1 bg-bg rounded-xl p-4">
-              <div className="text-3xl font-black text-primary">{fmtTime(result.ms)}</div>
-              <div className="text-xs text-muted mt-0.5">Survived</div>
-            </div>
-            <div className="flex-1 bg-bg rounded-xl p-4">
-              <div className="text-3xl font-black text-white">{(result.score ?? 0).toLocaleString()}</div>
-              <div className="text-xs text-muted mt-0.5">Score</div>
-            </div>
-          </div>
-          <div className="flex flex-col gap-3">
-            <GlowButton onClick={playAgain} variant="primary" size="lg" className="w-full">Run Again</GlowButton>
-            <GlowButton variant="ghost" onClick={reset} className="w-full border border-border">Back</GlowButton>
-          </div>
-        </div>
+        <ResultScreen
+          solo
+          soloTitle="Run Over"
+          soloEmoji="🎮"
+          profile={profile}
+          gameLabel="🎮 Solo Endless"
+          extraRows={[
+            { label: 'Survived', value: fmtTime(result.ms) },
+            { label: 'Score',    value: (result.score ?? 0).toLocaleString() },
+          ]}
+          onPlayAgain={playAgain}
+          onBackToLobby={reset}
+        />
       </div>
     );
   }

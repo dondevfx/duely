@@ -14,6 +14,7 @@ import CreateRoomModal from '../components/CreateRoomModal';
 import JoinRoomModal from '../components/JoinRoomModal';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
 import { usePageReady } from '../hooks/usePageReady';
+import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import { useResumeMatch } from '../hooks/useResumeMatch';
 import CoinIcon from '../components/CoinIcon';
 
@@ -248,6 +249,11 @@ function BlackjackGame() {
   const [statusMsg, setStatusMsg] = useState('');
   const [roomId, setRoomId] = useState(null);
   const [countdown, setCountdown] = useState(0); // visual countdown only — does not change phase
+  // Pin the page for the countdown and the match itself: start at the top,
+  // and no scrolling the board off-screen while it is being played.
+  // Placed after `countdown` is declared — referencing it above would hit
+  // the temporal dead zone and throw on mount.
+  useGameScrollLock(countdown > 0 || phase === 'playing' || phase === 'reveal');
 
   const [opponentUsername, setOpponentUsername] = useState('');
   const [myHand, setMyHand] = useState([]);

@@ -14,6 +14,7 @@ import CreateRoomModal from '../components/CreateRoomModal';
 import JoinRoomModal from '../components/JoinRoomModal';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
 import { usePageReady } from '../hooks/usePageReady';
+import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import CoinIcon from '../components/CoinIcon';
 
 function fmtFee(fee) {
@@ -209,6 +210,9 @@ export default function CoinFlipGame() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [phase, setPhase] = useState('lobby');
+  // Pin the page for the countdown and the match itself: start at the top,
+  // and no scrolling the board off-screen while it is being played.
+  useGameScrollLock(phase === 'countdown' || phase === 'flipping');
   const [countdown, setCountdown] = useState(0);
   const [side, setSide] = useState('heads');
   const [privateCode, setPrivateCode] = useState('');

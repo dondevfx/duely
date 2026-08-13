@@ -80,6 +80,14 @@ export default function ResultScreen({
   onBackToLobby,
   rematchLabel = 'Rematch',
   gameLabel = '',
+  // Solo endless: a run with no opponent. Block Burst and Rush Hour each had
+  // their own hand-built card for this, which is why those two looked unlike
+  // every other result in the app. Same card, same timer, same buttons — it
+  // just drops everything that needs an opponent to mean anything (win/loss,
+  // streak, placement, ELO, payout) rather than inventing one.
+  solo = false,
+  soloTitle = 'Run Over',
+  soloEmoji = '🎮',
 }) {
   // onBackToLobby falls back to onPlayAgain for pages that haven't split the two yet
   const goBack = onBackToLobby ?? onPlayAgain;
@@ -95,7 +103,9 @@ export default function ResultScreen({
 
   // Play the result sound once when this card mounts.
   useEffect(() => {
-    if (isDraw) playDraw();
+    // A solo run is neither won nor lost, so it takes the neutral chime. The
+    // loss sting on every practice run would read as punishment for playing.
+    if (solo || isDraw) playDraw();
     else if (isWinner) playWin();
     else playLoss();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -110,28 +120,29 @@ export default function ResultScreen({
           {/* Win / Loss / Draw header */}
           <div className="text-center mb-5">
             <div className="text-5xl mb-2">
-              {isDraw ? '🤝' : isWinner ? '🏆' : '💀'}
+              {solo ? soloEmoji : isDraw ? '🤝' : isWinner ? '🏆' : '💀'}
             </div>
-            <div className={`text-3xl font-black ${isDraw ? 'text-accent' : isWinner ? 'text-success' : 'text-danger'}`}>
-              {isDraw ? 'Draw!' : isWinner ? 'Victory!' : 'Defeat'}
+            <div className={`text-3xl font-black ${solo || isDraw ? 'text-accent' : isWinner ? 'text-success' : 'text-danger'}`}>
+              {solo ? soloTitle : isDraw ? 'Draw!' : isWinner ? 'Victory!' : 'Defeat'}
             </div>
-            {!isDraw && isWinner && winnerStreak >= 1 && (
+            {!solo && !isDraw && isWinner && winnerStreak >= 1 && (
               <p className="text-base font-bold text-orange-400 mt-1" style={{ textShadow: '0 0 10px rgba(251,146,60,0.5)' }}>
                 🔥 {winnerStreak} Win Streak!
               </p>
             )}
-            {!isDraw && !isWinner && (
+            {!solo && !isDraw && !isWinner && (
               <p className="text-sm text-muted mt-1">Your win streak has been reset</p>
             )}
-            {!isDraw && isWinner && isFirstWin && (
+            {!solo && !isDraw && isWinner && isFirstWin && (
               <div className="mt-2 px-4 py-1.5 rounded-xl bg-yellow-400/10 border border-yellow-400/30 text-yellow-300 text-sm font-bold inline-block">
                 🎉 First Victory!
               </div>
             )}
           </div>
 
-          {/* Placement progress (first 3 matches) */}
-          {!ranked && (
+          {/* Placement progress (first 3 matches). A solo run does not count
+              toward placement, so showing the tracker here would imply it does. */}
+          {!solo && !ranked && (
             <div className="mb-4 p-3 rounded-xl bg-primary/10 border border-primary/30 text-center">
               <div className="text-xs font-bold text-primary mb-1">Placement Matches</div>
               <div className="flex justify-center gap-2 mb-1">
@@ -152,7 +163,11 @@ export default function ResultScreen({
           {/* Stats */}
           <div className="bg-bg rounded-xl p-4 mb-4 space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-muted">{isWinner ? winnerUsername : loserUsername} vs {isWinner ? loserUsername : winnerUsername}</span>
+              <span className="text-muted">
+                {solo
+                  ? (profile?.username || 'You')
+                  : `${isWinner ? winnerUsername : loserUsername} vs ${isWinner ? loserUsername : winnerUsername}`}
+              </span>
               <span className="text-xs text-muted">{gameLabel}</span>
             </div>
             {disconnected && (
@@ -185,6 +200,9 @@ export default function ResultScreen({
                 <span className="text-white font-bold">{r.value}</span>
               </div>
             ))}
+            {/* No ELO and no payout on a solo run — nothing was staked and
+                nothing was rated, and a "0" or "Unranked" row implies otherwise. */}
+            {!solo && (
             <div className="flex justify-between border-t border-surfaceLight/40 pt-2">
               <span className="text-muted">ELO</span>
               {showElo ? (
@@ -200,7 +218,8 @@ export default function ResultScreen({
                 <span className="font-bold" style={{ color: '#64748b' }}>Unranked</span>
               )}
             </div>
-            {(balanceChange || (isDraw && entryFee > 0) || (!isDraw && entryFee > 0)) && (
+            )}
+            {!solo && (balanceChange || (isDraw && entryFee > 0) || (!isDraw && entryFee > 0)) && (
               <div className="border-t border-surfaceLight/40 pt-3 mt-1 text-center">
                 <div className="text-xs text-muted mb-1 uppercase tracking-widest font-semibold">
                   {isDraw ? 'Your Split' : isWinner ? 'Payout' : 'Entry Lost'}

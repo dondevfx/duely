@@ -8,6 +8,7 @@ import GameLobby, { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
 import GlowButton from '../components/GlowButton';
 import ResultScreen from '../components/ResultScreen';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
+import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import { useResumeMatch } from '../hooks/useResumeMatch';
 
 const MAX_GUESSES = 6;
@@ -178,6 +179,9 @@ export default function WordleGame() {
 
   // ── Phase + bet state ─────────────────────────────────────────────────────
   const [phase,       setPhase]       = useState('lobby');
+  // Pin the page for the countdown and the match itself: start at the top,
+  // and no scrolling the board off-screen while it is being played.
+  useGameScrollLock(phase === 'countdown' || phase === 'playing');
   const [entryFee,    setEntryFee]    = useState(() => location.state?.entryFee ?? (betCurrency === 'diamonds' ? DIAMOND_FEES[0] : COIN_FEES[0]));
   const [roomId,      setRoomId]      = useState(null);
   const [opponent,    setOpponent]    = useState(null);

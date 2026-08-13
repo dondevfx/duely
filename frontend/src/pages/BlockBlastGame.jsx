@@ -9,6 +9,7 @@ import GameLobby from '../components/GameLobby';
 import ResultScreen from '../components/ResultScreen';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
 import { usePageReady } from '../hooks/usePageReady';
+import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import { useResumeMatch } from '../hooks/useResumeMatch';
 import CoinIcon from '../components/CoinIcon';
 
@@ -154,6 +155,9 @@ export default function BlockBlastGame() {
   const location = useLocation();
 
   const [phase, _setPhase]             = useState(location.state?.autoQueue ? 'queue' : 'lobby');
+  // Pin the page for the countdown and the match itself: start at the top,
+  // and no scrolling the board off-screen while it is being played.
+  useGameScrollLock(phase === 'countdown' || phase === 'active');
   const { displayCurrency: betCurrency, setDisplayCurrency: setBetCurrency } = useCurrency();
   useEffect(() => { if (location.state?.betCurrency) setBetCurrency(location.state.betCurrency); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [entryFee, setEntryFee]       = useState(() => location.state?.entryFee ?? (betCurrency === 'diamonds' ? DIAMOND_FEES[0] : COIN_FEES[0]));
@@ -809,19 +813,19 @@ export default function BlockBlastGame() {
         </div>
       )}
       {phase === 'result' && result && result.isSolo && result.humanWon === null && (
-        <div className="w-full flex items-center justify-center" style={{ minHeight: 'calc(100vh - 56px)' }}>
-          <div className="w-full max-w-md bg-surface border border-surfaceLight rounded-3xl p-8 text-center animate-scale-in shadow-2xl overflow-y-auto">
-            <div className="text-7xl mb-4 animate-pop-in">🎮</div>
-            <h2 className="text-4xl font-black mb-2 text-accent">Game Over!</h2>
-            <div className="bg-bg rounded-xl p-6 mb-6">
-              <div className="text-5xl font-black text-white mb-1">{(result.playerScore ?? 0).toLocaleString()}</div>
-              <div className="text-sm text-muted">Final Score</div>
-            </div>
-            <div className="flex flex-col gap-3">
-              <GlowButton onClick={() => playAgain(playVsBotFree)} variant="primary" size="lg" className="w-full">Play Again</GlowButton>
-              <GlowButton variant="ghost" onClick={() => { window.location.href = '/'; }} className="w-full border border-border">Home</GlowButton>
-            </div>
-          </div>
+        <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center overflow-y-auto px-3 sm:px-4 py-2">
+          <ResultScreen
+            solo
+            soloTitle="Game Over"
+            soloEmoji="🎮"
+            profile={profile}
+            gameLabel="🟦 Block Burst"
+            extraRows={[
+              { label: 'Final Score', value: (result.playerScore ?? 0).toLocaleString() },
+            ]}
+            onPlayAgain={() => playAgain(playVsBotFree)}
+            onBackToLobby={backToLobby}
+          />
         </div>
       )}
 
