@@ -917,12 +917,18 @@ function BlackjackGame() {
                 {profile?.username || 'You'}
                 {rd && rd.winnerId === profile?.id && <span style={{ marginLeft: 6, fontSize: 14 }}>👑</span>}
               </div>
-              <ScoreBadge
-                score={rd ? (myReveal?.score ?? myScore) : myScore}
-                bust={bust || (rd && myReveal?.score > 21)}
-                stood={stood}
-                isLight={isLight}
-              />
+              {/* Hidden during a split: each hand carries its own badge under
+                  its cards, and this one has no hand to belong to. With a split
+                  bust it rendered a second red "Bust" above the cards while the
+                  hand's own badge said the same thing below them. */}
+              {!splitData && (
+                <ScoreBadge
+                  score={rd ? (myReveal?.score ?? myScore) : myScore}
+                  bust={bust || (rd && myReveal?.score > 21)}
+                  stood={stood}
+                  isLight={isLight}
+                />
+              )}
             </div>
           </div>
           {/* Player hand(s). When split: two hands side by side, same card style,
@@ -946,28 +952,36 @@ function BlackjackGame() {
                     <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', color: active ? '#22c55e' : textMuted }}>
                       Hand {hn}{active ? ' · Active' : done ? ' · Done' : ''}
                     </div>
-                    <div style={{ display: 'flex', gap: 5, justifyContent: 'center' }}>
+                    {/* Full-size cards, same gap as a normal hand. They used to
+                        be scaled to 0.82 and overlapped so two hands would sit
+                        side by side on desktop — but mobile only ever renders
+                        the active hand, so it paid that cost for nothing, and on
+                        desktop the outer row already wraps. Wrapping to a second
+                        row beats shrinking every card. */}
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', maxWidth: '100%' }}>
                       {(hand || []).map((c, i) => (
-                        <div key={i} style={{ transform: 'scale(0.82)', transformOrigin: 'center', margin: '0 -5px' }}>
-                          <CardFace card={c} />
-                        </div>
+                        <CardFace key={i} card={c} />
                       ))}
                     </div>
                     {score != null && <ScoreBadge score={score} bust={score > 21} isLight={isLight} />}
                     {/* HIT / STAND live under the hand they act on */}
                     {active && phase === 'playing' && !splitPending && (
                       // Fixed width, not 100%. This column is a shrink-to-fit flex
-                      // item sized by the cards above it — which are scaled 0.82 and
-                      // overlapped — so `width: 100%` resolved to roughly the width
-                      // of two cards and squashed HIT/STAND to about half their
-                      // normal size. A real width makes the column grow instead.
-                      <div style={{ width: 300, maxWidth: '100%', marginTop: 8 }}>
+                      // item sized by the cards above it, so `width: 100%`
+                      // resolved to roughly the width of the hand and squashed
+                      // HIT/STAND. 360 is the same max the non-split buttons use,
+                      // so they come out identical in both modes rather than
+                      // merely close.
+                      <div style={{ width: 360, maxWidth: '100%', marginTop: 8 }}>
                         {actionButtons()}
                       </div>
                     )}
                     {active && phase === 'playing' && splitPending && (
+                      // The badge directly above already states the score and
+                      // whether it busted; repeating it here just said "Bust"
+                      // twice in adjacent lines.
                       <p style={{ marginTop: 8, fontSize: 12, color: textMuted, fontWeight: 700 }}>
-                        {score > 21 ? '💥 Bust' : `✅ ${score}`} — moving to Hand 2…
+                        Moving to Hand 2…
                       </p>
                     )}
                   </div>
