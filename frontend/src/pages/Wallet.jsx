@@ -254,13 +254,7 @@ export default function Wallet() {
     <div className="min-h-[calc(100vh-56px)] bg-bg flex items-center justify-center px-4">
       <div className="text-center">
         <div className="text-5xl mb-4">💰</div>
-        <div className="flex items-baseline justify-between mb-2">
-          <h2 className="text-2xl font-black text-white">Wallet</h2>
-          {/* The page where money goes wrong is the page to ask about it from. */}
-          <Link to="/support" className="text-xs text-muted hover:text-primary underline underline-offset-2">
-            Problem with a deposit or withdrawal?
-          </Link>
-        </div>
+        <h2 className="text-2xl font-black text-white mb-2">Wallet</h2>
         <p className="text-muted mb-6">Login to deposit, withdraw, and manage your balance.</p>
         <Link to="/login" className="px-6 py-3 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl transition-all">Login to Access</Link>
       </div>
@@ -283,6 +277,14 @@ export default function Wallet() {
             </span>
           </div>
           <div className="text-sm text-muted truncate">≈ ${fmtCoins(profile?.c_coins)} USD</div>
+        </div>
+
+        {/* The page where money goes wrong is the page to ask about it from —
+            but only once signed in, since raising a ticket needs an account. */}
+        <div className="flex justify-end -mt-2 mb-3">
+          <Link to="/support" className="text-xs text-muted hover:text-primary underline underline-offset-2">
+            Problem with a deposit or withdrawal?
+          </Link>
         </div>
 
         {/* ── Deposit ──────────────────────────────────────────────────── */}
