@@ -689,8 +689,10 @@ export default function CoinFlipGame() {
                     className={`py-4 sm:py-3 rounded-xl text-center font-black border-2 transition-all ${
                       side === s ? 'border-primary bg-primary/20 text-white' : 'border-border text-muted hover:border-primary/50 hover:text-white'
                     }`}>
-                    <div className="text-base sm:text-xl mb-0 sm:mb-0.5">{s === 'heads' ? '🔵' : '⚪'}</div>
-                    <div className="capitalize text-[11px] sm:text-sm leading-none">{s}</div>
+                    {/* Mobile sizes only. The sm: values stay where they were
+                        tuned to fit the lobby on a 1080p viewport. */}
+                    <div className="text-xl sm:text-xl mb-0.5 sm:mb-0.5">{s === 'heads' ? '🔵' : '⚪'}</div>
+                    <div className="capitalize text-[13px] sm:text-sm leading-none">{s}</div>
                   </button>
                 ))}
               </div>
