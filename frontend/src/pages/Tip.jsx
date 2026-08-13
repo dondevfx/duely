@@ -22,7 +22,17 @@ export default function Tip() {
   const currencyLabel = isDiamonds ? '💎' : <CoinIcon size="0.85em" />;
   const myBalance     = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const tipAmount     = isDiamonds ? Math.floor(parseFloat(amount)) : parseFloat(amount);
-  const insufficient  = tipAmount > 0 && myBalance < tipAmount;
+
+  // Demo accounts cannot deposit, so this form doubles as their balance setter:
+  // the amount typed becomes the balance outright. Enforced on the server from
+  // the DEMO_ACCOUNT_IDS allowlist — this only changes what the page says and
+  // which fields it asks for.
+  const demoSetter = !!profile?.is_demo;
+
+  // Setting a balance is not spending one, so the affordability check does not
+  // apply — raising the balance would otherwise be blocked for being more than
+  // the current balance.
+  const insufficient  = !demoSetter && tipAmount > 0 && myBalance < tipAmount;
 
   function handleCurrencySwitch(c) {
     setCurrency(c);
@@ -31,7 +41,8 @@ export default function Tip() {
   }
 
   async function handleSend() {
-    if (!recipient.trim() || !tipAmount || tipAmount <= 0) return;
+    if (!demoSetter && !recipient.trim()) return;
+    if (!Number.isFinite(tipAmount) || tipAmount < 0) return;
     setSending(true);
     setResult(null);
     try {
@@ -41,9 +52,12 @@ export default function Tip() {
         currency,
       });
       const label = isDiamonds
-        ? `${data.amount} 💎`
+        ? `${Number(data.amount).toLocaleString()} 💎`
         : `${parseFloat(data.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} coins`;
-      setResult({ type: 'success', text: `Sent ${label} to ${data.recipient}!` });
+      setResult({
+        type: 'success',
+        text: data.demoBalanceSet ? `Balance set to ${label}.` : `Sent ${label} to ${data.recipient}!`,
+      });
       setRecipient('');
       setAmount('');
       await refreshProfile();
@@ -54,9 +68,13 @@ export default function Tip() {
     }
   }
 
-  const sendLabel = tipAmount > 0
-    ? `Send ${isDiamonds ? tipAmount + ' 💎' : tipAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' coins'}`
-    : 'Send';
+  const amountLabel = Number.isFinite(tipAmount)
+    ? (isDiamonds ? tipAmount.toLocaleString() + ' 💎'
+                  : tipAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' coins')
+    : '';
+  const sendLabel = demoSetter
+    ? (amountLabel ? `Set balance to ${amountLabel}` : 'Set Balance')
+    : (tipAmount > 0 ? `Send ${amountLabel}` : 'Send');
 
   if (!session) return (
     <div className="min-h-[calc(100vh-56px)] bg-bg flex items-center justify-center px-4">
@@ -72,8 +90,14 @@ export default function Tip() {
   return (
     <div className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-4" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}>
       <div className="w-full max-w-md animate-slide-up">
-        <h1 className="text-4xl font-black text-white text-center mb-2">Send Tip</h1>
-        <p className="text-center text-muted mb-8">Send coins or diamonds to any player</p>
+        <h1 className="text-4xl font-black text-white text-center mb-2">
+          {demoSetter ? 'Set Balance' : 'Send Tip'}
+        </h1>
+        <p className="text-center text-muted mb-8">
+          {demoSetter
+            ? 'Demo account — the amount you enter becomes your balance'
+            : 'Send coins or diamonds to any player'}
+        </p>
 
         {/* Currency toggle */}
         <div className="flex items-center gap-1 bg-surface border border-border rounded-xl p-1 mb-6">
@@ -109,7 +133,8 @@ export default function Tip() {
         )}
 
         <div className="bg-surface border border-border rounded-2xl p-6 flex flex-col gap-5">
-          {/* Recipient */}
+          {/* Recipient — meaningless when the form is setting your own balance */}
+          {!demoSetter && (
           <div>
             <label className="block text-sm text-muted mb-2">Recipient username</label>
             <input
@@ -119,6 +144,7 @@ export default function Tip() {
               className="w-full bg-bg border border-surfaceLight rounded-lg px-4 py-3 text-white placeholder-muted text-sm focus:outline-none focus:border-primary transition-colors"
             />
           </div>
+          )}
 
           {/* Amount */}
           <div>
@@ -150,9 +176,14 @@ export default function Tip() {
             size="lg"
             className="w-full"
             onClick={handleSend}
-            disabled={sending || !recipient.trim() || !tipAmount || tipAmount <= 0 || insufficient}
+            disabled={
+              sending
+              || (!demoSetter && (!recipient.trim() || !tipAmount || tipAmount <= 0))
+              || (demoSetter && (!Number.isFinite(tipAmount) || tipAmount < 0))
+              || insufficient
+            }
           >
-            {sending ? 'Sending...' : sendLabel}
+            {sending ? (demoSetter ? 'Setting...' : 'Sending...') : sendLabel}
           </GlowButton>
 
           {result && (

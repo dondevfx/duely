@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, optionalAuth } = require('../middleware/auth');
 const { isDemo, DEMO_IDS } = require('../services/demoAccounts');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -296,12 +296,20 @@ module.exports = function authRoutes(supabase) {
 
   // Public: who is behind this link? Lets a logged-out visitor see who invited
   // them before they sign up. Returns only what a profile page already shows.
-  router.get('/friend-invite/:username', async (req, res) => {
+  router.get('/friend-invite/:username', optionalAuth, async (req, res) => {
     const { data: p } = await supabase.from('profiles')
       .select('id, username, elo, profile_color, current_streak')
       .eq('username', String(req.params.username || '').trim())
       .maybeSingle();
-    if (!p || p.id === ADMIN_ID || isDemo(p.id)) return res.status(404).json({ error: 'Invite not found' });
+    // Same rule the POST below uses: a demo is hidden from everyone EXCEPT
+    // another demo. This route is public, so it read as a blanket block and the
+    // two demo accounts could never use each other's invite links — the POST
+    // would have accepted the request, but the preview 404'd before anyone got
+    // that far. optionalAuth exists so this can tell the two callers apart
+    // without closing the route to logged-out visitors.
+    if (!p || p.id === ADMIN_ID || (isDemo(p.id) && !isDemo(req.user?.id))) {
+      return res.status(404).json({ error: 'Invite not found' });
+    }
     const { id, ...safe } = p;   // don't hand out the user id to anonymous callers
     res.json(safe);
   });

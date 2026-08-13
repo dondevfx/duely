@@ -1,4 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
+const { closestByElo } = require('./queueMatch');
 const { findRoomBySocket } = require('./roomLookup');
 
 // queue: [{ socketId, userId, username, elo, entryFee, currency }]
@@ -27,7 +28,7 @@ function tryMatch() {
   const p1 = queue.shift();
 
   // Find closest entry fee match
-  const matchIdx = queue.findIndex(p => p.entryFee === p1.entryFee && p.currency === p1.currency && !!p.isDemo === !!p1.isDemo);
+  const matchIdx = closestByElo(queue, p1, p => p.entryFee === p1.entryFee && p.currency === p1.currency && !!p.isDemo === !!p1.isDemo);
   if (matchIdx === -1) {
     queue.unshift(p1);
     return null;

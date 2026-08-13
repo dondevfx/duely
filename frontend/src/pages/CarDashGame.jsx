@@ -7,7 +7,6 @@ import GameLobby from '../components/GameLobby';
 import GlowButton from '../components/GlowButton';
 import ResultScreen from '../components/ResultScreen';
 import { usePageReady } from '../hooks/usePageReady';
-import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import { useResumeMatch } from '../hooks/useResumeMatch';
 import { playMatchFound, playCountdown, playGo } from '../utils/sound';
 import HighwayCanvas from '../components/HighwayCanvas';
@@ -53,11 +52,6 @@ export default function CarDashGame() {
   const [entryFee, setEntryFee] = useState(location.state?.entryFee ?? 1);
   const [statusMsg, setStatusMsg] = useState('');
   const [countdown, setCountdown] = useState(0);
-  // Pin the page for the countdown and the match itself: start at the top,
-  // and no scrolling the board off-screen while it is being played.
-  // Placed after `countdown` is declared — referencing it above would hit
-  // the temporal dead zone and throw on mount.
-  useGameScrollLock(countdown > 0 || phase === 'playing');
   const [opponent, setOpponent] = useState(null);
   const [seed, setSeed] = useState(null);
   const [roomId, setRoomId] = useState(null);
@@ -324,7 +318,7 @@ export default function CarDashGame() {
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-4">
         <ResultScreen
           solo
-          soloTitle="Run Over"
+          soloTitle="Game Over"
           soloEmoji="🎮"
           profile={profile}
           gameLabel="🎮 Solo Endless"

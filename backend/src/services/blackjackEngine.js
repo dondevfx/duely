@@ -5,6 +5,7 @@
 // these use crypto.randomInt instead. Cosmetic randomness elsewhere (bot names,
 // timing jitter) is deliberately left alone.
 const { randomInt } = require('node:crypto');
+const { closestByElo } = require('./queueMatch');
 const { findRoomBySocket } = require('./roomLookup');
 const { v4: uuidv4 } = require('uuid');
 const { calculateNewRatings, applyMatchStreaks, applyEloUpdate } = require('./eloService');
@@ -51,7 +52,7 @@ function _queueKey(entryFee, currency) { return `${entryFee}:${currency}`; }
 function addToBlackjackQueue(player) {
   const key = _queueKey(player.entryFee, player.currency);
   const queue = bjQueues.get(key) || [];
-  const idx = queue.findIndex(p => p.socketId !== player.socketId && !!p.isDemo === !!player.isDemo);
+  const idx = closestByElo(queue, player, p => p.socketId !== player.socketId && !!p.isDemo === !!player.isDemo);
   if (idx !== -1) {
     const opponent = queue.splice(idx, 1)[0];
     if (queue.length === 0) bjQueues.delete(key); else bjQueues.set(key, queue);

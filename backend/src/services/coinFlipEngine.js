@@ -5,6 +5,7 @@
 // these use crypto.randomInt instead. Cosmetic randomness elsewhere (bot names,
 // timing jitter) is deliberately left alone.
 const { randomInt } = require('node:crypto');
+const { closestByElo } = require('./queueMatch');
 const { findRoomBySocket } = require('./roomLookup');
 const { v4: uuidv4 } = require('uuid');
 const { calculateNewRatings, applyMatchStreaks, applyEloUpdate } = require('./eloService');
@@ -27,7 +28,7 @@ function addToCoinFlipQueue(player) {
   const own = player.side === 'heads' ? headsQueues : tailsQueues;
 
   const oppQueue = opposite.get(key) || [];
-  const oppIdx = oppQueue.findIndex(p => !!p.isDemo === !!player.isDemo);
+  const oppIdx = closestByElo(oppQueue, player, p => !!p.isDemo === !!player.isDemo);
   if (oppIdx !== -1) {
     const opponent = oppQueue.splice(oppIdx, 1)[0];
     if (oppQueue.length === 0) opposite.delete(key); else opposite.set(key, oppQueue);

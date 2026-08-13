@@ -446,24 +446,59 @@ module.exports = function walletRoutes(supabase, io) {
     const { recipientUsername, currency = 'coins' } = req.body;
     const isDiamonds = currency === 'diamonds';
 
-    if (!recipientUsername || typeof recipientUsername !== 'string') {
+    // Demo accounts use this form to set their own balance (see below), so they
+    // have no recipient to name.
+    const demoSetter = isDemo(req.user.id);
+
+    if (!demoSetter && (!recipientUsername || typeof recipientUsername !== 'string')) {
       return res.status(400).json({ error: 'recipientUsername required' });
     }
 
     let tipAmount;
     try {
+      // The tip ceiling exists to bound what one real account can hand another.
+      // A demo is setting its own play money, so that ceiling has nothing to do
+      // with it — a $1,000 cap would make it useless for demonstrating the
+      // higher stakes. Still bounded, so a typo cannot write nonsense.
+      const coinMax = demoSetter ? 1_000_000 : MAX_TIP_COINS;
       tipAmount = isDiamonds
-        ? sanitizeDiamondAmount(req.body.amount, 1, MAX_TIP_DIAMONDS)
-        : sanitizeAmount(req.body.amount, 0.01, MAX_TIP_COINS);
+        ? sanitizeDiamondAmount(req.body.amount, demoSetter ? 0 : 1, MAX_TIP_DIAMONDS)
+        : sanitizeAmount(req.body.amount, demoSetter ? 0 : 0.01, coinMax);
     } catch (e) {
       return res.status(400).json({ error: e.message });
+    }
+
+    // ── Demo accounts: tip sets your own balance ────────────────────────────
+    //
+    // A demo account cannot deposit, so there is otherwise no way to put it at a
+    // chosen balance for a walkthrough. Rather than build a second admin screen,
+    // the tip form doubles as a balance setter: type a number, press Tip, that
+    // becomes the balance.
+    //
+    // Handled before the recipient lookup, so the field can be left empty — the
+    // recipient is meaningless here.
+    //
+    // This writes the balance directly instead of crediting, and so must never
+    // be reachable by a real account: it would be minting. isDemo is an explicit
+    // allowlist from DEMO_ACCOUNT_IDS, not a flag on the row, so it cannot be
+    // set by anything a user controls.
+    if (isDemo(req.user.id)) {
+      const column = isDiamonds ? 'diamonds' : 'c_coins';
+      const value  = isDiamonds ? Math.round(tipAmount) : tipAmount;
+      const { error } = await supabase.from('profiles')
+        .update({ [column]: value }).eq('id', req.user.id);
+      if (error) return res.status(500).json({ error: error.message });
+      console.log(`[demo] balance set ${column}=${value} for ${req.user.id}`);
+      return res.json({ success: true, demoBalanceSet: true, amount: value, currency });
     }
 
     const { data: recipient } = await supabase
       .from('profiles').select('id, username').eq('username', recipientUsername.trim()).single();
     if (!recipient) return res.status(404).json({ error: 'User not found' });
     if (recipient.id === req.user.id) return res.status(400).json({ error: 'You cannot tip yourself' });
-    if (isDemo(req.user.id) || isDemo(recipient.id)) return res.status(403).json({ error: 'Demo accounts cannot send or receive tips.' });
+    // A real account still cannot tip a demo, or the demo's fake balance would
+    // become real money in someone's pocket.
+    if (isDemo(recipient.id)) return res.status(403).json({ error: 'Demo accounts cannot send or receive tips.' });
 
     try {
       if (isDiamonds) {

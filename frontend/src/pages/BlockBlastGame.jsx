@@ -766,7 +766,7 @@ export default function BlockBlastGame() {
           `fixed inset-0 z-50`, which covered the top bar so the player could not
           see their balance or navigate away from the result. */}
       {phase === 'result' && result && !result.isSolo && (
-        <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center overflow-y-auto px-3 sm:px-4 py-2">
+        <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center overflow-y-auto py-2 w-full">
           <ResultScreen
             isWinner={isWinner}
             isDraw={result.draw}
@@ -793,7 +793,7 @@ export default function BlockBlastGame() {
         </div>
       )}
       {phase === 'result' && result && result.isSolo && result.humanWon !== null && (
-        <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center overflow-y-auto px-3 sm:px-4 py-2">
+        <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center overflow-y-auto py-2 w-full">
           <ResultScreen
             isWinner={result.humanWon}
             winnerUsername={result.humanWon ? profile?.username : 'Duely Bot'}
@@ -813,7 +813,7 @@ export default function BlockBlastGame() {
         </div>
       )}
       {phase === 'result' && result && result.isSolo && result.humanWon === null && (
-        <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center overflow-y-auto px-3 sm:px-4 py-2">
+        <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center overflow-y-auto py-2 w-full">
           <ResultScreen
             solo
             soloTitle="Game Over"

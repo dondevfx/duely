@@ -72,4 +72,22 @@ async function requireAuth(req, res, next) {
   next();
 }
 
-module.exports = { requireAuth, verifyToken };
+/**
+ * Like requireAuth, but a missing or bad token is not an error — req.user is
+ * simply left undefined.
+ *
+ * For public endpoints whose RESPONSE depends on who is asking. The friend
+ * invite preview is the case: it must stay anonymous-readable so a logged-out
+ * visitor can see who invited them, while still revealing a demo account to
+ * another demo account.
+ */
+async function optionalAuth(req, _res, next) {
+  const header = req.headers.authorization;
+  if (header?.startsWith('Bearer ')) {
+    const user = await verifyToken(header.slice(7)).catch(() => null);
+    if (user) req.user = user;
+  }
+  next();
+}
+
+module.exports = { requireAuth, optionalAuth, verifyToken };

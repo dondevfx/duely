@@ -5,6 +5,7 @@
 // these use crypto.randomInt instead. Cosmetic randomness elsewhere (bot names,
 // timing jitter) is deliberately left alone.
 const { randomInt } = require('node:crypto');
+const { closestByElo } = require('./queueMatch');
 const { findRoomBySocket } = require('./roomLookup');
 ﻿const { calculateNewRatings, applyMatchStreaks, applyEloUpdate } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
@@ -33,7 +34,7 @@ const CATCHUP_MS = 15_000;
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function addToBlockBlastQueue(player) {
-  const idx = blockBlastQueue.findIndex(p =>
+  const idx = closestByElo(blockBlastQueue, player, p =>
     p.socketId !== player.socketId &&
     p.entryFee === player.entryFee &&
     p.currency === player.currency &&

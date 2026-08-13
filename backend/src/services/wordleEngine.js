@@ -1,4 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
+const { closestByElo } = require('./queueMatch');
 const { findRoomBySocket } = require('./roomLookup');
 const { isValidWord } = require('./wordValidator');
 const { calculateNewRatings, applyMatchStreaks, applyEloUpdate } = require('./eloService');
@@ -186,7 +187,7 @@ function _makeRoom(roomId, p1, p2) {
 
 // ── Public queue / room API ──────────────────────────────────────────────────
 function addToWordleQueue(player) {
-  const idx = queue.findIndex(p =>
+  const idx = closestByElo(queue, player, p =>
     p.socketId  !== player.socketId &&
     p.entryFee  === player.entryFee &&
     p.currency  === player.currency &&

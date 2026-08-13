@@ -5,6 +5,7 @@
 // these use crypto.randomInt instead. Cosmetic randomness elsewhere (bot names,
 // timing jitter) is deliberately left alone.
 const { randomInt } = require('node:crypto');
+const { closestByElo } = require('./queueMatch');
 const { findRoomBySocket } = require('./roomLookup');
 /**
  * carDashEngine.js — "Rush Hour"
@@ -79,7 +80,7 @@ const carDashQueue = [];
 
 // ── Queue ────────────────────────────────────────────────────────────────────
 function addToCarDashQueue(player) {
-  const idx = carDashQueue.findIndex(p =>
+  const idx = closestByElo(carDashQueue, player, p =>
     p.socketId !== player.socketId &&
     p.entryFee === player.entryFee &&
     p.currency === player.currency &&
