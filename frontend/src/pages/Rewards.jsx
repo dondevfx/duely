@@ -306,22 +306,29 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
           }}
         />
 
-        {/* Spin glow ring */}
-        {spinning && (
-          <div
-            className="absolute rounded-full animate-pulse"
-            style={{
-              // Matches SpinWheel: the rim ends at ~91% of the SVG box, so 104%
-              // left a ring hanging in the viewBox padding rather than hugging
-              // the wheel.
-              width:     '94%',
-              aspectRatio: '1 / 1',
-              background: 'transparent',
-              border:    `2px solid ${tier.color}55`,
-              boxShadow: `0 0 30px ${tier.glow}`,
-            }}
-          />
-        )}
+        {/* Wheel box — see SpinWheel: the ring's percentage width resolves
+            against its containing block's padding box, and the row outside
+            carries px-2/sm:px-4, so the ring was measured from a wider box than
+            the SVG it was meant to trace. This wrapper is the wheel's own box. */}
+        <div className="relative w-full" style={{ maxWidth: SIZE }}>
+          {/* Spin glow ring */}
+          {spinning && (
+            <div
+              className="absolute rounded-full animate-pulse pointer-events-none"
+              style={{
+                // Same geometry as SpinWheel: the rim's outer stroke ends at 137
+                // of the 150 half-viewBox, so the ring sits on it at 91.33%.
+                width:      '91.33%',
+                aspectRatio: '1 / 1',
+                top:        '50%',
+                left:       '50%',
+                transform:  'translate(-50%, -50%)',
+                background: 'transparent',
+                border:    `2px solid ${tier.color}55`,
+                boxShadow: `0 0 30px ${tier.glow}`,
+              }}
+            />
+          )}
 
         {/* The SVG wheel */}
         <div
@@ -446,6 +453,7 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
             <circle cx={CX} cy={CY} r={18} fill="none"                stroke="#1e293b"  strokeWidth="1"   />
             <text x={CX} y={CY + 1} textAnchor="middle" dominantBaseline="middle" fontSize="16">💎</text>
           </svg>
+        </div>
         </div>
 
       </div>

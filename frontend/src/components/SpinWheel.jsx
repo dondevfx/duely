@@ -175,26 +175,33 @@ export default function SpinWheel({ locked = false }) {
           filter: 'drop-shadow(0 2px 8px rgba(0,0,0,1))',
         }} />
 
-        {/* Spin ring glow */}
-        {spinning && (
-          <div className="absolute rounded-full animate-pulse" style={{
-            // Sits just outside the wheel rim, not the SVG box. The outer
-            // border ends at r = R + 6 = 136 of a 150 half-width, so the art
-            // stops at ~91% while this was drawn at 104% — the gap was the
-            // viewBox padding, not part of the wheel.
-            width: '94%', aspectRatio: '1 / 1',
-            background: 'transparent',
-            border: '2px solid rgba(255,255,255,0.12)',
-            boxShadow: '0 0 30px rgba(255,255,255,0.08)',
-          }} />
-        )}
+        {/* Wheel box — the ring measures against this, not the padded row.
+            A percentage width on an absolute element resolves against its
+            containing block's PADDING box. The row outside carries px-5, so the
+            ring was sized from a box 40px wider than the one holding the SVG:
+            two different denominators, which is why tuning the percentage alone
+            never closed the gap. This wrapper is exactly the wheel's box. */}
+        <div className="relative w-full" style={{ maxWidth: SIZE }}>
+          {/* Spin ring glow */}
+          {spinning && (
+            <div className="absolute rounded-full animate-pulse pointer-events-none" style={{
+              // The rim's outer stroke is r = R + 6 = 136 with a 2-wide stroke,
+              // so the art ends at 137 of the 150 half-viewBox: 91.33%. The ring
+              // now lands on that stroke instead of orbiting outside it.
+              width: '91.33%', aspectRatio: '1 / 1',
+              top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+              background: 'transparent',
+              border: '2px solid rgba(255,255,255,0.12)',
+              boxShadow: '0 0 30px rgba(255,255,255,0.08)',
+            }} />
+          )}
 
-        <div className="w-full" style={{
-          transform: `rotate(${rotation}deg)`,
-          transition: spinning ? 'transform 4s cubic-bezier(0.17,0.67,0.12,0.99)' : 'none',
-          willChange: 'transform',
-          maxWidth: SIZE,
-        }}>
+          <div className="w-full" style={{
+            transform: `rotate(${rotation}deg)`,
+            transition: spinning ? 'transform 4s cubic-bezier(0.17,0.67,0.12,0.99)' : 'none',
+            willChange: 'transform',
+            maxWidth: SIZE,
+          }}>
           <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-full h-auto block" style={{ maxWidth: SIZE }}>
             <defs>
               {SEG.map((seg, i) => {
@@ -287,6 +294,7 @@ export default function SpinWheel({ locked = false }) {
             <circle cx={CX} cy={CY} r={18} fill="none" stroke="#1e293b" strokeWidth="1" />
             <text x={CX} y={CY + 1} textAnchor="middle" dominantBaseline="middle" fontSize="16">💎</text>
           </svg>
+          </div>
         </div>
       </div>
 
