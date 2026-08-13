@@ -498,17 +498,28 @@ async function _resolveGame(io, supabase, roomId) {
 
   let winnerStreak = 0, isFirstWin = false;
   if (supabase) {
-    if (!isDraw && !isFree) {
+      // Record and rating are separate questions. A free match is still a
+      // match: it has a winner, a loser and a score, and leaving it out of the
+      // record made free play feel like it did not happen. What a free match
+      // must not do is move a rating or pay anything out, because nothing was
+      // staked — so ELO stays gated on the fee while the win/loss counters and
+      // the streak follow the result itself.
+    if (!isDraw) {
       if (!winner.isBot) {
-        try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch (eloWinErr) { console.error('[blackjackEngine] elo winner update failed:', eloWinErr.message); }
+        if (!isFree) {
+          try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch (eloWinErr) { console.error('[blackjackEngine] elo winner update failed:', eloWinErr.message); }
+        }
         try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch (e) { console.error('[blackjackEngine] increment_win:', e.message); }
       }
       if (!loser.isBot) {
-        try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch (eloLoseErr) { console.error('[blackjackEngine] elo loser update failed:', eloLoseErr.message); }
+        if (!isFree) {
+          try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch (eloLoseErr) { console.error('[blackjackEngine] elo loser update failed:', eloLoseErr.message); }
+        }
         try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch (e) { console.error('[blackjackEngine] increment_loss:', e.message); }
       }
       // Streaks are PvP-only — applyMatchStreaks no-ops on bot matches, and
-      // handles both the winner's increment and the loser's reset.
+      // handles both the winner's increment and the loser's reset. A streak is
+      // a win record, so it follows the wins rather than the fee.
       try { ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser)); } catch (e) { console.error('[blackjackEngine] streaks:', e.message); }
     }
 

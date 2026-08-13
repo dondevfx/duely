@@ -136,13 +136,17 @@ async function resolveCoinFlip(io, supabase, roomId) {
 
   let winnerStreak = 0, isFirstWin = false;
   if (supabase) {
-    if (!isFree) {
+    // A free match is still a match: it has a winner, a loser and a score.
+    // Leaving it out of the record made free play feel like it never happened.
+    // What it must not do is move a rating or pay out, since nothing was staked
+    // — so ELO stays gated on the fee while the counters follow the result.
+    {
       if (!winner.isBot) {
-        try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch {}
+        if (!isFree) { try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch {} }
         try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch {}
       }
       if (!loser.isBot) {
-        try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch {}
+        if (!isFree) { try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch {} }
         try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch {}
       }
       // Streaks are PvP-only; applyMatchStreaks is a no-op when either side

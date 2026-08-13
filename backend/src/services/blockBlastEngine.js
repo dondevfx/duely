@@ -435,15 +435,21 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
   // Fire-and-forget: ELO, streaks, highscores, match record
   Promise.resolve().then(async () => {
     let winnerStreak = 0, isFirstWin = false;
-    if (supabase && !isFree && !winner.isBot) {
-      try { await applyEloUpdate(supabase, winner.userId, newWinnerElo, true); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
+    // A free match still counts toward the record — see the note in
+    // blackjackEngine. Only the rating is gated on the entry fee.
+    if (supabase && !winner.isBot) {
+      if (!isFree) {
+        try { await applyEloUpdate(supabase, winner.userId, newWinnerElo, true); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
+      }
       try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
       // Streaks are PvP-only — applyMatchStreaks no-ops on bot matches.
       try { ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser)); } catch {}
     }
 
-    if (supabase && !isFree && !loser.isBot) {
-      try { await applyEloUpdate(supabase, loser.userId, newLoserElo, true); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
+    if (supabase && !loser.isBot) {
+      if (!isFree) {
+        try { await applyEloUpdate(supabase, loser.userId, newLoserElo, true); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
+      }
       try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
     }
     if (supabase) {

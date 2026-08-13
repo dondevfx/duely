@@ -511,15 +511,17 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
   // Fire-and-forget bookkeeping
   Promise.resolve().then(async () => {
     if (!supabase) return;
-    if (ranked && !winner.isBot) {
-      try { await applyEloUpdate(supabase, winner.userId, newWinnerElo, true); } catch {}
+    // A free run still counts toward the record — see the note in
+    // blackjackEngine. Only the rating is gated on `ranked`.
+    if (!winner.isBot) {
+      if (ranked) { try { await applyEloUpdate(supabase, winner.userId, newWinnerElo, true); } catch {} }
       try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch {}
       // Streaks are PvP-only — applyMatchStreaks no-ops on bot matches.
       try { await applyMatchStreaks(supabase, winner, loser); } catch {}
     }
 
-    if (ranked && !loser.isBot) {
-      try { await applyEloUpdate(supabase, loser.userId, newLoserElo, true); } catch {}
+    if (!loser.isBot) {
+      if (ranked) { try { await applyEloUpdate(supabase, loser.userId, newLoserElo, true); } catch {} }
       try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch {}
     }
     // Highscore is stored in seconds survived
