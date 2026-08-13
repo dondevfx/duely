@@ -629,13 +629,25 @@ async function loadAddresses() {
   return data || [];
 }
 
-async function pollOnce(supabase) {
-  const addresses = await loadAddresses();
-  if (!addresses.length) return;
+// Per-address delay, chosen per provider rather than one number for everything.
+// The old flat 500ms was set by the slowest provider and then applied to all of
+// them, which is the expensive part: a BlockCypher limit has nothing to do with
+// how fast Etherscan or Helius will answer.
+//
+// BlockCypher stays at 500ms — its free tier caps per hour as well as per
+// second, so it is the one worth being careful with. Etherscan-family allows
+// ~5/s, Helius considerably more.
+const COIN_DELAY_MS = {
+  btc: 500, ltc: 500, doge: 500,   // BlockCypher
+  eth: 250, bnb: 250, trx: 250,    // Etherscan / BscScan / TronGrid
+  sol: 120, usdc: 120,             // Helius
+};
+const DEFAULT_DELAY_MS = 500;
 
-  // Stagger polls so we don't hammer APIs all at once
-  for (let i = 0; i < addresses.length; i++) {
-    const { user_id, coin, address } = addresses[i];
+async function pollCoin(supabase, coin, list) {
+  const delay = COIN_DELAY_MS[coin] ?? DEFAULT_DELAY_MS;
+  for (let i = 0; i < list.length; i++) {
+    const { user_id, address } = list[i];
     try {
       const txs = await fetchTxs(coin, address);
       for (const tx of txs) {
@@ -651,8 +663,40 @@ async function pollOnce(supabase) {
     } catch (e) {
       console.error(`[monitor] poll error ${coin}/${address}:`, e.message);
     }
-    // Small delay between addresses to avoid rate limiting
-    if (i < addresses.length - 1) await new Promise(r => setTimeout(r, 500));
+    if (i < list.length - 1) await new Promise(r => setTimeout(r, delay));
+  }
+}
+
+async function pollOnce(supabase) {
+  const addresses = await loadAddresses();
+  if (!addresses.length) return;
+
+  // Coins run in parallel, addresses within a coin stay staggered.
+  //
+  // The whole list used to be walked as one sequence, so a BTC address waited
+  // behind every SOL address and vice versa even though they hit unrelated APIs.
+  // Every user has an address per coin, so that made a full pass cost
+  // users x coins x 500ms — at a few hundred users a pass took longer than the
+  // 45s interval, and detection latency grew with signups.
+  //
+  // Splitting by coin divides the pass by the number of coins at zero cost to
+  // any provider's rate limit, since each group talks to a different one.
+  const byCoin = new Map();
+  for (const a of addresses) {
+    if (!byCoin.has(a.coin)) byCoin.set(a.coin, []);
+    byCoin.get(a.coin).push(a);
+  }
+
+  const startedAt = Date.now();
+  await Promise.all(
+    [...byCoin].map(([coin, list]) => pollCoin(supabase, coin, list))
+  );
+
+  // A pass that outruns the interval is the signal that this needs revisiting —
+  // per-provider limits, not the loop shape, are the ceiling beyond this point.
+  const took = Date.now() - startedAt;
+  if (took > POLL_INTERVAL_MS) {
+    console.warn(`[monitor] poll pass took ${(took / 1000).toFixed(1)}s across ${addresses.length} addresses — exceeds the ${POLL_INTERVAL_MS / 1000}s interval`);
   }
 }
 
