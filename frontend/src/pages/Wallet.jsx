@@ -283,14 +283,6 @@ export default function Wallet() {
           <div className="text-sm text-muted truncate">≈ ${fmtCoins(profile?.c_coins)} USD</div>
         </div>
 
-        {/* The page where money goes wrong is the page to ask about it from —
-            but only once signed in, since raising a ticket needs an account. */}
-        <div className="flex justify-end -mt-2 mb-3">
-          <Link to="/support" className="text-xs text-muted hover:text-primary underline underline-offset-2">
-            Problem with a deposit or withdrawal?
-          </Link>
-        </div>
-
         {/* ── Deposit ──────────────────────────────────────────────────── */}
         <div className="bg-surface border border-surfaceLight rounded-2xl p-6 mb-6">
           <h2 className="text-lg font-bold text-white mb-1">Deposit</h2>
@@ -508,6 +500,15 @@ export default function Wallet() {
           )}
         </div>
 
+        {/* The page where money goes wrong is the page to ask about it from.
+            Sits at the very bottom rather than up by the balance: a player only
+            wants it after a deposit or withdrawal has not behaved, which means
+            after they have read the section it went wrong in. */}
+        <div className="flex justify-center mt-2 mb-8">
+          <Link to="/support" className="text-xs text-muted hover:text-primary underline underline-offset-2">
+            Problem with a deposit or withdrawal?
+          </Link>
+        </div>
 
       </div>
     </div>

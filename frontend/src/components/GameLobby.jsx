@@ -5,6 +5,7 @@ import { useSocket } from '../context/SocketContext';
 import BetSlider from './BetSlider';
 import { useAuth } from '../context/AuthContext';
 import CoinIcon from './CoinIcon';
+import { topUpRoute, topUpLabel } from '../utils/topUpRoute';
 import CreateRoomModal from './CreateRoomModal';
 import JoinRoomModal from './JoinRoomModal';
 
@@ -164,19 +165,27 @@ export default function GameLobby({
           </GlowButton>
         ) : (
         <>
-      {/* Insufficient balance is surfaced ON the disabled action button,
-          not as a line of its own. As a separate row it added ~14px of
-          height that only ever appeared to players who could not afford
-          the bet — i.e. it pushed the lobby off small screens in exactly
-          the case where the buttons most needed to stay reachable. */}
+      {/* Insufficient balance is surfaced ON the action button, not as a line
+          of its own. As a separate row it added ~14px of height that only ever
+          appeared to players who could not afford the bet — i.e. it pushed the
+          lobby off small screens in exactly the case where the buttons most
+          needed to stay reachable.
+
+          The button stays ENABLED in that state and routes to wherever the
+          currency is topped up. Disabled, it named the problem and then refused
+          to help with it, leaving the player to find the wallet themselves. */}
         <GlowButton
-          onClick={session ? onQueue : () => navigate('/login')}
+          onClick={
+            !session      ? () => navigate('/login')
+            : insufficient ? () => navigate(topUpRoute(betCurrency))
+            : onQueue
+          }
           variant="primary"
           size="lg"
           className="w-full text-lg py-4 border border-transparent"
-          disabled={session && (!authenticated || insufficient)}
+          disabled={session && !authenticated}
         >
-          {!session ? '🔒 Login to Play' : insufficient ? 'Insufficient Balance' : 'Find Opponent'}
+          {!session ? '🔒 Login to Play' : insufficient ? topUpLabel(betCurrency) : 'Find Opponent'}
         </GlowButton>
 
         {/* ── Challenge a Friend (link or direct invite) ── */}

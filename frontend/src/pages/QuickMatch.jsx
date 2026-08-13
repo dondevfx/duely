@@ -7,6 +7,7 @@ import { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
 import BetSlider from '../components/BetSlider';
 import { useCurrency } from '../context/CurrencyContext';
 import GlowButton from '../components/GlowButton';
+import { topUpRoute, topUpLabel } from '../utils/topUpRoute';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
 import { chooseGame } from '../utils/quickMatchPool';
@@ -168,14 +169,18 @@ export default function QuickMatch() {
         )}
 
         <GlowButton
-          onClick={session ? play : () => navigate('/login')}
+          onClick={
+            !session      ? () => navigate('/login')
+            : insufficient ? () => navigate(topUpRoute(betCurrency))
+            : play
+          }
           variant="primary"
           size="lg"
           className="w-full text-lg py-4 border border-transparent"
-          disabled={session && (!authenticated || insufficient || rolling)}
+          disabled={session && (!authenticated || rolling)}
         >
           {!session ? '🔒 Login to Play'
-            : insufficient ? 'Insufficient Balance'
+            : insufficient ? topUpLabel(betCurrency)
             : rolling ? '⚡ Finding game…' : '⚡ Play'}
         </GlowButton>
 

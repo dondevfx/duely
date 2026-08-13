@@ -9,6 +9,7 @@ import BetSlider from '../components/BetSlider';
 import ResultScreen from '../components/ResultScreen';
 import GameErrorBoundary from '../components/GameErrorBoundary';
 import GlowButton from '../components/GlowButton';
+import { topUpRoute, topUpLabel } from '../utils/topUpRoute';
 import CreateRoomModal from '../components/CreateRoomModal';
 import JoinRoomModal from '../components/JoinRoomModal';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
@@ -1133,14 +1134,14 @@ function BlackjackGame() {
           ) : (
           <>
           {!isDiamonds && (
-            <GlowButton onClick={session ? joinQueue : () => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent" disabled={session && (!authenticated || insufficient)}>
-              {!session ? '🔒 Login to Play' : insufficient ? 'Insufficient Balance' : 'Find Opponent'}
+            <GlowButton onClick={!session ? () => navigate('/login') : insufficient ? () => navigate(topUpRoute(betCurrency)) : joinQueue} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent" disabled={session && !authenticated}>
+              {!session ? '🔒 Login to Play' : insufficient ? topUpLabel(betCurrency) : 'Find Opponent'}
             </GlowButton>
           )}
 
           {isDiamonds && (
-            <GlowButton onClick={session ? joinQueue : () => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent" disabled={session && (!authenticated || insufficient)}>
-              {!session ? '🔒 Login to Play' : insufficient ? 'Insufficient Balance' : 'Find Opponent'}
+            <GlowButton onClick={!session ? () => navigate('/login') : insufficient ? () => navigate(topUpRoute(betCurrency)) : joinQueue} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent" disabled={session && !authenticated}>
+              {!session ? '🔒 Login to Play' : insufficient ? topUpLabel(betCurrency) : 'Find Opponent'}
             </GlowButton>
           )}
 

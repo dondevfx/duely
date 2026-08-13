@@ -9,6 +9,7 @@ import { COIN_FEES, DIAMOND_FEES, SMALL_BTN } from '../components/GameLobby';
 import BetSlider from '../components/BetSlider';
 import ResultScreen from '../components/ResultScreen';
 import GlowButton from '../components/GlowButton';
+import { topUpRoute, topUpLabel } from '../utils/topUpRoute';
 import CreateRoomModal from '../components/CreateRoomModal';
 import JoinRoomModal from '../components/JoinRoomModal';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
@@ -702,9 +703,9 @@ export default function CoinFlipGame() {
                 </GlowButton>
               ) : (
               <>
-              <GlowButton onClick={joinQueue} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent" disabled={session && (!authenticated || insufficient)}>
+              <GlowButton onClick={insufficient ? () => navigate(topUpRoute(betCurrency)) : joinQueue} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent" disabled={session && !authenticated}>
                 {!session ? '🔒 Login to Play'
-                  : insufficient ? 'Insufficient Balance'
+                  : insufficient ? topUpLabel(betCurrency)
                   : `Find Opponent (${side === 'heads' ? '🔵 Heads' : '⚪ Tails'})`}
               </GlowButton>
               <GlowButton onClick={() => setPrivateMode('create')} variant="ghost" size="lg" className="w-full text-lg py-4 border border-border hover:border-primary">
