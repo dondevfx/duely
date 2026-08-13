@@ -102,10 +102,16 @@ async function sendUsdcSpl(privKey, toAddress, amount) {
   const usdcMint   = new solWeb3.PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
   const units      = Math.floor(amount * 1_000_000);   // USDC = 6 decimals
 
-  // Admin's USDC ATA — pre-created, no SOL needed to look up
-  const adminAtaAddr = process.env.ADMIN_USDC_ATA
-    || 'GGakQrHowCPNcd9VJJqTfwjYEtJfDm6bjwC2GvmSwAxV';
-  const fromAta = new solWeb3.PublicKey(adminAtaAddr);
+  // Source is always the admin keypair's own USDC ATA, derived from its pubkey.
+  //
+  // This used to read ADMIN_USDC_ATA with a hardcoded fallback, which is a trap:
+  // the transfer below signs with `keypair` as the OWNER of the source account,
+  // so any address other than this keypair's ATA is rejected by the token program.
+  // The env var could never hold a legitimately different value — all it could do
+  // is go stale. It did: rotating ADMIN_PHANTOM_PRIVATE_KEY and USDC_SPL_ADDRESS
+  // left the fallback pointing at the previous wallet's token account, and every
+  // withdrawal failed on an owner mismatch. Deriving it cannot drift.
+  const fromAta = splToken.getAssociatedTokenAddressSync(usdcMint, keypair.publicKey);
 
   // Check admin wallet has enough SOL for fees + ATA creation (~0.003 SOL minimum)
   const solBalance = await connection.getBalance(keypair.publicKey);
@@ -113,6 +119,24 @@ async function sendUsdcSpl(privKey, toAddress, amount) {
     throw new Error(
       `Admin wallet has insufficient SOL for fees (${solBalance / 1e9} SOL). ` +
       `Send at least 0.05 SOL to ${keypair.publicKey.toBase58()}`
+    );
+  }
+
+  // Source balance. Without this the token program fails with an opaque custom
+  // error, and the payout path only surfaces `err.message` to the admin queue —
+  // so an empty payout wallet looked identical to a broken key.
+  let fromBal = 0;
+  try {
+    fromBal = Number((await splToken.getAccount(connection, fromAta)).amount);
+  } catch {
+    throw new Error(
+      `Admin USDC token account ${fromAta.toBase58()} does not exist. ` +
+      `Send any amount of USDC to ${keypair.publicKey.toBase58()} to create it.`
+    );
+  }
+  if (fromBal < units) {
+    throw new Error(
+      `Admin wallet USDC balance too low: has ${fromBal / 1e6}, needs ${amount}.`
     );
   }
 
