@@ -1236,7 +1236,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       try {
         const { data: prof } = await supabase.from('profiles').select('elo').eq('id', userId).single();
         const currentElo = prof?.elo ?? 1000;
-        newElo = solved ? currentElo + 25 : Math.max(0, currentElo - 25);
+        const { eloGain, eloLoss } = require('../services/eloService');
+        newElo = solved ? currentElo + eloGain() : Math.max(0, currentElo - eloLoss());
         await supabase.from('profiles').update({ elo: newElo }).eq('id', userId);
         await supabase.rpc(solved ? 'increment_win' : 'increment_loss', { uid: userId }).catch(() => {});
       } catch (e) {
@@ -1731,8 +1732,12 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         console.log(`[forfeit] settling game:${gameType} currency:${currency} fee:${fee} winner:${stayer.userId} loser:${leaver.userId}`);
 
         // Pre-calculate ELO (used even if settle fails)
-        let newWinnerElo = (stayer.elo || 1000) + 25;
-        let newLoserElo  = Math.max(0, (leaver.elo || 1000) - 25);
+        // Fallback values, used only if the real ELO update below throws.
+        // Same ranges as a played-out match — a forfeit should not be worth a
+        // different amount.
+        const { eloGain, eloLoss } = require('../services/eloService');
+        let newWinnerElo = (stayer.elo || 1000) + eloGain();
+        let newLoserElo  = Math.max(0, (leaver.elo || 1000) - eloLoss());
         let winnerPayout = 0;
 
         try {

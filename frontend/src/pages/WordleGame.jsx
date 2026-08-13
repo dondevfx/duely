@@ -305,7 +305,10 @@ export default function WordleGame() {
       if (lastModeRef.current === 'solo') return; // no opponent in solo
       // The server only sends this to the staying (winning) player. Transition
       // to the result screen so they aren't frozen on the board/countdown.
-      if (data.newWinnerElo != null) eloBeforeRef.current = data.newWinnerElo - 25;
+      // Pre-match ELO comes from the profile snapshot taken when the match
+      // started, not from the result. ELO changes are a random 20-23 on a win
+      // and 17-20 on a loss, so subtracting a fixed 25 here would report a
+      // delta that never matches what actually happened.
       setResult({
         iWon: true,
         isDraw: false,

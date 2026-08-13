@@ -406,7 +406,10 @@ export default function BlockBlastGame() {
         );
       }
       // Use server-provided ELO values to compute accurate delta (avoids stale eloBeforeRef)
-      if (data.newWinnerElo != null) eloBeforeRef.current = isWin ? data.newWinnerElo - 25 : data.newLoserElo + 25;
+      // Pre-match ELO comes from the profile snapshot taken when the match
+      // started, not from the result. ELO changes are a random 20-23 on a win
+      // and 17-20 on a loss, so subtracting a fixed 25 here would report a
+      // delta that never matches what actually happened.
       setResult({
         winnerId:      data.winnerId || myId,
         loserId:       data.loserId,

@@ -1,9 +1,21 @@
-const ELO_CHANGE = 25;
+// A win is worth slightly more than a loss costs, and both vary, so a rating
+// drifts upward with play rather than sitting exactly where a fixed +/-25 left
+// it. The ranges overlap deliberately — a good run should feel like it is
+// climbing without a single loss undoing it exactly.
+const ELO_GAIN_MIN = 20, ELO_GAIN_MAX = 23;
+const ELO_LOSS_MIN = 17, ELO_LOSS_MAX = 20;
+
+const randBetween = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
+
+// Cosmetic randomness, so Math.random is fine here — the crypto RNG is reserved
+// for outcomes that decide money (see the note atop the game engines).
+function eloGain() { return randBetween(ELO_GAIN_MIN, ELO_GAIN_MAX); }
+function eloLoss() { return randBetween(ELO_LOSS_MIN, ELO_LOSS_MAX); }
 
 function calculateNewRatings(winnerElo, loserElo) {
   return {
-    newWinnerElo: (winnerElo || 1000) + ELO_CHANGE,
-    newLoserElo:  Math.max(0, (loserElo  || 1000) - ELO_CHANGE),
+    newWinnerElo: (winnerElo || 1000) + eloGain(),
+    newLoserElo:  Math.max(0, (loserElo  || 1000) - eloLoss()),
   };
 }
 
@@ -140,4 +152,4 @@ async function applyEloUpdate(supabase, userId, newElo, force = false) {
   }
 }
 
-module.exports = { applyMatchStreaks, calculateNewRatings, updateElo, updateStreaks, applyEloUpdate };
+module.exports = { eloGain, eloLoss, applyMatchStreaks, calculateNewRatings, updateElo, updateStreaks, applyEloUpdate };
