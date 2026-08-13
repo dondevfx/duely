@@ -80,14 +80,18 @@ export default function ResultScreen({
   onBackToLobby,
   rematchLabel = 'Rematch',
   gameLabel = '',
-  // Solo endless: a run with no opponent. Block Burst and Rush Hour each had
-  // their own hand-built card for this, which is why those two looked unlike
-  // every other result in the app. Same card, same timer, same buttons — it
-  // just drops everything that needs an opponent to mean anything (win/loss,
-  // streak, placement, ELO, payout) rather than inventing one.
+  // Solo: a run with no opponent.
+  //
+  // It does NOT get its own headline. An earlier version said "Run Over" with a
+  // neutral icon, which is exactly what made these screens look like a different
+  // product — the whole point is that finishing a run reads like every other
+  // result in the app. The caller passes isWinner as usual and gets Victory.
+  //
+  // What solo actually changes is only what would be false with nobody on the
+  // other side: the "you vs them" line, the win streak, and the placement
+  // tracker. Rating and payout follow the stake, not this flag, so a paid solo
+  // (Word VS) keeps both rows while a free endless run shows neither.
   solo = false,
-  soloTitle = 'Run Over',
-  soloEmoji = '🎮',
 }) {
   // onBackToLobby falls back to onPlayAgain for pages that haven't split the two yet
   const goBack = onBackToLobby ?? onPlayAgain;
@@ -101,11 +105,17 @@ export default function ResultScreen({
   // Paid matches always update ELO regardless of placement — show the real number
   const showElo = ranked || (entryFee > 0 && elo != null);
 
+  // A free solo run is neither staked nor rated, so both of those rows would be
+  // reporting on something that did not happen — an ELO line with no number, and
+  // a payout of zero. Anything with a stake or a rating attached still shows.
+  const rated = elo != null || entryFee > 0;
+  const showLedger = !solo || rated;
+
   // Play the result sound once when this card mounts.
   useEffect(() => {
     // A solo run is neither won nor lost, so it takes the neutral chime. The
     // loss sting on every practice run would read as punishment for playing.
-    if (solo || isDraw) playDraw();
+    if (isDraw) playDraw();
     else if (isWinner) playWin();
     else playLoss();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -120,10 +130,10 @@ export default function ResultScreen({
           {/* Win / Loss / Draw header */}
           <div className="text-center mb-5">
             <div className="text-5xl mb-2">
-              {solo ? soloEmoji : isDraw ? '🤝' : isWinner ? '🏆' : '💀'}
+              {isDraw ? '🤝' : isWinner ? '🏆' : '💀'}
             </div>
-            <div className={`text-3xl font-black ${solo || isDraw ? 'text-accent' : isWinner ? 'text-success' : 'text-danger'}`}>
-              {solo ? soloTitle : isDraw ? 'Draw!' : isWinner ? 'Victory!' : 'Defeat'}
+            <div className={`text-3xl font-black ${isDraw ? 'text-accent' : isWinner ? 'text-success' : 'text-danger'}`}>
+              {isDraw ? 'Draw!' : isWinner ? 'Victory!' : 'Defeat'}
             </div>
             {!solo && !isDraw && isWinner && winnerStreak >= 1 && (
               <p className="text-base font-bold text-orange-400 mt-1" style={{ textShadow: '0 0 10px rgba(251,146,60,0.5)' }}>
@@ -202,7 +212,7 @@ export default function ResultScreen({
             ))}
             {/* No ELO and no payout on a solo run — nothing was staked and
                 nothing was rated, and a "0" or "Unranked" row implies otherwise. */}
-            {!solo && (
+            {showLedger && (
             <div className="flex justify-between border-t border-surfaceLight/40 pt-2">
               <span className="text-muted">ELO</span>
               {showElo ? (
@@ -219,7 +229,7 @@ export default function ResultScreen({
               )}
             </div>
             )}
-            {!solo && (balanceChange || (isDraw && entryFee > 0) || (!isDraw && entryFee > 0)) && (
+            {showLedger && (balanceChange || (isDraw && entryFee > 0) || (!isDraw && entryFee > 0)) && (
               <div className="border-t border-surfaceLight/40 pt-3 mt-1 text-center">
                 <div className="text-xs text-muted mb-1 uppercase tracking-widest font-semibold">
                   {isDraw ? 'Your Split' : isWinner ? 'Payout' : 'Entry Lost'}

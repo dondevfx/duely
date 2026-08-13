@@ -796,6 +796,9 @@ export default function BlockBlastGame() {
         <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center overflow-y-auto py-2 w-full">
           <ResultScreen
             isWinner={result.humanWon}
+            // A free run has no opponent worth naming and nothing at stake, so
+            // it drops the "you vs bot" framing; a paid bot match keeps it.
+            solo={!(result.entryFee > 0)}
             winnerUsername={result.humanWon ? profile?.username : 'Duely Bot'}
             loserUsername={result.humanWon ? 'Duely Bot' : profile?.username}
             balanceChange={result.balanceChange}
@@ -816,8 +819,8 @@ export default function BlockBlastGame() {
         <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center overflow-y-auto py-2 w-full">
           <ResultScreen
             solo
-            soloTitle="Game Over"
-            soloEmoji="🎮"
+            isWinner
+            winnerUsername={profile?.username ?? 'You'}
             profile={profile}
             gameLabel="🟦 Block Burst"
             extraRows={[

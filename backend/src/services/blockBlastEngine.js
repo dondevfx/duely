@@ -279,9 +279,14 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
     if (player) {
       room.state = 'finished';
       // Final bot score = human score * ratio (ensures outcome matches what was shown)
+      // A free run is practice: nothing is staked, so there is nothing to lose,
+      // and being told you lost to a bot you never bet against just discourages
+      // playing. Paid bot matches are untouched — real money is on those.
+      const freeSolo = !(room.entryFee > 0);
+      const alwaysWin = room.demoWin || freeSolo;
       let botScore = Math.floor(verifiedScore * (room.botRatio ?? 0.8));
-      if (room.demoWin && botScore >= verifiedScore) botScore = Math.max(0, verifiedScore - 1);
-      const humanWon = room.demoWin ? true : verifiedScore > botScore;
+      if (alwaysWin && botScore >= verifiedScore) botScore = Math.max(0, verifiedScore - 1);
+      const humanWon = alwaysWin ? true : verifiedScore > botScore;
       let balanceChange = null;
       if (room.entryFee > 0 && !room.feesDeducted) {
         console.error(`[blockBlastEngine] CRITICAL: solo room ${roomId} settled without feesDeducted — no payout issued`);
@@ -291,7 +296,13 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
           balanceChange = await settleBotMatch(supabase, player.userId, room.entryFee, room.currency || 'coins', humanWon, { game: 'Block Burst' });
         } catch (e) { console.error('[blockBlastEngine] solo settle:', e.message); }
       }
-      if (supabase) {
+      // Rating and record are gated on the run costing something.
+      //
+      // This is the half that makes an unloseable game safe. A free solo run
+      // that always wins AND wrote ELO would be an infinite rating ladder —
+      // queue solo, crash immediately, gain rating, repeat. The highscore is
+      // still recorded below, since a personal best is the point of the mode.
+      if (supabase && !freeSolo) {
         const BOT_ELO = 1000;
         const { newWinnerElo, newLoserElo } = humanWon
           ? calculateNewRatings(player.elo, BOT_ELO)
@@ -313,6 +324,8 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
             prize_pool_diamonds: (room.currency || 'coins') === 'diamonds' ? (room.entryFee || 0) * 2 : 0,
           });
         } catch (e) { console.error('[blockBlastEngine] matches insert:', e.message); }
+      }
+      if (supabase) {
         await updateHighscore(supabase, player.userId, 'blockBlast', verifiedScore);
       }
       io.emit('active_game_ended', { id: roomId });

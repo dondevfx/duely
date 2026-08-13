@@ -627,6 +627,9 @@ export default function WordleGame() {
         <ResultScreen
           isWinner={solved}
           isDraw={false}
+          // No opponent here either — without this the stats line rendered
+          // "You vs " with an empty second half.
+          solo
           winnerUsername={solved ? (profile?.username ?? 'You') : null}
           loserUsername={solved ? null : (profile?.username ?? 'You')}
           newWinnerElo={solved ? newElo : undefined}

@@ -318,8 +318,10 @@ export default function CarDashGame() {
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-4">
         <ResultScreen
           solo
-          soloTitle="Game Over"
-          soloEmoji="🎮"
+          // Finishing an endless run is the goal, so it reads as a win. There is
+          // no opponent to lose to and nothing staked to lose.
+          isWinner
+          winnerUsername={profile?.username ?? 'You'}
           profile={profile}
           gameLabel="🎮 Solo Endless"
           extraRows={[
