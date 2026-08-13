@@ -92,6 +92,11 @@ export default function ResultScreen({
   // tracker. Rating and payout follow the stake, not this flag, so a paid solo
   // (Word VS) keeps both rows while a free endless run shows neither.
   solo = false,
+  // Whether either side was a bot. Streaks are a PvP record — applyMatchStreaks
+  // no-ops the moment a bot is involved — so the card must not claim a streak
+  // was reset by a loss to one. It said so on every bot defeat, which read as a
+  // punishment that never actually happened.
+  vsBot = false,
 }) {
   // onBackToLobby falls back to onPlayAgain for pages that haven't split the two yet
   const goBack = onBackToLobby ?? onPlayAgain;
@@ -147,7 +152,7 @@ export default function ResultScreen({
                 🔥 {winnerStreak} Win Streak!
               </p>
             )}
-            {!solo && !isDraw && !isWinner && (
+            {!solo && !vsBot && !isDraw && !isWinner && (
               <p className="text-sm text-muted mt-1">Your win streak has been reset</p>
             )}
             {!solo && !isDraw && isWinner && isFirstWin && (

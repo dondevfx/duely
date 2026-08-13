@@ -502,6 +502,8 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
     winnerId: winner.userId, loserId: loser.userId,
     winnerUsername: winner.username, loserUsername: loser.username,
     newWinnerElo, newLoserElo, balanceChange,
+    // Streaks are a PvP record, so the card needs to know not to mention them.
+    vsBot,
     winnerMs, loserMs,
     winnerScore, loserScore,
     currency: room.currency || 'coins',

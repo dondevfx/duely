@@ -559,6 +559,8 @@ async function _resolveGame(io, supabase, roomId) {
     loserUsername: loser.username,
     newWinnerElo,
     newLoserElo,
+    // Streaks are a PvP record, so the card needs to know not to mention them.
+    vsBot: !!(winner.isBot || loser.isBot),
     balanceChange,
     currency: room.currency,
     entryFee: room.entryFee,

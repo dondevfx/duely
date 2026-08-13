@@ -768,6 +768,7 @@ export default function BlockBlastGame() {
       {phase === 'result' && result && !result.isSolo && (
         <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center overflow-y-auto py-2 w-full">
           <ResultScreen
+            vsBot={!!result.vsBot}
             isWinner={isWinner}
             isDraw={result.draw}
             winnerUsername={result.winnerUsername}
@@ -795,6 +796,8 @@ export default function BlockBlastGame() {
       {phase === 'result' && result && result.isSolo && result.humanWon !== null && (
         <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center overflow-y-auto py-2 w-full">
           <ResultScreen
+            // Solo means a bot opponent, so no streak was ever at stake.
+            vsBot
             isWinner={result.humanWon}
             // A free run has no opponent worth naming and nothing at stake, so
             // it drops the "you vs bot" framing; a paid bot match keeps it.

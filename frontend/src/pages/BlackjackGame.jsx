@@ -768,6 +768,7 @@ function BlackjackGame() {
     return (
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-3 sm:px-4 py-0 sm:py-4">
         <ResultScreen
+          vsBot={!!resultData?.vsBot}
           isWinner={isWinner}
           isDraw={resultData.isDraw}
           winnerUsername={resultData.winnerUsername}

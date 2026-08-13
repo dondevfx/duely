@@ -578,6 +578,7 @@ export default function CoinFlipGame() {
         return (
           <div className="w-full flex items-center justify-center" style={{ minHeight: 'calc(100vh - 56px)' }}>
             <ResultScreen
+              vsBot={!!resultData?.vsBot}
               isWinner={isWinner}
               isDraw={false}
               winnerUsername={resultData.winnerUsername}

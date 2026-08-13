@@ -625,6 +625,7 @@ export default function WordleGame() {
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-3 sm:px-4 py-0 sm:py-8">
         <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
         <ResultScreen
+          vsBot
           isWinner={solved}
           isDraw={false}
           // No opponent here either — without this the stats line rendered
@@ -657,6 +658,7 @@ export default function WordleGame() {
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-3 sm:px-4 py-0 sm:py-8">
         <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
         <ResultScreen
+          vsBot={!!result.vsBot}
           isWinner={result.iWon}
           isDraw={result.isDraw}
           winnerUsername={result.winnerUsername}

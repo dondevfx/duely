@@ -488,6 +488,8 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
       opponentUsername:  them?.username,
       newWinnerElo,
       newLoserElo,
+      // Streaks are a PvP record, so the card needs to know not to mention them.
+      vsBot: !!(winner?.isBot || loser?.isBot),
       balanceChange,
       winnerStreak,
       isFirstWin,
