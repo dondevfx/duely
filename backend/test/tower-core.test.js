@@ -374,3 +374,40 @@ test('the band still turns around rather than running away', () => {
   assert.ok(Math.min(...lights) >= SHADE_MIN - 1e-9);
   assert.ok(Math.max(...lights) <= SHADE_MAX + 1e-9);
 });
+
+test('every block is a visibly different shade from its neighbour', () => {
+  // The band used to sweep over 26 blocks, so neighbours differed by about 2.5%
+  // — a real difference that nobody could see. A short triangle now drives the
+  // per-block step.
+  let smallest = Infinity;
+  for (let i = 0; i < 400; i++) {
+    smallest = Math.min(smallest, Math.abs(shadeFor(i + 1).light - shadeFor(i).light));
+  }
+  assert.ok(smallest >= 4, `neighbours differ by only ${smallest.toFixed(2)}%`);
+});
+
+test('the tower does not settle into repeating the same few shades', () => {
+  // A short sweep on its own would cycle through five values forever. A slow
+  // drift on a coprime period keeps producing new ones up a tall tower.
+  const seen = new Set(Array.from({ length: 60 }, (_, i) => Math.round(shadeFor(i).light)));
+  assert.ok(seen.size >= 20, `only ${seen.size} distinct shades in 60 blocks`);
+});
+
+test('both layers together stay inside the safe range', () => {
+  // The whole point of the range is that nothing vanishes against black or
+  // washes out — stacking a drift on top of the sweep must not break that.
+  for (let i = -40; i < 600; i++) {
+    const l = shadeFor(i).light;
+    assert.ok(l >= SHADE_MIN - 1e-9 && l <= SHADE_MAX + 1e-9, `${l} at ${i} is out of range`);
+  }
+});
+
+test('the plinth below the base gets the same treatment as the tower', () => {
+  // It is drawn with negative indices; a modulo that mishandled those would
+  // give the base blocks shades from outside the range.
+  for (let i = -1; i >= -20; i--) {
+    const f = faceShades(i);
+    assert.ok(f.top >= SHADE_MIN - 1e-9 && f.top <= SHADE_MAX + 1e-9, `plinth ${i} -> ${f.top}`);
+    assert.ok(f.top - f.right > 6 && f.right - f.left > 4, `plinth ${i} has no shading`);
+  }
+});

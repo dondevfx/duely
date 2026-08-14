@@ -401,3 +401,19 @@ test('Tower uses the tower emoji, and nobody else uses it', () => {
   const icons = [...fe('pages', 'QuickMatch.jsx').matchAll(/icon: '([^']+)'/g)].map(m => m[1]);
   assert.equal(new Set(icons).size, icons.length, `duplicate icon: ${icons}`);
 });
+
+test('the plinth is drawn bottom-up, like the tower', () => {
+  // It ran from L = -1 downward, so each deeper block painted over the one
+  // above it — and because a block's top face is drawn last, every deeper block
+  // stamped its own lid across its neighbour. The base came out as a stack of
+  // visible rhombus outlines rather than a solid column.
+  const src = fe('components', 'TowerCanvas.jsx');
+  assert.match(src, /for \(let L = plinthBottom; L <= -1; L\+\+\)/,
+    'the plinth must paint deepest-first so nearer blocks cover it');
+});
+
+test('the darkness starts low enough not to dull live blocks', () => {
+  const src = fe('components', 'TowerCanvas.jsx');
+  const top = +src.match(/const scrimTop = height \* ([\d.]+)/)[1];
+  assert.ok(top >= 0.75, `the scrim starts at ${top} of the screen — too high`);
+});

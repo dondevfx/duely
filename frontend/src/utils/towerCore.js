@@ -56,15 +56,28 @@ export const SHADE_MAX = 66;
 // it while the range itself stays inside the same safe window: never so dark it
 // vanishes on black, never so pale it stops reading as the site blue.
 export function shadeFor(index) {
-  const PERIOD = 26;                                  // blocks per full sweep
+  // Two layers, because "changes every block" and "does not repeat" pull in
+  // opposite directions on their own.
+  //
+  // A short triangle gives the per-block step: 8 blocks per sweep means every
+  // neighbour differs by a clear margin instead of the ~2.5% that a long sweep
+  // produced, which was technically different and visually identical.
+  //
+  // A slow drift on a period coprime with it stops the tower repeating the same
+  // five shades forever, so a tall tower keeps producing new ones. Both are
+  // sized so the total stays inside SHADE_MIN..SHADE_MAX.
+  const PERIOD = 8;
   const phase = ((index % PERIOD) + PERIOD) % PERIOD / PERIOD;
-  const tri = phase < 0.5 ? phase * 2 : 2 - phase * 2;  // 0..1..0, linear
+  const tri = phase < 0.5 ? phase * 2 : 2 - phase * 2;     // 0..1..0, linear
+  const drift = Math.sin((index * 2 * Math.PI) / 37) * 4;
+  const mid = (SHADE_MIN + SHADE_MAX) / 2;                  // 50
   return {
-    hue:   214 + Math.sin(index * 0.11) * 4,          // 210 .. 218, around #1250B4
-    light: SHADE_MIN + tri * (SHADE_MAX - SHADE_MIN),
+    hue:   214 + Math.sin(index * 0.11) * 4,               // 210 .. 218
+    light: mid + (tri * 2 - 1) * 12 + drift,               // 34 .. 66
     sat:   80,
   };
 }
+
 
 /** Top, right and left face lightness for a block. Always visibly stepped. */
 export function faceShades(index) {

@@ -156,9 +156,19 @@ export default function TowerCanvas({
       // tower. The disappearance is done afterwards with a black scrim over the
       // bottom of the screen — the tower stays solid and is swallowed by the
       // dark, which is what the reference actually does.
+      // Deepest FIRST. This loop used to run from L = -1 downward, so each block
+      // was painted over the one above it — and since a block's top face is
+      // drawn last, every deeper block stamped its own rhombus across the base
+      // of its neighbour. The result was a stack of visible lids that read as
+      // wireframe outlines rather than a solid column. The real tower is drawn
+      // bottom-up for exactly this reason; the plinth was the one place going
+      // the other way.
+      let plinthBottom = -1;
       for (let L = -1; L >= -PLINTH_DEPTH; L--) {
-        const yAt = view.originY - L * blockPx;
-        if (yAt > height + blockPx * 2) break;    // fully past the bottom edge
+        plinthBottom = L;
+        if (view.originY - L * blockPx > height + blockPx * 2) break;
+      }
+      for (let L = plinthBottom; L <= -1; L++) {
         drawBlock({ x: 0, y: 0, sx: BASE_SIZE, sy: BASE_SIZE, index: L }, L, 1);
       }
 
@@ -191,10 +201,13 @@ export default function TowerCanvas({
       // ── the tower fades into the dark at the bottom of the screen ──
       // A scrim rather than per-block transparency, so everything under it stays
       // solid and simply becomes unlit.
-      const scrimTop = height * 0.60;
+      // Starts well down the screen. At 0.60 it was reaching blocks that had only
+      // just been placed and dulling them mid-play, which looked like the colours
+      // going wrong rather than like distance.
+      const scrimTop = height * 0.80;
       const scrim = ctx.createLinearGradient(0, scrimTop, 0, height);
       scrim.addColorStop(0, 'rgba(0,0,0,0)');
-      scrim.addColorStop(0.55, 'rgba(0,0,0,0.72)');
+      scrim.addColorStop(0.45, 'rgba(0,0,0,0.55)');
       scrim.addColorStop(1, 'rgba(0,0,0,1)');
       ctx.fillStyle = scrim;
       ctx.fillRect(0, scrimTop, width, height - scrimTop);
