@@ -364,20 +364,16 @@ test('the placement sounds are actually audible on a phone', () => {
 });
 
 test('a falling offcut cannot be seen through the tower', () => {
-  // Third attempt at this. Interleaving by height embedded the slice in the
-  // block below; drawing it on top with a fading alpha made it literally
-  // see-through. It is now painted BEFORE the tower at full opacity, so the
-  // tower simply covers it.
-  //
-  // Anchored on code, not on the section comments — the helper strips those.
+  // Drawing it on top with a fading alpha made it literally see-through, so the
+  // tower showed straight through the falling piece. Which SIDE of the tower it
+  // is drawn on is covered by 'an offcut falls on the side it was cut from';
+  // this only cares that it is solid.
   const src = fe('components', 'TowerCanvas.jsx');
-  const offcuts = src.indexOf('for (const sl of s.slices)');
-  const tower   = src.indexOf('for (let i = firstVisible;');
-  assert.ok(offcuts > 0, 'offcut draw loop not found');
-  assert.ok(tower > 0, 'tower draw loop not found');
-  assert.ok(offcuts < tower, 'offcuts must be drawn before the tower, so it occludes them');
+  const at = src.indexOf('const drawSlice =');
+  assert.ok(at > 0, 'drawSlice not found');
+  const fn = src.slice(at, src.indexOf('};', at));
+  assert.match(fn, /sl\.level, 1\)/, 'an offcut must be fully opaque');
   assert.doesNotMatch(src, /ctx\.rotate\(sl\.spin/, 'the tilt drew attention to the overlap');
-  assert.match(src.slice(offcuts, tower), /sl\.level, 1\)/, 'an offcut must be fully opaque');
 });
 
 test('the plinth is solid and the darkness is a scrim', () => {
@@ -472,4 +468,22 @@ test('the block is visible at the top right when it spawns', () => {
     assert.ok(spawn.px > 0 && spawn.px < W, `${W}x${H}: spawn x=${spawn.px.toFixed(0)} is off screen`);
     assert.ok(spawn.py > 0 && spawn.py < H, `${W}x${H}: spawn y=${spawn.py.toFixed(0)} is off screen`);
   }
+});
+
+test('the canvas tells the core whether input is live', () => {
+  // Otherwise the slider travels behind the countdown overlay.
+  assert.match(fe('components', 'TowerCanvas.jsx'), /run\.step\(dt, runningRef\.current\)/);
+});
+
+test('an offcut falls on the side it was cut from', () => {
+  // +x and +y both point toward the viewer, so a piece taken off the near side
+  // belongs in front of the tower and a far-side piece behind it. Drawing them
+  // all on one side is wrong for half of them either way.
+  const src = fe('components', 'TowerCanvas.jsx');
+  const back  = src.indexOf('if ((sl.side || 1) < 0) drawSlice(sl)');
+  const tower = src.indexOf('for (let i = firstVisible;');
+  const front = src.indexOf('if ((sl.side || 1) >= 0) drawSlice(sl)');
+  assert.ok(back > 0 && tower > 0 && front > 0, 'draw calls not found');
+  assert.ok(back < tower, 'far-side offcuts must be drawn before the tower');
+  assert.ok(front > tower, 'near-side offcuts must be drawn after the tower');
 });

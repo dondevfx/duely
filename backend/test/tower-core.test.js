@@ -411,3 +411,35 @@ test('the plinth below the base gets the same treatment as the tower', () => {
     assert.ok(f.top - f.right > 6 && f.right - f.left > 4, `plinth ${i} has no shading`);
   }
 });
+
+test('the slider does not move while the countdown is up', () => {
+  // The canvas keeps stepping through the countdown so offcuts and bursts stay
+  // animated. Without gating the slider, three seconds at the opening speed is
+  // more than a full length of the track, so the block emerged from the count at
+  // an arbitrary point — usually bottom-left and heading back up-right, which is
+  // the opposite of the intended opening.
+  const run = createRun();
+  const start = run.state.moving.pos;
+  for (let i = 0; i < 180; i++) run.step(1 / 60, false);   // 3s of countdown
+  assert.equal(run.state.moving.pos, start, 'the block must still be at its spawn point');
+  assert.equal(run.state.moving.dir, 1, 'and still heading the right way');
+});
+
+test('a countdown still animates everything else', () => {
+  // Gating the whole step would freeze the falling pieces mid-air.
+  const run = createRun();
+  dropAt(run, 0.3);
+  const before = run.state.slices[0].level;
+  for (let i = 0; i < 20; i++) run.step(1 / 60, false);
+  assert.ok(run.state.slices[0].level < before, 'offcuts must keep falling');
+});
+
+test('the block is at the far top right when play begins', () => {
+  const run = createRun();
+  for (let i = 0; i < 180; i++) run.step(1 / 60, false);
+  const v = makeView(420, 860, 0);
+  const centre = isoProject(0, 0, 1, v);
+  const at = isoProject(0, run.state.moving.pos, 1, v);
+  assert.ok(at.px > centre.px && at.py < centre.py, 'top right');
+  assert.equal(Math.abs(run.state.moving.pos), core.TRAVEL, 'at the far end of its travel');
+});

@@ -144,12 +144,23 @@ export function createRun({ onLand, onOver } = {}) {
     };
   }
 
-  function step(dt) {
+  /**
+   * Advance the run.
+   *
+   * `live` is whether input is actually accepted right now. It has to be passed
+   * in rather than assumed: the canvas keeps stepping during the countdown so
+   * offcuts and bursts stay animated, and without this the slider was travelling
+   * behind the opaque countdown overlay. Three seconds at the opening speed is
+   * more than a full length of the track, so the block emerged from the count
+   * at an arbitrary point — usually bottom-left heading up-right, which is the
+   * opposite of the intended opening.
+   */
+  function step(dt, live = true) {
     state.elapsed += dt;
 
     // The slider only moves while the run is live, but everything else keeps
     // animating — the last block still has to be seen falling after a miss.
-    if (!state.over && state.moving) {
+    if (live && !state.over && state.moving) {
       const m = state.moving;
       const speed = speedForScore(state.score);
       m.pos += m.dir * speed * dt;

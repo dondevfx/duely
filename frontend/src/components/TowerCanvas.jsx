@@ -94,7 +94,9 @@ export default function TowerCanvas({
     function frame(now) {
       const dt = clamp((now - last) / 1000, 0, 0.05);   // clamp: a backgrounded
       last = now;                                        // tab must not teleport
-      run.step(dt);
+      // Pass whether input is live: during the countdown the offcuts and bursts
+      // must keep animating, but the slider must NOT move behind the overlay.
+      run.step(dt, runningRef.current);
 
       const s = run.state;
       const topLevel = s.blocks[s.blocks.length - 1]?.level ?? 0;
@@ -172,23 +174,21 @@ export default function TowerCanvas({
         drawBlock({ x: 0, y: 0, sx: BASE_SIZE, sy: BASE_SIZE, index: L }, L, 1);
       }
 
-      // ── falling offcuts ──
+      // ── falling offcuts, back side ──
       //
-      // Behind the tower and fully opaque.
-      //
-      // Two earlier attempts were wrong in the same way. Sorting them into the
-      // tower by height embedded a slice halfway through the block below, and
-      // drawing them on top with a fading alpha made them literally see-through,
-      // so the tower showed straight through the falling piece. Painting them
-      // first means the tower simply covers them, which is what "cut off and
-      // dropped" should look like; the tilt is gone because a spinning piece
-      // sweeping sideways over the tower is exactly what drew attention to the
-      // overlap.
-      for (const sl of s.slices) {
+      // An offcut is sliced from one side of the block, and +x/+y both point
+      // toward the viewer — so a piece taken off the FAR side is behind the
+      // tower and a piece off the NEAR side is in front of it. Splitting them
+      // around the tower draw is the only arrangement that is true for both:
+      // painting everything behind hid near-side pieces that should pass in
+      // front, and painting everything in front let far-side pieces float over
+      // a tower that should be covering them.
+      const drawSlice = (sl) => {
         const at = isoProject(sl.x, sl.y, sl.level, view);
-        if (at.py > height + blockPx * 3) continue;
+        if (at.py > height + blockPx * 3) return;
         drawBlock({ x: sl.x, y: sl.y, sx: sl.sx, sy: sl.sy, index: sl.index }, sl.level, 1);
-      }
+      };
+      for (const sl of s.slices) if ((sl.side || 1) < 0) drawSlice(sl);
 
       // ── tower ──
       // After the offcuts, so a falling piece is hidden behind it rather than
@@ -197,6 +197,10 @@ export default function TowerCanvas({
       for (let i = firstVisible; i < s.blocks.length; i++) {
         drawBlock(s.blocks[i], s.blocks[i].level);
       }
+
+      // ── falling offcuts, near side ──
+      // In front of the tower, because that is where they physically are.
+      for (const sl of s.slices) if ((sl.side || 1) >= 0) drawSlice(sl);
 
       // ── the tower fades into the dark at the bottom of the screen ──
       // A scrim rather than per-block transparency, so everything under it stays
