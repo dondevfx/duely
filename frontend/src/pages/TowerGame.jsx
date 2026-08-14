@@ -126,6 +126,10 @@ export default function TowerGame() {
     const onCatchup  = ({ endsAt, target }) => setCatchup({ endsAt, target });
 
     const onResult = (data) => {
+      // Trust the server's before-value when it sends one. The local profile can
+      // be a few points stale, and subtracting from the wrong baseline is what
+      // turned a normal rating loss into a reported "+3".
+      if (Number.isFinite(Number(data?.eloBefore))) eloBeforeRef.current = Number(data.eloBefore);
       setCatchup(null);
       setResult(data);
       setPhase('result');

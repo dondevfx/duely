@@ -84,8 +84,7 @@ test('a free match counts toward the record but not the rating', () => {
 
 test('a free solo run cannot be lost and is not rated', () => {
   assert.match(engine, /const freeSolo\s+= !\(room\.entryFee > 0\)/);
-  // `let`, not `const` — the diamond floor can overturn it below.
-  assert.match(engine, /let humanWon = alwaysWin \? true :/);
+  assert.match(engine, /if \(alwaysWin\)\s+humanWon = true;/);
   assert.match(engine, /if \(supabase && !freeSolo\)/);
   // The personal best is the point of the mode, so it records regardless.
   const hs = engine.indexOf("updateHighscore(supabase, player.userId");
@@ -200,7 +199,7 @@ for (const [file, engineName] of [['towerEngine.js', 'Tower'], ['blockBlastEngin
     assert.match(src, /newElo:\s+humanNewElo/, `${file} does not report the rating it applied`);
     // Declared outside the rated branch, so a FREE run still reports null and
     // the card correctly shows nothing.
-    assert.match(src, /let humanNewElo = null;/);
+    assert.match(src, /let humanNewElo = null(, eloBefore = null)?;/);
   });
 }
 
@@ -415,24 +414,30 @@ test('the darkness starts low enough not to dull live blocks', () => {
   assert.ok(top >= 0.75, `the scrim starts at ${top} of the screen — too high`);
 });
 
-test('a diamond bet against the bot has a real floor', () => {
-  // Without one the shortest possible run is a coin toss against a bot whose
-  // score is derived from yours — drop one block and hope.
+test('a diamond bet against the bot is decided by the stated target', () => {
+  // The player is told "get 15 to win", so 15 has to be what decides it.
   assert.match(engine, /const DIAMOND_BOT_MIN_SCORE = 15/);
-  assert.match(engine, /room\.currency === 'diamonds'\) && verified < DIAMOND_BOT_MIN_SCORE/);
+  assert.match(engine, /humanWon = verified >= DIAMOND_BOT_MIN_SCORE/);
 });
 
-test('the floor applies to diamonds only, and never to a free run', () => {
-  // Coins vs bot and Solo Endless must be untouched.
-  const at = engine.indexOf('verified < DIAMOND_BOT_MIN_SCORE');
-  const line = engine.slice(engine.lastIndexOf('if (', at), at + 60);
-  assert.match(line, /!freeSolo/, 'a free run must not be subject to it');
-  assert.match(line, /diamonds/, 'coins must not be subject to it');
+test('the target applies to diamonds only, and never to a free run', () => {
+  // Coins vs bot and Solo Endless must keep their own rules.
+  assert.match(engine, /const diamondBot = !freeSolo && room\.currency === 'diamonds'/);
+  // A free run is decided before the currency is ever consulted.
+  const at = engine.indexOf('if (alwaysWin)');
+  const chain = engine.slice(at, at + 260);
+  assert.ok(chain.indexOf('alwaysWin') < chain.indexOf('diamondBot'),
+    'a free run must be resolved before the diamond rule');
+  assert.match(chain, /else\s+humanWon = verified > botScore;/,
+    'coins vs bot must still be decided on score against the bot');
 });
 
-test('a floored loss does not report a winning score', () => {
-  // The card would otherwise say "you scored more" next to a defeat.
-  assert.match(engine, /if \(botScore <= verified\) botScore = verified \+ 1;/);
+test('the outcome and the shown scores never contradict each other', () => {
+  // Superseded the old one-directional check: the bot score is now nudged on
+  // both sides, so neither a win nor a loss can be reported next to a score line
+  // that says the opposite.
+  assert.match(engine, /if \(humanWon && botScore >= verified\)/);
+  assert.match(engine, /if \(!humanWon && botScore <= verified\)/);
 });
 
 test('the floor is stated before the bet, not discovered after it', () => {
@@ -486,4 +491,41 @@ test('an offcut falls on the side it was cut from', () => {
   assert.ok(back > 0 && tower > 0 && front > 0, 'draw calls not found');
   assert.ok(back < tower, 'far-side offcuts must be drawn before the tower');
   assert.ok(front > tower, 'near-side offcuts must be drawn after the tower');
+});
+
+test('clearing the diamond target IS the win, not a second condition', () => {
+  // First written as an extra requirement on top of out-scoring the bot, which
+  // meant a 46-block run could lose to a bot placed at 48 — three times over the
+  // stated bar, and shown a defeat. A rule the player is told has to be the rule
+  // that decides it.
+  assert.match(engine, /else if \(diamondBot\)\s+humanWon = verified >= DIAMOND_BOT_MIN_SCORE;/);
+  // And it must not ALSO require beating the bot.
+  const at = engine.indexOf('else if (diamondBot)');
+  const line = engine.slice(at, engine.indexOf('\n', at));
+  assert.doesNotMatch(line, /botScore/, 'the bot score must not gate a diamond win');
+});
+
+test('the shown bot score agrees with the outcome either way', () => {
+  assert.match(engine, /if \(humanWon && botScore >= verified\)/);
+  assert.match(engine, /if \(!humanWon && botScore <= verified\)/);
+});
+
+test('a bot match rates against the current rating, not a cached one', () => {
+  // calculateNewRatings returns an ABSOLUTE value. Derived from the elo cached
+  // on the socket at queue time, it produces a swing that is not the gain or
+  // loss at all — a socket holding 1020 against a profile of 1000 writes
+  // 1020 - 17 = 1003, which the card reports as +3 on a defeat.
+  const solo = engine.slice(engine.indexOf('if (room.isSolo)'));
+  assert.match(solo, /select\('elo'\)\.eq\('id', player\.userId\)/,
+    'the current rating must be read before it is changed');
+  assert.match(solo, /calculateNewRatings\(currentElo, BOT_ELO\)/);
+  assert.match(solo, /calculateNewRatings\(BOT_ELO, currentElo\)/);
+  const at = solo.indexOf('calculateNewRatings');
+  assert.doesNotMatch(solo.slice(at, at + 200), /player\.elo/,
+    'the cached socket rating must not feed the calculation');
+});
+
+test('the card is told which number to subtract from', () => {
+  assert.match(engine, /eloBefore,/);
+  assert.match(fe('pages', 'TowerGame.jsx'), /eloBeforeRef\.current = Number\(data\.eloBefore\)/);
 });

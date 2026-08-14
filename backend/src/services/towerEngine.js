@@ -246,15 +246,25 @@ async function handleTowerComplete(io, supabase, roomId, socketId, score = 0, ta
     const alwaysWin = room.demoWin || freeSolo;
     let botScore = Math.floor(verified * (room.botRatio ?? 0.8));
     if (alwaysWin && botScore >= verified) botScore = Math.max(0, verified - 1);
-    let humanWon = alwaysWin ? true : verified > botScore;
+    // On a diamond bet against the bot the target IS the score: clear
+    // DIAMOND_BOT_MIN_SCORE and you win, full stop.
+    //
+    // This was first written as an extra condition ON TOP of out-scoring the
+    // bot, which was wrong and badly so: botRatio sits at 1.05 or higher about
+    // 45% of the time, so a 46-block run could lose to a bot placed at 48. The
+    // player cleared the stated bar by three times over and was shown a defeat.
+    // A rule the player is told ("get 15 to win") has to be the rule that
+    // actually decides it.
+    const diamondBot = !freeSolo && room.currency === 'diamonds';
+    let humanWon;
+    if (alwaysWin)        humanWon = true;
+    else if (diamondBot)  humanWon = verified >= DIAMOND_BOT_MIN_SCORE;
+    else                  humanWon = verified > botScore;
 
-    // Beating the bot is necessary but not sufficient on a diamond bet.
-    if (!freeSolo && (room.currency === 'diamonds') && verified < DIAMOND_BOT_MIN_SCORE) {
-      humanWon = false;
-      // Keep the shown bot score consistent with the loss, or the card claims a
-      // win on score while reporting a defeat.
-      if (botScore <= verified) botScore = verified + 1;
-    }
+    // Keep the bot's shown score consistent with the outcome, or the card
+    // reports one thing on score and another in the headline.
+    if (humanWon && botScore >= verified) botScore = Math.max(0, verified - 1);
+    if (!humanWon && botScore <= verified) botScore = verified + 1;
 
     let balanceChange = null;
     if (room.entryFee > 0) {
@@ -268,12 +278,29 @@ async function handleTowerComplete(io, supabase, roomId, socketId, score = 0, ta
     // run that awarded rating would be an infinite ladder.
     // Reported so the card can show it — a paid bot match rates, in coins or
     // diamonds, and a payload without the number reads as though it does not.
-    let humanNewElo = null;
+    let humanNewElo = null, eloBefore = null;
     if (supabase && !freeSolo) {
       const BOT_ELO = 1000;
+      // Read the CURRENT rating rather than the one cached on the socket when
+      // the player joined the queue.
+      //
+      // calculateNewRatings returns an absolute value, and writing it derived
+      // from a stale number produces a delta that is not the gain or loss at
+      // all: a socket holding 1020 against a profile of 1000 writes 1020 - 17 =
+      // 1003, and the card reports +3 on a defeat. The swing is only ever
+      // eloGain or eloLoss when it is computed from what the rating actually is
+      // right now.
+      let currentElo = player.elo ?? 1000;
+      try {
+        const { data: fresh } = await supabase
+          .from('profiles').select('elo').eq('id', player.userId).single();
+        if (fresh && Number.isFinite(Number(fresh.elo))) currentElo = Number(fresh.elo);
+      } catch (e) { console.error('[tower] elo read:', e.message); }
+      eloBefore = currentElo;
+
       const { newWinnerElo, newLoserElo } = humanWon
-        ? calculateNewRatings(player.elo, BOT_ELO)
-        : calculateNewRatings(BOT_ELO, player.elo);
+        ? calculateNewRatings(currentElo, BOT_ELO)
+        : calculateNewRatings(BOT_ELO, currentElo);
       humanNewElo = humanWon ? newWinnerElo : newLoserElo;
       try { await supabase.from('profiles').update({ elo: humanNewElo }).eq('id', player.userId); } catch (e) { console.error('[tower] elo:', e.message); }
       try { await supabase.rpc(humanWon ? 'increment_win' : 'increment_loss', { uid: player.userId }); } catch (e) { console.error('[tower] rpc:', e.message); }
@@ -297,6 +324,10 @@ async function handleTowerComplete(io, supabase, roomId, socketId, score = 0, ta
       isSolo: true,
       vsBot: true,
       newElo: humanNewElo,
+      // Sent so the card subtracts from the same number the server used. Left
+      // to its own cached profile it can be a few points out, and the displayed
+      // swing then bears no relation to the real one.
+      eloBefore,
       winnerId: humanWon ? player.userId : null,
       playerId: player.userId,
       playerScore: verified,
