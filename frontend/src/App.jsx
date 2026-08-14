@@ -41,6 +41,10 @@ import WordleGame from './pages/WordleGame';
 import CoinFlipGame from './pages/CoinFlipGame';
 import BlackjackGame from './pages/BlackjackGame';
 import CarDashGame from './pages/CarDashGame';
+import TowerCanvas from './components/TowerCanvas';
+// Dev-only: lets the game be looked at before the lobby and engine exist.
+// Stripped from production builds by the import.meta.env.DEV guard below.
+function TowerPreview() { return <div style={{position:'fixed',inset:0}}><TowerCanvas running /></div>; }
 import Transactions from './pages/Transactions';
 import Rewards from './pages/Rewards';
 import Login from './pages/Login';
@@ -148,6 +152,7 @@ function Shell() {
           <Route path="/game/coin-flip"     element={<CoinFlipGame />} />
           <Route path="/game/blackjack"     element={<BlackjackGame />} />
           <Route path="/game/car-dash"      element={<CarDashGame />} />
+          {import.meta.env.DEV && <Route path="/__tower-preview" element={<TowerPreview />} />}
           <Route path="/game/word-vs"       element={<WordleGame />} />
           <Route path="/spectate/:gameId"   element={<SpectateView />} />
           {/* Friend invite link. Deliberately NOT wrapped in ProtectedRoute —
