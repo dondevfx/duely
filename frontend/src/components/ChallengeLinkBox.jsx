@@ -12,6 +12,7 @@ import ShareLinkButton from './ShareLinkButton';
 // while the others are camelCase. A miss just falls back to a generic message.
 const GAME_NAMES = {
   carDash: 'Rush Hour',
+  tower: 'Tower',
   blockBlast: 'Block Burst',
   scrabble: 'Word VS',
   blackjack: 'Blackjack',

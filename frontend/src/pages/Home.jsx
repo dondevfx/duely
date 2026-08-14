@@ -50,6 +50,14 @@ const GAMES = [
     countKey: 'car-dash',
   },
   {
+    title: 'Tower',
+    description: 'Stack sliding blocks as high as you can. Miss the edge and it gets sliced away — the taller tower takes the pot.',
+    icon: '🗼',
+    route: '/game/tower',
+    available: true,
+    countKey: 'tower',
+  },
+  {
     title: 'Blackjack',
     description: 'Get closer to 21 than your opponent. Both players act simultaneously — no waiting.',
     icon: '🃏',

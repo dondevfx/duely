@@ -304,7 +304,7 @@ module.exports = function leaderboardRoutes(supabase) {
 
   // Game-specific highscore leaderboard
   // Score-based games use game_highscores; all others use wins from matches table
-  const SCORE_GAMES = new Set(['blockBlast', 'carDash', 'tetris', 'snake', 'galaga', 'asteroids', 'piano', 'twoFortyEight', 'clickRace']);
+  const SCORE_GAMES = new Set(['blockBlast', 'carDash', 'tower', 'tetris', 'snake', 'galaga', 'asteroids', 'piano', 'twoFortyEight', 'clickRace']);
   // Games that also surface a companion stat (stored as its own game_type row)
   const COMPANION_STAT = { carDash: 'carDashMs' };
 

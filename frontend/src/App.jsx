@@ -41,6 +41,7 @@ import WordleGame from './pages/WordleGame';
 import CoinFlipGame from './pages/CoinFlipGame';
 import BlackjackGame from './pages/BlackjackGame';
 import CarDashGame from './pages/CarDashGame';
+import TowerGame from './pages/TowerGame';
 import TowerCanvas from './components/TowerCanvas';
 // Dev-only: lets the game be looked at before the lobby and engine exist.
 // Stripped from production builds by the import.meta.env.DEV guard below.
@@ -152,6 +153,7 @@ function Shell() {
           <Route path="/game/coin-flip"     element={<CoinFlipGame />} />
           <Route path="/game/blackjack"     element={<BlackjackGame />} />
           <Route path="/game/car-dash"      element={<CarDashGame />} />
+          <Route path="/game/tower"         element={<TowerGame />} />
           {import.meta.env.DEV && <Route path="/__tower-preview" element={<TowerPreview />} />}
           <Route path="/game/word-vs"       element={<WordleGame />} />
           <Route path="/spectate/:gameId"   element={<SpectateView />} />

@@ -38,6 +38,13 @@ const GAMES = [
     countKey: 'car-dash',
   },
   {
+    title: 'Tower',
+    description: 'Stack sliding blocks. Overhang gets sliced — tallest tower wins.',
+    icon: '🗼',
+    route: '/game/tower',
+    countKey: 'tower',
+  },
+  {
     title: 'Blackjack',
     description: 'Get closer to 21 than your opponent. No waiting on turns.',
     icon: '🃏',

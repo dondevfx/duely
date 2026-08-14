@@ -97,7 +97,14 @@ test('the queue keys match what the server actually broadcasts', () => {
   const page = fs.readFileSync(
     path.join(__dirname, '..', '..', 'frontend', 'src', 'pages', 'QuickMatch.jsx'), 'utf8');
   const keys = [...page.matchAll(/queueKey:\s*'([^']+)'/g)].map((m) => m[1]);
-  assert.equal(keys.length, 4, 'every pool entry needs a queueKey');
+  // Derived from the pool rather than hard-coded, so adding a game does not
+  // mean editing a number here — but an entry that FORGETS its queueKey still
+  // fails, which is the case worth catching.
+  const poolStart = page.indexOf('const POOL = [');
+  const entries = (page.slice(poolStart, page.indexOf('];', poolStart))
+    .match(/route: '\/game\//g) || []).length;
+  assert.ok(entries > 0, 'POOL not found');
+  assert.equal(keys.length, entries, 'every pool entry needs a queueKey');
   for (const k of keys) {
     assert.ok(new RegExp(`incrementCount\\('${k}'`).test(handlers),
       `no server queue is counted under '${k}'`);

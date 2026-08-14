@@ -8,6 +8,13 @@ const {
   trackBlockBlastScorePing, checkBlockBlastOvertake,
 } = require('../services/blockBlastEngine');
 const {
+  createDirectTowerRoom,
+  addToTowerQueue, removeFromTowerQueue,
+  getTowerRoom, deleteTowerRoom, getTowerRoomBySocket,
+  startTowerCountdown, handleTowerComplete,
+  trackTowerScorePing, checkTowerOvertake,
+} = require('../services/towerEngine');
+const {
   addToCarDashQueue, removeFromCarDashQueue,
   createDirectCarDashRoom,
   getCarDashRoom, deleteCarDashRoom, getCarDashRoomBySocket,
@@ -67,6 +74,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     [getCoinFlipRoomBySocket,   deleteCoinFlipRoom,   'coin_flip'],
     [getBlackjackRoomBySocket,  deleteBlackjackRoom,  'blackjack'],
     [getCarDashRoomBySocket,    deleteCarDashRoom,    'carDash'],
+    [getTowerRoomBySocket,      deleteTowerRoom,      'tower'],
   ]);
 
   // Is this socket already sitting in a live room of ANY game?
@@ -656,6 +664,214 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       }
     });
 
+    socket.on('join_tower_queue', async ({ entryFee = 0, currency = 'coins' }) => {
+      if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      if (_inLiveRoom(socket.id))
+        return socket.emit('error', { message: 'Finish your current game first.' });
+      resumeCounts.delete(authenticatedUser.userId);   // fresh match, fresh grace
+      if (!isValidFee(entryFee, currency)) return socket.emit('error', { message: 'Invalid entry fee' });
+      if (inMatchOrQueue(authenticatedUser.userId))
+        return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
+      socket._startingGame = 'tower';
+      try {
+      const { data: profile } = await supabase
+        .from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
+      // Player navigated away while we were awaiting the DB query — bail out cleanly
+      if (socket._pendingForfeitGame === 'tower') {
+        socket._pendingForfeitGame = null;
+        if (socket._pendingForfeitGameTimer) { clearTimeout(socket._pendingForfeitGameTimer); socket._pendingForfeitGameTimer = null; }
+        return;
+      }
+      if (entryFee > 0) {
+        if (currency === 'diamonds' && (profile.diamonds || 0) < entryFee)
+          return socket.emit('error', { message: 'Insufficient diamonds' });
+        if (currency === 'coins' && profile.c_coins < entryFee)
+          return socket.emit('error', { message: 'Insufficient C Coins' });
+        lockUser(authenticatedUser.userId);
+      }
+      const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
+      userQueues.add(authenticatedUser.userId);
+      incrementCount('tower', socket.id, entryFee, currency);
+      const match = addToTowerQueue(player);
+      if (match) {
+        const { roomId, p1, p2 } = match;
+        userQueues.delete(p1.userId); userQueues.delete(p2.userId);
+        // Deduct fees from both players BEFORE notifying clients — no exploit window
+        if (entryFee > 0) {
+          try {
+            await deductMatchFees(supabase, p1.userId, p2.userId, entryFee, currency);
+            const room = getTowerRoom(roomId);
+            if (room) room.feesDeducted = true;
+          } catch (e) {
+            console.error('[block-blast] fee deduction failed:', e.message);
+            deleteTowerRoom(roomId);
+            unlockUser(p1.userId); unlockUser(p2.userId);
+            decrementCount('tower', p1.socketId);
+            decrementCount('tower', p2.socketId);
+            io.emit('queue_entry_removed', { id: p1.socketId });
+            io.emit('queue_entry_removed', { id: p2.socketId });
+            const s1e = io.sockets.sockets.get(p1.socketId);
+            const s2e = io.sockets.sockets.get(p2.socketId);
+            if (s1e) s1e.emit('match_cancelled', { message: 'Your balance changed. Please rejoin the queue.' });
+            if (s2e) s2e.emit('match_cancelled', { message: 'Your balance changed. Please rejoin the queue.' });
+            return;
+          }
+        } else {
+          const room = getTowerRoom(roomId);
+          if (room) room.feesDeducted = true;
+        }
+        const s1 = io.sockets.sockets.get(p1.socketId);
+        const s2 = io.sockets.sockets.get(p2.socketId);
+        const twP1Name = p1.isDemo ? randomFunnyName() : p1.username;
+        const twP2Name = p2.isDemo ? randomFunnyName() : p2.username;
+        if (s1) { s1.join(roomId); s1.emit('tower_match_found', { roomId, opponent: { userId: p2.userId, username: twP2Name, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency }); }
+        if (s2) { s2.join(roomId); s2.emit('tower_match_found', { roomId, opponent: { userId: p1.userId, username: twP1Name, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency }); }
+        io.emit('queue_entry_removed', { id: p1.socketId });
+        io.emit('queue_entry_removed', { id: p2.socketId });
+        if (!p1.isBot && !p2.isBot) {
+          io.emit('active_game_started', {
+            id: roomId,
+            gameType: 'tower',
+            player1: { username: p1.username, elo: p1.elo, profileColor: p1.profile_color || '#1E90FF' },
+            player2: { username: p2.username, elo: p2.elo, profileColor: p2.profile_color || '#1E90FF' },
+            entryFee: p1.entryFee || 0,
+            currency: p1.currency || 'coins',
+            score1: 0,
+            score2: 0,
+            startedAt: Date.now(),
+          });
+        }
+        startTowerCountdown(io, supabase, roomId);
+      } else {
+        socket.emit('tower_queue_joined');
+        io.emit('queue_entry_added', {
+          id: socket.id,
+          gameType: 'tower',
+          entryFee,
+          currency,
+          username: authenticatedUser.username || 'Player',
+          elo: authenticatedUser.elo || 1000,
+          profileColor: authenticatedUser.profile_color || '#1E90FF',
+          currentStreak: authenticatedUser.current_streak || 0,
+        });
+        // Demo accounts: no other demo within 3s → bot match (demo always wins,
+        // bot score trails a little). Funny opponent name.
+        if (authenticatedUser.isDemo) {
+          setTimeout(async () => {
+            if (!removeFromTowerQueue(socket.id)) return; // already matched or left
+            userQueues.delete(authenticatedUser.userId);
+            unlockUser(authenticatedUser.userId);
+            io.emit('queue_entry_removed', { id: socket.id });
+            try {
+              if (entryFee > 0) {
+                if (currency === 'diamonds') await deductDiamonds(supabase, authenticatedUser.userId, Math.floor(entryFee));
+                else await deductCoins(supabase, authenticatedUser.userId, parseFloat(entryFee));
+              }
+            } catch (e) { return socket.emit('error', { message: e.message || 'Insufficient balance' }); }
+            const bot = createBotPlayer(entryFee, 'tower');
+            bot.entryFee = entryFee;
+            bot.username = randomFunnyName();
+            const { roomId } = createDirectTowerRoom(player, bot);
+            if (entryFee > 0) { const r = getTowerRoom(roomId); if (r) r.feesDeducted = true; }
+            socket.join(roomId);
+            socket.emit('tower_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo }, entryFee, currency, vsBot: true });
+            startTowerCountdown(io, supabase, roomId);
+          }, 3000);
+        }
+      }
+      } finally {
+        socket._startingGame = null;
+      }
+    });
+
+    socket.on('leave_tower_queue', () => {
+      removeFromTowerQueue(socket.id);
+      if (authenticatedUser) { unlockUser(authenticatedUser.userId); userQueues.delete(authenticatedUser.userId); }
+      decrementCount('tower', socket.id);
+      io.emit('queue_entry_removed', { id: socket.id });
+    });
+
+    socket.on('play_tower_vs_bot', async ({ entryFee = 0, currency = 'coins' } = {}) => {
+      if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      if (_inLiveRoom(socket.id))
+        return socket.emit('error', { message: 'Finish your current game first.' });
+      resumeCounts.delete(authenticatedUser.userId);   // fresh match, fresh grace
+      socket._startingGame = 'tower';
+      try {
+        if (currency !== 'diamonds') entryFee = 0; // bot games are free for coins
+        const { data: profile } = await supabase.from('profiles').select('elo,username,c_coins,diamonds').eq('id', authenticatedUser.userId).single();
+        if (entryFee > 0) {
+          try {
+            if (currency === 'diamonds') {
+              await deductDiamonds(supabase, authenticatedUser.userId, Math.floor(entryFee));
+            } else {
+              await deductCoins(supabase, authenticatedUser.userId, parseFloat(entryFee));
+            }
+          } catch (e) {
+            return socket.emit('error', { message: e.message || 'Insufficient balance' });
+          }
+        }
+        const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
+        const bot = createBotPlayer(entryFee, 'tower');
+        bot.entryFee = entryFee;
+        const { roomId } = createDirectTowerRoom(player, bot);
+        if (entryFee > 0) { const r = getTowerRoom(roomId); if (r) r.feesDeducted = true; }
+        socket.join(roomId);
+        if (socket._pendingForfeitGame === 'tower') {
+          socket._pendingForfeitGame = null;
+          if (socket._pendingForfeitGameTimer) { clearTimeout(socket._pendingForfeitGameTimer); socket._pendingForfeitGameTimer = null; }
+          await _handleForfeit(io, supabase, { roomId, room: getTowerRoom(roomId) }, socket.id, deleteTowerRoom, 'blockBlast');
+          return;
+        }
+        incrementCount('tower', socket.id, entryFee, currency);
+        socket.emit('tower_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo }, entryFee, vsBot: true });
+        startTowerCountdown(io, supabase, roomId);
+      } finally {
+        socket._startingGame = null;
+      }
+    });
+
+    socket.on('tower_complete', ({ roomId, score = 0, taps = null }) => {
+      if (!authenticatedUser) return;
+      // taps is advisory only — it feeds the metronomic-run check and never the
+      // score, which comes from the server's own clamped tally.
+      handleTowerComplete(io, supabase, roomId, socket.id, score, Array.isArray(taps) ? taps.slice(0, 4000) : null);
+    });
+
+    socket.on('tower_score_ping', ({ roomId, score }) => {
+      if (!authenticatedUser) return;
+      const room = getTowerRoom(roomId);
+      if (!room || room.state !== 'active') return;
+      // Validate and track — returns the clamped authoritative score
+      const verified = trackTowerScorePing(roomId, socket.id, score || 0);
+      if (verified === null) return;
+      const opp = room.players.find(p => p.socketId !== socket.id);
+      if (opp && !opp.isBot) io.to(opp.socketId).emit('tower_opponent_score', { score: verified });
+      // If this ping just passed the score they were chasing, end it now rather
+      // than making them play out the rest of the window.
+      checkTowerOvertake(io, supabase, roomId);
+      if (!room.isSolo) {
+        const [rp1, rp2] = room.players;
+        const s1 = socket.id === rp1.socketId ? verified : (room.pingScores[rp1.socketId] || 0);
+        const s2 = socket.id === rp2.socketId ? verified : (room.pingScores[rp2.socketId] || 0);
+        io.emit('active_game_score', { id: roomId, score1: s1, score2: s2 });
+      }
+    });
+
+    socket.on('tower_rematch_request', ({ roomId }) => {
+      const room = getTowerRoom(roomId);
+      if (!room) return;
+      room.rematches = room.rematches || {};
+      room.rematches[socket.id] = true;
+      const opp = room.players.find(p => p.socketId !== socket.id);
+      if (opp && !opp.isBot) io.to(opp.socketId).emit('tower_rematch_requested');
+      if (room.players.every(p => p.isBot || room.rematches[p.socketId])) {
+        room.state = 'countdown'; room.startTime = null; room.rematches = {}; room.scores = {};
+        startTowerCountdown(io, supabase, roomId);
+      }
+    });
+
+
     // ════════════════════════════════════════════════════════════════
     //  HIGHWAY DASH (car dodge — longest survival wins)
     // ════════════════════════════════════════════════════════════════
@@ -882,7 +1098,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       // online requirement to allow offline invites, would open an
       // authorization bypass. Validate the shape here so it cannot regress.
       if (!UUID_RE.test(String(friendId))) return fail('Invalid friend.');
-      if (!['blackjack', 'coin-flip', 'scrabble', 'blockBlast', 'carDash'].includes(gameType)) return fail('Invalid game.');
+      if (!['blackjack', 'coin-flip', 'scrabble', 'blockBlast', 'carDash', 'tower'].includes(gameType)) return fail('Invalid game.');
       if (!isValidFee(entryFee, currency)) return fail('Invalid entry fee.');
       if (inMatchOrQueue(fromId)) return fail('Finish your current game first.');
       if (!_isUserOnline(friendId)) return fail('That friend is offline.');
@@ -1525,6 +1741,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         [getCoinFlipRoomBySocket,   deleteCoinFlipRoom,   'coin_flip'],
         [getBlackjackRoomBySocket,  deleteBlackjackRoom,  'blackjack'],
         [getCarDashRoomBySocket,    deleteCarDashRoom,    'carDash'],
+    [getTowerRoomBySocket,      deleteTowerRoom,      'tower'],
       ];
       let forfeited = false;
       for (const [getFn, delFn, gameType] of roomLookups) {
@@ -1654,6 +1871,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         [getCoinFlipRoomBySocket,   deleteCoinFlipRoom,   'coin_flip'],
         [getBlackjackRoomBySocket,  deleteBlackjackRoom,  'blackjack'],
         [getCarDashRoomBySocket,    deleteCarDashRoom,    'carDash'],
+    [getTowerRoomBySocket,      deleteTowerRoom,      'tower'],
       ];
 
       const pendingJobs = [];
@@ -1893,6 +2111,11 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         ({ roomId } = createDirectBlockBlastRoom(p1, p2));
         if (entryFee > 0) { const r = getBlockBlastRoom(roomId); if (r) r.feesDeducted = true; }
         emit2('block_blast_match_found'); startBlockBlastCountdown(io, supabase, roomId); break;
+      }
+      case 'tower': {
+        ({ roomId } = createDirectTowerRoom(p1, p2));
+        if (entryFee > 0) { const r = getTowerRoom(roomId); if (r) r.feesDeducted = true; }
+        emit2('tower_match_found'); startTowerCountdown(io, supabase, roomId); break;
       }
       case 'scrabble': {
         ({ roomId } = createDirectWordleRoom(p1, p2));
