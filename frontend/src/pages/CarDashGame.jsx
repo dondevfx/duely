@@ -139,14 +139,40 @@ export default function CarDashGame() {
     window.addEventListener('resize', pin);
     window.addEventListener('orientationchange', pin);
 
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', pin);
-      window.removeEventListener('orientationchange', pin);
+    // This effect locks the DOCUMENT, not just a child, so leaving it locked is
+    // much worse than leaving it unlocked: a phone that suspends a backgrounded
+    // tab may never run this cleanup, and the page then returns with html and
+    // body frozen and nothing able to scroll or paint properly — a blank app
+    // that only a reload clears. So the lock is dropped whenever the page hides
+    // and retaken when it comes back.
+    const restore = () => {
       if (main) main.style.overflowY = prev.main;
       body.style.overflow = prev.body;
       html.style.overflow = prev.html;
       body.style.touchAction = prev.touch;
+    };
+    const relock = () => {
+      if (main) main.style.overflowY = 'hidden';
+      body.style.overflow = 'hidden';
+      html.style.overflow = 'hidden';
+      body.style.touchAction = 'none';
+      pin();
+    };
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') restore(); else relock();
+    };
+    window.addEventListener('pagehide', restore);
+    window.addEventListener('pageshow', relock);
+    document.addEventListener('visibilitychange', onVis);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', pin);
+      window.removeEventListener('orientationchange', pin);
+      window.removeEventListener('pagehide', restore);
+      window.removeEventListener('pageshow', relock);
+      document.removeEventListener('visibilitychange', onVis);
+      restore();
     };
   }, [phase]);
 
@@ -413,7 +439,10 @@ export default function CarDashGame() {
           <div className="text-center animate-fade-in">
             <div className="text-8xl font-black text-primary mb-4" style={{ textShadow: '0 0 40px #1250B4' }}>{countdown}</div>
             <p className="text-muted">Get ready...</p>
-            {opponent && <p className="text-xs text-muted mt-2">vs {opponent.username}</p>}
+            {/* Solo Endless has no opponent — the bot is plumbing, not a rival. */}
+            {opponent && lastModeRef.current !== 'bot_free' && (
+              <p className="text-xs text-muted mt-2">vs {opponent.username}</p>
+            )}
           </div>
         </div>
       );

@@ -247,7 +247,7 @@ export default function TowerGame() {
           entryFee={result.entryFee ?? entryFee}
           disconnected={result.disconnected}
           profile={profile}
-          gameLabel={freeSolo ? '🎮 Solo Endless' : '🧊 Tower'}
+          gameLabel={freeSolo ? '🎮 Solo Endless' : '🗼 Tower'}
           extraRows={result.isSolo
             ? (freeSolo
                 ? [{ label: 'Blocks', value: (result.playerScore ?? 0).toLocaleString() }]
@@ -325,7 +325,7 @@ export default function TowerGame() {
   if (phase === 'queue') {
     return (
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
-        <div className="text-5xl mb-4 animate-pulse">🧊</div>
+        <div className="text-5xl mb-4 animate-pulse">🗼</div>
         <h2 className="text-2xl font-black text-white mb-2">Finding an opponent…</h2>
         <p className="text-muted text-sm mb-6">{statusMsg || 'Waiting for someone at your bet size'}</p>
         <button onClick={backToLobby} className="px-5 py-2 rounded-xl border border-border text-muted hover:text-white hover:border-primary transition-all text-sm font-bold">
@@ -342,7 +342,7 @@ export default function TowerGame() {
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}
     >
       <GameLobby
-        title="🧊 Tower"
+        title="🗼 Tower"
         description="Stack the blocks as high as you can. Each block slides in on its own — tap to drop it, and anything hanging over the edge is sliced off. Land it dead centre and you keep the full width."
         controls="Tap the screen or press SPACE to drop · Perfect drops keep your tower wide"
         betCurrency={betCurrency} setBetCurrency={setBetCurrency}

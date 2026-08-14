@@ -765,7 +765,7 @@ export default function WordleGame() {
           </div>
           <p className="text-muted">Get ready…</p>
           {lastModeRef.current === 'solo'
-            ? <p className="text-xs text-muted mt-2">vs Duely Bot</p>
+            ? (entryFee > 0 ? <p className="text-xs text-muted mt-2">vs Duely Bot</p> : null)
             : opponent && <p className="text-xs text-muted mt-2">vs {opponent.username}</p>}
         </div>
       </div>

@@ -140,8 +140,9 @@ export function createRun({ onLand, onOver } = {}) {
       sl.t  += dt;
       sl.vy += 9.8 * dt;
       sl.level -= sl.vy * dt;
-      // A tilt as it goes, so it reads as a piece knocked off rather than a
-      // block calmly descending. Direction follows the side it was cut from.
+      // Kept for any future use, but nothing renders it: a tilting piece
+      // sweeping sideways across the tower was what made the overlap obvious,
+      // so an offcut now simply drops behind the tower.
       sl.spin += dt * 1.9 * (sl.side || 1);
     }
     if (state.slices.length > 12) state.slices.splice(0, state.slices.length - 12);
@@ -237,7 +238,11 @@ export function createRun({ onLand, onOver } = {}) {
     onLand?.({ perfect, score: state.score });
 
     // Nothing left to aim at.
-    if (newSize <= 0.06) {
+    //
+    // This was 0.06 of the base footprint, which ends a run while the block is
+    // still several pixels wide and clearly landable — the game appeared to quit
+    // on its own. It now only stops when there is genuinely nothing to hit.
+    if (newSize <= 0.012) {
       state.over = true;
       state.moving = null;
       state.pendingOverAt = state.elapsed + MISS_FALL_S;
@@ -320,8 +325,9 @@ export function makeView(width, height, camera) {
   return {
     halfW, halfH, blockPx,
     originX: width / 2,
-    // Rises with the tower so the working top stays put on screen.
-    originY: height * 0.58 + camera * blockPx,
+    // Rises with the tower so the working top stays put on screen. Sits lower
+    // than centre so there is room above for the incoming block.
+    originY: height * 0.66 + camera * blockPx,
   };
 }
 

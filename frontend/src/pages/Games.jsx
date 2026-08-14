@@ -40,7 +40,7 @@ const GAMES = [
   {
     title: 'Tower',
     description: 'Stack sliding blocks. Overhang gets sliced — tallest tower wins.',
-    icon: '🧊',
+    icon: '🗼',
     route: '/game/tower',
     countKey: 'tower',
   },

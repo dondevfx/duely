@@ -25,7 +25,7 @@ const GAME_LINKS = [
   { icon: '🔤', label: 'Word VS',     to: '/game/scrabble',    countKey: 'scrabble' },
   { icon: '🃏', label: 'Blackjack',   to: '/game/blackjack',   countKey: 'blackjack' },
   { icon: '🚗', label: 'Rush Hour', to: '/game/car-dash',  countKey: 'car-dash' },
-  { icon: '🧊', label: 'Tower',     to: '/game/tower',     countKey: 'tower' },
+  { icon: '🗼', label: 'Tower',     to: '/game/tower',     countKey: 'tower' },
 ];
 
 

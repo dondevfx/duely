@@ -268,9 +268,13 @@ test('the background motes are dim, few and slow', () => {
   const speed = +block.match(/v:\s*([\d.]+)\s*\+/)[1];
   // Some were asked back after being cut too far, but they must stay a depth
   // cue rather than weather.
-  assert.ok(count >= 8 && count <= 20, `${count} motes`);
+  // More of them were asked for, spawning lower down the screen. Still dim and
+  // slow enough to stay a depth cue rather than weather.
+  assert.ok(count >= 20 && count <= 45, `${count} motes`);
   assert.ok(alpha <= 0.14, `base alpha ${alpha} is too bright`);
   assert.ok(speed <= 0.0012, `base speed ${speed} is too fast`);
+  const birth = +src.match(/MOTE_BIRTH = ([\d.]+)/)[1];
+  assert.ok(birth >= 0.8, `motes start ${birth} down the screen — asked for lower`);
 });
 
 test('the score is smaller on a desktop', () => {
@@ -358,27 +362,42 @@ test('the placement sounds are actually audible on a phone', () => {
   }
 });
 
-test('offcuts fall clear of the tower instead of clipping through it', () => {
+test('a falling offcut cannot be seen through the tower', () => {
+  // Third attempt at this. Interleaving by height embedded the slice in the
+  // block below; drawing it on top with a fading alpha made it literally
+  // see-through. It is now painted BEFORE the tower at full opacity, so the
+  // tower simply covers it.
+  //
+  // Anchored on code, not on the section comments — the helper strips those.
   const src = fe('components', 'TowerCanvas.jsx');
-  assert.doesNotMatch(src, /order: sl\.side < 0/, 'the interleave read as clipping, not depth');
-  assert.match(src, /ctx\.rotate\(sl\.spin/, 'it should tip over as it falls');
-  assert.match(src, /nearBottom/, 'and fade out at the bottom of the screen');
+  const offcuts = src.indexOf('for (const sl of s.slices)');
+  const tower   = src.indexOf('for (let i = firstVisible;');
+  assert.ok(offcuts > 0, 'offcut draw loop not found');
+  assert.ok(tower > 0, 'tower draw loop not found');
+  assert.ok(offcuts < tower, 'offcuts must be drawn before the tower, so it occludes them');
+  assert.doesNotMatch(src, /ctx\.rotate\(sl\.spin/, 'the tilt drew attention to the overlap');
+  assert.match(src.slice(offcuts, tower), /sl\.level, 1\)/, 'an offcut must be fully opaque');
 });
 
-test('the plinth fades against the screen, not against its own depth', () => {
-  // Tied to depth, the fade drifted as the camera rose and left the base
-  // hanging in mid-air.
+test('the plinth is solid and the darkness is a scrim', () => {
+  // Fading the plinth with alpha let every block behind show through, so the
+  // base came out as a lattice of overlapping diamonds instead of a tower.
   const src = fe('components', 'TowerCanvas.jsx');
-  assert.match(src, /const fadeFrom = height \* /);
+  const at = src.indexOf('for (let L = -1; L >= -PLINTH_DEPTH; L--)');
+  assert.ok(at > 0, 'plinth loop not found');
+  const plinth = src.slice(at, at + 400);
+  assert.match(plinth, /index: L \}, L, 1\)/, 'plinth blocks must be fully opaque');
+  assert.match(src, /createLinearGradient/, 'the fade into the dark should be a scrim');
+  assert.match(src, /addColorStop\(1, 'rgba\(0,0,0,1\)'\)/, 'and reach full black');
 });
 
 test('the burst outline is thicker', () => {
-  assert.match(fe('components', 'TowerCanvas.jsx'), /ctx\.lineWidth = 3\.5/);
+  assert.match(fe('components', 'TowerCanvas.jsx'), /ctx\.lineWidth = 5/);
 });
 
-test('Tower no longer wears an orange tower emoji', () => {
-  for (const f of ['pages/Home.jsx', 'pages/Games.jsx', 'components/Navbar.jsx']) {
-    assert.doesNotMatch(fe(...f.split('/')), /🗼/, `${f} still uses the old emoji`);
-  }
-  assert.match(fe('pages', 'QuickMatch.jsx'), /icon: '🧊', queueKey: 'tower'/);
+test('Tower uses the tower emoji, and nobody else uses it', () => {
+  assert.match(fe('pages', 'QuickMatch.jsx'), /icon: '🗼', queueKey: 'tower'/);
+  // Still has to be unique, or two games light up together in the reel.
+  const icons = [...fe('pages', 'QuickMatch.jsx').matchAll(/icon: '([^']+)'/g)].map(m => m[1]);
+  assert.equal(new Set(icons).size, icons.length, `duplicate icon: ${icons}`);
 });

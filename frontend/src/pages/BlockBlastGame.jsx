@@ -900,7 +900,8 @@ export default function BlockBlastGame() {
               </div>
               <p className="text-muted">Get ready...</p>
               {!isSolo && opponent && <p className="text-xs text-muted mt-2">vs {opponent.username}</p>}
-              {isSolo && <p className="text-xs text-muted mt-2">vs Duely Bot</p>}
+              {/* Solo Endless has no opponent — naming the bot invents one. */}
+              {isSolo && entryFee > 0 && <p className="text-xs text-muted mt-2">vs Duely Bot</p>}
             </>
           ) : (
             <>

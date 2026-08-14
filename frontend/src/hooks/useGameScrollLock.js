@@ -61,12 +61,38 @@ export function useGameScrollLock(active) {
     window.addEventListener('resize', apply);
     window.addEventListener('orientationchange', apply);
 
+    // Give the styles back whenever the page is hidden, and take them again on
+    // return.
+    //
+    // A phone can suspend or discard a backgrounded tab without ever running a
+    // React cleanup, so a page put to sleep mid-match could come back with the
+    // scroller still locked and nothing able to move — which reads as a frozen
+    // or blank app that only a reload clears. Releasing on pagehide means the
+    // worst case is an unlocked page, never a stuck one.
+    const release = () => {
+      main.style.overflowY = prevOverflow;
+      document.body.style.overscrollBehavior = prevOverscroll;
+    };
+    const onHide = () => release();
+    const onShow = () => {
+      document.body.style.overscrollBehavior = 'none';
+      apply();
+    };
+    window.addEventListener('pagehide', onHide);
+    window.addEventListener('pageshow', onShow);
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') onHide(); else onShow();
+    };
+    document.addEventListener('visibilitychange', onVis);
+
     return () => {
       ro.disconnect();
       window.removeEventListener('resize', apply);
       window.removeEventListener('orientationchange', apply);
-      main.style.overflowY = prevOverflow;
-      document.body.style.overscrollBehavior = prevOverscroll;
+      window.removeEventListener('pagehide', onHide);
+      window.removeEventListener('pageshow', onShow);
+      document.removeEventListener('visibilitychange', onVis);
+      release();
     };
   }, [active]);
 }
