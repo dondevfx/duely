@@ -251,3 +251,85 @@ test('the base block is a sensible share of the screen', () => {
   const span = Math.max(...f.top.map(p => p.px)) - Math.min(...f.top.map(p => p.px));
   assert.ok(span > 420 * 0.4 && span < 420 * 0.9, `base spans ${span}px of 420`);
 });
+
+// ── Feedback and finish ──────────────────────────────────────────────────────
+
+test('a miss drops the block instead of deleting it', () => {
+  // Item 14: the run used to simply stop, with no sense that the block missed.
+  const run = createRun();
+  const before = run.state.slices.length;
+  dropAt(run, 1.0);
+  assert.equal(run.state.slices.length, before + 1, 'the missed block should be falling');
+  assert.ok(run.over, 'no further input is accepted');
+});
+
+test('the run is reported over only once that block has fallen', () => {
+  let overAt = null;
+  const run = createRun({ onOver: () => { overAt = run.state.elapsed; } });
+  dropAt(run, 1.0);
+  assert.equal(overAt, null, 'the result must not appear while the block is still in the air');
+  for (let i = 0; i < 20; i++) run.step(0.05);   // 1.0s
+  assert.ok(overAt !== null, 'the run must end after the fall');
+  assert.ok(overAt >= MISS_FALL_S - 1e-9, `ended too early at ${overAt}`);
+});
+
+test('the falling block keeps animating after the run ends', () => {
+  // step() used to bail the moment `over` was set, which froze the animation
+  // that is the whole point of the delay.
+  const run = createRun();
+  dropAt(run, 1.0);
+  const start = run.state.slices[run.state.slices.length - 1].level;
+  for (let i = 0; i < 10; i++) run.step(0.03);
+  assert.ok(run.state.slices[run.state.slices.length - 1].level < start, 'it should be falling');
+});
+
+test('a perfect drop leaves a burst to draw, an ordinary one does not', () => {
+  const run = createRun();
+  dropAt(run, 0.25);
+  assert.equal(run.state.bursts.length, 0);
+  dropAt(run, 0);
+  assert.equal(run.state.bursts.length, 1);
+});
+
+test('bursts do not accumulate forever', () => {
+  const run = createRun();
+  for (let i = 0; i < 30; i++) { dropAt(run, 0); run.step(0.016); }
+  assert.ok(run.state.bursts.length <= 4, `${run.state.bursts.length} bursts retained`);
+});
+
+// ── Colour ───────────────────────────────────────────────────────────────────
+
+const { faceShades, SHADE_MIN, SHADE_MAX, MISS_FALL_S } = new Function(
+  `${src.replace(/export /g, '')}; return { faceShades, SHADE_MIN, SHADE_MAX, MISS_FALL_S };`)();
+
+test('no block is ever too dark to see on black', () => {
+  // The complaint: high up the tower went near-black and vanished.
+  for (let i = 0; i < 500; i++) {
+    const f = faceShades(i);
+    assert.ok(f.top >= SHADE_MIN - 1e-9, `top ${f.top} at ${i} is below the floor`);
+    assert.ok(f.left > 15, `left face ${f.left} at ${i} would read as black`);
+  }
+});
+
+test('every block keeps three distinct faces', () => {
+  // The old fixed subtraction clamped to near-zero on dark blocks, flattening
+  // them into one silhouette with no shading at all.
+  for (let i = 0; i < 500; i++) {
+    const f = faceShades(i);
+    assert.ok(f.top - f.right > 6, `faces merged at ${i}: ${f.top}/${f.right}`);
+    assert.ok(f.right - f.left > 4, `sides merged at ${i}: ${f.right}/${f.left}`);
+  }
+});
+
+test('the palette sits on the site blue', () => {
+  for (let i = 0; i < 500; i++) {
+    const { hue, sat } = faceShades(i);
+    assert.ok(hue >= 208 && hue <= 222, `hue ${hue} drifted off #1250B4`);
+    assert.ok(sat >= 70, 'a washed-out blue would not match the site');
+  }
+});
+
+test('blocks are thin and the slide is quicker than before', () => {
+  assert.ok(core.BLOCK_H <= 0.13, `blocks are ${core.BLOCK_H} tall — item 11 asked for 3x thinner`);
+  assert.ok(speedForScore(0) > 1.4, 'item 10 asked for a slightly faster slide');
+});

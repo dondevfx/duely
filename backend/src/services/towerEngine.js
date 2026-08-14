@@ -248,12 +248,15 @@ async function handleTowerComplete(io, supabase, roomId, socketId, score = 0, ta
 
     // Rating and record only when the run cost something — an unloseable free
     // run that awarded rating would be an infinite ladder.
+    // Reported so the card can show it — a paid bot match rates, in coins or
+    // diamonds, and a payload without the number reads as though it does not.
+    let humanNewElo = null;
     if (supabase && !freeSolo) {
       const BOT_ELO = 1000;
       const { newWinnerElo, newLoserElo } = humanWon
         ? calculateNewRatings(player.elo, BOT_ELO)
         : calculateNewRatings(BOT_ELO, player.elo);
-      const humanNewElo = humanWon ? newWinnerElo : newLoserElo;
+      humanNewElo = humanWon ? newWinnerElo : newLoserElo;
       try { await supabase.from('profiles').update({ elo: humanNewElo }).eq('id', player.userId); } catch (e) { console.error('[tower] elo:', e.message); }
       try { await supabase.rpc(humanWon ? 'increment_win' : 'increment_loss', { uid: player.userId }); } catch (e) { console.error('[tower] rpc:', e.message); }
       try {
@@ -275,6 +278,7 @@ async function handleTowerComplete(io, supabase, roomId, socketId, score = 0, ta
     io.to(roomId).emit('tower_result', {
       isSolo: true,
       vsBot: true,
+      newElo: humanNewElo,
       winnerId: humanWon ? player.userId : null,
       playerId: player.userId,
       playerScore: verified,

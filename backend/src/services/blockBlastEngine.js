@@ -302,12 +302,17 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
       // that always wins AND wrote ELO would be an infinite rating ladder —
       // queue solo, crash immediately, gain rating, repeat. The highscore is
       // still recorded below, since a personal best is the point of the mode.
+      // Reported back so the result card can show it. A paid bot match — coins
+      // or diamonds — really does move the rating, but the payload carried no
+      // number, so the card had nothing to print and hid the row entirely. That
+      // reads as "bot matches are unrated", which is not true.
+      let humanNewElo = null;
       if (supabase && !freeSolo) {
         const BOT_ELO = 1000;
         const { newWinnerElo, newLoserElo } = humanWon
           ? calculateNewRatings(player.elo, BOT_ELO)
           : calculateNewRatings(BOT_ELO, player.elo);
-        const humanNewElo = humanWon ? newWinnerElo : newLoserElo;
+        humanNewElo = humanWon ? newWinnerElo : newLoserElo;
         try { await supabase.from('profiles').update({ elo: humanNewElo }).eq('id', player.userId); } catch (e) { console.error('[blockBlastEngine] elo update:', e.message); }
         try { await supabase.rpc(humanWon ? 'increment_win' : 'increment_loss', { uid: player.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
         // Beating a bot no longer builds a streak — streaks are a PvP record.
@@ -332,6 +337,7 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
       gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId) });
       io.to(roomId).emit('block_blast_result', {
         isSolo:      true,
+        newElo:      humanNewElo,
         winnerId:    humanWon ? player.userId : null,
         playerId:    player.userId,
         playerScore: verifiedScore,

@@ -10,7 +10,7 @@ import TowerCanvas from '../components/TowerCanvas';
 import { usePageReady } from '../hooks/usePageReady';
 import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import { useResumeMatch } from '../hooks/useResumeMatch';
-import { playMatchFound, playCountdown, playGo, playPlace } from '../utils/sound';
+import { playMatchFound, playCountdown, playGo, playTowerPlace, playTowerPerfect } from '../utils/sound';
 
 // Tower — same page shape as every other game: lobby, countdown, play, result.
 // Only the middle bit is game-specific.
@@ -199,6 +199,15 @@ export default function TowerGame() {
   }
 
   // ── canvas callbacks ──
+  const onPerfect = () => {
+    playTowerPerfect();
+    // A single very short pulse. Anything longer reads as an error buzz, and on
+    // a run of perfects a heavy pattern becomes irritating fast. Guarded because
+    // iOS Safari has no Vibration API at all and desktop Chrome throws on some
+    // platforms.
+    try { navigator.vibrate?.(12); } catch { /* not supported — no fallback wanted */ }
+  };
+
   const onScore = (score) => {
     setMyScore(score);
     if (roomIdRef.current) socket?.emit('tower_score_ping', { roomId: roomIdRef.current, score });
@@ -225,8 +234,8 @@ export default function TowerGame() {
           loserUsername={result.isSolo
             ? (isWinner ? 'Duely Bot' : (profile?.username ?? 'You'))
             : result.loserUsername}
-          newWinnerElo={result.newWinnerElo}
-          newLoserElo={result.newLoserElo}
+          newWinnerElo={result.isSolo ? (isWinner ? result.newElo : undefined) : result.newWinnerElo}
+          newLoserElo={result.isSolo ? (isWinner ? undefined : result.newElo) : result.newLoserElo}
           eloBeforeRef={eloBeforeRef}
           balanceChange={result.balanceChange}
           currency={result.currency || betCurrency}
@@ -255,12 +264,23 @@ export default function TowerGame() {
   // ── countdown / play ──
   if (phase === 'countdown' || phase === 'active') {
     return (
-      <div className="relative" style={{ height: 'calc(100dvh - 56px)', background: '#000' }}>
+      <div
+        className="relative select-none"
+        style={{
+          height: 'calc(100dvh - 56px)',
+          background: '#000',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          WebkitTouchCallout: 'none',
+          overscrollBehavior: 'none',
+        }}
+      >
         <TowerCanvas
           running={phase === 'active'}
           onScore={onScore}
           onGameOver={onGameOver}
-          onPerfect={playPlace}
+          onPerfect={onPerfect}
+          onPlace={playTowerPlace}
         />
 
         {catchup && <CatchupBanner endsAt={catchup.endsAt} target={catchup.target} />}
@@ -277,7 +297,10 @@ export default function TowerGame() {
         )}
 
         {phase === 'countdown' && (
-          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/70">
+          // Fully opaque, like every other game's countdown. A translucent
+          // overlay showed the board sliding underneath, which both spoils the
+          // start and invites a tap before the run is live.
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-bg">
             <div className="text-8xl font-black text-primary mb-3" style={{ textShadow: '0 0 40px #1250B4' }}>
               {countdown || '…'}
             </div>

@@ -178,6 +178,26 @@ export function playPlace() {
   tone(430, 0.00, 0.025, { type: 'triangle', gain: 0.045 }); // faint tick on top
 }
 
+// Tower: a block lands off-centre. A soft, slightly dull thud — it is the
+// ordinary outcome and happens once a second, so it has to sit under the music
+// of the game rather than announce itself. Deliberately duller than the perfect
+// version below: the two are told apart by brightness, not volume, which keeps
+// them equally quiet.
+export function playTowerPlace() {
+  tone(132, 0.00, 0.075, { type: 'sine',     gain: 0.11 });
+  tone(198, 0.00, 0.045, { type: 'triangle', gain: 0.035 });
+  noiseBurst(0.018, { gain: 0.030, filter: 'lowpass', freq: 900 });
+}
+
+// Tower: a perfect drop. Same weight as the ordinary landing, but it rings —
+// a clean two-note chime a fifth apart over the same body, so a good drop is
+// heard as brighter rather than louder.
+export function playTowerPerfect() {
+  tone(132,  0.00, 0.070, { type: 'sine',     gain: 0.095 });
+  tone(784,  0.00, 0.090, { type: 'triangle', gain: 0.075 });
+  tone(1175, 0.045, 0.110, { type: 'triangle', gain: 0.055 });
+}
+
 // Word VS: a subtle, satisfying key "click" when typing a letter — a tiny
 // crisp high transient plus a faint short body (like a soft mechanical key).
 export function playType() {

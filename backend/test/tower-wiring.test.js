@@ -185,3 +185,109 @@ test('the page forfeits on leaving, like the others', () => {
   assert.match(src, /player_forfeit/);
   assert.match(src, /useResumeMatch/);
 });
+
+// ── Bot matches report the rating they actually applied ──────────────────────
+//
+// A paid bot match — coins or diamonds — really does move the rating, but the
+// solo payload carried no number, so the result card had nothing to print and
+// hid the ELO row entirely. That reads as "bot matches are unrated", which is
+// not true, and it is the one item on this list that is not Tower-specific.
+
+for (const [file, engineName] of [['towerEngine.js', 'Tower'], ['blockBlastEngine.js', 'Block Burst']]) {
+  test(`${engineName} sends the new rating with a bot result`, () => {
+    const src = be('services', file);
+    assert.match(src, /newElo:\s+humanNewElo/, `${file} does not report the rating it applied`);
+    // Declared outside the rated branch, so a FREE run still reports null and
+    // the card correctly shows nothing.
+    assert.match(src, /let humanNewElo = null;/);
+  });
+}
+
+test('the pages pass that rating to the card', () => {
+  assert.match(fe('pages', 'TowerGame.jsx'), /result\.isSolo \? \(isWinner \? result\.newElo/);
+  const bb = fe('pages', 'BlockBlastGame.jsx');
+  assert.match(bb, /newWinnerElo=\{result\.humanWon \? result\.newElo : undefined\}/);
+  assert.match(bb, /eloBeforeRef=\{eloBeforeRef\}/);
+});
+
+// ── The rest of the polish pass ──────────────────────────────────────────────
+
+test('the countdown is opaque', () => {
+  // It was translucent, so the board slid past underneath during the count.
+  //
+  // Scoped to the overlay itself: the catch-up banner legitimately uses a
+  // translucent black, and a file-wide search flagged that instead.
+  const src = fe('pages', 'TowerGame.jsx');
+  const at = src.indexOf("phase === 'countdown' && (");
+  assert.ok(at > 0, 'countdown overlay not found');
+  const overlay = src.slice(at, at + 400);
+  assert.match(overlay, /className="absolute inset-0 z-30[^"]*bg-bg"/,
+    'the countdown overlay must be fully opaque');
+  assert.doesNotMatch(overlay, /bg-black\/\d/, 'no translucency on the countdown');
+});
+
+test('the play area cannot be text-selected', () => {
+  // A long press popped the copy handles and ate the next tap.
+  for (const [f, ...p] of [['components', 'TowerCanvas.jsx'], ['pages', 'TowerGame.jsx']]) {
+    const src = fe(f, ...p);
+    assert.match(src, /WebkitTouchCallout/, `${p} allows the long-press callout`);
+    assert.match(src, /userSelect/i);
+  }
+});
+
+test('a perfect drop is felt as well as heard', () => {
+  const src = fe('pages', 'TowerGame.jsx');
+  assert.match(src, /navigator\.vibrate\?\.\(/);
+  assert.match(src, /try \{[\s\S]{0,80}vibrate/, 'vibrate throws on some platforms and must be guarded');
+  assert.match(src, /playTowerPerfect/);
+  assert.match(src, /onPlace=\{playTowerPlace\}/, 'an ordinary landing needs its own sound');
+});
+
+test('the two placement sounds are distinct but equally quiet', () => {
+  const src = fe('utils', 'sound.js');
+  const grab = (name) => {
+    const at = src.indexOf(`export function ${name}()`);
+    assert.ok(at > 0, `${name} missing`);
+    return src.slice(at, src.indexOf('\n}', at));
+  };
+  const place = grab('playTowerPlace');
+  const perfect = grab('playTowerPerfect');
+  assert.notEqual(place, perfect, 'they must not be the same sound');
+  const peak = (body) => Math.max(...[...body.matchAll(/gain:\s*([\d.]+)/g)].map(m => +m[1]));
+  assert.ok(peak(place) < 0.2 && peak(perfect) < 0.2, 'both were asked to stay subtle');
+  assert.ok(Math.abs(peak(place) - peak(perfect)) < 0.06,
+    'they should differ in brightness, not in volume');
+});
+
+test('the falling offcut can pass behind the tower', () => {
+  // It is a 3D slice off a real block: half of it is on the far side.
+  const src = fe('components', 'TowerCanvas.jsx');
+  assert.match(src, /order: sl\.side < 0 \? -1 : 1/);
+  assert.match(src, /drawables\.sort/);
+});
+
+test('the tower has a base that fades into the dark', () => {
+  assert.match(fe('components', 'TowerCanvas.jsx'), /PLINTH_DEPTH/);
+});
+
+test('the background motes are dim, few and slow', () => {
+  const src = fe('components', 'TowerCanvas.jsx');
+  const block = src.slice(src.indexOf('const motes'), src.indexOf('let camera'));
+  const count = +block.match(/length:\s*(\d+)/)[1];
+  const alpha = +block.match(/a:\s*([\d.]+)\s*\+/)[1];
+  const speed = +block.match(/v:\s*([\d.]+)\s*\+/)[1];
+  assert.ok(count <= 14, `${count} motes is still confetti`);
+  assert.ok(alpha <= 0.08, `base alpha ${alpha} is too bright`);
+  assert.ok(speed <= 0.002, `base speed ${speed} is too fast`);
+});
+
+test('the score is smaller on a desktop', () => {
+  const src = fe('components', 'TowerCanvas.jsx');
+  assert.match(src, /width < 640 \? 0\.155 : 0\.0/, 'desktop needs its own, smaller scale');
+});
+
+test('the catch-up window is 15 seconds and the taller tower wins', () => {
+  // Items 15 and 16, asserted rather than assumed.
+  assert.match(engine, /CATCHUP_MS = 15_000/);
+  assert.match(engine, /const winner = s1 >= s2 \? p1 : p2/);
+});

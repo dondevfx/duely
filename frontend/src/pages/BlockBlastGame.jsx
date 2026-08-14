@@ -804,6 +804,9 @@ export default function BlockBlastGame() {
             solo={!(result.entryFee > 0)}
             winnerUsername={result.humanWon ? profile?.username : 'Duely Bot'}
             loserUsername={result.humanWon ? 'Duely Bot' : profile?.username}
+            newWinnerElo={result.humanWon ? result.newElo : undefined}
+            newLoserElo={result.humanWon ? undefined : result.newElo}
+            eloBeforeRef={eloBeforeRef}
             balanceChange={result.balanceChange}
             currency={result.currency || betCurrency}
             entryFee={result.entryFee ?? entryFee}
