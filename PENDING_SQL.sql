@@ -314,3 +314,45 @@ CREATE POLICY "ticket_messages_own" ON support_messages
     EXISTS (SELECT 1 FROM support_tickets t
              WHERE t.id = support_messages.ticket_id AND t.user_id = auth.uid())
   );
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 7. Coin P&L: record the stake alongside a payout
+-- ─────────────────────────────────────────────────────────────────────────────
+--
+-- amount_c on a match_win is the GROSS payout — it returns the player's own
+-- stake as well as their winnings. The entry fee itself writes no transaction
+-- row at all (it is taken with deduct_coins), so nothing in the ledger said what
+-- a win had cost. Summing the rows therefore counted the stake as profit and
+-- every account read as up: a break-even player banks +1.9x per win against
+-- -1x per loss.
+--
+-- stake_c carries it, so net profit on a win is amount_c - stake_c.
+--
+-- Safe to run more than once. The backend works without this — it infers the
+-- stake from the payout instead — so nothing breaks if it is delayed; the P&L is
+-- simply approximate until it runs.
+
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS stake_c numeric;
+
+-- Backfill historical wins from the matches table, which does record the entry
+-- fee. Matched on player and time because transactions carry no match id.
+-- Only fills rows that are still empty, so re-running cannot corrupt live data.
+UPDATE transactions t
+SET    stake_c = m.entry_fee_c
+FROM   matches m
+WHERE  t.stake_c IS NULL
+  AND  t.type = 'match_win'
+  AND  t.amount_c > 0
+  AND  m.entry_fee_c > 0
+  AND  m.winner_id = t.user_id
+  AND  m.created_at BETWEEN t.created_at - interval '30 seconds'
+                        AND t.created_at + interval '30 seconds';
+
+-- A draw refunds exactly the stake, so its net effect is zero by definition.
+UPDATE transactions
+SET    stake_c = amount_c
+WHERE  stake_c IS NULL AND type = 'match_draw' AND amount_c > 0;
+
+-- Anything still empty is a bot match or a row with no matching record; the
+-- backend infers those from the payout. Check how many are left:
+--   SELECT count(*) FROM transactions WHERE type = 'match_win' AND stake_c IS NULL;

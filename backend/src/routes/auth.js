@@ -163,7 +163,8 @@ module.exports = function authRoutes(supabase) {
     res.json(Object.values(stats));
   });
 
-  // Coin balance history (reconstructed from transactions). ?days=7|30|90 (default 90)
+  // Coin profit and loss over a window, reconstructed from transactions.
+  // ?days=7|30|90 (default 90). Route name kept for the existing client.
   router.get('/coin-history/:userId', requireAuth, async (req, res) => {
     const { userId } = req.params;
     if (!UUID_RE.test(userId)) return res.status(400).json({ error: 'Invalid user id' });
@@ -177,27 +178,65 @@ module.exports = function authRoutes(supabase) {
       if (target?.is_private) return res.status(403).json({ error: 'This profile is private' });
     }
 
-    const [{ data: prof }, { data: txs }] = await Promise.all([
+    // stake_c is selected if it exists and skipped if it does not, so this keeps
+    // working before the migration is run — it just falls back to inferring the
+    // stake. A profile page 500ing because a column is missing would be a far
+    // worse outcome than an approximate curve.
+    const readTxs = async (withStake) => supabase
+      .from('transactions')
+      .select(withStake ? 'amount_c, stake_c, type, created_at' : 'amount_c, type, created_at')
+      .eq('user_id', userId)
+      .gte('created_at', startDate.toISOString())
+      .order('created_at', { ascending: true });
+
+    let [{ data: prof }, txRes] = await Promise.all([
       supabase.from('profiles').select('c_coins').eq('id', userId).single(),
-      supabase.from('transactions')
-        .select('amount_c, type, created_at')
-        .eq('user_id', userId)
-        .gte('created_at', startDate.toISOString())
-        .order('created_at', { ascending: true }),
+      readTxs(true),
     ]);
+    if (txRes.error && /stake_c/i.test(txRes.error.message || '')) txRes = await readTxs(false);
+    const txs = txRes.data;
 
     if (!prof) return res.status(404).json({ error: 'Not found' });
 
-    // Plot one point per transaction (not bucketed by day) so individual
-    // wins/losses within the same day show as real ups/downs instead of
-    // being netted into a single flat daily step.
-    const DEBITS = new Set(['withdrawal', 'match_loss']);
+    // This is a PROFIT AND LOSS curve, not a balance curve, and it had been
+    // computing neither.
+    //
+    // Two things made every account look up. A deposit was counted as a gain,
+    // so anyone who had ever funded their account started deep in profit — that
+    // alone put nearly everyone in the green. And a win was added at its GROSS
+    // payout, which hands back the player's own stake: a break-even player
+    // banked +1.9x per win against -1x per loss and drifted upward forever.
+    //
+    // Only gameplay counts now. Deposits, withdrawals and tips move money in and
+    // out of the account without saying anything about how the player is doing,
+    // and bonuses are gifts rather than performance.
+    const CREDIT = new Set(['match_win', 'match_draw']);
+    const DEBIT  = new Set(['match_loss']);
+
+    // Payouts before this shipped carry no stake, so it is inferred from the
+    // payout: payout = stake * 2 * (1 - rake), giving stake = payout / 1.9 at the
+    // usual 5%. Coin Flip rakes 2%, where the true stake is payout / 1.96, so an
+    // old coin-flip win is understated by about 3% of the stake. Deliberately the
+    // conservative direction — a P&L that flatters nobody is the point here.
+    const LEGACY_PAYOUT_MULT = 1.9;
+
     let running = 0;
     const points = [{ date: startDate.toISOString(), balance: 0 }];
     for (const tx of (txs || [])) {
       const amt = parseFloat(tx.amount_c) || 0;
       if (amt === 0) continue; // diamond-only entries don't move the coin balance
-      const signed = DEBITS.has(tx.type) ? -amt : amt;
+
+      let signed = null;
+      if (CREDIT.has(tx.type)) {
+        const stake = tx.stake_c != null
+          ? parseFloat(tx.stake_c) || 0
+          : amt / LEGACY_PAYOUT_MULT;
+        signed = amt - stake;              // winnings only, stake excluded
+      } else if (DEBIT.has(tx.type)) {
+        signed = -amt;                     // the stake, lost
+      }
+      if (signed === null) continue;       // transfers and gifts are not P&L
+
       running += signed;
       points.push({ date: tx.created_at, balance: parseFloat(running.toFixed(2)) });
     }

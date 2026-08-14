@@ -62,6 +62,33 @@ async function creditCoins(supabase, userId, amount) {
   notifyBalance(userId);
 }
 
+// ── Transaction insert with a stake recorded ─────────────────────────────────
+//
+// amount_c on a match_win is the GROSS payout — it hands back the player's own
+// stake as well as their winnings. Anything summing those rows therefore counts
+// the stake as profit, which is why the profile P&L showed every account up:
+// a 50/50 player banked +1.9x per win against -1x per loss.
+//
+// The stake is not otherwise recoverable: entry fees are taken with deduct_coins
+// and write no row at all. So the credit-side rows carry it, and net profit is
+// amount_c - stake_c.
+//
+// Retries without the column if the migration has not been run, because
+// RECORDING MONEY must never depend on a migration. P&L is approximate until it
+// is; the ledger is correct either way.
+async function insertTx(supabase, rows) {
+  const { error } = await supabase.from('transactions').insert(rows);
+  if (!error) return;
+  if (/stake_c/i.test(error.message || '')) {
+    const stripped = (Array.isArray(rows) ? rows : [rows]).map(({ stake_c, ...r }) => r);
+    const retry = await supabase.from('transactions').insert(stripped);
+    if (retry.error) console.error('[tx] insert failed:', retry.error.message);
+    else console.warn('[tx] transactions.stake_c missing — run PENDING_SQL; P&L stays approximate until then');
+    return;
+  }
+  console.error('[tx] insert failed:', error.message);
+}
+
 // Deduct coins — DB throws 'Insufficient balance' if not enough funds.
 // No app-level pre-check needed (that was a TOCTOU race condition).
 async function deductCoins(supabase, userId, amount) {
@@ -154,10 +181,10 @@ async function settleMatch(supabase, winnerId, loserId, entryFee, meta = {}) {
       trackWager(supabase, loserId,  fee).catch(() => {});
     }
 
-    supabase.from('transactions').insert([
-      { user_id: winnerId, type: 'match_win',  amount_c: payout, status: 'confirmed', notes: matchNote(meta.game, meta.loserUsername) },
+    insertTx(supabase, [
+      { user_id: winnerId, type: 'match_win',  amount_c: payout, stake_c: fee, status: 'confirmed', notes: matchNote(meta.game, meta.loserUsername) },
       { user_id: loserId,  type: 'match_loss', amount_c: fee,    status: 'confirmed', notes: matchNote(meta.game, meta.winnerUsername) },
-    ]).then().catch(e => console.error('[tx] coin match insert failed:', e.message));
+    ])
 
     return { winnerPayout: payout };
   } finally {
@@ -197,10 +224,10 @@ async function settleCoinFlip(supabase, winnerId, loserId, entryFee, meta = {}) 
     // Rakeback — 0.4% of pool (0.2% per player)
     await creditRakeback(supabase, winnerId, loserId, prizePool, 'coins', 0.002).catch(() => {});
 
-    supabase.from('transactions').insert([
-      { user_id: winnerId, type: 'match_win',  amount_c: payout, status: 'confirmed', notes: matchNote(meta.game, meta.loserUsername) },
+    insertTx(supabase, [
+      { user_id: winnerId, type: 'match_win',  amount_c: payout, stake_c: fee, status: 'confirmed', notes: matchNote(meta.game, meta.loserUsername) },
       { user_id: loserId,  type: 'match_loss', amount_c: fee,    status: 'confirmed', notes: matchNote(meta.game, meta.winnerUsername) },
-    ]).then().catch(e => console.error('[tx] coin flip match insert failed:', e.message));
+    ])
 
     return { winnerPayout: payout };
   } finally {
@@ -297,9 +324,9 @@ async function settleBotMatch(supabase, humanUserId, entryFee, currency, humanWo
   } else {
     const payout = parseFloat((entryFee * 2 * coinPayoutMult).toFixed(4));
     await creditCoins(supabase, humanUserId, payout);
-    supabase.from('transactions').insert({
-      user_id: humanUserId, type: 'match_win', amount_c: payout, status: 'confirmed', notes: note,
-    }).then().catch(e => console.error('[tx] bot win insert failed:', e.message));
+    insertTx(supabase, {
+      user_id: humanUserId, type: 'match_win', amount_c: payout, stake_c: parseFloat(entryFee), status: 'confirmed', notes: note,
+    })
     return { winnerPayout: payout };
   }
 }
@@ -404,10 +431,10 @@ async function forfeitSettleCoins(supabase, winnerId, loserId, entryFee, adminId
         .catch(err => console.error('[forfeit-fee] credit_fee_balance failed:', err.message));
     }
 
-    supabase.from('transactions').insert([
-      { user_id: winnerId, type: 'match_win',  amount_c: winnerPayout, status: 'confirmed' },
+    insertTx(supabase, [
+      { user_id: winnerId, type: 'match_win',  amount_c: winnerPayout, stake_c: fee, status: 'confirmed' },
       { user_id: loserId,  type: 'match_loss', amount_c: fee,          status: 'confirmed' },
-    ]).then().catch(e => console.error('[tx] forfeit coins insert failed:', e.message));
+    ])
 
     return { winnerPayout };
   } finally {
@@ -436,10 +463,10 @@ async function settleDrawMatch(supabase, p1Id, p2Id, entryFee) {
   await supabase.rpc('credit_coins', { user_id: p1Id, amount: refund });
   await supabase.rpc('credit_coins', { user_id: p2Id, amount: refund });
 
-  supabase.from('transactions').insert([
-    { user_id: p1Id, type: 'match_draw', amount_c: refund, status: 'confirmed' },
-    { user_id: p2Id, type: 'match_draw', amount_c: refund, status: 'confirmed' },
-  ]).then().catch(() => {});
+  insertTx(supabase, [
+    { user_id: p1Id, type: 'match_draw', amount_c: refund, stake_c: refund, status: 'confirmed' },
+    { user_id: p2Id, type: 'match_draw', amount_c: refund, stake_c: refund, status: 'confirmed' },
+  ])
 
   unlockUser(p1Id);
   unlockUser(p2Id);
