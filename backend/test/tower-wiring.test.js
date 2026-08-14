@@ -529,3 +529,45 @@ test('the card is told which number to subtract from', () => {
   assert.match(engine, /eloBefore,/);
   assert.match(fe('pages', 'TowerGame.jsx'), /eloBeforeRef\.current = Number\(data\.eloBefore\)/);
 });
+
+test('fast repeated tapping cannot trigger the copy bubble', () => {
+  // CSS alone does not cover this. user-select and touch-callout suppress a LONG
+  // press, but a fast repeated tap is a different gesture: iOS reads it as a
+  // double-tap, which selects, raises the magnifier and offers Copy — and that
+  // swallows the next tap mid-run.
+  // Whitespace-normalised: the source aligns these calls, and the test should
+  // not dictate formatting. Plain string matching rather than a regex, because
+  // escaping a brace through a template literal turns it into a quantifier that
+  // silently matches nothing.
+  const src = fe('components', 'TowerCanvas.jsx').replace(/[ 	]+/g, ' ');
+  for (const ev of ['touchstart', 'touchmove', 'touchend']) {
+    assert.ok(src.includes(`addEventListener('${ev}', eat, { passive: false })`),
+      `${ev} must be suppressed, and non-passively or preventDefault is ignored`);
+  }
+  assert.match(src, /addEventListener\('selectstart', eat\)/);
+  assert.match(src, /addEventListener\('contextmenu', eat\)/);
+});
+
+test('a selection that slips through is cleared on the next drop', () => {
+  // Once a selection exists iOS keeps the bubble alive across later taps, so it
+  // has to be removed rather than only prevented.
+  const src = fe('components', 'TowerCanvas.jsx');
+  const fn = src.slice(src.indexOf('const drop = ()'), src.indexOf('const onPointer'));
+  assert.match(fn, /removeAllRanges\(\)/);
+});
+
+test('the touch handlers do not drop a block themselves', () => {
+  // pointerdown already covers touch; dropping from both would place two blocks
+  // for one tap.
+  const src = fe('components', 'TowerCanvas.jsx');
+  const at = src.indexOf('const eat = (e)');
+  assert.ok(at > 0, 'suppressor not found');
+  assert.doesNotMatch(src.slice(at, src.indexOf('\n', at)), /drop\(\)/);
+});
+
+test('every touch listener is removed on cleanup', () => {
+  const src = fe('components', 'TowerCanvas.jsx');
+  for (const ev of ['touchstart', 'touchmove', 'touchend', 'selectstart', 'contextmenu']) {
+    assert.ok(src.includes(`removeEventListener('${ev}', eat)`), `${ev} leaks`);
+  }
+});

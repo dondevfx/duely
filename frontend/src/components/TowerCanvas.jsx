@@ -83,8 +83,36 @@ export default function TowerCanvas({
     let last = performance.now();
     let raf = 0;
 
-    const drop = () => { if (runningRef.current) run.drop(); };
+    const drop = () => {
+      if (!runningRef.current) return;
+      // Clear anything the browser managed to select before we got here. Once a
+      // selection exists iOS keeps the copy bubble alive across later taps, so
+      // it has to be dropped rather than just prevented.
+      const sel = window.getSelection?.();
+      if (sel && !sel.isCollapsed) sel.removeAllRanges();
+      run.drop();
+    };
+
+    // The drop itself runs on pointerdown, which covers mouse, pen and touch in
+    // one event and cannot fire twice for a single tap.
     const onPointer = (e) => { e.preventDefault(); drop(); };
+
+    // The touch events are handled purely to suppress the browser's own
+    // gestures, and deliberately do NOT drop a block.
+    //
+    // CSS alone does not stop this: user-select and touch-callout suppress a
+    // long press, but a fast repeated tap is a different gesture entirely — iOS
+    // reads it as a double-tap, which selects, raises the magnifier and offers
+    // Copy, and that swallows the next tap. Only preventDefault on the touch
+    // sequence suppresses it, and it must be a non-passive listener or the call
+    // is ignored.
+    const eat = (e) => { if (e.cancelable) e.preventDefault(); };
+    canvas.addEventListener('touchstart', eat, { passive: false });
+    canvas.addEventListener('touchmove',  eat, { passive: false });
+    canvas.addEventListener('touchend',   eat, { passive: false });
+    canvas.addEventListener('selectstart', eat);
+    canvas.addEventListener('contextmenu', eat);
+
     const onKey = (e) => {
       if (e.code === 'Space' || e.code === 'Enter' || e.key === ' ') { e.preventDefault(); drop(); }
     };
@@ -271,6 +299,11 @@ export default function TowerCanvas({
       window.removeEventListener('orientationchange', resize);
       window.removeEventListener('keydown', onKey);
       canvas.removeEventListener('pointerdown', onPointer);
+      canvas.removeEventListener('touchstart', eat);
+      canvas.removeEventListener('touchmove', eat);
+      canvas.removeEventListener('touchend', eat);
+      canvas.removeEventListener('selectstart', eat);
+      canvas.removeEventListener('contextmenu', eat);
     };
   }, []);
 
