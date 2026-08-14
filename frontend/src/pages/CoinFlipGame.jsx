@@ -351,7 +351,18 @@ export default function CoinFlipGame() {
       fxTimersRef.current.push(
         setTimeout(() => { setCountdown(2); playCountdown(); }, 1000),
         setTimeout(() => { setCountdown(1); playCountdown(); }, 2000),
-        setTimeout(() => { setCountdown(0); playGo(); setPhase('flipping'); }, 3000),
+        setTimeout(() => {
+          setCountdown(0); playGo(); setPhase('flipping');
+          // Hold from the moment the coin leaves the hand.
+          //
+          // The hold used to start when coin_flip_result arrived — but the
+          // server settles the match BEFORE it emits that, and settling fires
+          // balance_changed first. So the refresh that gives the result away
+          // was already in flight before anything was holding it back. Taking
+          // the hold as the flip begins closes that window.
+          releaseBalanceRef.current?.();
+          releaseBalanceRef.current = holdBalance();
+        }, 3000),
       );
     });
 
@@ -374,8 +385,11 @@ export default function CoinFlipGame() {
       // The server has already settled the money. Hold only the DISPLAY until
       // the coin lands, or the navbar balance changes mid-spin and gives the
       // result away before the animation does.
-      releaseBalanceRef.current?.();
-      releaseBalanceRef.current = holdBalance();
+      //
+      // Normally the flip already took a hold (see the countdown above); this
+      // re-takes it so a result arriving without one — a rejoin, or a flip that
+      // resolves before the countdown finishes — is still covered.
+      if (!releaseBalanceRef.current) releaseBalanceRef.current = holdBalance();
 
       // After transition completes show label for 2s, then result screen
       fxTimersRef.current.push(setTimeout(() => { setResultLanded(true); playCoinLand(); }, 4200));
@@ -562,6 +576,11 @@ export default function CoinFlipGame() {
     } else if (mode === 'bot_free' || mode === 'bot_paid') {
       socket.emit('play_coin_flip_vs_bot', { entryFee: s.entryFee, currency: s.currency, side: s.side });
       setPhase('flipping');
+      // This path skips the countdown and starts spinning immediately, so it
+      // takes its own hold — a bot flip settles and gives the result away just
+      // as readily as a PvP one.
+      releaseBalanceRef.current?.();
+      releaseBalanceRef.current = holdBalance();
       setStatusMsg('vs Duely Bot');
     } else {
       setPhase('lobby');

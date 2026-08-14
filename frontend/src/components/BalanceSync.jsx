@@ -32,6 +32,12 @@ export default function BalanceSync() {
       } else if (!timerRef.current) {
         timerRef.current = setTimeout(() => {
           timerRef.current = null;
+          // Re-check the hold. A refresh can be scheduled up to a second before
+          // it runs, and a Coin Flip hold is taken inside that window — so
+          // without this the throttle timer sailed past the hold and refreshed
+          // the balance mid-spin, which is the exact thing the hold exists to
+          // prevent. Defer instead; onBalanceRelease picks it up.
+          if (isBalanceHeld()) { pendingRef.current = true; return; }
           lastRef.current = Date.now();
           refreshProfile();
         }, 1000 - since);

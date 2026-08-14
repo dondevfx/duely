@@ -104,7 +104,59 @@ export function SocketProvider({ children }) {
       }
     });
 
+    // ── Coming back from the background ────────────────────────────────────
+    //
+    // iOS Safari freezes a backgrounded tab's socket without closing it. On
+    // return the client still reports `connected` while the server timed the
+    // session out long ago, so nothing reconnects until Socket.IO's own ping
+    // eventually notices — that wait is the 5-10 seconds of "Connecting…" or
+    // "Authenticating…" under the play buttons after switching back to Safari.
+    //
+    // Nothing here can detect that by inspecting local state, because local
+    // state is exactly what is wrong. The only way to know is to ask the server
+    // and put a deadline on the answer.
+    let probing = false;
+    const resume = () => {
+      if (document.visibilityState !== 'visible') return;
+      const s = socketRef.current;
+      if (!s) return;
+
+      // Genuinely disconnected: reconnect now rather than sitting out the
+      // remainder of the backoff, which can be seconds on a later attempt.
+      if (!s.connected) { s.connect(); return; }
+
+      if (probing) return;
+      probing = true;
+      // Ask, with a deadline. A live socket answers in well under 2s; a frozen
+      // one never answers at all, and the ack timeout is what tells them apart.
+      s.timeout(2000).emit('ping_check', (err) => {
+        probing = false;
+        if (!err) {
+          // Alive. The session can still have lapsed while backgrounded, so
+          // re-assert it — doAuth is a no-op without a token.
+          doAuth(s);
+          return;
+        }
+        // No answer: the connection is dead but does not know it. Tear it down
+        // so a fresh one starts immediately instead of waiting for the ping
+        // timeout to work it out.
+        s.disconnect();
+        s.connect();
+      });
+    };
+
+    document.addEventListener('visibilitychange', resume);
+    // pageshow also fires when Safari restores a page from the back/forward
+    // cache, where visibilitychange does not.
+    window.addEventListener('pageshow', resume);
+    window.addEventListener('focus', resume);
+    window.addEventListener('online', resume);
+
     return () => {
+      document.removeEventListener('visibilitychange', resume);
+      window.removeEventListener('pageshow', resume);
+      window.removeEventListener('focus', resume);
+      window.removeEventListener('online', resume);
       socket.disconnect();
       unsubSessionChange();
     };

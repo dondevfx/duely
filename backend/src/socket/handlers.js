@@ -297,6 +297,21 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     require('../services/tickerService').sendSeed(socket);
     socket.on('request_ticker_seed', () => require('../services/tickerService').sendSeed(socket));
 
+    // ── Liveness probe ────────────────────────────────────────────────
+    //
+    // Answers an ack and nothing else. It exists for the phone-unlock case: iOS
+    // freezes a backgrounded tab's socket without closing it, so on return the
+    // client still reports `connected` while the server has long since timed the
+    // session out. The client cannot tell the difference without asking, and
+    // waiting for the ping timeout to notice is the 5-10 seconds of
+    // "Connecting…" a player sees after switching back to Safari.
+    //
+    // Deliberately requires no auth: the answer is the same either way, and
+    // gating it would mean a socket that lost its session could not use it.
+    socket.on('ping_check', (ack) => {
+      if (typeof ack === 'function') ack({ ok: true });
+    });
+
     // ── Auth ──────────────────────────────────────────────────────────
     socket.on('authenticate', async ({ token }) => {
       try {
