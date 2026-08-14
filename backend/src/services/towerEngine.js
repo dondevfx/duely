@@ -362,6 +362,17 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
     unlockUser(winner.userId); unlockUser(loser.userId);
   }
 
+  // Streaks are resolved BEFORE the result goes out. They used to be emitted as
+  // a hard-coded 0 and applied afterwards in the background, so a winning PvP
+  // streak was recorded correctly but never once shown — the card had a zero.
+  // applyMatchStreaks no-ops on bot matches, which is what keeps streaks PvP-only.
+  let winnerStreak = 0, isFirstWin = false;
+  if (supabase && !winner.isBot && !loser.isBot) {
+    try {
+      ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser));
+    } catch (e) { console.error('[tower] streaks:', e.message); }
+  }
+
   io.emit('active_game_ended', { id: roomId });
   gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId) });
   io.to(roomId).emit('tower_result', {
@@ -373,8 +384,8 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
     winnerScore, loserScore,
     currency: room.currency || 'coins',
     entryFee: room.entryFee || 0,
-    winnerStreak: 0,
-    isFirstWin: false,
+    winnerStreak,
+    isFirstWin,
   });
 
   // Bookkeeping after the result is on screen — none of it changes the outcome.
@@ -387,7 +398,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
         try { await applyEloUpdate(supabase, winner.userId, newWinnerElo, true); } catch {}
       }
       try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch {}
-      try { await applyMatchStreaks(supabase, winner, loser); } catch {}
+      // Streaks already applied above, before the emit.
     }
     if (!loser.isBot) {
       if (!isFree) {

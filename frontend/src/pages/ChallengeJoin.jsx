@@ -30,7 +30,7 @@ const GAME_NAMES = {
   scrabble:    '🔤 Word VS',
   blockBlast:  '🟦 Block Burst',
   carDash:     '🚗 Rush Hour',
-  tower:       '🗼 Tower',
+  tower:       '🧊 Tower',
 };
 
 export const PENDING_CHALLENGE_KEY = 'duely_pending_challenge';

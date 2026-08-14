@@ -820,7 +820,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         if (socket._pendingForfeitGame === 'tower') {
           socket._pendingForfeitGame = null;
           if (socket._pendingForfeitGameTimer) { clearTimeout(socket._pendingForfeitGameTimer); socket._pendingForfeitGameTimer = null; }
-          await _handleForfeit(io, supabase, { roomId, room: getTowerRoom(roomId) }, socket.id, deleteTowerRoom, 'blockBlast');
+          await _handleForfeit(io, supabase, { roomId, room: getTowerRoom(roomId) }, socket.id, deleteTowerRoom, 'tower');
           return;
         }
         incrementCount('tower', socket.id, entryFee, currency);

@@ -19,7 +19,7 @@ const POOL = [
   { route: '/game/coin-flip',   name: 'Coin Flip',    icon: '🟡', coinsOnly: true, queueKey: 'coin-flip' },
   { route: '/game/blackjack',   name: 'Blackjack',    icon: '🃏', queueKey: 'blackjack' },
   { route: '/game/word-vs',     name: 'Word VS',       icon: '🔤', queueKey: 'scrabble' },
-  { route: '/game/tower',       name: 'Tower',        icon: '🗼', queueKey: 'tower' },
+  { route: '/game/tower',       name: 'Tower',        icon: '🧊', queueKey: 'tower' },
 ];
 
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];

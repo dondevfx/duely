@@ -52,7 +52,7 @@ const GAMES = [
   {
     title: 'Tower',
     description: 'Stack sliding blocks as high as you can. Miss the edge and it gets sliced away — the taller tower takes the pot.',
-    icon: '🗼',
+    icon: '🧊',
     route: '/game/tower',
     available: true,
     countKey: 'tower',

@@ -27,9 +27,9 @@ export const MISS_FALL_S = 0.85;
 
 // Speed ramp. Slow enough at the start to feel fair, and capped so the top of a
 // long run stays humanly playable rather than turning into a coin flip.
-const SPEED_START = 1.55;   // world units per second
-const SPEED_STEP  = 0.062;
-const SPEED_MAX   = 5.1;
+const SPEED_START = 1.35;   // world units per second
+const SPEED_STEP  = 0.030;   // was 0.062 — full speed arrived by ~block 55
+const SPEED_MAX   = 4.6;
 
 export const speedForScore = (score) =>
   Math.min(SPEED_MAX, SPEED_START + score * SPEED_STEP);
@@ -44,17 +44,25 @@ export const speedForScore = (score) =>
 // of that. Now it never goes below 36%, and the sides are derived as a RATIO of
 // the top rather than a fixed subtraction, so a dark block keeps the same
 // relative shading a light one has instead of flattening out.
-export const SHADE_MIN = 36;
-export const SHADE_MAX = 62;
+export const SHADE_MIN = 34;
+export const SHADE_MAX = 66;
 
+// The band walks a long triangle wave rather than a sine.
+//
+// A sine spends most of its time near the extremes and crawls through the
+// middle, so long stretches of the tower came out nearly the same shade — the
+// complaint that the colours "don't change enough". A triangle moves at a
+// constant rate, so every block is a visibly different step from the one below
+// it while the range itself stays inside the same safe window: never so dark it
+// vanishes on black, never so pale it stops reading as the site blue.
 export function shadeFor(index) {
-  const t = index * 0.26;
-  const mid  = (SHADE_MIN + SHADE_MAX) / 2;
-  const half = (SHADE_MAX - SHADE_MIN) / 2;
+  const PERIOD = 26;                                  // blocks per full sweep
+  const phase = ((index % PERIOD) + PERIOD) % PERIOD / PERIOD;
+  const tri = phase < 0.5 ? phase * 2 : 2 - phase * 2;  // 0..1..0, linear
   return {
-    hue:   215 + Math.sin(t * 0.45) * 5,        // 210 .. 220, around #1250B4
-    light: mid + Math.sin(t) * half,            // 36% .. 62%
-    sat:   82,
+    hue:   214 + Math.sin(index * 0.11) * 4,          // 210 .. 218, around #1250B4
+    light: SHADE_MIN + tri * (SHADE_MAX - SHADE_MIN),
+    sat:   80,
   };
 }
 
@@ -99,7 +107,10 @@ export function createRun({ onLand, onOver } = {}) {
 
   function spawn() {
     const top  = state.blocks[state.blocks.length - 1];
-    const axis = state.blocks.length % 2 === 1 ? 'x' : 'y';
+    // +y projects to the top-right -> bottom-left diagonal and +x to the
+    // top-left -> bottom-right one. Starting on y means the very first block
+    // enters from the top right, and they alternate from there.
+    const axis = state.blocks.length % 2 === 1 ? 'y' : 'x';
     state.moving = {
       axis,
       // Always enters from the far side so the eye can pick it up before it
@@ -129,7 +140,9 @@ export function createRun({ onLand, onOver } = {}) {
       sl.t  += dt;
       sl.vy += 9.8 * dt;
       sl.level -= sl.vy * dt;
-      sl.spin += dt * 2.2;
+      // A tilt as it goes, so it reads as a piece knocked off rather than a
+      // block calmly descending. Direction follows the side it was cut from.
+      sl.spin += dt * 1.9 * (sl.side || 1);
     }
     if (state.slices.length > 12) state.slices.splice(0, state.slices.length - 12);
 

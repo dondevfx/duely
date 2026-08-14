@@ -221,7 +221,7 @@ test('the countdown is opaque', () => {
   const at = src.indexOf("phase === 'countdown' && (");
   assert.ok(at > 0, 'countdown overlay not found');
   const overlay = src.slice(at, at + 400);
-  assert.match(overlay, /className="absolute inset-0 z-30[^"]*bg-bg"/,
+  assert.match(overlay, /className="absolute inset-0 z-30[^"]*bg-bg[ "]/,
     'the countdown overlay must be fully opaque');
   assert.doesNotMatch(overlay, /bg-black\/\d/, 'no translucency on the countdown');
 });
@@ -243,28 +243,18 @@ test('a perfect drop is felt as well as heard', () => {
   assert.match(src, /onPlace=\{playTowerPlace\}/, 'an ordinary landing needs its own sound');
 });
 
-test('the two placement sounds are distinct but equally quiet', () => {
+test('the two placement sounds are distinct', () => {
+  // Levels are asserted by 'the placement sounds are actually audible on a
+  // phone' below — this one only cares that they are not the same sound.
   const src = fe('utils', 'sound.js');
   const grab = (name) => {
     const at = src.indexOf(`export function ${name}()`);
     assert.ok(at > 0, `${name} missing`);
     return src.slice(at, src.indexOf('\n}', at));
   };
-  const place = grab('playTowerPlace');
-  const perfect = grab('playTowerPerfect');
-  assert.notEqual(place, perfect, 'they must not be the same sound');
-  const peak = (body) => Math.max(...[...body.matchAll(/gain:\s*([\d.]+)/g)].map(m => +m[1]));
-  assert.ok(peak(place) < 0.2 && peak(perfect) < 0.2, 'both were asked to stay subtle');
-  assert.ok(Math.abs(peak(place) - peak(perfect)) < 0.06,
-    'they should differ in brightness, not in volume');
+  assert.notEqual(grab('playTowerPlace'), grab('playTowerPerfect'));
 });
 
-test('the falling offcut can pass behind the tower', () => {
-  // It is a 3D slice off a real block: half of it is on the far side.
-  const src = fe('components', 'TowerCanvas.jsx');
-  assert.match(src, /order: sl\.side < 0 \? -1 : 1/);
-  assert.match(src, /drawables\.sort/);
-});
 
 test('the tower has a base that fades into the dark', () => {
   assert.match(fe('components', 'TowerCanvas.jsx'), /PLINTH_DEPTH/);
@@ -272,13 +262,15 @@ test('the tower has a base that fades into the dark', () => {
 
 test('the background motes are dim, few and slow', () => {
   const src = fe('components', 'TowerCanvas.jsx');
-  const block = src.slice(src.indexOf('const motes'), src.indexOf('let camera'));
+  const block = src.slice(src.indexOf('const newMote'), src.indexOf('let camera'));
   const count = +block.match(/length:\s*(\d+)/)[1];
   const alpha = +block.match(/a:\s*([\d.]+)\s*\+/)[1];
   const speed = +block.match(/v:\s*([\d.]+)\s*\+/)[1];
-  assert.ok(count <= 14, `${count} motes is still confetti`);
-  assert.ok(alpha <= 0.08, `base alpha ${alpha} is too bright`);
-  assert.ok(speed <= 0.002, `base speed ${speed} is too fast`);
+  // Some were asked back after being cut too far, but they must stay a depth
+  // cue rather than weather.
+  assert.ok(count >= 8 && count <= 20, `${count} motes`);
+  assert.ok(alpha <= 0.14, `base alpha ${alpha} is too bright`);
+  assert.ok(speed <= 0.0012, `base speed ${speed} is too fast`);
 });
 
 test('the score is smaller on a desktop', () => {
@@ -290,4 +282,103 @@ test('the catch-up window is 15 seconds and the taller tower wins', () => {
   // Items 15 and 16, asserted rather than assumed.
   assert.match(engine, /CATCHUP_MS = 15_000/);
   assert.match(engine, /const winner = s1 >= s2 \? p1 : p2/);
+});
+
+// ── The second pass ──────────────────────────────────────────────────────────
+
+test('a forfeited Tower match is reported as Tower', () => {
+  // This block was copied from Block Burst and every identifier renamed except
+  // one: the forfeit was still being settled under 'blockBlast', so a Tower
+  // walkout was recorded against the wrong game.
+  const at = handlers.indexOf('deleteTowerRoom, ');
+  assert.ok(at > 0, 'no Tower forfeit call found');
+  assert.doesNotMatch(handlers, /deleteTowerRoom,\s*'(?!tower')/,
+    'a Tower room must never be settled under another game name');
+  assert.match(handlers, /deleteTowerRoom, 'tower'/);
+});
+
+test('no other Block Burst identifier survived the copy', () => {
+  // The whole handler block was duplicated, so anything left behind is a bug of
+  // exactly this shape.
+  const start = handlers.indexOf("socket.on('join_tower_queue'");
+  const end = handlers.indexOf("socket.on('tower_rematch_request'");
+  assert.ok(start > 0 && end > start);
+  const block = handlers.slice(start, end);
+  assert.doesNotMatch(block, /blockBlast|block_blast|BlockBlast/i,
+    'a Block Burst reference is still inside the Tower handlers');
+});
+
+test('a PvP win streak reaches the result card', () => {
+  // It was emitted as a hard-coded 0 and applied afterwards in the background,
+  // so the streak was recorded correctly and never once displayed.
+  // Scoped to _resolve: there are two tower_result emits and the solo one comes
+  // first in the file, so an unscoped search compared the wrong pair.
+  const fn = engine.slice(engine.indexOf('async function _resolve(io'));
+  const applied = fn.indexOf('applyMatchStreaks');
+  const emit = fn.indexOf("emit('tower_result'");
+  assert.ok(applied > 0, 'streaks are never applied in the PvP resolve');
+  assert.ok(applied < emit, 'streaks must be resolved before the result is emitted');
+  assert.match(engine, /winnerStreak,\n\s+isFirstWin,/,
+    'the real values must be sent, not zeroes');
+});
+
+test('streaks stay PvP-only', () => {
+  assert.match(engine, /!winner\.isBot && !loser\.isBot/);
+});
+
+test('Solo Endless does not show a bot opponent', () => {
+  // It is played through the bot plumbing, but there is nobody to race.
+  const src = fe('pages', 'TowerGame.jsx');
+  assert.match(src, /const \[soloEndless, setSoloEndless\]/);
+  assert.match(src, /\{opponent && !soloEndless &&/, 'the score panel must be hidden');
+  assert.match(src, /setSoloEndless\(!!vsBot && !\(fee > 0\)\)/);
+});
+
+test('the countdown matches the other games', () => {
+  const src = fe('pages', 'TowerGame.jsx');
+  const at = src.indexOf("phase === 'countdown' && (");
+  const overlay = src.slice(at, at + 700);
+  assert.match(overlay, /text-8xl font-black text-primary/, 'same size and weight');
+  assert.match(overlay, /Get ready\.\.\./, 'same wording as every other game');
+  assert.doesNotMatch(overlay, /press space|Tap or press/i, 'no bespoke instruction line');
+});
+
+test('the placement sounds are actually audible on a phone', () => {
+  // The first version was built on a 132Hz body, which a handset speaker cannot
+  // reproduce — it was effectively silent, which read as "no sound effects".
+  const src = fe('utils', 'sound.js');
+  for (const name of ['playTowerPlace', 'playTowerPerfect']) {
+    const at = src.indexOf(`export function ${name}()`);
+    const body = src.slice(at, src.indexOf('\n}', at));
+    const freqs = [...body.matchAll(/tone\((\d+)/g)].map(m => +m[1]);
+    const gains = [...body.matchAll(/gain:\s*([\d.]+)/g)].map(m => +m[1]);
+    assert.ok(Math.min(...freqs) >= 170, `${name} still has a ${Math.min(...freqs)}Hz body`);
+    assert.ok(Math.max(...gains) >= 0.15, `${name} peaks at ${Math.max(...gains)} — too quiet to hear`);
+    assert.ok(Math.max(...gains) <= 0.25, `${name} is louder than "subtle"`);
+  }
+});
+
+test('offcuts fall clear of the tower instead of clipping through it', () => {
+  const src = fe('components', 'TowerCanvas.jsx');
+  assert.doesNotMatch(src, /order: sl\.side < 0/, 'the interleave read as clipping, not depth');
+  assert.match(src, /ctx\.rotate\(sl\.spin/, 'it should tip over as it falls');
+  assert.match(src, /nearBottom/, 'and fade out at the bottom of the screen');
+});
+
+test('the plinth fades against the screen, not against its own depth', () => {
+  // Tied to depth, the fade drifted as the camera rose and left the base
+  // hanging in mid-air.
+  const src = fe('components', 'TowerCanvas.jsx');
+  assert.match(src, /const fadeFrom = height \* /);
+});
+
+test('the burst outline is thicker', () => {
+  assert.match(fe('components', 'TowerCanvas.jsx'), /ctx\.lineWidth = 3\.5/);
+});
+
+test('Tower no longer wears an orange tower emoji', () => {
+  for (const f of ['pages/Home.jsx', 'pages/Games.jsx', 'components/Navbar.jsx']) {
+    assert.doesNotMatch(fe(...f.split('/')), /🗼/, `${f} still uses the old emoji`);
+  }
+  assert.match(fe('pages', 'QuickMatch.jsx'), /icon: '🧊', queueKey: 'tower'/);
 });

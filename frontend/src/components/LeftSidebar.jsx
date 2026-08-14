@@ -10,7 +10,7 @@ const GAMES = [
   { icon: '🔤', label: 'Word VS',       route: '/game/scrabble',    live: true },
   { icon: '🃏', label: 'Blackjack',    route: '/game/blackjack',   live: true },
   { icon: '🚗', label: 'Rush Hour', route: '/game/car-dash',    live: true },
-  { icon: '🗼', label: 'Tower',     route: '/game/tower',       live: true },
+  { icon: '🧊', label: 'Tower',     route: '/game/tower',       live: true },
 ];
 
 const NAV = [

@@ -178,24 +178,26 @@ export function playPlace() {
   tone(430, 0.00, 0.025, { type: 'triangle', gain: 0.045 }); // faint tick on top
 }
 
-// Tower: a block lands off-centre. A soft, slightly dull thud — it is the
-// ordinary outcome and happens once a second, so it has to sit under the music
-// of the game rather than announce itself. Deliberately duller than the perfect
-// version below: the two are told apart by brightness, not volume, which keeps
-// them equally quiet.
+// Tower: a block lands off-centre. A soft wooden knock.
+//
+// The first version was built around a 132Hz body, which is below what a phone
+// speaker can reproduce at all — on a handset it was close to silence, which is
+// why it read as "no sound effects". The body now sits at 300-400Hz where small
+// speakers are actually efficient, and the level is up accordingly. Still quiet:
+// this fires roughly once a second for a whole run.
 export function playTowerPlace() {
-  tone(132, 0.00, 0.075, { type: 'sine',     gain: 0.11 });
-  tone(198, 0.00, 0.045, { type: 'triangle', gain: 0.035 });
-  noiseBurst(0.018, { gain: 0.030, filter: 'lowpass', freq: 900 });
+  tone(340, 0.00, 0.085, { type: 'sine',     gain: 0.20, slideTo: 250 });
+  tone(180, 0.00, 0.065, { type: 'sine',     gain: 0.12 });  // weight, on speakers that can
+  noiseBurst(0.022, { gain: 0.055, filter: 'lowpass', freq: 1400 });
 }
 
-// Tower: a perfect drop. Same weight as the ordinary landing, but it rings —
-// a clean two-note chime a fifth apart over the same body, so a good drop is
-// heard as brighter rather than louder.
+// Tower: a perfect drop. Same weight, but it rings — a clean fifth over the
+// same knock, so a good drop is heard as brighter rather than louder. Kept
+// within a whisker of the ordinary landing's level on purpose.
 export function playTowerPerfect() {
-  tone(132,  0.00, 0.070, { type: 'sine',     gain: 0.095 });
-  tone(784,  0.00, 0.090, { type: 'triangle', gain: 0.075 });
-  tone(1175, 0.045, 0.110, { type: 'triangle', gain: 0.055 });
+  tone(340,  0.00,  0.070, { type: 'sine',     gain: 0.13 });
+  tone(784,  0.00,  0.110, { type: 'triangle', gain: 0.20 });
+  tone(1175, 0.055, 0.130, { type: 'triangle', gain: 0.15 });
 }
 
 // Word VS: a subtle, satisfying key "click" when typing a letter — a tiny

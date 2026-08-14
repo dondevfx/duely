@@ -56,6 +56,10 @@ export default function TowerGame() {
   const [myScore, setMyScore]     = useState(0);
   const [oppScore, setOppScore]   = useState(0);
   const [catchup, setCatchup]     = useState(null);   // { endsAt, target }
+  // Solo Endless is a practice run against nobody. It is played through the bot
+  // plumbing for convenience, but showing "Duely Bot" and a score alongside it
+  // tells the player they are racing something they are not.
+  const [soloEndless, setSoloEndless] = useState(false);
   const [result, setResult]       = useState(null);
   const [privateCode, setPrivateCode]     = useState('');
   const [invitedFriend, setInvitedFriend] = useState(null);
@@ -110,6 +114,7 @@ export default function TowerGame() {
       eloBeforeRef.current = profile?.elo ?? 1000;
       lastSettings.current = { entryFee: fee ?? 0, currency: currency ?? 'coins' };
       lastModeRef.current = vsBot ? (fee > 0 ? 'bot_paid' : 'bot_free') : 'pvp';
+      setSoloEndless(!!vsBot && !(fee > 0));
       setPhase('countdown');
       playMatchFound();
     };
@@ -242,7 +247,7 @@ export default function TowerGame() {
           entryFee={result.entryFee ?? entryFee}
           disconnected={result.disconnected}
           profile={profile}
-          gameLabel={freeSolo ? '🎮 Solo Endless' : '🗼 Tower'}
+          gameLabel={freeSolo ? '🎮 Solo Endless' : '🧊 Tower'}
           extraRows={result.isSolo
             ? (freeSolo
                 ? [{ label: 'Blocks', value: (result.playerScore ?? 0).toLocaleString() }]
@@ -287,7 +292,7 @@ export default function TowerGame() {
 
         {/* Opponent's tower height. Deliberately small and out of the way — the
             board is the thing being looked at. */}
-        {opponent && (
+        {opponent && !soloEndless && (
           <div className="pointer-events-none absolute right-3 top-3 z-20 text-right">
             <div className="text-[10px] uppercase tracking-widest text-white/50 font-bold">
               {opponent.username}
@@ -297,14 +302,19 @@ export default function TowerGame() {
         )}
 
         {phase === 'countdown' && (
-          // Fully opaque, like every other game's countdown. A translucent
-          // overlay showed the board sliding underneath, which both spoils the
-          // start and invites a tap before the run is live.
-          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-bg">
-            <div className="text-8xl font-black text-primary mb-3" style={{ textShadow: '0 0 40px #1250B4' }}>
-              {countdown || '…'}
+          // The same countdown screen the other games use — full-bleed, the
+          // number at text-8xl in primary with the same glow, and "Get ready…"
+          // beneath it. It previously had its own size, position and wording.
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-bg px-4">
+            <div className="text-center animate-fade-in">
+              <div className="text-8xl font-black text-primary mb-4" style={{ textShadow: '0 0 40px #1250B4' }}>
+                {countdown || 1}
+              </div>
+              <p className="text-muted">Get ready...</p>
+              {opponent && !soloEndless && (
+                <p className="text-xs text-muted mt-2">vs {opponent.username}</p>
+              )}
             </div>
-            <p className="text-white/70 text-sm font-bold">Tap or press space to drop</p>
           </div>
         )}
       </div>
@@ -315,7 +325,7 @@ export default function TowerGame() {
   if (phase === 'queue') {
     return (
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
-        <div className="text-5xl mb-4 animate-pulse">🗼</div>
+        <div className="text-5xl mb-4 animate-pulse">🧊</div>
         <h2 className="text-2xl font-black text-white mb-2">Finding an opponent…</h2>
         <p className="text-muted text-sm mb-6">{statusMsg || 'Waiting for someone at your bet size'}</p>
         <button onClick={backToLobby} className="px-5 py-2 rounded-xl border border-border text-muted hover:text-white hover:border-primary transition-all text-sm font-bold">
@@ -332,7 +342,7 @@ export default function TowerGame() {
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}
     >
       <GameLobby
-        title="🗼 Tower"
+        title="🧊 Tower"
         description="Stack the blocks as high as you can. Each block slides in on its own — tap to drop it, and anything hanging over the edge is sliced off. Land it dead centre and you keep the full width."
         controls="Tap the screen or press SPACE to drop · Perfect drops keep your tower wide"
         betCurrency={betCurrency} setBetCurrency={setBetCurrency}

@@ -30,6 +30,10 @@ function dropAt(run, offset) {
 }
 
 const topOf = (run) => run.state.blocks[run.state.blocks.length - 1];
+// Which axis the waiting block travels on, and the footprint key that goes with
+// it. Written this way so the tests survive a change to which axis comes first.
+const axisOf = (run) => run.state.moving.axis;
+const sizeKeyOf = (run) => (axisOf(run) === 'x' ? 'sx' : 'sy');
 
 test('a run starts with one full-size block and a slider', () => {
   const run = createRun();
@@ -47,36 +51,39 @@ test('successive blocks alternate axis', () => {
     axes.push(run.state.moving.axis);
     dropAt(run, 0);
   }
-  assert.deepEqual(axes, ['x', 'y', 'x', 'y']);
+  // Starts on y, which is the top-right -> bottom-left diagonal.
+  assert.deepEqual(axes, ['y', 'x', 'y', 'x']);
 });
 
 test('an offset drop shrinks the footprint by exactly the overhang', () => {
   const run = createRun();
-  const before = topOf(run).sx;
+  const key = sizeKeyOf(run);
+  const before = topOf(run)[key];
   dropAt(run, 0.2);
-  assert.ok(Math.abs(topOf(run).sx - (before - 0.2)) < 1e-9,
-    `expected ${before - 0.2}, got ${topOf(run).sx}`);
+  assert.ok(Math.abs(topOf(run)[key] - (before - 0.2)) < 1e-9,
+    `expected ${before - 0.2}, got ${topOf(run)[key]}`);
 });
 
 test('the surviving block is centred on the overlap, not on either original', () => {
   // Getting this wrong makes the tower lean and is invisible for a few blocks.
   const run = createRun();
-  const top = topOf(run);
+  const along = axisOf(run);
   const offset = 0.3;
   dropAt(run, offset);
   const placed = topOf(run);
   // Overlap spans [offset - 0.5, 0.5] for a unit block, so its centre is at
   // offset/2.
-  assert.ok(Math.abs(placed.x - offset / 2) < 1e-9,
-    `expected centre ${offset / 2}, got ${placed.x}`);
+  assert.ok(Math.abs(placed[along] - offset / 2) < 1e-9,
+    `expected centre ${offset / 2}, got ${placed[along]}`);
 });
 
 test('overhang on the other side works the same', () => {
   const run = createRun();
+  const along = axisOf(run), key = sizeKeyOf(run);
   dropAt(run, -0.3);
   const placed = topOf(run);
-  assert.ok(Math.abs(placed.sx - 0.7) < 1e-9);
-  assert.ok(Math.abs(placed.x + 0.15) < 1e-9, `got ${placed.x}`);
+  assert.ok(Math.abs(placed[key] - 0.7) < 1e-9);
+  assert.ok(Math.abs(placed[along] + 0.15) < 1e-9, `got ${placed[along]}`);
 });
 
 test('a perfect drop keeps the footprint and hands a sliver back', () => {
@@ -331,5 +338,39 @@ test('the palette sits on the site blue', () => {
 
 test('blocks are thin and the slide is quicker than before', () => {
   assert.ok(core.BLOCK_H <= 0.13, `blocks are ${core.BLOCK_H} tall — item 11 asked for 3x thinner`);
-  assert.ok(speedForScore(0) > 1.4, 'item 10 asked for a slightly faster slide');
+  // Quicker off the line than the original, but the ramp is gentler now — full
+  // speed used to arrive by about block 55, which felt fast far too early.
+  assert.ok(speedForScore(0) > 1.2, 'the opening slide should not be sluggish');
+  assert.ok(speedForScore(30) < speedForScore(80), 'it must still ramp');
+  assert.ok(speedForScore(30) < 2.6, `too fast by block 30: ${speedForScore(30)}`);
+});
+
+test('the first block enters from the top right', () => {
+  // +y is the top-right -> bottom-left diagonal; +x is the other one. Which axis
+  // the run opens on is what decides where the very first block comes from.
+  const run = createRun();
+  assert.equal(run.state.moving.axis, 'y');
+
+  const v = makeView(420, 860, 0);
+  const centre = isoProject(0, 0, 1, v);
+  const entry  = isoProject(0, run.state.moving.pos, 1, v);
+  assert.ok(entry.px > centre.px, 'it should enter from the right');
+  assert.ok(entry.py < centre.py, 'and from above');
+});
+
+test('the shade steps visibly between neighbouring blocks', () => {
+  // A sine crawls through its midpoint, so long stretches came out nearly
+  // identical. Every block should be a clear step from the one below it.
+  let smallest = Infinity;
+  for (let i = 0; i < 200; i++) {
+    const d = Math.abs(shadeFor(i + 1).light - shadeFor(i).light);
+    if (d < smallest) smallest = d;
+  }
+  assert.ok(smallest > 1.5, `neighbouring blocks differ by only ${smallest.toFixed(2)}%`);
+});
+
+test('the band still turns around rather than running away', () => {
+  const lights = Array.from({ length: 200 }, (_, i) => shadeFor(i).light);
+  assert.ok(Math.min(...lights) >= SHADE_MIN - 1e-9);
+  assert.ok(Math.max(...lights) <= SHADE_MAX + 1e-9);
 });

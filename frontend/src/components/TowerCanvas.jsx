@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { createRun, faceShades, blockFaces, makeView, BASE_SIZE } from '../utils/towerCore';
+import { createRun, faceShades, blockFaces, makeView, isoProject, BASE_SIZE } from '../utils/towerCore';
 
 // Tower — isometric renderer.
 //
@@ -63,14 +63,21 @@ export default function TowerCanvas({
       },
     });
 
-    // Drifting motes. Few, dim and slow — they are depth cues, not confetti, and
-    // anything brighter competes with the tower for attention.
-    const motes = Array.from({ length: 12 }, () => ({
-      x: Math.random(), y: Math.random(),
-      s: 1 + Math.random() * 1.6,
-      v: 0.0012 + Math.random() * 0.0028,
-      a: 0.05 + Math.random() * 0.10,
-    }));
+    // Drifting motes: depth cues, not confetti.
+    //
+    // They rise from the lower third rather than from the very bottom edge, and
+    // fade in over their first stretch — spawning hard-edged at y=1 made them
+    // pop into existence at the screen edge, which is the thing that looked
+    // wrong. They also fade out again near the top, so nothing blinks away.
+    const MOTE_BIRTH = 0.66;      // fraction down the screen where they appear
+    const newMote = (y) => ({
+      x: 0.06 + Math.random() * 0.88,
+      y: y ?? (MOTE_BIRTH + Math.random() * (1 - MOTE_BIRTH)),
+      s: 1 + Math.random() * 1.5,
+      v: 0.0009 + Math.random() * 0.0016,
+      a: 0.10 + Math.random() * 0.13,
+    });
+    const motes = Array.from({ length: 16 }, () => newMote(Math.random()));
 
     let camera = 0;        // eased vertical follow, in block levels
     let last = performance.now();
@@ -99,10 +106,15 @@ export default function TowerCanvas({
       // ── background ──
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, width, height);
-      for (const m of motes) {
+      for (let i = 0; i < motes.length; i++) {
+        const m = motes[i];
         m.y -= m.v * dt * 60;
-        if (m.y < -0.05) { m.y = 1.05; m.x = Math.random(); }
-        ctx.globalAlpha = m.a;
+        if (m.y < -0.02) { motes[i] = newMote(); continue; }
+        // Ease in over the first fifth of the climb and out over the last, so a
+        // mote never appears or vanishes as a hard dot.
+        const travelled = clamp((MOTE_BIRTH - m.y) / MOTE_BIRTH, 0, 1);
+        const fade = Math.min(1, travelled / 0.2) * Math.min(1, (1 - travelled) / 0.25 + 0.25);
+        ctx.globalAlpha = m.a * clamp(fade, 0, 1);
         ctx.fillStyle = '#9dc4ff';
         ctx.fillRect(m.x * width, m.y * height, m.s, m.s);
       }
@@ -134,35 +146,54 @@ export default function TowerCanvas({
       };
 
       // ── plinth ──
-      // Purely cosmetic blocks below the real base, fading out downward so the
-      // tower reads as continuing into darkness rather than floating.
-      const lowestVisible = Math.floor((view.originY - height) / blockPx) - 1;
-      const plinthFrom = Math.max(lowestVisible, -PLINTH_DEPTH);
-      for (let L = -1; L >= plinthFrom; L--) {
+      //
+      // Cosmetic blocks below the real base so the tower continues off the
+      // bottom of the frame instead of sitting on nothing. Solid all the way
+      // down, and faded by where each one lands ON SCREEN rather than by how
+      // deep it is: tied to depth, the fade drifted as the camera rose and the
+      // base could be left hanging in mid-air.
+      const fadeFrom = height * 0.62;
+      for (let L = -1; L >= -PLINTH_DEPTH; L--) {
+        const yAt = view.originY + 0 - L * blockPx;
+        if (yAt > height + blockPx * 2) break;    // fully past the bottom edge
+        const t = clamp((yAt - fadeFrom) / (height - fadeFrom), 0, 1);
         drawBlock({ x: 0, y: 0, sx: BASE_SIZE, sy: BASE_SIZE, index: L },
-                  L, clamp(1 + L / PLINTH_DEPTH, 0, 1));
+                  L, 1 - t);
       }
 
-      // ── tower and offcuts, in depth order ──
-      //
-      // A falling offcut must be able to pass BEHIND the tower: it was sliced off
-      // a real block and half of it is on the far side. Sorting by level and,
-      // within a level, putting the far-side offcut before the block and the
-      // near-side one after, gets that for free — later draws sit on top.
+      // ── tower ──
       const firstVisible = Math.max(0, Math.floor(camera - (height / blockPx) - 2));
-      const drawables = [];
       for (let i = firstVisible; i < s.blocks.length; i++) {
-        drawables.push({ b: s.blocks[i], level: s.blocks[i].level, order: 0, alpha: 1 });
+        drawBlock(s.blocks[i], s.blocks[i].level);
       }
+
+      // ── falling offcuts ──
+      //
+      // Drawn over the tower and pushed clear of it, rather than sorted into it.
+      // Interleaving by height was an attempt at honest occlusion, but what it
+      // actually produced was a slice embedded halfway through the block below —
+      // it read as clipping, not as depth. A piece that is knocked off, tips over
+      // and falls away past the edge is both clearer and closer to what the
+      // geometry implies.
       for (const sl of s.slices) {
-        drawables.push({
-          b: sl, level: sl.level,
-          order: sl.side < 0 ? -1 : 1,
-          alpha: clamp(1 - sl.t / 1.6, 0, 1),
-        });
+        const drift = Math.min(1, sl.t * 2.2) * 0.45 * (sl.side || 1);
+        const b = {
+          x: sl.x + (sl.sy >= sl.sx ? drift : 0),
+          y: sl.y + (sl.sy >= sl.sx ? 0 : drift),
+          sx: sl.sx, sy: sl.sy, index: sl.index,
+        };
+        const at = isoProject(b.x, b.y, sl.level, view);
+        // Gone by the time it reaches the bottom of the screen.
+        const nearBottom = clamp((at.py - height * 0.8) / (height * 0.25), 0, 1);
+        const alpha = clamp(1 - sl.t / 1.9, 0, 1) * (1 - nearBottom);
+        if (alpha <= 0.01) continue;
+        ctx.save();
+        ctx.translate(at.px, at.py);
+        ctx.rotate(sl.spin * 0.22);
+        ctx.translate(-at.px, -at.py);
+        drawBlock(b, sl.level, alpha);
+        ctx.restore();
       }
-      drawables.sort((a, b) => (a.level - b.level) || (a.order - b.order));
-      for (const d of drawables) drawBlock(d.b, d.level, d.alpha);
 
       // ── the slider ──
       if (s.moving) {
@@ -188,7 +219,7 @@ export default function TowerCanvas({
           burst.level, view);
         ctx.globalAlpha = (1 - life) * 0.85;
         ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 3.5;
         ctx.beginPath();
         ctx.moveTo(f.top[0].px, f.top[0].py);
         for (let i = 1; i < f.top.length; i++) ctx.lineTo(f.top[i].px, f.top[i].py);
