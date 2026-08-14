@@ -38,6 +38,16 @@ const CATCHUP_MS = 15_000;
 const ROBOT_STDEV_S  = 0.035;
 const ROBOT_MIN_DROPS = 12;
 
+// A diamond bet against the bot has to clear a real floor before it can win.
+//
+// Same idea as Rush Hour's 25-second minimum: without it the shortest possible
+// run is a coin toss against a bot whose score is derived from yours, so the
+// cheapest strategy is to drop one block and hope. Fifteen is reachable in well
+// under a minute of ordinary play and is not something a single lucky tap
+// produces. Coins are untouched — this is the currency that is handed out for
+// free, so it is the one worth protecting from a grind.
+const DIAMOND_BOT_MIN_SCORE = 15;
+
 const towerRooms = new Map();
 const towerQueue = [];
 
@@ -236,7 +246,15 @@ async function handleTowerComplete(io, supabase, roomId, socketId, score = 0, ta
     const alwaysWin = room.demoWin || freeSolo;
     let botScore = Math.floor(verified * (room.botRatio ?? 0.8));
     if (alwaysWin && botScore >= verified) botScore = Math.max(0, verified - 1);
-    const humanWon = alwaysWin ? true : verified > botScore;
+    let humanWon = alwaysWin ? true : verified > botScore;
+
+    // Beating the bot is necessary but not sufficient on a diamond bet.
+    if (!freeSolo && (room.currency === 'diamonds') && verified < DIAMOND_BOT_MIN_SCORE) {
+      humanWon = false;
+      // Keep the shown bot score consistent with the loss, or the card claims a
+      // win on score while reporting a defeat.
+      if (botScore <= verified) botScore = verified + 1;
+    }
 
     let balanceChange = null;
     if (room.entryFee > 0) {

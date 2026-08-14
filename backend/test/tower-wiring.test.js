@@ -84,7 +84,8 @@ test('a free match counts toward the record but not the rating', () => {
 
 test('a free solo run cannot be lost and is not rated', () => {
   assert.match(engine, /const freeSolo\s+= !\(room\.entryFee > 0\)/);
-  assert.match(engine, /const humanWon = alwaysWin \? true :/);
+  // `let`, not `const` — the diamond floor can overturn it below.
+  assert.match(engine, /let humanWon = alwaysWin \? true :/);
   assert.match(engine, /if \(supabase && !freeSolo\)/);
   // The personal best is the point of the mode, so it records regardless.
   const hs = engine.indexOf("updateHighscore(supabase, player.userId");
@@ -416,4 +417,59 @@ test('the darkness starts low enough not to dull live blocks', () => {
   const src = fe('components', 'TowerCanvas.jsx');
   const top = +src.match(/const scrimTop = height \* ([\d.]+)/)[1];
   assert.ok(top >= 0.75, `the scrim starts at ${top} of the screen — too high`);
+});
+
+test('a diamond bet against the bot has a real floor', () => {
+  // Without one the shortest possible run is a coin toss against a bot whose
+  // score is derived from yours — drop one block and hope.
+  assert.match(engine, /const DIAMOND_BOT_MIN_SCORE = 15/);
+  assert.match(engine, /room\.currency === 'diamonds'\) && verified < DIAMOND_BOT_MIN_SCORE/);
+});
+
+test('the floor applies to diamonds only, and never to a free run', () => {
+  // Coins vs bot and Solo Endless must be untouched.
+  const at = engine.indexOf('verified < DIAMOND_BOT_MIN_SCORE');
+  const line = engine.slice(engine.lastIndexOf('if (', at), at + 60);
+  assert.match(line, /!freeSolo/, 'a free run must not be subject to it');
+  assert.match(line, /diamonds/, 'coins must not be subject to it');
+});
+
+test('a floored loss does not report a winning score', () => {
+  // The card would otherwise say "you scored more" next to a defeat.
+  assert.match(engine, /if \(botScore <= verified\) botScore = verified \+ 1;/);
+});
+
+test('the floor is stated before the bet, not discovered after it', () => {
+  assert.match(fe('pages', 'TowerGame.jsx'), /at least 15 blocks to win/);
+});
+
+test('the searching screen is the one every other game uses', () => {
+  const tower = fe('pages', 'TowerGame.jsx');
+  const cardash = fe('pages', 'CarDashGame.jsx');
+  for (const marker of ['Searching...', 'border-4 border-primary border-t-transparent rounded-full animate-spin']) {
+    assert.ok(tower.includes(marker), `Tower's queue screen is missing: ${marker}`);
+    assert.ok(cardash.includes(marker), `template changed: ${marker}`);
+  }
+  assert.doesNotMatch(tower, /Finding an opponent…/, 'the bespoke wording should be gone');
+});
+
+test('the block is visible at the top right when it spawns', () => {
+  // It always spawned top-right, but at TRAVEL 1.9 that point was off the side
+  // of a phone screen — so the first thing a player saw was it already sliding
+  // in from the edge, which read as starting from the wrong place.
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'src', 'utils', 'towerCore.js'), 'utf8');
+  const { createRun, makeView, isoProject } = new Function(
+    `${src.replace(/export /g, '')}; return { createRun, makeView, isoProject };`)();
+
+  for (const [W, H] of [[390, 760], [420, 860], [1280, 800]]) {
+    const run = createRun();
+    const v = makeView(W, H, 0);
+    const centre = isoProject(0, 0, 1, v);
+    const spawn = isoProject(0, run.state.moving.pos, 1, v);
+    assert.ok(spawn.px > centre.px, `${W}x${H}: spawns left of centre`);
+    assert.ok(spawn.py < centre.py, `${W}x${H}: spawns below centre`);
+    assert.ok(spawn.px > 0 && spawn.px < W, `${W}x${H}: spawn x=${spawn.px.toFixed(0)} is off screen`);
+    assert.ok(spawn.py > 0 && spawn.py < H, `${W}x${H}: spawn y=${spawn.py.toFixed(0)} is off screen`);
+  }
 });

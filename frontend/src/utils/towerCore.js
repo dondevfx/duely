@@ -12,7 +12,16 @@
 
 export const BLOCK_H   = 0.12;   // block height, in the same units as its footprint
 export const BASE_SIZE = 1.0;    // starting footprint, world units
-export const TRAVEL    = 1.9;    // distance from centre the slider reaches before turning
+// Distance from centre the slider reaches before turning.
+//
+// This was 1.9, which put the spawn point off the side of a phone screen: the
+// block was created at the top right as intended but was not VISIBLE there, so
+// the first thing a player saw was it already sliding in from the edge — which
+// is why the start read as coming from the wrong place. 1.25 keeps the whole
+// travel on screen, so the block is seen sitting at the top right before it
+// moves. It also tightens the pacing, since the block no longer spends time
+// crossing empty space nobody can see.
+export const TRAVEL    = 1.25;
 
 // A drop within this of perfect keeps the full footprint and hands a sliver
 // back. Without the reward a long run is impossible: every drop shaves a little

@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { useCurrency } from '../context/CurrencyContext';
 import GameLobby from '../components/GameLobby';
+import GlowButton from '../components/GlowButton';
 import ResultScreen from '../components/ResultScreen';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
 import TowerCanvas from '../components/TowerCanvas';
@@ -322,15 +323,17 @@ export default function TowerGame() {
   }
 
   // ── queue ──
+  // The same searching screen every other game uses. Tower had a bespoke one
+  // with its own icon, heading and copy, which made it look like a different
+  // product the moment you pressed Find Opponent.
   if (phase === 'queue') {
     return (
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
-        <div className="text-5xl mb-4 animate-pulse">🗼</div>
-        <h2 className="text-2xl font-black text-white mb-2">Finding an opponent…</h2>
-        <p className="text-muted text-sm mb-6">{statusMsg || 'Waiting for someone at your bet size'}</p>
-        <button onClick={backToLobby} className="px-5 py-2 rounded-xl border border-border text-muted hover:text-white hover:border-primary transition-all text-sm font-bold">
-          Cancel
-        </button>
+        <div className="text-center animate-fade-in">
+          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-6" />
+          <h2 className="text-2xl font-bold text-white mb-6">Searching...</h2>
+          <GlowButton variant="ghost" onClick={backToLobby}>Cancel</GlowButton>
+        </div>
       </div>
     );
   }
@@ -343,7 +346,12 @@ export default function TowerGame() {
     >
       <GameLobby
         title="🗼 Tower"
-        description="Stack the blocks as high as you can. Each block slides in on its own — tap to drop it, and anything hanging over the edge is sliced off. Land it dead centre and you keep the full width."
+        description={
+          'Stack the blocks as high as you can. Each block slides in on its own — tap to drop it, ' +
+          'and anything hanging over the edge is sliced off. Land it dead centre and you keep the full width.' +
+          // The bot floor has to be stated before the bet, not discovered after it.
+          (isDiamonds ? ' Betting diamonds against the bot? You need at least 15 blocks to win.' : '')
+        }
         controls="Tap the screen or press SPACE to drop · Perfect drops keep your tower wide"
         betCurrency={betCurrency} setBetCurrency={setBetCurrency}
         entryFee={entryFee} setEntryFee={setEntryFee}
