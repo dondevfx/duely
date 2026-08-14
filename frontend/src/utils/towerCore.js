@@ -270,18 +270,20 @@ export function createRun({ onLand, onOver } = {}) {
     state.taps.push(state.elapsed);
     onLand?.({ perfect, score: state.score });
 
-    // Nothing left to aim at.
+    // A successful landing NEVER ends the run, however thin the survivor is.
     //
-    // This was 0.06 of the base footprint, which ends a run while the block is
-    // still several pixels wide and clearly landable — the game appeared to quit
-    // on its own. It now only stops when there is genuinely nothing to hit.
-    if (newSize <= 0.012) {
-      state.over = true;
-      state.moving = null;
-      state.pendingOverAt = state.elapsed + MISS_FALL_S;
-      return { hit: true, perfect, exhausted: true };
-    }
-
+    // There used to be a minimum footprint here — 0.06 of the base, then 0.012 —
+    // and both had the same effect: a block the player had just landed cleanly
+    // was accepted, scored, and then the game quit on its own. From the other
+    // side of the screen that is indistinguishable from a bug, because it is
+    // one. A run ends when a block misses, and only then.
+    //
+    // A sliver is also not a death sentence. PERFECT_EPS is 0.035, wider than
+    // the block itself by this point, so any hit that lands at all is inside the
+    // perfect window: it snaps to centre and hands back PERFECT_REWARD. The
+    // tower recovers width as long as the player keeps hitting, which makes a
+    // near-death run something to fight out of rather than a countdown to a
+    // forced ending.
     spawn();
     return { hit: true, perfect };
   }

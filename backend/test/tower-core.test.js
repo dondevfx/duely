@@ -123,11 +123,36 @@ test('a miss does not score', () => {
   assert.equal(run.score, before);
 });
 
-test('the run ends when nothing is left to aim at', () => {
+test('a sliver keeps playing — only a miss ends a run', () => {
+  // There used to be a minimum footprint, and it meant a block the player had
+  // just landed cleanly was accepted, scored, and then the game quit on its own.
+  // From the other side of the screen that is indistinguishable from a bug.
   const run = createRun();
-  // Shave repeatedly on alternating axes until it starves.
-  for (let i = 0; i < 60 && !run.over; i++) dropAt(run, topOf(run)[i % 2 === 0 ? 'sx' : 'sy'] * 0.5);
-  assert.ok(run.over, 'a starved tower must end the run');
+  for (let i = 0; i < 14 && !run.over; i++) {
+    dropAt(run, topOf(run)[sizeKeyOf(run)] * 0.5);   // halve it every time
+  }
+  const key = sizeKeyOf(run);
+  assert.ok(topOf(run)[key] < 0.05, `expected a sliver, got ${topOf(run)[key]}`);
+  assert.ok(!run.over, 'a landed block must never end the run, however thin');
+
+  // And it still ends when a block genuinely misses.
+  dropAt(run, 5);
+  assert.ok(run.over);
+});
+
+test('a sliver can be recovered by landing well', () => {
+  // PERFECT_EPS is wider than the block by this point, so any hit that lands at
+  // all is inside the perfect window and hands width back. A near-death run
+  // should be something to fight out of, not a countdown to a forced ending.
+  const run = createRun();
+  for (let i = 0; i < 14 && !run.over; i++) {
+    dropAt(run, topOf(run)[sizeKeyOf(run)] * 0.5);
+  }
+  const before = topOf(run)[sizeKeyOf(run)];
+  for (let i = 0; i < 8 && !run.over; i++) dropAt(run, 0);
+  assert.ok(!run.over, 'perfect drops must not end it either');
+  assert.ok(topOf(run).sx > before && topOf(run).sy > before,
+    `expected recovery from ${before}, got ${topOf(run).sx}`);
 });
 
 test('an offcut is produced for a miss-by-a-bit, but not for a perfect', () => {
