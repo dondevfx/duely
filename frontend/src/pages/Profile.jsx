@@ -482,7 +482,7 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
             </button>
             {showVerify && (
               <div className="mt-3 space-y-3">
-                <p className="text-xs text-muted">Verify your identity to unlock higher limits. Info stored locally.</p>
+                <p className="text-xs text-muted">Verify your identity to unlock higher limits.</p>
                 <div>
                   <label className="block text-xs text-muted mb-1">Full Name</label>
                   <input value={verifyName} onChange={e => setVerifyName(e.target.value)}
