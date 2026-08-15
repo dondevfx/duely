@@ -383,15 +383,24 @@ export default function WordleGame() {
   }, [socket, authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-join a private room from an accepted friend invite.
-  const _autoJoinFired = useRef(false);
+    // Redeem an accepted invite.
+  //
+  // Keyed on the CODE and on location.key, not on a fire-once ref with only
+  // [socket, authenticated] deps. Accepting an invite while already sitting on
+  // that game's page is a route update, not a remount — neither dep changes, so
+  // the effect never re-ran and the code was never redeemed. It looked like the
+  // Accept button did nothing, and it was most visible on whichever game you
+  // happened to be viewing when the invite arrived.
+  const _lastJoinCode = useRef(null);
   useEffect(() => {
-    if (!location.state?.autoJoin || !location.state?.joinCode || _autoJoinFired.current) return;
-    if (!authenticated || !socket) return;
-    _autoJoinFired.current = true;
-    const code = location.state.joinCode;
-    window.history.replaceState({}, '');
+    const code = location.state?.joinCode;
+    if (!location.state?.autoJoin || !code) return;
+    if (!socket || !authenticated) return;
+    if (_lastJoinCode.current === code) return;
+    _lastJoinCode.current = code;
+    window.history.replaceState({}, '');   // don't re-join on refresh
     setTimeout(() => joinPrivate(code), 300);
-  }, [socket, authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [socket, authenticated, location.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   function resetGameState() {

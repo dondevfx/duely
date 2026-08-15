@@ -90,15 +90,24 @@ export default function CarDashGame() {
   // the betting screen instead of the match: the invite is accepted, the toast
   // navigates here with the room code, and nothing ever redeems it. Rush Hour
   // and Tower were the two games missing it.
-  const _autoJoinFired = useRef(false);
+    // Redeem an accepted invite.
+  //
+  // Keyed on the CODE and on location.key, not on a fire-once ref with only
+  // [socket, authenticated] deps. Accepting an invite while already sitting on
+  // that game's page is a route update, not a remount — neither dep changes, so
+  // the effect never re-ran and the code was never redeemed. It looked like the
+  // Accept button did nothing, and it was most visible on whichever game you
+  // happened to be viewing when the invite arrived.
+  const _lastJoinCode = useRef(null);
   useEffect(() => {
-    if (!location.state?.autoJoin || !location.state?.joinCode || _autoJoinFired.current) return;
+    const code = location.state?.joinCode;
+    if (!location.state?.autoJoin || !code) return;
     if (!socket || !authenticated) return;
-    _autoJoinFired.current = true;
-    const code = location.state.joinCode;
+    if (_lastJoinCode.current === code) return;
+    _lastJoinCode.current = code;
     window.history.replaceState({}, '');   // don't re-join on refresh
     setTimeout(() => joinPrivate(code), 300);
-  }, [socket, authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [socket, authenticated, location.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const _autoQueueFired = useRef(false);
   useEffect(() => {

@@ -151,3 +151,25 @@ test('the waiting screen is one shared component, not six', () => {
   assert.match(fe('pages', 'CarDashGame.jsx'), /w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin/,
     'the queue Searching screen should use the same spinner');
 });
+
+test('an invite accepted from the game page itself is still redeemed', () => {
+  // Accepting while already on that game's page is a route update, not a
+  // remount. Keyed on [socket, authenticated] with a fire-once ref, neither dep
+  // changed, so the effect never re-ran and the code was never redeemed — the
+  // Accept button appeared to do nothing, most visibly on whichever game you
+  // happened to be viewing when the invite arrived.
+  for (const [, file] of Object.entries(GAME_PAGES)) {
+    const src = fe('pages', file);
+    assert.match(src, /_lastJoinCode/, `${file} still fires once per mount`);
+    assert.match(src, /\[socket, authenticated, location\.key\]/,
+      `${file} does not re-check when the route changes`);
+    assert.match(src, /_lastJoinCode\.current === code/,
+      `${file} must dedupe on the code, not on having run before`);
+  }
+});
+
+test('the private-room join compares canonical ids on both sides', () => {
+  // The stored id is normalised at creation; the incoming one was not, so a
+  // client holding a queue key was told "Wrong game type for this code".
+  assert.match(handlers, /canonicalGameType\(pending\.gameType\) !== canonicalGameType\(gameType\)/);
+});

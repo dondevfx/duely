@@ -1219,7 +1219,16 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       const key = (code || '').toUpperCase().trim();
       const pending = pendingPrivateRooms.get(key);
       if (!pending) return socket.emit('error', { message: 'Room not found. Check the code and try again.' });
-      if (pending.gameType !== gameType) return socket.emit('error', { message: 'Wrong game type for this code.' });
+      // Compare canonical ids on BOTH sides. The stored one is normalised when
+      // the room is created, but the incoming one was not — so a client holding
+      // a queue key rather than a room id was told "Wrong game type for this
+      // code" and the invite simply refused to open, with the reason buried in a
+      // generic error toast.
+      if (canonicalGameType(pending.gameType) !== canonicalGameType(gameType)) {
+        console.warn(`[private] game type mismatch — code:${key} stored:${pending.gameType} sent:${gameType}`);
+        return socket.emit('error', { message: 'Wrong game type for this code.' });
+      }
+      gameType = canonicalGameType(gameType);
       if (pending.p1.socketId === socket.id) return socket.emit('error', { message: "You can't join your own room." });
       const p1Socket = io.sockets.sockets.get(pending.p1.socketId);
       if (!p1Socket) { pendingPrivateRooms.delete(key); if ((pending.p1.entryFee || 0) > 0) unlockUser(pending.p1.userId); return socket.emit('error', { message: 'Room host disconnected.' }); }
