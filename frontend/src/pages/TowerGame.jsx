@@ -7,6 +7,7 @@ import GameLobby from '../components/GameLobby';
 import GlowButton from '../components/GlowButton';
 import ResultScreen from '../components/ResultScreen';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
+import PrivateWaiting from '../components/PrivateWaiting';
 import TowerCanvas from '../components/TowerCanvas';
 import { usePageReady } from '../hooks/usePageReady';
 import { useGameScrollLock } from '../hooks/useGameScrollLock';
@@ -81,6 +82,17 @@ export default function TowerGame() {
   // The initial phase is set to 'queue' from autoQueue, but nothing ever emitted
   // the join — so arriving from Quick Match showed a Searching screen that would
   // have spun forever against an empty queue.
+  // Arriving from an accepted friend invite — see the note in CarDashGame.
+  const _autoJoinFired = useRef(false);
+  useEffect(() => {
+    if (!location.state?.autoJoin || !location.state?.joinCode || _autoJoinFired.current) return;
+    if (!socket || !authenticated) return;
+    _autoJoinFired.current = true;
+    const code = location.state.joinCode;
+    window.history.replaceState({}, '');
+    setTimeout(() => joinPrivate(code), 300);
+  }, [socket, authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const _autoQueueFired = useRef(false);
   useEffect(() => {
     if (!location.state?.autoQueue || _autoQueueFired.current) return;
@@ -155,8 +167,26 @@ export default function TowerGame() {
     socket.on('tower_opponent_score', onOppScore);
     socket.on('tower_catchup', onCatchup);
     socket.on('tower_result', onResult);
-    socket.on('private_room_created', ({ code }) => setPrivateCode(code));
+    socket.on('private_room_created', ({ code }) => { setPrivateCode(code); setInvitedFriend(null); setPhase('private_waiting'); });
     socket.on('private_room_error', ({ message }) => setStatusMsg(message || 'Room not found'));
+    // Tower had none of the invite plumbing: no way to show that an invite was
+    // sent, and no way to come back from one being declined.
+    socket.on('invite_sent', ({ friendUsername }) => {
+      setPrivateCode(''); setInvitedFriend(friendUsername || 'your friend');
+      setStatusMsg(''); setPhase('private_waiting');
+    });
+    socket.on('invite_declined', ({ friendUsername }) => {
+      setPhase('lobby'); setInvitedFriend(null);
+      setStatusMsg(`${friendUsername || 'Your friend'} declined the invite.`);
+    });
+    socket.on('invite_expired', () => {
+      setPhase('lobby'); setInvitedFriend(null);
+      setStatusMsg('The invite expired.');
+    });
+    socket.on('invite_failed', ({ message }) => {
+      setPhase('lobby'); setInvitedFriend(null);
+      setStatusMsg(message || 'Could not send that invite.');
+    });
 
     return () => {
       socket.off('tower_queue_joined', onQueueJoined);
@@ -169,6 +199,8 @@ export default function TowerGame() {
       socket.off('tower_result', onResult);
       socket.off('private_room_created');
       socket.off('private_room_error');
+      socket.off('invite_sent'); socket.off('invite_declined');
+      socket.off('invite_expired'); socket.off('invite_failed');
     };
   }, [socket]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -199,6 +231,10 @@ export default function TowerGame() {
   }
   function joinPrivate(code) {
     socket.emit('join_private_room', { gameType: 'tower', code });
+  }
+  function cancelPrivate() {
+    socket?.emit('cancel_private_room');
+    setPhase('lobby'); setPrivateCode(''); setInvitedFriend(null); setStatusMsg('');
   }
   function backToLobby() {
     socket?.emit('leave_tower_queue');
@@ -337,6 +373,18 @@ export default function TowerGame() {
           </div>
         )}
       </div>
+    );
+  }
+
+  // ── waiting on a friend invite or a private link ──
+  if (phase === 'private_waiting') {
+    return (
+      <PrivateWaiting
+        invitedFriend={invitedFriend}
+        code={privateCode}
+        gameType="tower"
+        onCancel={cancelPrivate}
+      />
     );
   }
 

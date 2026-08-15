@@ -13,6 +13,7 @@ import { topUpRoute, topUpLabel } from '../utils/topUpRoute';
 import CreateRoomModal from '../components/CreateRoomModal';
 import JoinRoomModal from '../components/JoinRoomModal';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
+import PrivateWaiting from '../components/PrivateWaiting';
 import { usePageReady } from '../hooks/usePageReady';
 import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import CoinIcon from '../components/CoinIcon';
@@ -778,23 +779,13 @@ export default function CoinFlipGame() {
 
         {/* Private waiting */}
         {phase === 'private_waiting' && (
-          <div className="text-center animate-fade-in">
-            <div className="text-5xl mb-4">🔒</div>
-            {invitedFriend ? (
-              <>
-                <h2 className="text-2xl font-black text-white mb-2">Invite Sent</h2>
-                <div className="w-14 h-14 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto my-6" />
-                <p className="text-muted text-sm mb-6">Waiting for <span className="text-white font-bold">{invitedFriend}</span> to accept…</p>
-              </>
-            ) : (
-              <>
-                <h2 className="text-2xl font-black text-white mb-2">Challenge Ready</h2>
-                <ChallengeLinkBox code={privateCode} gameType="coin-flip" />
-                <p className="text-muted text-sm mb-6">Waiting for opponent to join…</p>
-              </>
-            )}
-            <button onClick={cancelPrivate} className="text-sm text-danger hover:text-red-400 transition-colors">Cancel</button>
-          </div>
+          <PrivateWaiting
+            inline
+            invitedFriend={invitedFriend}
+            code={privateCode}
+            gameType="coin-flip"
+            onCancel={cancelPrivate}
+          />
         )}
 
         {statusMsg && phase === 'lobby' && (

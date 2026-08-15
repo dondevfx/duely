@@ -8,6 +8,7 @@ import GameLobby, { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
 import GlowButton from '../components/GlowButton';
 import ResultScreen from '../components/ResultScreen';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
+import PrivateWaiting from '../components/PrivateWaiting';
 import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import { useResumeMatch } from '../hooks/useResumeMatch';
 
@@ -731,26 +732,12 @@ export default function WordleGame() {
   // ── Private waiting ───────────────────────────────────────────────────────
   if (phase === 'private_waiting') {
     return (
-      <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
-        <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
-        <div className="w-full max-w-md text-center animate-fade-in">
-          <div className="text-5xl mb-4">🔒</div>
-          {invitedFriend ? (
-            <>
-              <h2 className="text-2xl font-black text-white mb-2">Invite Sent</h2>
-              <div className="w-14 h-14 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto my-6" />
-              <p className="text-muted text-sm mb-6">Waiting for <span className="text-white font-bold">{invitedFriend}</span> to accept…</p>
-            </>
-          ) : (
-            <>
-              <h2 className="text-2xl font-black text-white mb-2">Challenge Ready</h2>
-              <ChallengeLinkBox code={privateCode} gameType="scrabble" />
-              <p className="text-muted text-sm mb-6">Waiting for opponent to join…</p>
-            </>
-          )}
-          <GlowButton variant="ghost" onClick={cancelPrivate}>Cancel</GlowButton>
-        </div>
-      </div>
+      <PrivateWaiting
+        invitedFriend={invitedFriend}
+        code={privateCode}
+        gameType="scrabble"
+        onCancel={cancelPrivate}
+      />
     );
   }
 

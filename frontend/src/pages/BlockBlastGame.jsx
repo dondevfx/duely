@@ -8,6 +8,7 @@ import GlowButton from '../components/GlowButton';
 import GameLobby from '../components/GameLobby';
 import ResultScreen from '../components/ResultScreen';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
+import PrivateWaiting from '../components/PrivateWaiting';
 import { usePageReady } from '../hooks/usePageReady';
 import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import { useResumeMatch } from '../hooks/useResumeMatch';
@@ -862,23 +863,13 @@ export default function BlockBlastGame() {
 
       {/* ── PRIVATE WAITING ── */}
       {phase === 'private_waiting' && (
-        <div className="text-center animate-fade-in">
-          <div className="text-5xl mb-4">🔒</div>
-          {invitedFriend ? (
-            <>
-              <h2 className="text-2xl font-bold text-white mb-2">Invite Sent</h2>
-              <div className="w-14 h-14 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto my-6" />
-              <p className="text-muted text-sm mb-6">Waiting for <span className="text-white font-bold">{invitedFriend}</span> to accept…</p>
-            </>
-          ) : (
-            <>
-              <h2 className="text-2xl font-bold text-white mb-2">Challenge Ready</h2>
-              <ChallengeLinkBox code={privateCode} gameType="blockBlast" />
-              <p className="text-muted text-sm animate-pulse mb-6">Waiting for opponent to join...</p>
-            </>
-          )}
-          <GlowButton variant="ghost" onClick={cancelPrivate} className="border border-border">Cancel</GlowButton>
-        </div>
+        <PrivateWaiting
+          inline
+          invitedFriend={invitedFriend}
+          code={privateCode}
+          gameType="blockBlast"
+          onCancel={cancelPrivate}
+        />
       )}
 
       {/* ── QUEUE ── */}

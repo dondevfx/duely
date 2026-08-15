@@ -11,6 +11,7 @@ import { useResumeMatch } from '../hooks/useResumeMatch';
 import { playMatchFound, playCountdown, playGo } from '../utils/sound';
 import HighwayCanvas from '../components/HighwayCanvas';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
+import PrivateWaiting from '../components/PrivateWaiting';
 
 function fmtTime(ms) {
   const s = (ms ?? 0) / 1000;
@@ -84,6 +85,20 @@ export default function CarDashGame() {
   useEffect(() => {
     if (location.state?.betCurrency) setBetCurrency(location.state.betCurrency);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Arriving from an accepted friend invite. Without this the player lands on
+  // the betting screen instead of the match: the invite is accepted, the toast
+  // navigates here with the room code, and nothing ever redeems it. Rush Hour
+  // and Tower were the two games missing it.
+  const _autoJoinFired = useRef(false);
+  useEffect(() => {
+    if (!location.state?.autoJoin || !location.state?.joinCode || _autoJoinFired.current) return;
+    if (!socket || !authenticated) return;
+    _autoJoinFired.current = true;
+    const code = location.state.joinCode;
+    window.history.replaceState({}, '');   // don't re-join on refresh
+    setTimeout(() => joinPrivate(code), 300);
+  }, [socket, authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const _autoQueueFired = useRef(false);
   useEffect(() => {
@@ -436,20 +451,12 @@ export default function CarDashGame() {
   // ── Waiting on a private room or a friend invite ──
   if (phase === 'private_waiting') {
     return (
-      <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
-        <div className="text-center animate-fade-in w-full max-w-md">
-          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-6" />
-          {invitedFriend ? (
-            <p className="text-muted text-sm mb-6">Waiting for {invitedFriend} to accept…</p>
-          ) : (
-            <>
-              <ChallengeLinkBox code={privateCode} gameType="carDash" />
-              <p className="text-muted text-sm mb-6">Waiting for opponent to join…</p>
-            </>
-          )}
-          <GlowButton variant="ghost" onClick={cancelPrivate}>Cancel</GlowButton>
-        </div>
-      </div>
+      <PrivateWaiting
+        invitedFriend={invitedFriend}
+        code={privateCode}
+        gameType="carDash"
+        onCancel={cancelPrivate}
+      />
     );
   }
 

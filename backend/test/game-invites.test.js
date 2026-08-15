@@ -93,3 +93,61 @@ test('the invite path does not gate on demo accounts', () => {
   const body = handlers.slice(at, handlers.indexOf("socket.on('", at + 10));
   assert.doesNotMatch(body, /isDemo/, 'a demo account must be able to invite another demo account');
 });
+
+// ── Accepting an invite has to land you in the match ─────────────────────────
+//
+// Accepting navigates to the game route with { autoJoin, joinCode }. If the page
+// does not redeem that code, the player lands on the betting screen instead of
+// the match and the invite silently does nothing. Rush Hour and Tower were both
+// missing it, for demo and real accounts alike.
+
+const GAME_PAGES = {
+  blackjack:   'BlackjackGame.jsx',
+  'coin-flip': 'CoinFlipGame.jsx',
+  scrabble:    'WordleGame.jsx',
+  blockBlast:  'BlockBlastGame.jsx',
+  carDash:     'CarDashGame.jsx',
+  tower:       'TowerGame.jsx',
+};
+
+test('every invitable game redeems the code it is sent', () => {
+  for (const [game, file] of Object.entries(GAME_PAGES)) {
+    const src = fe('pages', file);
+    assert.match(src, /location\.state\?\.autoJoin/, `${file} ignores an accepted invite`);
+    assert.match(src, /joinPrivate\(code\)/, `${file} never redeems the room code`);
+  }
+});
+
+test('the invite toast routes every game somewhere real', () => {
+  // Whitespace-normalised string matching rather than a regex: an escape written
+  // through a template literal loses its backslash, and `\s` quietly becomes a
+  // literal 's' that matches nothing.
+  const toast = fe('components', 'InviteToasts.jsx').replace(/[ 	]+/g, ' ');
+  for (const game of Object.keys(GAME_PAGES)) {
+    const key = game.includes('-') ? `'${game}'` : game;
+    assert.ok(toast.includes(`${key}: '/game/`), `no route for '${game}' in the invite toast`);
+  }
+});
+
+test('every game can show that an invite was sent', () => {
+  // Tower had no invite plumbing at all: nothing set the waiting state, so the
+  // sender saw the lobby as though nothing had happened.
+  for (const [, file] of Object.entries(GAME_PAGES)) {
+    const src = fe('pages', file);
+    assert.match(src, /'invite_sent'/, `${file} never shows that an invite was sent`);
+    assert.match(src, /private_waiting/, `${file} has no waiting state`);
+  }
+});
+
+test('the waiting screen is one shared component, not six', () => {
+  // It had drifted into five variants: different spinner sizes, one with no
+  // spinner, and the link box and waiting line in different orders.
+  for (const [, file] of Object.entries(GAME_PAGES)) {
+    assert.match(fe('pages', file), /<PrivateWaiting/, `${file} still has its own waiting screen`);
+  }
+  const shared = fe('components', 'PrivateWaiting.jsx');
+  // Same spinner as the Searching screen, so the two reads as one product.
+  assert.match(shared, /w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin/);
+  assert.match(fe('pages', 'CarDashGame.jsx'), /w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin/,
+    'the queue Searching screen should use the same spinner');
+});
