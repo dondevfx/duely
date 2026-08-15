@@ -45,6 +45,26 @@ const {
 } = require('../services/blackjackEngine');
 const { checkSocketClickRate, cleanupSocket } = require('../middleware/rateLimit');
 const { createBotPlayer } = require('../services/botService');
+
+// The same game is known by two names in this codebase: a queue/bet-count key
+// ('block-blast', 'car-dash') and a room id ('blockBlast', 'carDash'). Both are
+// load-bearing — the counts map is keyed one way and the room switch the other —
+// so a component holding one and sending the other is an easy mistake to make.
+// It was: Block Burst's lobby passed its bet-count key into the friend invite,
+// and every Block Burst invite came back "Invalid game."
+//
+// Normalising here means no client spelling can break an invite, and there is
+// exactly one place to look when a seventh game is added.
+const GAME_ALIASES = {
+  'block-blast': 'blockBlast',
+  'car-dash':    'carDash',
+  'word-vs':     'scrabble',
+  'wordle':      'scrabble',
+  'coinflip':    'coin-flip',
+};
+const VALID_GAME_TYPES = ['blackjack', 'coin-flip', 'scrabble', 'blockBlast', 'carDash', 'tower'];
+const canonicalGameType = (g) => GAME_ALIASES[g] || g;
+
 const { isDemo: isDemoAccount, randomFunnyName } = require('../services/demoAccounts');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1056,7 +1076,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       let code;
       do { code = _genPrivateCode(); } while (pendingPrivateRooms.has(code));
       const p1 = { socketId: socket.id, userId: authenticatedUser.userId, username: authenticatedUser.username, elo: authenticatedUser.elo, entryFee, currency, side };
-      pendingPrivateRooms.set(code, { gameType, p1, createdAt: Date.now() });
+      pendingPrivateRooms.set(code, { gameType: canonicalGameType(gameType), p1, createdAt: Date.now() });
       socket.emit('private_room_created', { code });
       // Auto-expire after 10 minutes and unlock
       setTimeout(() => {
@@ -1098,7 +1118,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       // online requirement to allow offline invites, would open an
       // authorization bypass. Validate the shape here so it cannot regress.
       if (!UUID_RE.test(String(friendId))) return fail('Invalid friend.');
-      if (!['blackjack', 'coin-flip', 'scrabble', 'blockBlast', 'carDash', 'tower'].includes(gameType)) return fail('Invalid game.');
+      gameType = canonicalGameType(gameType);
+      if (!VALID_GAME_TYPES.includes(gameType)) return fail('Invalid game.');
       if (!isValidFee(entryFee, currency)) return fail('Invalid entry fee.');
       if (inMatchOrQueue(fromId)) return fail('Finish your current game first.');
       if (!_isUserOnline(friendId)) return fail('That friend is offline.');
@@ -1126,7 +1147,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
       let code; do { code = _genPrivateCode(); } while (pendingPrivateRooms.has(code));
       const p1 = { socketId: socket.id, userId: fromId, username: authenticatedUser.username, elo: authenticatedUser.elo, entryFee, currency, side: 'heads' };
-      pendingPrivateRooms.set(code, { gameType, p1, createdAt: Date.now() });
+      pendingPrivateRooms.set(code, { gameType: canonicalGameType(gameType), p1, createdAt: Date.now() });
 
       const inviteId = 'inv_' + uuidv4();
       pendingInvites.set(inviteId, {

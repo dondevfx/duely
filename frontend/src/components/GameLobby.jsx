@@ -23,6 +23,21 @@ function fmtFee(fee) {
   return `${fee}`;
 }
 
+// `gameType` on this component is the QUEUE key — it keys the bet-count map the
+// server broadcasts. The friend-invite and private-room APIs take the ROOM id,
+// which for two games is spelled differently. Passing the queue key straight
+// through is why Block Burst invites failed with "Invalid game."
+//
+// The server normalises these too, so neither side alone can break it; this map
+// exists so the request is correct as sent rather than correct only after being
+// forgiven.
+const INVITE_GAME_TYPE = {
+  'block-blast': 'blockBlast',
+  'car-dash':    'carDash',
+  'word-vs':     'scrabble',
+};
+const inviteTypeFor = (queueKey) => INVITE_GAME_TYPE[queueKey] || queueKey;
+
 export default function GameLobby({
   title,
   description,
@@ -232,7 +247,7 @@ export default function GameLobby({
             <CreateRoomModal
               open={privateMode === 'create'}
               onClose={() => setPrivateMode(null)}
-              gameType={gameType}
+              gameType={inviteTypeFor(gameType)}
               entryFee={entryFee}
               currency={betCurrency}
               onCreateCode={() => onCreatePrivate(entryFee, betCurrency)}
