@@ -77,6 +77,22 @@ export default function CarDashGame() {
   // Only a live match re-claims itself after a reconnect; a refresh forfeits.
   useResumeMatch(socket, () => phaseRef.current === 'playing');
 
+  // Quick Match sends the player straight here with a bet already chosen and
+  // expects to land them IN the queue. Rush Hour had no handling for it at all,
+  // so Quick Match could pick it and then drop the player on the lobby with
+  // nothing queued — the one thing Quick Match promises not to make them do.
+  useEffect(() => {
+    if (location.state?.betCurrency) setBetCurrency(location.state.betCurrency);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const _autoQueueFired = useRef(false);
+  useEffect(() => {
+    if (!location.state?.autoQueue || _autoQueueFired.current) return;
+    if (!authenticated || !socket) return;
+    _autoQueueFired.current = true;
+    joinQueue(location.state?.entryFee, location.state?.betCurrency);
+  }, [socket, authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const isDiamonds = betCurrency === 'diamonds';
   const balance = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
 
@@ -263,13 +279,19 @@ export default function CarDashGame() {
     };
   }, [socket]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function joinQueue() {
+  // Overrides exist for the Quick Match path. setBetCurrency from location.state
+  // and this call happen in the same commit, so the closure here can still be
+  // holding the previous currency — queuing at the wrong one, silently, for a
+  // real bet. Passing the values explicitly removes the timing question.
+  function joinQueue(feeArg, curArg) {
+    const fee = feeArg ?? entryFee;
+    const cur = curArg ?? betCurrency;
     eloBeforeRef.current = profile?.elo ?? 1000;
     lastModeRef.current = 'pvp';
-    lastSettingsRef.current = { entryFee, currency: betCurrency };
+    lastSettingsRef.current = { entryFee: fee, currency: cur };
     setStatusMsg('');
     setPhase('queue');
-    socket?.emit('join_car_dash_queue', { entryFee, currency: betCurrency });
+    socket?.emit('join_car_dash_queue', { entryFee: fee, currency: cur });
   }
   function leaveQueue() { socket?.emit('leave_car_dash_queue'); setPhase('lobby'); setStatusMsg(''); }
   function playVsBot() {

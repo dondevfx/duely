@@ -19,6 +19,7 @@ const POOL = [
   { route: '/game/coin-flip',   name: 'Coin Flip',    icon: '🟡', coinsOnly: true, queueKey: 'coin-flip' },
   { route: '/game/blackjack',   name: 'Blackjack',    icon: '🃏', queueKey: 'blackjack' },
   { route: '/game/word-vs',     name: 'Word VS',       icon: '🔤', queueKey: 'scrabble' },
+  { route: '/game/car-dash',    name: 'Rush Hour',    icon: '🚗', queueKey: 'car-dash' },
   { route: '/game/tower',       name: 'Tower',        icon: '🗼', queueKey: 'tower' },
 ];
 

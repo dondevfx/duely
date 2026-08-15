@@ -110,3 +110,60 @@ test('the queue keys match what the server actually broadcasts', () => {
       `no server queue is counted under '${k}'`);
   }
 });
+
+// Being listed in the pool is not the same as working. A game reached from Quick
+// Match has to (a) exist in POOL with the queue key the server actually counts,
+// and (b) act on autoQueue when it gets there — otherwise the player is dropped
+// on a lobby, or left on a Searching screen that never joined anything.
+
+test('every pooled game is counted under its queueKey by the server', () => {
+  const handlers = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'socket', 'handlers.js'), 'utf8');
+  const page = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'src', 'pages', 'QuickMatch.jsx'), 'utf8');
+  for (const k of [...page.matchAll(/queueKey:\s*'([^']+)'/g)].map(m => m[1])) {
+    assert.ok(handlers.includes(`incrementCount('${k}'`), `no server queue counted under '${k}'`);
+  }
+});
+
+test('Rush Hour is in the pool', () => {
+  const page = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'src', 'pages', 'QuickMatch.jsx'), 'utf8');
+  assert.match(page, /route: '\/game\/car-dash'/, 'Rush Hour is missing from Quick Match');
+  assert.match(page, /icon: '🚗', queueKey: 'car-dash'/);
+});
+
+test('every pooled game acts on autoQueue', () => {
+  // The page for each pooled route must both read autoQueue and emit a join.
+  const dir = path.join(__dirname, '..', '..', 'frontend', 'src', 'pages');
+  const pageFor = {
+    '/game/block-blast': 'BlockBlastGame.jsx',
+    '/game/coin-flip':   'CoinFlipGame.jsx',
+    '/game/blackjack':   'BlackjackGame.jsx',
+    '/game/word-vs':     'WordleGame.jsx',
+    '/game/car-dash':    'CarDashGame.jsx',
+    '/game/tower':       'TowerGame.jsx',
+  };
+  const pool = fs.readFileSync(path.join(dir, 'QuickMatch.jsx'), 'utf8');
+  const routes = [...pool.matchAll(/route: '([^']+)'/g)].map(m => m[1]);
+  assert.ok(routes.length >= 6, `expected the full pool, found ${routes.length}`);
+  for (const r of routes) {
+    const file = pageFor[r];
+    assert.ok(file, `no page mapped for pooled route ${r}`);
+    const src = fs.readFileSync(path.join(dir, file), 'utf8');
+    assert.match(src, /location\.state\?\.autoQueue/, `${file} ignores autoQueue`);
+    assert.match(src, /joinQueue\(|joinBjQueue\(|_autoFired/, `${file} never joins a queue`);
+  }
+});
+
+test('the auto-queue path does not depend on render timing for the bet', () => {
+  // setBetCurrency from location.state and the auto-join land in the same
+  // commit, so a closure can still hold the previous currency — queuing a real
+  // bet in the wrong one, silently.
+  const dir = path.join(__dirname, '..', '..', 'frontend', 'src', 'pages');
+  for (const f of ['CarDashGame.jsx', 'TowerGame.jsx']) {
+    const src = fs.readFileSync(path.join(dir, f), 'utf8');
+    assert.match(src, /joinQueue\(location\.state\?\.entryFee, location\.state\?\.betCurrency\)/,
+      `${f} should pass the bet explicitly on the auto-queue path`);
+  }
+});

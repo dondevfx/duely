@@ -78,6 +78,17 @@ export default function TowerGame() {
 
   useEffect(() => { if (location.state?.betCurrency) setBetCurrency(location.state.betCurrency); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The initial phase is set to 'queue' from autoQueue, but nothing ever emitted
+  // the join — so arriving from Quick Match showed a Searching screen that would
+  // have spun forever against an empty queue.
+  const _autoQueueFired = useRef(false);
+  useEffect(() => {
+    if (!location.state?.autoQueue || _autoQueueFired.current) return;
+    if (!authenticated || !socket) return;
+    _autoQueueFired.current = true;
+    joinQueue(location.state?.entryFee, location.state?.betCurrency);
+  }, [socket, authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const isDiamonds = betCurrency === 'diamonds';
   const balance = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
 
@@ -162,12 +173,15 @@ export default function TowerGame() {
   }, [socket]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── actions ──
-  function joinQueue() {
+  // Overrides exist for the Quick Match path — see the note in CarDashGame.
+  function joinQueue(feeArg, curArg) {
     if (!authenticated) return;
+    const fee = feeArg ?? entryFee;
+    const cur = curArg ?? betCurrency;
     lastModeRef.current = 'pvp';
-    lastSettings.current = { entryFee, currency: betCurrency };
+    lastSettings.current = { entryFee: fee, currency: cur };
     setStatusMsg('');
-    socket.emit('join_tower_queue', { entryFee, currency: betCurrency });
+    socket.emit('join_tower_queue', { entryFee: fee, currency: cur });
   }
   function playVsBot() {
     if (!authenticated) return;
