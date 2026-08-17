@@ -9,24 +9,25 @@ import { topUpRoute, topUpLabel } from '../utils/topUpRoute';
 import CreateRoomModal from './CreateRoomModal';
 import JoinRoomModal from './JoinRoomModal';
 
-// Small secondary buttons under the two primary actions on every betting screen.
-// Secondary actions, but they still have to be READABLE. This was muted text on
-// surface with a border-coloured outline, which on a dark background is close to
-// invisible — players could not tell the bot options were buttons at all. Now
-// white text on a lifted background with a blue-tinted border: clearly a
-// control, still visibly below the two primary actions.
 // The secondary lobby actions: Challenge a Friend, Bet vs Bot, Play vs Bot,
-// Join Game. Still smaller than Find Opponent, which is the primary action —
-// but not so small that they are awkward to hit on a phone or an iPad, which
-// is why the padding and the label both went up a step.
+// Join Game. Below Find Opponent, which is the one primary action, but not so
+// small that they are awkward to hit on a phone or an iPad.
+//
+// Same surface and border as the Entry Fee panel above them, so the screen has
+// two visual weights instead of three: one blue button that starts a match, and
+// everything else in the neutral panel treatment.
+//
+// The text stays WHITE, unlike the panel's muted labels. An earlier version of
+// these buttons used muted text on this same background and players could not
+// tell they were buttons at all — the grey is what recedes here, not the label.
 //
 // whitespace-nowrap is load-bearing: two of these share a row, and the longest
 // label ("Bet vs Bot — 50,000 💎") has to stay on one line or the row grows a
 // second line and the buttons stop matching each other.
 export const SMALL_BTN =
   'flex-1 px-3 sm:px-4 py-4 rounded-xl text-base font-bold whitespace-nowrap ' +
-  'border border-primary/40 bg-primary/10 text-white ' +
-  'hover:border-primary hover:bg-primary/20 active:bg-primary/25 transition-all';
+  'border border-border bg-surface text-white ' +
+  'hover:border-primary hover:bg-surfaceLight active:bg-surfaceLight transition-all';
 
 export const COIN_FEES    = [1, 5, 10, 25, 50, 100];
 export const DIAMOND_FEES = [500, 5000, 50000];
