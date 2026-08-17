@@ -114,7 +114,7 @@ export default function CarDashGame() {
     if (!location.state?.autoQueue || _autoQueueFired.current) return;
     if (!authenticated || !socket) return;
     _autoQueueFired.current = true;
-    joinQueue(location.state?.entryFee, location.state?.betCurrency);
+    joinQueueWith(location.state?.entryFee, location.state?.betCurrency);
   }, [socket, authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isDiamonds = betCurrency === 'diamonds';
@@ -307,9 +307,13 @@ export default function CarDashGame() {
   // and this call happen in the same commit, so the closure here can still be
   // holding the previous currency — queuing at the wrong one, silently, for a
   // real bet. Passing the values explicitly removes the timing question.
-  function joinQueue(feeArg, curArg) {
-    const fee = feeArg ?? entryFee;
-    const cur = curArg ?? betCurrency;
+  // See TowerGame: the button handler takes no arguments, because the lobby
+  // wires it to onClick and React would pass the click event as the entry fee.
+  function joinQueue() { joinQueueWith(); }
+
+  function joinQueueWith(feeArg, curArg) {
+    const fee = Number.isFinite(Number(feeArg)) ? Number(feeArg) : entryFee;
+    const cur = typeof curArg === 'string' ? curArg : betCurrency;
     eloBeforeRef.current = profile?.elo ?? 1000;
     lastModeRef.current = 'pvp';
     lastSettingsRef.current = { entryFee: fee, currency: cur };

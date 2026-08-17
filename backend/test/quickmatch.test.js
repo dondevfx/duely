@@ -163,7 +163,33 @@ test('the auto-queue path does not depend on render timing for the bet', () => {
   const dir = path.join(__dirname, '..', '..', 'frontend', 'src', 'pages');
   for (const f of ['CarDashGame.jsx', 'TowerGame.jsx']) {
     const src = fs.readFileSync(path.join(dir, f), 'utf8');
-    assert.match(src, /joinQueue\(location\.state\?\.entryFee, location\.state\?\.betCurrency\)/,
+    assert.match(src, /joinQueueWith\(location\.state\?\.entryFee, location\.state\?\.betCurrency\)/,
       `${f} should pass the bet explicitly on the auto-queue path`);
+  }
+});
+
+test('the Find Opponent handler takes no arguments', () => {
+  // GameLobby wires onQueue straight to onClick, so React passes the click event
+  // as the first argument. A joinQueue that accepts an optional fee therefore
+  // received a SyntheticEvent as the entry fee and the server rejected it —
+  // Find Opponent silently stopped working on exactly the games that had the
+  // override. The overrides live in a separately named function now.
+  const dir = path.join(__dirname, '..', '..', 'frontend', 'src', 'pages');
+  for (const f of ['TowerGame.jsx', 'CarDashGame.jsx', 'BlockBlastGame.jsx', 'WordleGame.jsx']) {
+    const src = fs.readFileSync(path.join(dir, f), 'utf8');
+    const m = src.match(/function joinQueue\(([^)]*)\)/);
+    assert.ok(m, `${f}: no joinQueue found`);
+    assert.equal(m[1].trim(), '', `${f}: joinQueue must take no arguments — it is a click handler`);
+  }
+});
+
+test('the auto-queue override is a separate function', () => {
+  const dir = path.join(__dirname, '..', '..', 'frontend', 'src', 'pages');
+  for (const f of ['TowerGame.jsx', 'CarDashGame.jsx']) {
+    const src = fs.readFileSync(path.join(dir, f), 'utf8');
+    assert.match(src, /joinQueueWith\(location\.state\?\.entryFee, location\.state\?\.betCurrency\)/, f);
+    // And it must not trust whatever it is handed.
+    assert.match(src, /Number\.isFinite\(Number\(feeArg\)\)/, `${f}: validate the fee`);
+    assert.match(src, /typeof curArg === 'string'/, `${f}: validate the currency`);
   }
 });

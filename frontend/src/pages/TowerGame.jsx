@@ -107,7 +107,7 @@ export default function TowerGame() {
     if (!location.state?.autoQueue || _autoQueueFired.current) return;
     if (!authenticated || !socket) return;
     _autoQueueFired.current = true;
-    joinQueue(location.state?.entryFee, location.state?.betCurrency);
+    joinQueueWith(location.state?.entryFee, location.state?.betCurrency);
   }, [socket, authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isDiamonds = betCurrency === 'diamonds';
@@ -214,11 +214,20 @@ export default function TowerGame() {
   }, [socket]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── actions ──
-  // Overrides exist for the Quick Match path — see the note in CarDashGame.
-  function joinQueue(feeArg, curArg) {
+  // Two entry points on purpose.
+  //
+  // joinQueue() is the button handler and takes NOTHING. It used to accept
+  // optional fee/currency overrides for the Quick Match path — but the lobby
+  // wires it straight to onClick, so React handed it the click event as the
+  // first argument, the event object was sent as the entry fee, and the server
+  // rejected it. Find Opponent silently stopped working on exactly the two games
+  // that had the overrides.
+  function joinQueue() { joinQueueWith(); }
+
+  function joinQueueWith(feeArg, curArg) {
     if (!authenticated) return;
-    const fee = feeArg ?? entryFee;
-    const cur = curArg ?? betCurrency;
+    const fee = Number.isFinite(Number(feeArg)) ? Number(feeArg) : entryFee;
+    const cur = typeof curArg === 'string' ? curArg : betCurrency;
     lastModeRef.current = 'pvp';
     lastSettings.current = { entryFee: fee, currency: cur };
     setStatusMsg('');
