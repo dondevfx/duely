@@ -47,6 +47,24 @@ export default class ErrorBoundary extends Component {
               Go home
             </button>
           </div>
+
+          {/* The escape hatch for a crash that reloading cannot fix.
+              Something stored in this browser — a half-written session, a
+              value from an older version of the app — can make the app throw
+              on every single load, and then Reload just reproduces it forever.
+              Clearing signs them out, so it is last resort and labelled as
+              such, but it beats a browser that can never open the site. */}
+          {this.props.allowReset && (
+            <button
+              onClick={() => {
+                try { localStorage.clear(); sessionStorage.clear(); } catch {}
+                window.location.href = '/';
+              }}
+              className="mt-2 text-xs text-muted underline hover:text-white"
+            >
+              Still broken? Reset the app (signs you out)
+            </button>
+          )}
         </div>
       );
     }

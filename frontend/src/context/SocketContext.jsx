@@ -11,6 +11,18 @@ const SHOW_LIVE_COUNTS = false;
 
 export function SocketProvider({ children }) {
   const socketRef = useRef(null);
+  // The socket is also held in STATE, not only in the ref.
+  //
+  // The context used to publish `socket: socketRef.current`. The ref is filled
+  // in the effect below, which runs after the first render, and assigning a ref
+  // does not re-render anything — so every consumer read `socket: null` until
+  // some OTHER piece of state happened to change. In practice that was the
+  // 'connect' event, so for the entire time the server took to answer (a cold
+  // start on Railway is tens of seconds) the whole app held a null socket.
+  //
+  // Anything that emits once on mount silently did nothing at all, and the page
+  // sat on "Connecting…" until it was reloaded by hand.
+  const [socket, setSocket] = useState(null);
   const [connected, setConnected] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
   const [forfeitWin, setForfeitWin] = useState(null); // kept for backward compat, unused after migration
@@ -43,6 +55,7 @@ export function SocketProvider({ children }) {
       reconnectionDelayMax: 3000,
     });
     socketRef.current = socket;
+    setSocket(socket);   // publish it to consumers on this commit, not on connect
 
     socket.on('connect', () => {
       setConnected(true);
@@ -158,6 +171,7 @@ export function SocketProvider({ children }) {
       window.removeEventListener('focus', resume);
       window.removeEventListener('online', resume);
       socket.disconnect();
+      setSocket(null);
       unsubSessionChange();
     };
   }, []);
@@ -166,7 +180,7 @@ export function SocketProvider({ children }) {
 
   return (
     <SocketContext.Provider value={{
-      socket: socketRef.current,
+      socket,
       connected,
       authenticated,
       doAuth: () => doAuth(socketRef.current),

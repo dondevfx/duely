@@ -184,21 +184,35 @@ function Shell() {
 }
 
 export default function App() {
+  // The inner boundary around <Routes> only ever covered the page. React
+  // unmounts the ENTIRE tree on an uncaught render error, so a throw in a
+  // provider, the navbar, the sidebars or any of the toasts blanked the app to
+  // black with no message and nothing to click — the only way out was a manual
+  // refresh, which is the reported symptom.
+  //
+  // A provider is the worst case and the most likely one: AuthProvider reads a
+  // stored session at startup, so one malformed value in localStorage takes the
+  // whole site down for that browser permanently, on every load.
+  //
+  // This one catches all of it. The inner boundary still exists and still runs
+  // first for page errors, which keeps the shell alive when only a page breaks.
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <SocketProvider>
-          <WalletProvider>
-            <CurrencyProvider>
-              <ScrollToTop />
-              <NotifyToast />
-              <BalanceSync />
-              <ReferralCapture />
-              <Shell />
-            </CurrencyProvider>
-          </WalletProvider>
-        </SocketProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <ErrorBoundary allowReset>
+      <BrowserRouter>
+        <AuthProvider>
+          <SocketProvider>
+            <WalletProvider>
+              <CurrencyProvider>
+                <ScrollToTop />
+                <NotifyToast />
+                <BalanceSync />
+                <ReferralCapture />
+                <Shell />
+              </CurrencyProvider>
+            </WalletProvider>
+          </SocketProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
