@@ -11,6 +11,7 @@ import PrivateWaiting from '../components/PrivateWaiting';
 import TowerCanvas from '../components/TowerCanvas';
 import GameHelp from '../components/GameHelp';
 import { usePageReady } from '../hooks/usePageReady';
+import { useLeaveGuard } from '../hooks/useLeaveGuard';
 import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import { useResumeMatch } from '../hooks/useResumeMatch';
 import { playMatchFound, playCountdown, playGo, playTowerPlace, playTowerPerfect } from '../utils/sound';
@@ -117,17 +118,9 @@ export default function TowerGame() {
   const isDiamonds = betCurrency === 'diamonds';
   const balance = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
 
-  // Forfeit on leaving, the same as every other game.
-  useEffect(() => {
-    const bail = () => { if (socket?.connected) socket.emit('player_forfeit'); };
-    window.addEventListener('beforeunload', bail);
-    window.addEventListener('pagehide', bail);
-    return () => {
-      window.removeEventListener('beforeunload', bail);
-      window.removeEventListener('pagehide', bail);
-      bail();
-    };
-  }, [socket]);
+  // Forfeit on every way out of the page — refresh, tab close, in-app
+  // navigation — but NOT on an app switch. See useLeaveGuard.
+  useLeaveGuard(socket);
 
   useEffect(() => {
     if (!socket) return;
@@ -357,8 +350,11 @@ export default function TowerGame() {
           overscrollBehavior: 'none',
         }}
       >
+        {/* bottom-left: the opponent's height is pinned top-right and the
+            catch-up banner top-left, so the top of this canvas is spoken for. */}
         <GameHelp
           gameType="tower"
+          placement="bottom-left"
           canPause={lastModeRef.current !== 'pvp'}
           onPauseChange={setHelpPaused}
         />

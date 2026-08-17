@@ -11,6 +11,7 @@ import GameHelp from '../components/GameHelp';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
 import PrivateWaiting from '../components/PrivateWaiting';
 import { usePageReady } from '../hooks/usePageReady';
+import { useLeaveGuard } from '../hooks/useLeaveGuard';
 import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import { useResumeMatch } from '../hooks/useResumeMatch';
 import CoinIcon from '../components/CoinIcon';
@@ -227,26 +228,12 @@ export default function BlockBlastGame() {
   useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
   useEffect(() => { socketRef.current = socket; }, [socket]);
   useEffect(() => { refreshProfileRef.current = refreshProfile; }, [refreshProfile]);
-  // Forfeit on unmount and on page refresh/close; also refresh balance so leaver sees updated balance
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
-    };
-    // pagehide as well as beforeunload: iOS Safari routinely skips
-    // beforeunload when a tab is closed or the app is swiped away, which would
-    // leave the forfeit relying solely on the socket dropping.
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    window.addEventListener('pagehide', handleBeforeUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('pagehide', handleBeforeUnload);
-      // Always emit on SPA navigation (logo click, sidebar links, etc.)
-      // Server is a no-op if no active room exists for this socket
-      if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
-      // Refresh balance after 2.5s so the leaver sees the deducted/settled balance
-      setTimeout(() => refreshProfileRef.current?.(), 2500);
-    };
-  }, []);
+  // Forfeit on every way out of the page — refresh, tab close, in-app
+  // navigation — but NOT on an app switch. See useLeaveGuard.
+  useLeaveGuard(socket);
+
+  // Let the settlement land, then show the leaver their real balance.
+  useEffect(() => () => { setTimeout(() => refreshProfileRef.current?.(), 2500); }, []);
   // Refresh balance on mount; delayed second call catches server settle that races with reload
   useEffect(() => {
     refreshProfile();
@@ -916,7 +903,6 @@ export default function BlockBlastGame() {
       {/* ── GAME ── */}
       {phase === 'active' && (
         <div className="relative flex flex-col items-center gap-4 animate-fade-in w-full" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 24px)' }}>
-          <GameHelp gameType="blockBlast" />
           <style>{`
             @keyframes powerUpPulse {
               0%, 100% { transform: scale(1); filter: brightness(1); }
@@ -930,7 +916,10 @@ export default function BlockBlastGame() {
             clearly from the filling bar, which runs deep blue → cyan.
           */}
           {/* HUD */}
+          {/* The help button sits IN this row, not floating over it. Floated at
+              top-right it landed squarely on the opponent's score. */}
           <div className="flex items-center justify-between w-full max-w-lg gap-2">
+            <GameHelp gameType="blockBlast" placement="inline" />
             {/* My score */}
             <div className="text-center min-w-[72px]">
               <div className="text-xl font-black font-mono text-success">{score.toLocaleString()}</div>

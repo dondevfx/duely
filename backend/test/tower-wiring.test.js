@@ -181,8 +181,11 @@ test('the page pins the screen while playing', () => {
 });
 
 test('the page forfeits on leaving, like the others', () => {
+  // "Like the others" is now literal: all six share useLeaveGuard rather than
+  // each emitting player_forfeit themselves. Which cases that covers — and the
+  // app-switch case it must NOT cover — is asserted in leave-guard.test.js.
   const src = fe('pages', 'TowerGame.jsx');
-  assert.match(src, /player_forfeit/);
+  assert.match(src, /useLeaveGuard\(/);
   assert.match(src, /useResumeMatch/);
 });
 

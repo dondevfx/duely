@@ -7,6 +7,7 @@ import GameLobby from '../components/GameLobby';
 import GlowButton from '../components/GlowButton';
 import ResultScreen from '../components/ResultScreen';
 import { usePageReady } from '../hooks/usePageReady';
+import { useLeaveGuard } from '../hooks/useLeaveGuard';
 import { useResumeMatch } from '../hooks/useResumeMatch';
 import { playMatchFound, playCountdown, playGo } from '../utils/sound';
 import HighwayCanvas from '../components/HighwayCanvas';
@@ -126,18 +127,9 @@ export default function CarDashGame() {
   // forfeited correctly, but closing the tab relied entirely on the socket
   // dropping. The disconnect path does catch it, so this is belt and braces —
   // it just settles the match immediately instead of after the grace period.
-  useEffect(() => {
-    const bail = () => {
-      if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
-    };
-    window.addEventListener('beforeunload', bail);
-    window.addEventListener('pagehide', bail);
-    return () => {
-      window.removeEventListener('beforeunload', bail);
-      window.removeEventListener('pagehide', bail);
-      bail();
-    };
-  }, []);
+  // Forfeit on every way out of the page — refresh, tab close, in-app
+  // navigation — but NOT on an app switch. See useLeaveGuard.
+  useLeaveGuard(socket);
 
   // Lock the page while the match is live.
   //
@@ -454,7 +446,9 @@ export default function CarDashGame() {
       <div className="relative">
         {/* Rush Hour's canvas has no pause input, so the panel says the match is
             still running rather than pretending otherwise. */}
-        <GameHelp gameType="carDash" />
+        {/* bottom-left: the canvas draws the timer top-right and the score
+            top-centre, and the catch-up banner takes top-left. */}
+        <GameHelp gameType="carDash" placement="bottom-left" />
         <HighwayCanvas
           seed={seed}
           onProgress={onProgress}

@@ -14,6 +14,7 @@ const blockBlast = require('../src/services/blockBlastEngine');
 const wordle     = require('../src/services/wordleEngine');
 const blackjack  = require('../src/services/blackjackEngine');
 const coinFlip   = require('../src/services/coinFlipEngine');
+const tower      = require('../src/services/towerEngine');
 
 const ENGINES = [
   ['Rush Hour',   () => carDash.createDirectCarDashRoom(player('s1','u1'), player('s2','u2')),
@@ -26,6 +27,11 @@ const ENGINES = [
                   coinFlip.getCoinFlipRoomBySocket,  coinFlip.deleteCoinFlipRoom],
   ['Blackjack',   () => blackjack.createDirectBlackjackRoom?.(player('s1','u1'), player('s2','u2')),
                   blackjack.getBlackjackRoomBySocket, blackjack.deleteBlackjackRoom],
+  // Tower was absent from this list, which is how Word VS broke in the first
+  // place: a new engine whose lookup returns a different shape is invisible
+  // until someone leaves a real match and the forfeit throws.
+  ['Tower',       () => tower.createDirectTowerRoom(player('s1','u1'), player('s2','u2')),
+                  tower.getTowerRoomBySocket,        tower.deleteTowerRoom],
 ];
 
 for (const [name, create, getBySocket, del] of ENGINES) {

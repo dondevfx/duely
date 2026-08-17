@@ -72,7 +72,25 @@ const HELP = {
   },
 };
 
-export default function GameHelp({ gameType, onPauseChange, canPause = false }) {
+// WHERE the button sits, per game.
+//
+// It was floated at top-right on all six, and every single one has something
+// there: the opponent's tower height, the opponent's score, the opponent's
+// guess count, the lap timer, the turn timer. So it covered the one number the
+// player most needs mid-match. Corner-hunting does not fix that — the corners
+// are where HUDs go — so games with a header row put the button IN the header,
+// where the layout makes room for it and nothing can be hidden behind it.
+//
+//   'inline'      — flows in a header row. Nothing can ever overlap.
+//   'bottom-left' — full-bleed canvas games, whose HUD is along the top.
+//   'top-right'   — only where the corner is genuinely empty.
+const PLACEMENT = {
+  inline: '',
+  'bottom-left': 'absolute bottom-3 left-3 z-30',
+  'top-right':   'absolute top-3 right-3 z-30',
+};
+
+export default function GameHelp({ gameType, onPauseChange, canPause = false, placement = 'top-right' }) {
   const [open, setOpen] = useState(false);
   const info = HELP[gameType];
 
@@ -103,16 +121,20 @@ export default function GameHelp({ gameType, onPauseChange, canPause = false }) 
         onPointerDown={(e) => e.stopPropagation()}
         onTouchStart={(e) => e.stopPropagation()}
         aria-label="How to play"
-        className="absolute top-3 right-3 z-30 w-9 h-9 rounded-full bg-black/55 border border-white/25
+        className={`${PLACEMENT[placement] ?? PLACEMENT['top-right']} shrink-0
+                   w-9 h-9 rounded-full bg-black/55 border border-white/25
                    text-white/80 hover:text-white hover:border-white/60 text-base font-bold
-                   flex items-center justify-center backdrop-blur-sm transition-all"
+                   flex items-center justify-center backdrop-blur-sm transition-all`}
       >
         ?
       </button>
 
       {open && (
+        // fixed, not absolute. Inline placement puts the button inside a header
+        // row, and an absolute overlay would then be sized to that row rather
+        // than to the screen.
         <div
-          className="absolute inset-0 z-40 flex items-center justify-center bg-black/80 px-4 py-6 overflow-y-auto"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 px-4 py-6 overflow-y-auto"
           onPointerDown={(e) => e.stopPropagation()}
           onTouchStart={(e) => e.stopPropagation()}
           onClick={(e) => { e.stopPropagation(); setOpen(false); }}

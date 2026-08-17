@@ -16,6 +16,7 @@ import JoinRoomModal from '../components/JoinRoomModal';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
 import PrivateWaiting from '../components/PrivateWaiting';
 import { usePageReady } from '../hooks/usePageReady';
+import { useLeaveGuard } from '../hooks/useLeaveGuard';
 import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import { useResumeMatch } from '../hooks/useResumeMatch';
 import CoinIcon from '../components/CoinIcon';
@@ -217,26 +218,12 @@ function BlackjackGame() {
   // Tracks whether we are in an active room (set on match_found, cleared on result/reset)
   const roomIdRef = useRef(null);
 
-  // Forfeit on unmount and on page refresh/close; also refresh balance so leaver sees updated balance
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
-    };
-    // pagehide as well as beforeunload: iOS Safari routinely skips
-    // beforeunload when a tab is closed or the app is swiped away, which would
-    // leave the forfeit relying solely on the socket dropping.
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    window.addEventListener('pagehide', handleBeforeUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('pagehide', handleBeforeUnload);
-      // Always emit on SPA navigation (logo click, sidebar links, etc.)
-      // Server is a no-op if no active room exists for this socket
-      if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
-      // Refresh balance after 2.5s so the leaver sees the deducted/settled balance
-      setTimeout(() => refreshProfileRef.current?.(), 2500);
-    };
-  }, []);
+  // Forfeit on every way out of the page — refresh, tab close, in-app
+  // navigation — but NOT on an app switch. See useLeaveGuard.
+  useLeaveGuard(socket);
+
+  // Let the settlement land, then show the leaver their real balance.
+  useEffect(() => () => { setTimeout(() => refreshProfileRef.current?.(), 2500); }, []);
   // Refresh balance on mount; delayed second call catches server settle that races with reload
   useEffect(() => {
     refreshProfile();
@@ -839,7 +826,6 @@ function BlackjackGame() {
         opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}>
-        <GameHelp gameType="blackjack" />
         <style>{CARD_DEAL_CSS}</style>
 
         {/* Top bar */}
@@ -848,7 +834,13 @@ function BlackjackGame() {
           padding: '12px 16px',
           borderBottom: divider,
         }}>
-          <span style={{ fontWeight: 900, fontSize: 16, color: textPrimary, letterSpacing: 0.5 }}>🃏 Blackjack</span>
+          {/* In the top bar beside the title. Floated at top-right it sat on
+              the turn timer, which is the one thing you cannot afford to lose
+              sight of in this game. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <GameHelp gameType="blackjack" placement="inline" />
+            <span style={{ fontWeight: 900, fontSize: 16, color: textPrimary, letterSpacing: 0.5 }}>🃏 Blackjack</span>
+          </div>
           {phase === 'playing' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ width: 120, height: 6, background: timerTrack, borderRadius: 3, overflow: 'hidden' }}>

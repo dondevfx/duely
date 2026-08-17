@@ -16,6 +16,7 @@ import JoinRoomModal from '../components/JoinRoomModal';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
 import PrivateWaiting from '../components/PrivateWaiting';
 import { usePageReady } from '../hooks/usePageReady';
+import { useLeaveGuard } from '../hooks/useLeaveGuard';
 import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import CoinIcon from '../components/CoinIcon';
 
@@ -182,27 +183,13 @@ export default function CoinFlipGame() {
   useEffect(() => { socketRef.current = socket; }, [socket]);
   useEffect(() => { refreshProfileRef.current = refreshProfile; }, [refreshProfile]);
   useEffect(() => { profileRef.current = profile; }, [profile]);
-  // Forfeit on unmount and on page refresh/close; also refresh balance so leaver sees updated balance
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
-    };
-    // pagehide as well as beforeunload: iOS Safari routinely skips
-    // beforeunload when a tab is closed or the app is swiped away, which would
-    // leave the forfeit relying solely on the socket dropping.
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    window.addEventListener('pagehide', handleBeforeUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('pagehide', handleBeforeUnload);
-      // Cancel pending countdown/flip timers and silence any scheduled sounds
-      stopCoinFx();
-      // Always emit on SPA navigation (logo click, sidebar links, etc.)
-      // Server is a no-op if no active room exists for this socket
-      if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
-      // Refresh balance after 2.5s so the leaver sees the deducted/settled balance
-      setTimeout(() => refreshProfileRef.current?.(), 2500);
-    };
+  // Forfeit on every way out of the page — refresh, tab close, in-app
+  // navigation — but NOT on an app switch. See useLeaveGuard.
+  useLeaveGuard(socket);
+
+  useEffect(() => () => {
+    stopCoinFx();   // no scheduled sound outlives the page
+    setTimeout(() => refreshProfileRef.current?.(), 2500);
   }, []);
   // Refresh balance on mount; delayed second call catches server settle that races with reload
   useEffect(() => {

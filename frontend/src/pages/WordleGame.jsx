@@ -12,6 +12,7 @@ import ChallengeLinkBox from '../components/ChallengeLinkBox';
 import PrivateWaiting from '../components/PrivateWaiting';
 import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import { useResumeMatch } from '../hooks/useResumeMatch';
+import { useLeaveGuard } from '../hooks/useLeaveGuard';
 
 const MAX_GUESSES = 6;
 const WORD_LENGTH = 5;
@@ -224,25 +225,15 @@ export default function WordleGame() {
   const [soloSessionId, setSoloSessionId] = useState(null);
   const [soloResult,    setSoloResult]    = useState(null); // { won, payout, currency, entryFee }
 
-  // ── Forfeit on unmount, and on tab close or refresh ───────────────────────
-  // This page had only the unmount half, so closing the tab mid-match relied
-  // entirely on the socket dropping. That does still settle it, but not until
-  // the disconnect grace period has run.
-  useEffect(() => {
-    const bail = () => {
-      if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
-    };
-    window.addEventListener('beforeunload', bail);
-    window.addEventListener('pagehide', bail);
-    return () => {
-      window.removeEventListener('beforeunload', bail);
-      window.removeEventListener('pagehide', bail);
-      if (socketRef.current?.connected) socketRef.current.emit('player_forfeit');
-      // Clear any running countdowns so they don't tick / setState after unmount.
-      if (failIntervalRef.current) { clearInterval(failIntervalRef.current); failIntervalRef.current = null; }
-      soloCdTimersRef.current.forEach(clearTimeout);
-      soloCdTimersRef.current = [];
-    };
+  // Forfeit on every way out of the page — refresh, tab close, in-app
+  // navigation — but NOT on an app switch. See useLeaveGuard.
+  useLeaveGuard(socket);
+
+  // Clear running countdowns so they don't tick or setState after unmount.
+  useEffect(() => () => {
+    if (failIntervalRef.current) { clearInterval(failIntervalRef.current); failIntervalRef.current = null; }
+    soloCdTimersRef.current.forEach(clearTimeout);
+    soloCdTimersRef.current = [];
   }, []);
 
   // ── Socket events ─────────────────────────────────────────────────────────
@@ -777,7 +768,6 @@ export default function WordleGame() {
   return (
     <div className="relative min-h-[calc(100dvh-56px)] bg-bg flex flex-col select-none overflow-hidden"
       style={{ touchAction: 'manipulation' }}>
-      <GameHelp gameType="scrabble" />
       <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
 
       {/* ── Grid area ── */}
@@ -792,7 +782,10 @@ export default function WordleGame() {
         )}
 
         {/* HUD — matches Block Blast layout exactly */}
+        {/* In the row, not over it — floated top-right it covered the
+            opponent's guess count. */}
         <div className="flex items-center justify-between w-full max-w-lg gap-2">
+          <GameHelp gameType="scrabble" placement="inline" />
           {/* My guess count */}
           <div className="text-center min-w-[72px]">
             <div className="text-xl font-black font-mono text-success">{guessNum}</div>
