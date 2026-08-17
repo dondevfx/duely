@@ -303,6 +303,15 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
   // Any balance movement (match settle, entry fee, tip, deposit, withdrawal,
   // refund) → tell that user's client so the displayed balance updates live.
+  // A friend request only existed as a row in the database, so the recipient
+  // learned about it by happening to open their profile. Pushed live now, the
+  // same way balances are.
+  gameEvents.on('friend_request', ({ toUserId, fromUsername }) => {
+    for (const [, sock] of io.sockets.sockets) {
+      if (sock._authenticatedUserId === toUserId) sock.emit('friend_request', { fromUsername });
+    }
+  });
+
   gameEvents.on('balance_changed', ({ userId }) => {
     for (const [, sock] of io.sockets.sockets) {
       if (sock._authenticatedUserId === userId) sock.emit('balance_changed');

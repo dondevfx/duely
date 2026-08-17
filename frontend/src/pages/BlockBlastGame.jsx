@@ -7,6 +7,7 @@ import { useCurrency } from '../context/CurrencyContext';
 import GlowButton from '../components/GlowButton';
 import GameLobby from '../components/GameLobby';
 import ResultScreen from '../components/ResultScreen';
+import GameHelp from '../components/GameHelp';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
 import PrivateWaiting from '../components/PrivateWaiting';
 import { usePageReady } from '../hooks/usePageReady';
@@ -914,7 +915,8 @@ export default function BlockBlastGame() {
 
       {/* ── GAME ── */}
       {phase === 'active' && (
-        <div className="flex flex-col items-center gap-4 animate-fade-in w-full" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 24px)' }}>
+        <div className="relative flex flex-col items-center gap-4 animate-fade-in w-full" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 24px)' }}>
+          <GameHelp gameType="blockBlast" />
           <style>{`
             @keyframes powerUpPulse {
               0%, 100% { transform: scale(1); filter: brightness(1); }

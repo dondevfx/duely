@@ -8,6 +8,7 @@ import { useCurrency } from '../context/CurrencyContext';
 import { COIN_FEES, DIAMOND_FEES, SMALL_BTN } from '../components/GameLobby';
 import BetSlider from '../components/BetSlider';
 import ResultScreen from '../components/ResultScreen';
+import GameHelp from '../components/GameHelp';
 import GlowButton from '../components/GlowButton';
 import { topUpRoute, topUpLabel } from '../utils/topUpRoute';
 import CreateRoomModal from '../components/CreateRoomModal';
@@ -657,7 +658,8 @@ export default function CoinFlipGame() {
 
         {/* Flipping phase */}
         {phase === 'flipping' && (
-          <div className="mb-6 text-center">
+          <div className="relative mb-6 text-center">
+            <GameHelp gameType="coin-flip" />
             {statusMsg && !resultLanded && (
               <p className="text-muted text-sm mb-8">{statusMsg}</p>
             )}

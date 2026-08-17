@@ -133,7 +133,7 @@ export default function Navbar() {
 
           {/* Hamburger — mobile only */}
           <button
-            className="lg:hidden p-2 rounded-lg text-muted hover:text-white hover:bg-surfaceLight transition-colors shrink-0 w-9 h-9 flex items-center justify-center"
+            className="md:hidden p-2 rounded-lg text-muted hover:text-white hover:bg-surfaceLight transition-colors shrink-0 w-9 h-9 flex items-center justify-center"
             onClick={() => setMobileMenuOpen(o => !o)}
             aria-label="Menu"
           >
@@ -156,7 +156,7 @@ export default function Navbar() {
           </div>
 
           {/* Desktop center — balance + tip */}
-          <div className="hidden lg:flex flex-1 justify-center items-center gap-3" ref={dropRef}>
+          <div className="hidden md:flex flex-1 justify-center items-center gap-3" ref={dropRef}>
             {profile ? (
               <>
               <div className="relative">
@@ -305,11 +305,11 @@ export default function Navbar() {
           </div>
 
           {/* Flex-1 spacer on mobile to push right items to edge */}
-          <div className="lg:hidden flex-1" />
+          <div className="md:hidden flex-1" />
 
           {/* Mobile: balance + rakeback (inline with right section) */}
           {profile && (
-            <div className="lg:hidden flex items-center gap-1.5 shrink-0">
+            <div className="md:hidden flex items-center gap-1.5 shrink-0">
               {/* Balance dropdown */}
               <div className="relative" ref={mobileCurrencyRef}>
                 <button
@@ -415,7 +415,7 @@ export default function Navbar() {
             {profile ? (
               <>
                 {profile.is_admin && (
-                  <Link to="/admin" className="hidden lg:block text-xs font-bold px-2 py-1 rounded-lg text-muted/50 hover:text-primary hover:bg-primary/10 transition-colors">
+                  <Link to="/admin" className="hidden md:block text-xs font-bold px-2 py-1 rounded-lg text-muted/50 hover:text-primary hover:bg-primary/10 transition-colors">
                     ⚙
                   </Link>
                 )}
@@ -448,7 +448,7 @@ export default function Navbar() {
                     </span>
                   </div>
                 </Link>
-                <button onClick={handleSignOut} className="hidden lg:block text-sm font-medium px-3 py-1.5 rounded-lg text-muted hover:text-danger hover:bg-danger/10 transition-colors whitespace-nowrap shrink-0">
+                <button onClick={handleSignOut} className="hidden md:block text-sm font-medium px-3 py-1.5 rounded-lg text-muted hover:text-danger hover:bg-danger/10 transition-colors whitespace-nowrap shrink-0">
                   Sign out
                 </button>
               </>
@@ -470,7 +470,7 @@ export default function Navbar() {
 
       {/* Mobile menu overlay */}
       {mobileMenuOpen && (
-        <div className="lg:hidden fixed inset-0 top-14 z-40 bg-bg overflow-y-auto pb-8">
+        <div className="md:hidden fixed inset-0 top-14 z-40 bg-bg overflow-y-auto pb-8">
           <div className="px-4 pt-4 space-y-6">
 
             {/* Nav section */}

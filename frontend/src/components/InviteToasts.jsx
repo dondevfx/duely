@@ -42,9 +42,25 @@ export default function InviteToasts() {
       playMatchFound();
     };
     const onCancelled = ({ inviteId }) => remove(inviteId);
+
+    // Friend requests only existed as a database row, so you found out by
+    // happening to open your profile. Same stack as a game invite, but there is
+    // nothing to accept in place — it points at the friends list instead.
+    const onFriendRequest = ({ fromUsername }) => {
+      const id = 'fr_' + Date.now() + Math.random();
+      setInvites(list => [{ inviteId: id, friendRequest: true, fromUsername, at: Date.now() }, ...list]);
+      playMatchFound();
+      setTimeout(() => remove(id), 12000);
+    };
+
     socket.on('game_invite', onInvite);
     socket.on('invite_cancelled', onCancelled);
-    return () => { socket.off('game_invite', onInvite); socket.off('invite_cancelled', onCancelled); };
+    socket.on('friend_request', onFriendRequest);
+    return () => {
+      socket.off('game_invite', onInvite);
+      socket.off('invite_cancelled', onCancelled);
+      socket.off('friend_request', onFriendRequest);
+    };
   }, [socket, remove]);
 
   function join(inv) {
@@ -62,6 +78,32 @@ export default function InviteToasts() {
   return (
     <div className="fixed top-20 right-4 z-[110] flex flex-col gap-2 pointer-events-none">
       {invites.map(inv => {
+        // A friend request has nothing to accept in place — it is a heads-up
+        // with a way to get to the list, not a two-button decision.
+        if (inv.friendRequest) {
+          return (
+            <div key={inv.inviteId} className="pointer-events-auto animate-slide-down bg-surface border border-primary/40 rounded-xl px-4 py-3 shadow-glow w-[260px]">
+              <div className="text-sm font-black text-white">👋 Friend request</div>
+              <div className="text-xs text-muted mt-0.5">
+                <span className="text-white font-bold">{inv.fromUsername}</span> wants to add you
+              </div>
+              <div className="flex gap-2 mt-2.5">
+                <button
+                  onClick={() => { remove(inv.inviteId); navigate('/profile'); }}
+                  className="flex-1 py-1.5 rounded-lg text-xs font-bold bg-primary text-white hover:bg-blue-500 transition-all"
+                >
+                  View
+                </button>
+                <button
+                  onClick={() => remove(inv.inviteId)}
+                  className="flex-1 py-1.5 rounded-lg text-xs font-bold border border-border text-muted hover:text-white transition-all"
+                >
+                  Later
+                </button>
+              </div>
+            </div>
+          );
+        }
         const isDiamonds = inv.currency === 'diamonds';
         const bal = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
         const canAfford = (inv.entryFee ?? 0) <= bal;

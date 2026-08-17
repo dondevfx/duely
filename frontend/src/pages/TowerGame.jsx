@@ -9,6 +9,7 @@ import ResultScreen from '../components/ResultScreen';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
 import PrivateWaiting from '../components/PrivateWaiting';
 import TowerCanvas from '../components/TowerCanvas';
+import GameHelp from '../components/GameHelp';
 import { usePageReady } from '../hooks/usePageReady';
 import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import { useResumeMatch } from '../hooks/useResumeMatch';
@@ -62,6 +63,9 @@ export default function TowerGame() {
   // plumbing for convenience, but showing "Duely Bot" and a score alongside it
   // tells the player they are racing something they are not.
   const [soloEndless, setSoloEndless] = useState(false);
+  // Only a bot match may be paused — a PvP clock is shared, so stopping it
+  // would either freeze an innocent opponent or hand out free thinking time.
+  const [helpPaused, setHelpPaused] = useState(false);
   const [result, setResult]       = useState(null);
   const [privateCode, setPrivateCode]     = useState('');
   const [invitedFriend, setInvitedFriend] = useState(null);
@@ -353,8 +357,13 @@ export default function TowerGame() {
           overscrollBehavior: 'none',
         }}
       >
+        <GameHelp
+          gameType="tower"
+          canPause={lastModeRef.current !== 'pvp'}
+          onPauseChange={setHelpPaused}
+        />
         <TowerCanvas
-          running={phase === 'active'}
+          running={phase === 'active' && !(helpPaused && lastModeRef.current !== 'pvp')}
           onScore={onScore}
           onGameOver={onGameOver}
           onPerfect={onPerfect}

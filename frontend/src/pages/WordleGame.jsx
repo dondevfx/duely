@@ -7,6 +7,7 @@ import { useCurrency } from '../context/CurrencyContext';
 import GameLobby, { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
 import GlowButton from '../components/GlowButton';
 import ResultScreen from '../components/ResultScreen';
+import GameHelp from '../components/GameHelp';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
 import PrivateWaiting from '../components/PrivateWaiting';
 import { useGameScrollLock } from '../hooks/useGameScrollLock';
@@ -774,8 +775,9 @@ export default function WordleGame() {
   const guessNum = guesses.length;
 
   return (
-    <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col select-none overflow-hidden"
+    <div className="relative min-h-[calc(100dvh-56px)] bg-bg flex flex-col select-none overflow-hidden"
       style={{ touchAction: 'manipulation' }}>
+      <GameHelp gameType="scrabble" />
       <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
 
       {/* ── Grid area ── */}

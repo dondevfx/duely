@@ -10,6 +10,7 @@ import { usePageReady } from '../hooks/usePageReady';
 import { useResumeMatch } from '../hooks/useResumeMatch';
 import { playMatchFound, playCountdown, playGo } from '../utils/sound';
 import HighwayCanvas from '../components/HighwayCanvas';
+import GameHelp from '../components/GameHelp';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
 import PrivateWaiting from '../components/PrivateWaiting';
 
@@ -451,6 +452,9 @@ export default function CarDashGame() {
   if (phase === 'playing') {
     return (
       <div className="relative">
+        {/* Rush Hour's canvas has no pause input, so the panel says the match is
+            still running rather than pretending otherwise. */}
+        <GameHelp gameType="carDash" />
         <HighwayCanvas
           seed={seed}
           onProgress={onProgress}

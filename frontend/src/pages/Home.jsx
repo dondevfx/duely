@@ -100,8 +100,8 @@ export default function Home() {
           (was ~120px of stacked top padding on every screen size) */}
       <section className="relative pt-3 md:pt-14 pb-6 md:pb-10 px-4 overflow-hidden">
         <div className="relative max-w-7xl mx-auto">
-          <div className="flex flex-col lg:flex-row items-center justify-between gap-6 lg:gap-12">
-            <div className="flex-1 text-center lg:text-left">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6 md:gap-12">
+            <div className="flex-1 text-center md:text-left">
               <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 border border-primary/30 rounded-full text-primary text-sm font-medium mb-3 md:mb-6">
                 <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
                 Live — Play Now
@@ -112,12 +112,12 @@ export default function Home() {
                   Duels
                 </span>
               </h1>
-              <p className="text-lg md:text-xl text-muted max-w-2xl mx-auto lg:mx-0 mb-5 md:mb-10">
+              <p className="text-lg md:text-xl text-muted max-w-2xl mx-auto md:mx-0 mb-5 md:mb-10">
                 Challenge opponents in real-time skill-based games. Wager{' '}
                 <span className="text-primary font-semibold whitespace-nowrap"><CoinIcon size="1em" /> Coins</span>, climb the leaderboard,
                 and prove you're the best.
               </p>
-              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4">
+              <div className="flex flex-wrap md:flex-nowrap items-center justify-center md:justify-start gap-4">
                 <Link
                   to="/games"
                   className="px-8 py-4 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl shadow-glow hover:shadow-glow-lg transition-all text-lg"
@@ -135,7 +135,7 @@ export default function Home() {
 
             {/* Daily spin — desktop only here; on mobile it's shown after the Blackjack
                 game card further down the page instead (see Game cards section) */}
-            <div className="hidden lg:block w-full max-w-sm lg:w-96 shrink-0">
+            <div className="hidden md:block w-full max-w-sm md:w-80 lg:w-96 shrink-0">
               <DailySpinWidget profile={profile} />
             </div>
           </div>
@@ -175,7 +175,7 @@ export default function Home() {
 
       {/* Game cards + daily bonus */}
       <section className="max-w-7xl mx-auto px-4 pb-16 md:pb-24">
-        <div className="flex flex-col lg:flex-row gap-8">
+        <div className="flex flex-col md:flex-row gap-8">
           <div className="flex-1">
             <h2 className="text-xl md:text-2xl font-bold text-white mb-4 md:mb-6">Choose a Game</h2>
             <div className="grid grid-cols-2 gap-3 md:gap-5">
@@ -187,17 +187,17 @@ export default function Home() {
             {/* Invite — mobile only, above the daily spin. The desktop copy lives
                 in the sidebar below How It Works; the two are complementary so
                 exactly one renders at any width. */}
-            <div className="lg:hidden mt-5 max-w-sm mx-auto sm:mx-0 sm:max-w-none">
+            <div className="md:hidden mt-5 max-w-sm mx-auto sm:mx-0 sm:max-w-none">
               <ReferralCard variant="compact" />
             </div>
 
             {/* Daily spin — mobile/tablet only; desktop shows it in the hero instead */}
-            <div className="lg:hidden mt-5 max-w-sm mx-auto sm:mx-0 sm:max-w-none">
+            <div className="md:hidden mt-5 max-w-sm mx-auto sm:mx-0 sm:max-w-none">
               <DailySpinWidget profile={profile} />
             </div>
           </div>
 
-          <div className="lg:w-72 flex flex-col gap-5 lg:pt-[3.5rem]">
+          <div className="md:w-64 lg:w-72 flex flex-col gap-5 lg:pt-[3.5rem]">
             {profile ? (
               <DailyBonus />
             ) : (
@@ -239,7 +239,7 @@ export default function Home() {
 
             {/* Fills the empty space below How It Works. Desktop only — on
                 mobile the copy above the daily spin is shown instead. */}
-            <div className="hidden lg:block">
+            <div className="hidden md:block">
               <ReferralCard variant="compact" />
             </div>
           </div>

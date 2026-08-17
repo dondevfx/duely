@@ -7,6 +7,7 @@ import { useCurrency } from '../context/CurrencyContext';
 import { COIN_FEES, DIAMOND_FEES, SMALL_BTN } from '../components/GameLobby';
 import BetSlider from '../components/BetSlider';
 import ResultScreen from '../components/ResultScreen';
+import GameHelp from '../components/GameHelp';
 import GameErrorBoundary from '../components/GameErrorBoundary';
 import GlowButton from '../components/GlowButton';
 import { topUpRoute, topUpLabel } from '../utils/topUpRoute';
@@ -828,6 +829,7 @@ function BlackjackGame() {
 
     return (
       <div style={{
+        position: 'relative',   // anchors the help button to the board
         // dvh (not vh) so the layout shrinks when mobile Safari's bottom
         // toolbar is showing, instead of being sized for the toolbar-hidden
         // viewport and having the HIT/STAND buttons clipped underneath it.
@@ -837,6 +839,7 @@ function BlackjackGame() {
         opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}>
+        <GameHelp gameType="blackjack" />
         <style>{CARD_DEAL_CSS}</style>
 
         {/* Top bar */}

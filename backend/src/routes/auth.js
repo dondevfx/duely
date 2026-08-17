@@ -1,11 +1,21 @@
 const { Router } = require('express');
 const { requireAuth, optionalAuth } = require('../middleware/auth');
 const { isDemo, DEMO_IDS } = require('../services/demoAccounts');
+const gameEvents = require('../services/gameEvents');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 module.exports = function authRoutes(supabase) {
   const router = Router();
+
+  // Fire-and-forget: the request is already saved, so a failure to look up the
+  // sender's name must never turn a successful add into an error response.
+  async function _notifyFriendRequest(db, fromId, toUserId) {
+    try {
+      const { data } = await db.from('profiles').select('username').eq('id', fromId).single();
+      gameEvents.emit('friend_request', { toUserId, fromUsername: data?.username || 'Someone' });
+    } catch { /* the row is written either way */ }
+  }
 
   // Upsert profile on first login
   router.post('/profile', requireAuth, async (req, res) => {
@@ -299,6 +309,7 @@ module.exports = function authRoutes(supabase) {
     if (existing) return res.status(400).json({ error: existing.status === 'accepted' ? 'Already friends' : 'Request already sent' });
     const { error } = await supabase.from('friends').insert({ requester_id: myId, addressee_id: target.id });
     if (error) return res.status(400).json({ error: 'User not found' });
+    _notifyFriendRequest(supabase, myId, target.id);
     res.json({ ok: true });
   });
 
@@ -319,6 +330,7 @@ module.exports = function authRoutes(supabase) {
     if (existing) return res.status(400).json({ error: existing.status === 'accepted' ? 'Already friends' : 'Request already sent' });
     const { error } = await supabase.from('friends').insert({ requester_id: myId, addressee_id: userId });
     if (error) return res.status(400).json({ error: 'User not found' });
+    _notifyFriendRequest(supabase, myId, userId);
     res.json({ ok: true });
   });
 

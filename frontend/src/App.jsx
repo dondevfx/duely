@@ -134,7 +134,7 @@ function Shell() {
         </div>
       </div>
       {/* Main content always interactive */}
-      <main className={`absolute top-14 bottom-0 left-0 right-0 overflow-y-auto transition-[left,right] duration-300 lg:left-56 ${chatOpen ? 'lg:right-80' : 'lg:right-0'}`}>
+      <main className={`absolute top-14 bottom-0 left-0 right-0 overflow-y-auto transition-[left,right] duration-300 md:left-56 ${chatOpen ? 'lg:right-80' : 'md:right-0'}`}>
         <div className={isGamePage ? '' : 'tv-scale'}>
         <ErrorBoundary resetKey={location.pathname}>
         <Routes>

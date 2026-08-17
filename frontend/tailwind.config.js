@@ -3,6 +3,15 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
+      // md drops from Tailwind's default 768px to 720px so it catches the iPad
+      // Mini, which is 744pt wide in portrait and was the one iPad still falling
+      // into the phone layout after the shell moved to md:.
+      //
+      // Nothing else meaningful lives in 720-767: a phone in landscape is
+      // already 844pt or wider, so it was getting md: before this change too.
+      screens: {
+        md: '720px',
+      },
       colors: {
         bg:           '#000000',
         surface:      '#0D0D0D',
