@@ -399,6 +399,23 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
   const priceUsd     = await getPriceUsd(coin);
   const estimatedUsd = amount * priceUsd;
 
+  // A price of 0 means the LOOKUP FAILED, not that the coin is worthless.
+  //
+  // getPriceUsd returns 0 when CoinGecko errors or rate-limits. Everything
+  // downstream then values the deposit at $0.00, decides it is below the $3
+  // minimum, and adds it to _seenTxs — which is never cleared, so a real
+  // deposit was discarded for the rest of the process's life by a transient
+  // API blip. That is exactly what happened to a live BTC deposit:
+  //
+  //   [monitor] non-SOL $0.00 below $3 min — skipping c004a08a...
+  //
+  // Returning WITHOUT marking it seen leaves it for the next poll, where the
+  // price will almost certainly be back.
+  if (coin !== 'usdc' && !(priceUsd > 0)) {
+    console.warn(`[monitor] no USD price for ${coin} — leaving ${txHash} for the next poll`);
+    return;
+  }
+
   const { creditCoins, recordDeposit } = require('./walletService');
   const gameEvents = require('./gameEvents');
   const usdcAddress = process.env.USDC_SPL_ADDRESS;

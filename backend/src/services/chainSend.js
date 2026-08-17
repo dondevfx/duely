@@ -343,14 +343,28 @@ async function sendUtxoCoin(coin, privKey, toAddress, amount) {
     ` reserve=${Math.round((GAS_RESERVE[coin] || 0) * 1e8)} sats`
   );
 
-  // Step 2: sign each hash with DER-encoded secp256k1 signature + SIGHASH_ALL (0x01)
+  // Step 2: sign each hash. DER only — NO sighash byte.
+  //
+  // This used to append '01' for SIGHASH_ALL, and every BTC/LTC/DOGE forward
+  // failed with:
+  //
+  //   Invalid signature: Non-canonical signature: wrong length marker
+  //
+  // A DER signature declares its own length in byte 2. Appending the sighash
+  // makes the blob one byte longer than it says it is, so the parser rejects it
+  // before ever looking at the maths. BlockCypher assembles the scriptSig
+  // itself and appends the hashtype at that point — handing it a pre-terminated
+  // signature is what broke it.
+  //
+  // The "not enough funds" errors that come back alongside this are downstream
+  // noise: the input is dropped once its signature fails, leaving zero inputs
+  // to fund the output. They are not a balance problem.
   const pubkeyHex = compressedPub.toString('hex');
   skel.pubkeys    = skel.tosign.map(() => pubkeyHex);
   skel.signatures = skel.tosign.map(hexHash => {
     const hash   = Buffer.from(hexHash, 'hex');
     const rawSig = ecc.sign(hash, privKey);          // 64-byte raw r||s
-    const der    = derEncode(Buffer.from(rawSig));   // DER-encoded
-    return der.toString('hex') + '01';               // + SIGHASH_ALL byte
+    return derEncode(Buffer.from(rawSig)).toString('hex');
   });
 
   // Step 3: broadcast
@@ -452,4 +466,4 @@ async function sendCrypto({ coin, privKey, toAddress, amount }) {
   }
 }
 
-module.exports = { sendCrypto, sweepUsdc, GAS_RESERVE, PayoutError, checkSolanaSignature, sendAndVerify };
+module.exports = { sendCrypto, sweepUsdc, GAS_RESERVE, PayoutError, checkSolanaSignature, sendAndVerify, derEncode };
