@@ -47,11 +47,17 @@ function StatCard({ label, value, sub, color = 'text-white' }) {
 // mean the money already reached the player, so a single "fix it" button that
 // always credited would pay twice.
 const SEVERITY = {
-  refund_failed: { label: 'Money owed',      cls: 'text-danger border-danger/50 bg-danger/10' },
-  payout_failed: { label: 'Payout failed',   cls: 'text-danger border-danger/50 bg-danger/10' },
-  stuck:         { label: 'Swap gave up',    cls: 'text-warning border-warning/50 bg-warning/10' },
-  pending_retry: { label: 'Retrying',        cls: 'text-warning border-warning/40 bg-warning/5' },
-  converting:    { label: 'Converting >1h',  cls: 'text-muted border-border' },
+  refund_failed:    { label: 'Money owed',      cls: 'text-danger border-danger/50 bg-danger/10' },
+  // Broadcast, but the chain could not be read, so it was deliberately NOT
+  // refunded — the player may already hold the crypto. Check the hash first.
+  payout_uncertain: { label: 'Outcome unknown', cls: 'text-danger border-danger/50 bg-danger/10' },
+  // A withdrawal in a state nothing currently writes, so nothing will ever
+  // move it on. Left over from older code.
+  pending:          { label: 'Stranded',        cls: 'text-danger border-danger/40 bg-danger/5' },
+  payout_failed:    { label: 'Payout failed',   cls: 'text-danger border-danger/50 bg-danger/10' },
+  stuck:            { label: 'Swap gave up',    cls: 'text-warning border-warning/50 bg-warning/10' },
+  pending_retry:    { label: 'Retrying',        cls: 'text-warning border-warning/40 bg-warning/5' },
+  converting:       { label: 'Converting >1h',  cls: 'text-muted border-border' },
 };
 
 function AttentionRow({ tx, busy, onResolve }) {

@@ -84,7 +84,11 @@ test('worst first, then oldest', () => {
   // refunded, because the player may already hold the crypto. So it is money
   // possibly owed, behind refund_failed which is money definitely owed, and
   // ahead of payout_failed where the refund already succeeded.
-  const rank = ['refund_failed', 'payout_uncertain', 'payout_failed', 'stuck', 'pending_retry', 'converting'];
+  // 'pending' ranks above payout_failed: a payout_failed row already refunded
+  // successfully, so the player is whole, whereas a 'pending' withdrawal is a
+  // state nothing currently writes — nothing will ever move it on, and the
+  // coins may have been deducted without a payout.
+  const rank = ['refund_failed', 'payout_uncertain', 'pending', 'payout_failed', 'stuck', 'pending_retry', 'converting'];
   const listed = adminSrc.match(/const ATTENTION_STATUSES = \[([^\]]+)\]/)[1]
     .split(',').map(s => s.trim().replace(/'/g, ''));
   assert.deepEqual(listed, rank, 'order encodes severity — the queue sorts by it');
@@ -113,4 +117,45 @@ test('the dashboard counter no longer reads a status nothing writes', () => {
   assert.ok(!/eq\('type', 'withdrawal'\)\.eq\('status', 'pending'\)/.test(adminSrc),
     'that counter was permanently zero and hid exactly what it was meant to show');
   assert.match(adminSrc, /needs_attention:/);
+});
+
+// ── Stranded withdrawals ───────────────────────────────────────────────────
+//
+// A live database turned up one withdrawal sitting at status 'pending' — a
+// status NOTHING in the current code writes. Left over from an older version,
+// so no process will ever move it on, and it was invisible: not in the
+// attention queue, not in the dashboard counter, not labelled in the UI.
+//
+// It is either a payout that happened and got recorded wrong, or coins that
+// were deducted and never paid out. Only a human can tell, which is exactly
+// what the attention queue is for.
+
+test('a stranded withdrawal reaches the attention queue', () => {
+  const listed = adminSrc.match(/const ATTENTION_STATUSES = \[([^\]]+)\]/)[1];
+  assert.ok(listed.includes("'pending'"),
+    "a withdrawal stuck at 'pending' is money that may be owed and nothing will ever move it on");
+});
+
+test('the dashboard counter counts it too', () => {
+  // The queue and the badge read from separate lists, so one can surface a
+  // problem the other hides.
+  // Matched with a regex rather than a literal containing \n — this file is
+  // checked out with CRLF endings, so a \n anchor silently matches nothing and
+  // the test passes or fails for the wrong reason.
+  const inLists = [...adminSrc.matchAll(/\.in\('status',\s*\[([^\]]*)\]/g)].map(m => m[1]);
+  assert.ok(inLists.length > 0, "no .in('status', [...]) query found in admin.js");
+  assert.ok(inLists.some(l => l.includes("'pending'")),
+    'the badge must agree with the queue, or a real problem shows a count of zero');
+});
+
+test('nothing in the code writes a pending withdrawal', () => {
+  // The reason it is treated as stranded rather than in-progress. If some path
+  // ever starts writing it legitimately, this fails and the ranking above
+  // should be revisited before the queue fills with normal traffic.
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const wallet = fs2.readFileSync(path2.join(__dirname, '..', 'src', 'routes', 'wallet.js'), 'utf8');
+  const writes = [...wallet.matchAll(/status:\s*'pending'/g)];
+  assert.equal(writes.length, 0,
+    "wallet.js now writes status 'pending' — it is ranked in the attention queue as a stranded row, which would be wrong for a normal in-progress state");
 });
