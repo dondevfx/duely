@@ -308,7 +308,40 @@ async function sendUtxoCoin(coin, privKey, toAddress, amount) {
     }),
   });
   const skel = await skelRes.json();
-  if (skel.errors?.length) throw new Error(`BlockCypher skeleton: ${JSON.stringify(skel.errors)}`);
+  if (skel.errors?.length) {
+    const msg = JSON.stringify(skel.errors);
+    // The failure that matters here is running out of room for the fee. The
+    // gas reserve caps what this transaction can pay (2000 sats for BTC), so
+    // when the network is busier than the reserve allows, the build fails
+    // rather than broadcasting an underpaid transaction. Worth saying plainly,
+    // because the raw BlockCypher error reads as a generic funds problem and
+    // sends you looking at the wrong thing.
+    if (/insufficient|funds/i.test(msg)) {
+      throw new Error(
+        `${coin.toUpperCase()} forward could not afford the network fee — the gas reserve ` +
+        `(${GAS_RESERVE[coin]} ${coin.toUpperCase()}) is below the current fee rate. BlockCypher: ${msg}`
+      );
+    }
+    throw new Error(`BlockCypher skeleton: ${msg}`);
+  }
+
+  // What this transaction is actually paying, in the units miners sort by.
+  //
+  // This is the one number that decides how long ChangeNow waits on us, and it
+  // was invisible. A deposit that takes 40 minutes and one that takes 4 hours
+  // look identical in the logs without it — and the difference is almost always
+  // here, in whether the forward made the next block or sat in the mempool.
+  //
+  // Logged rather than tuned: raising the fee means raising the gas reserve too
+  // (it is what caps the fee), and that comes out of the player's deposit. Not
+  // a change to make on a guess about what BlockCypher already chose.
+  const feeSats = skel.tx?.fees ?? 0;
+  const vsize   = skel.tx?.vsize || skel.tx?.size || 0;
+  console.log(
+    `[chainSend] ${coin} forward fee=${feeSats} sats` +
+    (vsize ? ` size=${vsize}vB rate=${(feeSats / vsize).toFixed(2)} sat/vB` : '') +
+    ` reserve=${Math.round((GAS_RESERVE[coin] || 0) * 1e8)} sats`
+  );
 
   // Step 2: sign each hash with DER-encoded secp256k1 signature + SIGHASH_ALL (0x01)
   const pubkeyHex = compressedPub.toString('hex');
