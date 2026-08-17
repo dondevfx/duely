@@ -80,7 +80,11 @@ test('the attention queue covers every stuck state', () => {
 });
 
 test('worst first, then oldest', () => {
-  const rank = ['refund_failed', 'payout_failed', 'stuck', 'pending_retry', 'converting'];
+  // payout_uncertain ranks second: the coins are deducted and deliberately not
+  // refunded, because the player may already hold the crypto. So it is money
+  // possibly owed, behind refund_failed which is money definitely owed, and
+  // ahead of payout_failed where the refund already succeeded.
+  const rank = ['refund_failed', 'payout_uncertain', 'payout_failed', 'stuck', 'pending_retry', 'converting'];
   const listed = adminSrc.match(/const ATTENTION_STATUSES = \[([^\]]+)\]/)[1]
     .split(',').map(s => s.trim().replace(/'/g, ''));
   assert.deepEqual(listed, rank, 'order encodes severity — the queue sorts by it');

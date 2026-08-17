@@ -143,7 +143,11 @@ async function swapUsdcToSol(adminPrivKey, amountUsdc, playerAddress) {
       lamports:   sendLamports,
     })
   );
-  const sendTxHash = await solWeb3.sendAndConfirmTransaction(connection, sendTx, [keypair]);
+  // The leg that actually pays the player. sendAndVerify carries the signature
+  // on failure, so a confirmation timeout can be checked against the chain
+  // instead of being refunded blind — see chainSend.
+  const { sendAndVerify } = require('./chainSend');
+  const sendTxHash = await sendAndVerify(connection, sendTx, [keypair]);
   const solSent = sendLamports / solWeb3.LAMPORTS_PER_SOL;
 
   console.log(`[jupiter] sent ${solSent} SOL → ${playerAddress}, tx=${sendTxHash}`);

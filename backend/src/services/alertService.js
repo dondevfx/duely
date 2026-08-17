@@ -11,7 +11,7 @@
 const SWEEP_MS = 15 * 60 * 1000;
 
 // Money owed to a real person — one is worth waking up for.
-const CRITICAL = ['refund_failed', 'payout_failed'];
+const CRITICAL = ['refund_failed', 'payout_failed', 'payout_uncertain'];
 // Usually self-healing, so only interesting in bulk or when old.
 //
 // 'failed' is a withdrawal whose payout failed and whose refund SUCCEEDED — the

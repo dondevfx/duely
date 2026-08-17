@@ -50,7 +50,7 @@ module.exports = function adminRoutes(supabase, io) {
       // zero forever while real failures went unnoticed. Counts the attention
       // queue instead, which is the number that actually needs watching.
       supabase.from('transactions').select('id', { count: 'exact', head: true })
-        .in('status', ['refund_failed', 'payout_failed', 'stuck', 'pending_retry']),
+        .in('status', ['refund_failed', 'payout_uncertain', 'payout_failed', 'stuck', 'pending_retry']),
       supabase.from('transactions').select('amount_c').eq('type', 'fee_collection').eq('user_id', process.env.ADMIN_USER_ID),
       supabase.from('matches').select('game_type'),
       supabase.from('matches').select('player1_id, player2_id').gte('played_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
@@ -133,12 +133,15 @@ module.exports = function adminRoutes(supabase, io) {
   // Statuses that mean money is stuck and a human has to look.
   //
   // Ordered by how bad they are, which is also the order they should be worked:
-  //   refund_failed  coins taken, payout failed, refund failed — money owed
-  //   payout_failed  funds may be in flight; verify on-chain before touching
+  //   refund_failed     coins taken, payout failed, refund failed — money owed
+  //   payout_uncertain  broadcast, but the chain could not be read. NOT refunded
+  //                     on purpose: the player may already hold the crypto, so
+  //                     look up the tx_hash before crediting anything back
+  //   payout_failed     funds may be in flight; verify on-chain before touching
   //   stuck          the swap gave up after an hour
   //   pending_retry  funds still in the deposit wallet; usually self-heals
   //   converting     normal in the short term, a problem when it is hours old
-  const ATTENTION_STATUSES = ['refund_failed', 'payout_failed', 'stuck', 'pending_retry', 'converting'];
+  const ATTENTION_STATUSES = ['refund_failed', 'payout_uncertain', 'payout_failed', 'stuck', 'pending_retry', 'converting'];
   const ATTENTION_RANK = Object.fromEntries(ATTENTION_STATUSES.map((s, i) => [s, i]));
   // 'converting' is transient by design, so only count it once it has clearly
   // outlived a normal swap. Without this the queue is permanently full of

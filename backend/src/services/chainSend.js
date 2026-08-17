@@ -17,6 +17,94 @@ bitcoin.initEccLib(ecc);
 
 const USDC_MINT = new solWeb3.PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
 
+// ── Sending money is not the same as failing to confirm it ───────────────────
+//
+// sendAndConfirmTransaction broadcasts FIRST and waits SECOND. When the wait
+// times out — congestion, a slow RPC, a dropped socket — it throws, and the
+// caller sees a failed payout. The transaction may well have landed anyway.
+//
+// That mattered because the withdrawal handler refunds on any payout error. A
+// timeout therefore paid the player on-chain AND put their coins back: a real
+// double-spend, and one anybody could fish for by retrying withdrawals during
+// congestion until a confirmation happened to time out.
+//
+// So the signature is captured at BROADCAST time and carried on the error. A
+// caller that is about to refund can then ask the chain what actually happened
+// instead of assuming the worst.
+class PayoutError extends Error {
+  constructor(message, signature) {
+    super(message);
+    this.name = 'PayoutError';
+    this.signature = signature || null;   // null = never broadcast, safe to refund
+  }
+}
+
+// Broadcast, then confirm. Any failure after the broadcast carries the signature.
+async function sendAndVerify(connection, tx, signers) {
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+  tx.recentBlockhash = blockhash;
+  tx.feePayer = signers[0].publicKey;
+  tx.sign(...signers);
+
+  // Nothing has been broadcast yet, so a failure here is unambiguous.
+  let signature;
+  try {
+    signature = await connection.sendRawTransaction(tx.serialize(), {
+      skipPreflight: false,
+      maxRetries: 3,
+    });
+  } catch (e) {
+    throw new PayoutError(e.message, null);
+  }
+
+  try {
+    const res = await connection.confirmTransaction(
+      { signature, blockhash, lastValidBlockHeight }, 'confirmed');
+    // Landed but reverted. The money did not move, so this is safe to refund —
+    // but it still gets the signature, so the caller's own check agrees.
+    if (res?.value?.err) {
+      throw new PayoutError(`transaction failed on chain: ${JSON.stringify(res.value.err)}`, signature);
+    }
+  } catch (e) {
+    if (e instanceof PayoutError) throw e;
+    throw new PayoutError(`could not confirm: ${e.message}`, signature);
+  }
+  return signature;
+}
+
+// What actually happened to a signature. Called before refunding.
+//
+//   'confirmed' — it landed and succeeded. Do NOT refund.
+//   'failed'    — it landed and reverted. The money is still ours; refund.
+//   'missing'   — the chain has no record and the blockhash can no longer be
+//                 revived. Refund.
+//   'unknown'   — we could not find out. Refund NOTHING and escalate; guessing
+//                 here is how you either rob a player or pay them twice.
+async function checkSolanaSignature(signature, { attempts = 5, delayMs = 3000 } = {}) {
+  if (!signature) return 'missing';
+  const connection = new solWeb3.Connection(
+    process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com', 'confirmed');
+
+  let sawRpc = false;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const { value } = await connection.getSignatureStatuses([signature], { searchTransactionHistory: true });
+      sawRpc = true;
+      const st = value?.[0];
+      if (st) {
+        if (st.err) return 'failed';
+        if (st.confirmationStatus === 'confirmed' || st.confirmationStatus === 'finalized') return 'confirmed';
+      }
+    } catch { /* try again — an RPC that is down is not an answer */ }
+    if (i < attempts - 1) await new Promise(r => setTimeout(r, delayMs));
+  }
+
+  // The RPC answered every time and never heard of it. A transaction that has
+  // not landed within this window cannot land later: its blockhash has expired.
+  if (sawRpc) return 'missing';
+  return 'unknown';
+}
+
 // Actual network fee reserves (realistic)
 const GAS_RESERVE = {
   btc:  0.00002,   // ~$1.30 at $65k — covers typical tx fee
@@ -150,8 +238,13 @@ async function sendUsdcSpl(privKey, toAddress, amount) {
   const toAta = toAtaAccount.address;
 
   console.log(`[chainSend] USDC transfer: ${fromAta.toBase58()} → ${toAta.toBase58()} (${units} units)`);
-  const txHash = await splToken.transfer(connection, keypair, fromAta, toAta, keypair, units);
-  return txHash;
+  // Built explicitly rather than via splToken.transfer, which is a wrapper over
+  // sendAndConfirmTransaction and throws away the signature when confirmation
+  // fails — leaving no way to find out whether the money actually moved.
+  const tx = new solWeb3.Transaction().add(
+    splToken.createTransferInstruction(fromAta, toAta, keypair.publicKey, units)
+  );
+  return sendAndVerify(connection, tx, [keypair]);
 }
 
 // ── TRX ───────────────────────────────────────────────────────────────────────
@@ -326,4 +419,4 @@ async function sendCrypto({ coin, privKey, toAddress, amount }) {
   }
 }
 
-module.exports = { sendCrypto, sweepUsdc, GAS_RESERVE };
+module.exports = { sendCrypto, sweepUsdc, GAS_RESERVE, PayoutError, checkSolanaSignature, sendAndVerify };

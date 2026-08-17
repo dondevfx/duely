@@ -102,7 +102,11 @@ test('open tickets are capped, but not so low it blocks a real problem', () => {
 // ── Alerting ──────────────────────────────────────────────────────────────
 
 test('money owed alerts on the first occurrence', () => {
-  assert.deepEqual(alert.CRITICAL, ['refund_failed', 'payout_failed']);
+  // payout_uncertain belongs here, not in WARNING: the coins are deducted and
+  // deliberately not refunded, so a single one is a player who is out of pocket
+  // until somebody reads the tx_hash. Waiting for three of those is not a thing
+  // to do to one real person.
+  assert.deepEqual(alert.CRITICAL, ['refund_failed', 'payout_failed', 'payout_uncertain']);
   assert.ok(alert.WARN_AT > 1,
     'self-healing states should alert in bulk, not one at a time');
 });

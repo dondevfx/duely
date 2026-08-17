@@ -9,7 +9,7 @@ const {
   recordWithdrawal, getWithdrawable,
 } = require('../services/walletService');
 const { getOrCreateAddress } = require('../services/addressService');
-const { sendCrypto }         = require('../services/chainSend');
+const { sendCrypto, checkSolanaSignature } = require('../services/chainSend');
 const { createWithdrawalSwap, estimateWithdrawal, SS_TICKERS } = require('../services/simpleSwapService');
 const { isValidAddressFor } = require('../services/addressValidator');
 const { swapUsdcToSol }      = require('../services/jupiterService');
@@ -354,6 +354,54 @@ module.exports = function walletRoutes(supabase, io) {
 
       } catch (payoutErr) {
         console.error(`[withdraw] payout failed user=${req.user.id} amount=${amount}:`, payoutErr.message);
+
+        // ── Did it actually fail? ──────────────────────────────────────────
+        //
+        // A Solana send broadcasts first and confirms second, so a confirmation
+        // timeout is NOT proof the money stayed put. Refunding on the error
+        // alone therefore paid the player on-chain and gave their coins back —
+        // a double-spend anyone could fish for by retrying withdrawals during
+        // congestion until a confirmation happened to time out.
+        //
+        // So we ask the chain before touching the balance.
+        const sig = payoutErr.signature || null;
+        if (sig) {
+          const state = await checkSolanaSignature(sig).catch(() => 'unknown');
+
+          if (state === 'confirmed') {
+            // It landed. The player has been paid; the only thing that failed
+            // was our confidence. Record it as the successful withdrawal it is
+            // and do NOT refund.
+            console.log(`[withdraw] confirmation timed out but tx ${sig} landed — treating as paid`);
+            await supabase.from('transactions').insert({
+              user_id: req.user.id, type: 'withdrawal', amount_c: amount,
+              crypto_amount: cryptoAmt, crypto_symbol: coin.toUpperCase(),
+              tx_hash: String(sig), extra_id: memo?.trim() || null,
+              status: 'confirmed', notes: 'confirmed late after timeout',
+            }).then().catch(e => console.error('[withdraw] late-confirm row failed:', e.message));
+            await recordWithdrawal(supabase, req.user.id, amount, 'crypto').catch(() => {});
+            const bal = await getBalance(supabase, req.user.id);
+            return res.json({ success: true, new_balance: bal, tx: sig });
+          }
+
+          if (state === 'unknown') {
+            // We could not find out. Refunding might pay them twice; not
+            // refunding might rob them. Neither is ours to guess, so the money
+            // stays deducted, the row is flagged, and a human decides. This is
+            // in alertService's CRITICAL list.
+            console.error(`CRITICAL: withdrawal outcome unknown user=${req.user.id} amount=${amount} sig=${sig} — manual review required`);
+            await supabase.from('transactions').insert({
+              user_id: req.user.id, type: 'withdrawal', amount_c: amount,
+              crypto_symbol: coin.toUpperCase(), tx_hash: String(sig),
+              status: 'payout_uncertain',
+              notes: `could not determine on-chain outcome: ${String(payoutErr.message).slice(0, 200)}`,
+            }).then().catch(e => console.error('[withdraw] uncertain row failed:', e.message));
+            return res.status(500).json({
+              error: 'Your withdrawal is being verified. Your balance will be corrected within a few minutes — please do not retry.',
+            });
+          }
+          // 'failed' or 'missing' — the money never left. Refund below.
+        }
 
         // A failed withdrawal must leave a ROW, not just a log line.
         //
