@@ -125,7 +125,7 @@ export default function Support() {
               />
               <textarea
                 value={body} onChange={e => setBody(e.target.value)}
-                placeholder="What happened? Include amounts and times if you can." rows={4}
+                placeholder="What happened? Include amounts and time stamps if you can." rows={4}
                 className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-sm text-white placeholder-muted focus:outline-none focus:border-primary mb-2"
               />
               {msg && <p className="text-xs text-muted mb-2">{msg}</p>}

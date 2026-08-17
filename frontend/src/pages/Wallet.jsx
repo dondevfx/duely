@@ -451,10 +451,19 @@ export default function Wallet() {
                 placeholder={`min $${getWithdrawMin(witCoin.id)}`}
                 className="w-full bg-bg border border-surfaceLight rounded-lg px-4 py-3 text-white placeholder-muted text-sm focus:outline-none focus:border-primary transition-colors"
               />
-              {witAmountUsd && parseFloat(witAmountUsd) > (profile?.c_coins ?? 0) && (
+              {/* Affordability is checked BEFORE you submit, never during.
+                  The server deducts the coins and pushes the new balance down
+                  the socket while this request is still in flight — so for the
+                  moment between the deduction landing and the response
+                  clearing the amount field, the typed amount was larger than
+                  the balance and this flashed "Exceeds your balance of 0
+                  coins" on a withdrawal that was working perfectly.
+                  Once submitted the server is the authority, so these go
+                  quiet and witMsg reports the real outcome. */}
+              {!witLoading && witAmountUsd && parseFloat(witAmountUsd) > (profile?.c_coins ?? 0) && (
                 <p className="text-xs text-danger mt-1">Exceeds your balance of {fmt(profile?.c_coins)} coins</p>
               )}
-              {witAmountUsd && parseFloat(witAmountUsd) < getWithdrawMin(witCoin.id) && parseFloat(witAmountUsd) > 0 && (
+              {!witLoading && witAmountUsd && parseFloat(witAmountUsd) < getWithdrawMin(witCoin.id) && parseFloat(witAmountUsd) > 0 && (
                 <p className="text-xs text-danger mt-1">Minimum withdrawal is ${getWithdrawMin(witCoin.id)}</p>
               )}
             </div>

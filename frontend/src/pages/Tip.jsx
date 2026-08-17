@@ -32,7 +32,13 @@ export default function Tip() {
   // Setting a balance is not spending one, so the affordability check does not
   // apply — raising the balance would otherwise be blocked for being more than
   // the current balance.
-  const insufficient  = !demoSetter && tipAmount > 0 && myBalance < tipAmount;
+  //
+  // `sending` is part of this for the same reason the withdraw form checks its
+  // loading flag: the server deducts and pushes the new balance down the socket
+  // before this request returns, so mid-send the typed amount is larger than
+  // the balance and a false "Insufficient balance" flashes on a tip that is
+  // going through. Once submitted, the server decides.
+  const insufficient  = !demoSetter && !sending && tipAmount > 0 && myBalance < tipAmount;
 
   function handleCurrencySwitch(c) {
     setCurrency(c);
