@@ -500,17 +500,40 @@ module.exports = function walletRoutes(supabase, io) {
     // become real money in someone's pocket.
     if (isDemo(recipient.id)) return res.status(403).json({ error: 'Demo accounts cannot send or receive tips.' });
 
+    // A tip is two independent writes: take from the sender, give to the
+    // recipient. If the second fails the first has already happened, and the
+    // sender's coins are simply gone — nothing refunds them and the only trace
+    // is a 500. So the credit is wrapped and the deduction reversed on failure.
+    //
+    // If the reversal ALSO fails the money really is lost, which is why that
+    // case gets its own log line and its own error: it is the one outcome that
+    // needs a human. Same shape as the withdrawal refund path.
+    const undoTip = async (err) => {
+      try {
+        if (isDiamonds) await creditDiamonds(supabase, req.user.id, tipAmount);
+        else            await creditCoins(supabase, req.user.id, tipAmount);
+      } catch (refundErr) {
+        console.error(`CRITICAL: tip refund failed user=${req.user.id} amount=${tipAmount} ${currency} — manual credit required:`, refundErr.message);
+        throw new Error('Tip failed and the refund failed — contact support.');
+      }
+      throw new Error(`Tip failed: ${err.message}`);
+    };
+
     try {
       if (isDiamonds) {
         await deductDiamonds(supabase, req.user.id, tipAmount);
-        await creditDiamonds(supabase, recipient.id, tipAmount);
+        try {
+          await creditDiamonds(supabase, recipient.id, tipAmount);
+        } catch (e) { await undoTip(e); }
         supabase.from('transactions').insert([
           { user_id: req.user.id,   type: 'tip_sent',     amount_c: 0, crypto_amount: tipAmount, crypto_symbol: 'diamonds', status: 'confirmed' },
           { user_id: recipient.id,  type: 'tip_received', amount_c: 0, crypto_amount: tipAmount, crypto_symbol: 'diamonds', status: 'confirmed' },
         ]).then().catch(e => console.error('[tx] diamond tip insert failed:', e.message));
       } else {
         await deductCoins(supabase, req.user.id, tipAmount);
-        await creditCoins(supabase, recipient.id, tipAmount);
+        try {
+          await creditCoins(supabase, recipient.id, tipAmount);
+        } catch (e) { await undoTip(e); }
         supabase.from('transactions').insert([
           { user_id: req.user.id,   type: 'tip_sent',     amount_c: tipAmount, status: 'confirmed' },
           { user_id: recipient.id,  type: 'tip_received', amount_c: tipAmount, status: 'confirmed' },
