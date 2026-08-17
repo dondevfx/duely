@@ -1192,7 +1192,11 @@ function FriendsPanel({ myId, myUsername, myReferralCode, activeGames }) {
                   )}
                   <button
                     onClick={() => setConfirmUnadd({ id: f.id, username: p?.username })}
-                    className="text-[10px] px-2 py-1 text-muted hover:text-danger border border-transparent hover:border-danger/30 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                    // 10px text, a 2px pad and opacity-0 until hover. On a
+                    // touch screen there is no hover, so it was invisible AND
+                    // barely a target; on desktop it was a 10px word. Always
+                    // visible now, with a real 44px-ish hit area.
+                    className="text-xs font-bold px-3 py-2 min-h-[38px] text-muted hover:text-danger border border-surfaceLight hover:border-danger/40 rounded-lg transition-all"
                   >
                     Unadd
                   </button>

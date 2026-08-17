@@ -10,9 +10,15 @@ import CreateRoomModal from './CreateRoomModal';
 import JoinRoomModal from './JoinRoomModal';
 
 // Small secondary buttons under the two primary actions on every betting screen.
+// Secondary actions, but they still have to be READABLE. This was muted text on
+// surface with a border-coloured outline, which on a dark background is close to
+// invisible — players could not tell the bot options were buttons at all. Now
+// white text on a lifted background with a blue-tinted border: clearly a
+// control, still visibly below the two primary actions.
 export const SMALL_BTN =
-  'flex-1 px-3 sm:px-4 py-3.5 rounded-xl text-sm font-bold whitespace-nowrap border border-border bg-surface text-muted ' +
-  'hover:border-primary hover:text-white transition-all disabled:opacity-40 disabled:hover:border-border';
+  'flex-1 px-3 sm:px-4 py-3.5 rounded-xl text-sm font-bold whitespace-nowrap ' +
+  'border border-primary/40 bg-primary/10 text-white ' +
+  'hover:border-primary hover:bg-primary/20 active:bg-primary/25 transition-all';
 
 export const COIN_FEES    = [1, 5, 10, 25, 50, 100];
 export const DIAMOND_FEES = [500, 5000, 50000];
@@ -221,9 +227,16 @@ export default function GameLobby({
           <div className="flex flex-col gap-2 sm:gap-2 pt-0.5 sm:pt-1">
             {/* Diamond bet-vs-bot gets its own full-width row — the label is too
                 long to share a row with the other two. */}
+            {/* Never disabled for balance. A dead button tells the player
+                nothing — it looks broken, and they cannot find out why. It
+                stays clickable and takes them where the currency is topped up,
+                the same as the main action above. */}
             {onBot && isDiamonds && entryFee > 0 && (
-              <button onClick={onBot} disabled={insufficient} className={SMALL_BTN}>
-                Bet vs Bot — {fmtFee(entryFee)} 💎
+              <button
+                onClick={insufficient ? () => navigate(topUpRoute(betCurrency)) : onBot}
+                className={SMALL_BTN}
+              >
+                {insufficient ? 'Insufficient 💎 — Get More' : `Bet vs Bot — ${fmtFee(entryFee)} 💎`}
               </button>
             )}
             <div className="flex gap-2 sm:gap-2">

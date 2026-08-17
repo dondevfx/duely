@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import { api } from '../utils/api';
 import { supabase } from '../utils/supabase';
 import { PENDING_CHALLENGE_KEY } from './ChallengeJoin';
@@ -37,6 +38,7 @@ function pendingChallengeTarget() {
 export default function Login() {
   const ready = usePageReady();
   const { signIn, signOut, completeMfaLogin, refreshProfile, mfaPending, mfaFactorId } = useAuth();
+  const { doAuth } = useSocket() || {};
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -151,6 +153,14 @@ export default function Login() {
     try {
       await api.post('/auth/profile', { username: username.trim() });
       await refreshProfile();
+      // Re-authenticate the socket.
+      //
+      // It authenticated before this profile row existed, so the server holds a
+      // connection with no player behind it: every game button stays disabled
+      // and nothing can be queued. That is exactly why a manual refresh was
+      // needed before a new account could play — the reload was only re-running
+      // auth at a point where the profile finally existed.
+      doAuth?.();
       { const t = postLoginTarget(); if (t) navigate(t.route, { state: t.state }); else navigate('/'); }
     } catch (err) {
       setError(err.message || 'Failed to create profile. Try a different username.');

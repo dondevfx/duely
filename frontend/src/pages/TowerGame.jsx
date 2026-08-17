@@ -432,7 +432,7 @@ export default function TowerGame() {
         title="🗼 Tower"
         description={
           'Stack the blocks as high as you can. Each block slides in on its own — tap to drop it, ' +
-          'and anything hanging over the edge is sliced off. Land it dead centre and you keep the full width.' +
+          'and anything hanging over the edge is sliced off. Land it dead center and you keep the full width.' +
           // The bot floor has to be stated before the bet, not discovered after it.
           (isDiamonds ? ' Betting diamonds against the bot? You need at least 15 blocks to win.' : '')
         }

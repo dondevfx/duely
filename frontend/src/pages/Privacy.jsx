@@ -60,7 +60,7 @@ export default function Privacy() {
           },
           {
             title: '10. Public Information',
-            body: 'Some information is visible to other players by design. Your username, ELO, rank, win and loss record, current streak and profile colour appear on leaderboards, in matches, and on your public profile. Live and recent matches may show your username and the stake. Your email address, balance, transaction history and wallet addresses are never shown to other users.',
+            body: 'Some information is visible to other players by design. Your username, ELO, rank, win and loss record, current streak and profile color appear on leaderboards, in matches, and on your public profile. Live and recent matches may show your username and the stake. Your email address, balance, transaction history and wallet addresses are never shown to other users.',
           },
           {
             title: '11. How Long We Keep It',
@@ -75,15 +75,11 @@ export default function Privacy() {
             body: 'Passwords are hashed by our authentication provider and never stored in readable form. Two-factor authentication is available and is required for withdrawals once enabled. Traffic is encrypted in transit. Withdrawal destination addresses are validated before funds are sent. No system is perfectly secure, so please use a unique password, turn on two-factor authentication, and tell us promptly if you think your account has been accessed by someone else.',
           },
           {
-            title: '14. Browser Storage',
-            body: 'We store a session token in your browser so you stay signed in between visits, along with small preferences such as your chosen theme and display currency. These are necessary for the site to work and are not used for advertising or cross-site tracking. Clearing your browser storage will sign you out.',
-          },
-          {
-            title: '15. Age Requirement',
+            title: '14. Age Requirement',
             body: 'This platform is strictly for adults aged 18 or over. We do not knowingly collect information from anyone under 18. If we become aware that an underage person has created an account, we will close it. If you believe a minor has provided us with information, please contact us so we can remove it.',
           },
           {
-            title: '16. Changes to This Policy',
+            title: '15. Changes to This Policy',
             body: 'We may update this policy as the platform changes. The date at the top of this page reflects the most recent revision, and significant changes will be communicated through the platform. Continuing to use Duely after a change means you accept the updated policy.',
           },
         ].map(({ title, body }) => (

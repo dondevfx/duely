@@ -40,21 +40,29 @@ export default function AgeToSModal({ onAccept }) {
             </span>
           </label>
 
-          <label className="flex items-start gap-3 cursor-pointer group">
-            <input
-              type="checkbox"
-              checked={tos}
-              onChange={e => setTos(e.target.checked)}
-              className="mt-0.5 w-5 h-5 accent-primary cursor-pointer"
-            />
+          {/* The text sits OUTSIDE the label on purpose.
+              A click on any descendant of a <label> activates its control, so
+              the two links were unreachable: tapping "Terms of Service" just
+              toggled the checkbox. The label now wraps only the checkbox, and
+              the sentence is a sibling — so the links are ordinary links and
+              the box is still hit-target sized. */}
+          <div className="flex items-start gap-3">
+            <label className="cursor-pointer shrink-0 p-1 -m-1">
+              <input
+                type="checkbox"
+                checked={tos}
+                onChange={e => setTos(e.target.checked)}
+                className="mt-0.5 w-5 h-5 accent-primary cursor-pointer"
+              />
+            </label>
             <span className="text-sm text-white leading-relaxed">
               I agree to the{' '}
-              <Link to="/tos" target="_blank" className="font-bold text-primary hover:underline">Terms of Service</Link>
+              <Link to="/tos" target="_blank" rel="noopener noreferrer" className="font-bold text-primary underline underline-offset-2">Terms of Service</Link>
               {' '}and{' '}
-              <Link to="/privacy" target="_blank" className="font-bold text-primary hover:underline">Privacy Policy</Link>
+              <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="font-bold text-primary underline underline-offset-2">Privacy Policy</Link>
               , and understand that all wagers are final and there are no chargebacks.
             </span>
-          </label>
+          </div>
         </div>
 
         <GlowButton

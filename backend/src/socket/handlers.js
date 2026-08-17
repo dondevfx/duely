@@ -1749,6 +1749,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       removeFromCoinFlipQueue(socket.id);
       removeFromBlackjackQueue(socket.id);
       removeFromCarDashQueue(socket.id);
+      removeFromTowerQueue(socket.id);
       if (authenticatedUser) { unlockUser(authenticatedUser.userId); userQueues.delete(authenticatedUser.userId); }
       io.emit('queue_entry_removed', { id: socket.id });
     });
@@ -1796,6 +1797,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         removeFromCoinFlipQueue(socket.id);
         removeFromBlackjackQueue(socket.id);
         removeFromCarDashQueue(socket.id);
+        removeFromTowerQueue(socket.id);
         removeFromBlockBlastQueue(socket.id);
         unlockUser(authenticatedUser.userId);
         userQueues.delete(authenticatedUser.userId);
@@ -1890,6 +1892,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       removeFromCoinFlipQueue(socket.id);
       removeFromBlackjackQueue(socket.id);
       removeFromCarDashQueue(socket.id);
+      removeFromTowerQueue(socket.id);
       // Broadcast queue entry removal so Play Now page stays in sync
       io.emit('queue_entry_removed', { id: socket.id });
 
@@ -2036,6 +2039,27 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           // (stayer.isBot is false), and the helper re-checks anyway.
           const { applyMatchStreaks } = require('../services/eloService');
           applyMatchStreaks(supabase, stayer, leaver).catch(() => {});
+
+          // Count it.
+          //
+          // A forfeit moved the rating, paid the winner and reset the streak —
+          // but never touched the win/loss counters and wrote no match row. So
+          // walking out of a losing match cost money and rating while leaving
+          // the RECORD untouched, and the winner was never credited with the
+          // win at all. Refreshing mid-match was the easy way to do it.
+          if (!stayer.isBot) await supabase.rpc('increment_win',  { uid: stayer.userId }).then(() => {}, () => {});
+          if (!leaver.isBot) await supabase.rpc('increment_loss', { uid: leaver.userId }).then(() => {}, () => {});
+          if (!stayer.isBot && !leaver.isBot) {
+            const cur = currency === 'diamonds' ? 'diamonds' : 'coins';
+            await supabase.from('matches').insert({
+              player1_id: stayer.userId, player2_id: leaver.userId,
+              winner_id:  stayer.userId, game_type: gameType,
+              entry_fee_c:        cur === 'coins'    ? fee : 0,
+              entry_fee_diamonds: cur === 'diamonds' ? fee : 0,
+              prize_pool_c:        cur === 'coins'    ? fee * 2 : 0,
+              prize_pool_diamonds: cur === 'diamonds' ? fee * 2 : 0,
+            }).then(() => {}, () => {});
+          }
 
           console.log(`[forfeit] settle OK — payout:${winnerPayout} newWinnerElo:${newWinnerElo}`);
         } catch (e) {
