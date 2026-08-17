@@ -16,9 +16,33 @@ const { getExchangeStatus } = require('./simpleSwapService');
 const { creditCoins, recordDeposit } = require('./walletService');
 const gameEvents = require('./gameEvents');
 
-const POLL_INTERVAL_MS  = 30_000;   // check each exchange every 30s
-const MAX_WAIT_MS       = 60 * 60 * 1000;  // give up after 1 hour
-const STARTUP_DELAY_MS  = 5_000;    // wait 5s after server start before polling
+// ── How long to keep watching ────────────────────────────────────────────────
+//
+// This was one hour, which is shorter than a BTC deposit takes.
+//
+// A BTC swap waits on TWO Bitcoin confirmations in sequence: ours forwarding to
+// ChangeNow, then ChangeNow's own requirement before they will swap. Each
+// averages ~10 minutes with a long tail, so an hour is routinely not enough.
+//
+// Giving up did not just stop the clock — it stopped the polling. So when
+// ChangeNow finished twenty minutes later and sent the USDC, our wallet
+// received it and NOBODY CREDITED THE PLAYER. The money arrived and the
+// deposit stayed unpaid until someone noticed by hand.
+//
+// 24 hours instead. Nothing is lost by waiting: a swap that genuinely fails
+// reports 'failed', 'refunded' or 'expired' and ends the watch immediately, so
+// the long ceiling only ever applies to one that is still legitimately running.
+const MAX_WAIT_MS = 24 * 60 * 60 * 1000;
+
+// Polling backs off with age rather than hammering every 30s for a day.
+// Fast while an answer is plausibly imminent, slow once it is clearly a
+// multi-confirmation wait.
+const STARTUP_DELAY_MS = 5_000;    // wait 5s after server start before polling
+function pollDelay(ageMs) {
+  if (ageMs < 15 * 60_000)  return 30_000;    // first 15 min — SOL/fast chains
+  if (ageMs < 60 * 60_000)  return 120_000;   // up to an hour — first confirmation
+  return 300_000;                             // beyond that — BTC's second wait
+}
 
 // Track active polls in memory so we don't double-poll
 const activePolls = new Set();
@@ -34,7 +58,7 @@ function init(supabase) {
       const { data: pending } = await supabase
         .from('transactions')
         .select('tx_hash, user_id, created_at, extra_id')
-        .eq('status', 'converting')
+        .in('status', ['converting', 'stuck'])
         .eq('type', 'deposit');
 
       if (pending?.length) {
@@ -61,7 +85,7 @@ function watch(exchangeId, userId, startedAt = Date.now(), creditUser = true) {
 }
 
 function scheduleNext(exchangeId, userId, startedAt, creditUser) {
-  setTimeout(() => poll(exchangeId, userId, startedAt, creditUser), POLL_INTERVAL_MS);
+  setTimeout(() => poll(exchangeId, userId, startedAt, creditUser), pollDelay(Date.now() - startedAt));
 }
 
 async function poll(exchangeId, userId, startedAt, creditUser) {
@@ -90,7 +114,11 @@ async function poll(exchangeId, userId, startedAt, creditUser) {
           .from('transactions')
           .update({ status: 'confirmed', amount_c: usdcCredit })
           .eq('tx_hash', exchangeId)
-          .eq('status', 'converting')
+          // 'stuck' as well as 'converting': the old one-hour timeout marked
+          // rows stuck and stopped polling, so any that ChangeNow finished
+          // afterwards are sitting unpaid. Accepting both means those credit
+          // automatically on resume instead of needing a manual payout.
+          .in('status', ['converting', 'stuck'])
           .select('id');
 
         if (claimed && claimed.length > 0) {
@@ -134,9 +162,13 @@ async function poll(exchangeId, userId, startedAt, creditUser) {
       activePolls.delete(exchangeId);
 
     } else if (Date.now() - startedAt > MAX_WAIT_MS) {
-      // Been waiting over 1 hour — give up polling but keep DB status as 'converting'
-      // so a human can investigate
-      console.error(`[swapPoller] exchange ${exchangeId} timed out after 1h — manual review needed`);
+      // A full day with no terminal status from ChangeNow. Genuinely wrong.
+      //
+      // Visibility does not depend on this: the admin queue already surfaces
+      // any 'converting' row older than an hour, so a slow swap is on screen
+      // long before it reaches this point. That is what makes it safe to keep
+      // polling rather than giving up at the first sign of slowness.
+      console.error(`[swapPoller] exchange ${exchangeId} still unresolved after 24h — manual review needed`);
       await supabaseRef
         .from('transactions')
         .update({ status: 'stuck' })
