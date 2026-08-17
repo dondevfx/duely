@@ -747,12 +747,15 @@ export default function CoinFlipGame() {
                   : insufficient ? topUpLabel(betCurrency)
                   : `Find Opponent (${side === 'heads' ? '🔵 Heads' : '⚪ Tails'})`}
               </GlowButton>
-              <GlowButton onClick={() => setPrivateMode('create')} variant="ghost" size="lg" className="w-full text-lg py-4 border border-border hover:border-primary">
-                🎮 Challenge a Friend
-              </GlowButton>
               <>
-                  {/* Secondary options — small buttons, still visible but not competing */}
+                  {/* Secondary options — small buttons, still visible but not competing.
+                      Challenge a Friend is one of them: it starts a match the
+                      same way the others do, so it is sized like them rather
+                      than like the one primary action above. */}
                   <div className="flex flex-col gap-2 pt-1">
+                    <button onClick={() => setPrivateMode('create')} className={SMALL_BTN}>
+                      🎮 Challenge a Friend
+                    </button>
                     {/* Diamond bet-vs-bot gets its own full-width row — too long to share */}
                     {isDiamonds && (
                       <button onClick={() => playVsBot(false)} disabled={!authenticated || insufficient} className={SMALL_BTN}>

@@ -336,6 +336,8 @@ ALTER TABLE transactions ADD COLUMN IF NOT EXISTS stake_c numeric;
 
 -- Backfill historical wins from the matches table, which does record the entry
 -- fee. Matched on player and time because transactions carry no match id.
+-- Note the column names differ across the two tables: matches.played_at against
+-- transactions.created_at.
 -- Only fills rows that are still empty, so re-running cannot corrupt live data.
 UPDATE transactions t
 SET    stake_c = m.entry_fee_c
@@ -345,8 +347,8 @@ WHERE  t.stake_c IS NULL
   AND  t.amount_c > 0
   AND  m.entry_fee_c > 0
   AND  m.winner_id = t.user_id
-  AND  m.created_at BETWEEN t.created_at - interval '30 seconds'
-                        AND t.created_at + interval '30 seconds';
+  AND  m.played_at BETWEEN t.created_at - interval '30 seconds'
+                       AND t.created_at + interval '30 seconds';
 
 -- A draw refunds exactly the stake, so its net effect is zero by definition.
 UPDATE transactions

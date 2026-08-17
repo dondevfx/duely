@@ -209,22 +209,21 @@ export default function GameLobby({
           {!session ? '🔒 Login to Play' : insufficient ? topUpLabel(betCurrency) : 'Find Opponent'}
         </GlowButton>
 
-        {/* ── Challenge a Friend (link or direct invite) ── */}
-        {session && onCreatePrivate && (
-          <GlowButton
-            onClick={() => setPrivateMode('create')}
-            variant="ghost"
-            size="lg"
-            className="w-full text-lg py-4 border border-border hover:border-primary"
-          >
-            🎮 Challenge a Friend
-          </GlowButton>
-        )}
-
         {/* Secondary options — small buttons, still visible but not competing
-            with the two primary actions above. */}
+            with the one primary action above.
+
+            Challenge a Friend sits in this group rather than above it. It used
+            to be a full-height ghost button the same size as Find Opponent,
+            which read as a second primary action and made the lobby tall enough
+            to push the small buttons off a phone. It is a way of starting a
+            match, like the three below it, so it looks like them. */}
         {session && (onBot || onBotFree || onCreatePrivate) && (
           <div className="flex flex-col gap-2 sm:gap-2 pt-0.5 sm:pt-1">
+            {onCreatePrivate && (
+              <button onClick={() => setPrivateMode('create')} className={SMALL_BTN}>
+                🎮 Challenge a Friend
+              </button>
+            )}
             {/* Diamond bet-vs-bot gets its own full-width row — the label is too
                 long to share a row with the other two. */}
             {/* Never disabled for balance. A dead button tells the player
