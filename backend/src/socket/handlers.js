@@ -479,6 +479,19 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     function isValidFee(fee, cur) {
       return cur === 'diamonds' ? VALID_DIAMOND_FEES.has(Number(fee)) : VALID_COIN_FEES.has(Number(fee));
     }
+    // Bot matches take the same tiers. They are not free of consequence just
+    // because the opponent is a bot: the stake is deducted for real and the
+    // payout is computed from it, so an off-tier fee is an off-tier payout.
+    //
+    // A fractional stake was the actual hole. Deduction floors the amount but
+    // the room keeps the raw number, so betting 0.99 diamonds cost nothing and
+    // paid out on 0.99 — repeatable, on all six games. Rejecting anything not
+    // on the tier list closes that and every variant of it at the door.
+    function rejectBadFee(fee, cur) {
+      if (isValidFee(fee, cur)) return false;
+      socket.emit('error', { message: 'Invalid entry fee' });
+      return true;
+    }
 
     // ════════════════════════════════════════════════════════════════
     //  BLOCK BLAST
@@ -618,6 +631,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       socket._startingGame = 'block_blast';
       try {
         if (currency !== 'diamonds') entryFee = 0; // bot games are free for coins
+        if (rejectBadFee(entryFee, currency)) return;
         const { data: profile } = await supabase.from('profiles').select('elo,username,c_coins,diamonds').eq('id', authenticatedUser.userId).single();
         if (entryFee > 0) {
           try {
@@ -828,6 +842,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       socket._startingGame = 'tower';
       try {
         if (currency !== 'diamonds') entryFee = 0; // bot games are free for coins
+        if (rejectBadFee(entryFee, currency)) return;
         const { data: profile } = await supabase.from('profiles').select('elo,username,c_coins,diamonds').eq('id', authenticatedUser.userId).single();
         if (entryFee > 0) {
           try {
@@ -1021,6 +1036,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       socket._startingGame = 'car_dash';
       try {
         if (currency !== 'diamonds') entryFee = 0; // bot games are free for coins
+        if (rejectBadFee(entryFee, currency)) return;
         const { data: profile } = await supabase.from('profiles').select('elo,username,c_coins,diamonds').eq('id', authenticatedUser.userId).single();
         if (entryFee > 0) {
           try {
@@ -1076,6 +1092,9 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
       if (inMatchOrQueue(authenticatedUser.userId))
         return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
+      // Both sides of a private match are settled from this fee, so it has to
+      // be on the tier list before anyone is invited to it.
+      if (rejectBadFee(entryFee, currency)) return;
       if (entryFee > 0) {
         const { data: pf } = await supabase.from('profiles').select('c_coins,diamonds').eq('id', authenticatedUser.userId).single();
         if (currency === 'diamonds' && (pf.diamonds || 0) < entryFee) return socket.emit('error', { message: 'Insufficient diamonds' });
@@ -1407,6 +1426,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       socket._startingGame = 'scrabble';
       try {
         if (currency !== 'diamonds') entryFee = 0; // bot games free for coins
+        if (rejectBadFee(entryFee, currency)) return;
         const { data: profile } = await supabase.from('profiles').select('elo,username,c_coins,diamonds').eq('id', authenticatedUser.userId).single();
         if (entryFee > 0) {
           try {
@@ -1444,6 +1464,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     socket.on('wordle_solo_start', async ({ entryFee = 0, currency = 'diamonds' } = {}) => {
       if (!authenticatedUser) return socket.emit('wordle_solo_error', { error: 'Not authenticated' });
       try {
+        if (!isValidFee(entryFee, currency)) return socket.emit('wordle_solo_error', { error: 'Invalid entry fee' });
         const fee = Math.floor(entryFee);
         if (fee > 0 && currency === 'diamonds') {
           const { data: prof } = await supabase.from('profiles').select('diamonds').eq('id', authenticatedUser.userId).single();
@@ -1619,6 +1640,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       try {
         // CoinFlip bot is diamonds-only; never allow a coins bet vs bot
         if (currency !== 'diamonds') entryFee = 0;
+        if (rejectBadFee(entryFee, currency)) return;
         const { data: profile } = await supabase.from('profiles').select('elo,username,c_coins,diamonds').eq('id', authenticatedUser.userId).single();
         if (entryFee > 0) {
           try {
@@ -1831,6 +1853,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       socket._startingGame = 'blackjack';
       try {
         if (currency !== 'diamonds') entryFee = 0;
+        if (rejectBadFee(entryFee, currency)) return;
         const { data: profile } = await supabase.from('profiles').select('elo,username,c_coins,diamonds').eq('id', authenticatedUser.userId).single();
         if (entryFee > 0) {
           try {
