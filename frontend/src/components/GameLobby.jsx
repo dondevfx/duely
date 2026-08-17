@@ -15,8 +15,16 @@ import JoinRoomModal from './JoinRoomModal';
 // invisible — players could not tell the bot options were buttons at all. Now
 // white text on a lifted background with a blue-tinted border: clearly a
 // control, still visibly below the two primary actions.
+// The secondary lobby actions: Challenge a Friend, Bet vs Bot, Play vs Bot,
+// Join Game. Still smaller than Find Opponent, which is the primary action —
+// but not so small that they are awkward to hit on a phone or an iPad, which
+// is why the padding and the label both went up a step.
+//
+// whitespace-nowrap is load-bearing: two of these share a row, and the longest
+// label ("Bet vs Bot — 50,000 💎") has to stay on one line or the row grows a
+// second line and the buttons stop matching each other.
 export const SMALL_BTN =
-  'flex-1 px-3 sm:px-4 py-3.5 rounded-xl text-sm font-bold whitespace-nowrap ' +
+  'flex-1 px-3 sm:px-4 py-4 rounded-xl text-base font-bold whitespace-nowrap ' +
   'border border-primary/40 bg-primary/10 text-white ' +
   'hover:border-primary hover:bg-primary/20 active:bg-primary/25 transition-all';
 
