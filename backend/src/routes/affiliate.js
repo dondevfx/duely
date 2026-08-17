@@ -90,13 +90,25 @@ module.exports = function affiliateRoutes(supabase) {
     const { data: existing } = await supabase
       .from('profiles').select('referred_by').eq('id', req.user.id).single();
 
-    const patch = { applied_affiliate_code: raw, applied_code_expires_at: expiresAt };
+    // The OWNER is pinned here, not looked up from the code at settlement time.
+    // Codes are re-nameable: resolving the string later paid whoever held it at
+    // that moment, so renaming a code handed your whole downstream to whoever
+    // claimed the freed string next.
+    const patch = {
+      applied_affiliate_code: raw,
+      applied_code_expires_at: expiresAt,
+      applied_code_owner_id: owner.id,
+    };
     if (!existing?.referred_by) patch.referred_by = owner.id;
 
-    const { error } = await supabase
-      .from('profiles')
-      .update(patch)
-      .eq('id', req.user.id);
+    let { error } = await supabase.from('profiles').update(patch).eq('id', req.user.id);
+    // Before PENDING_SQL section 8 the column does not exist. Applying a code
+    // must still work — resolveAffiliates falls back to the string lookup.
+    if (error && /applied_code_owner_id/i.test(error.message || '')) {
+      const { applied_code_owner_id, ...legacy } = patch;
+      ({ error } = await supabase.from('profiles').update(legacy).eq('id', req.user.id));
+      if (!error) console.warn('[affiliate] applied_code_owner_id missing — run PENDING_SQL section 8');
+    }
 
     if (error) return res.status(500).json({ error: error.message });
 
@@ -153,10 +165,15 @@ module.exports = function affiliateRoutes(supabase) {
 
   // DELETE /api/affiliate/apply-code — remove applied code
   router.delete('/apply-code', requireAuth, async (req, res) => {
-    await supabase
-      .from('profiles')
-      .update({ applied_affiliate_code: null, applied_code_expires_at: null })
-      .eq('id', req.user.id);
+    // Clear the pinned owner too, or the code reads as removed while the
+    // earnings keep flowing to whoever it pointed at.
+    const patch = { applied_affiliate_code: null, applied_code_expires_at: null, applied_code_owner_id: null };
+    const { error } = await supabase.from('profiles').update(patch).eq('id', req.user.id);
+    if (error && /applied_code_owner_id/i.test(error.message || '')) {
+      await supabase.from('profiles')
+        .update({ applied_affiliate_code: null, applied_code_expires_at: null })
+        .eq('id', req.user.id);
+    }
     res.json({ success: true });
   });
 

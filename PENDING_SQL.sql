@@ -358,3 +358,45 @@ WHERE  stake_c IS NULL AND type = 'match_draw' AND amount_c > 0;
 -- Anything still empty is a bot match or a row with no matching record; the
 -- backend infers those from the payout. Check how many are left:
 --   SELECT count(*) FROM transactions WHERE type = 'match_win' AND stake_c IS NULL;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 8. REQUIRED — pin an applied affiliate code to its OWNER
+-- ─────────────────────────────────────────────────────────────────────────────
+--
+-- profiles.applied_affiliate_code stores the code STRING, and the payout
+-- resolved that string to an owner at settlement time. Codes are re-nameable,
+-- so the owner it resolved to was whoever held the string at that moment —
+-- not whoever the player actually signed up under.
+--
+-- That is a theft: Alice renames her code, Bob claims the freed string, and
+-- every player who ever applied Alice's code starts paying Bob.
+--
+-- Pinning the owner id at apply time fixes it at the root. The string stays for
+-- display; the money follows the id.
+--
+-- Safe to run more than once. The backend works without this — it falls back to
+-- resolving by string — so nothing breaks if it is delayed.
+
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS applied_code_owner_id uuid REFERENCES profiles(id);
+
+-- Backfill from the codes as they stand TODAY. This is the one moment the
+-- string mapping is authoritative: whoever holds a code now is the owner the
+-- current payouts are already crediting, so this changes nobody's earnings, it
+-- just freezes the mapping before it can drift again.
+UPDATE profiles p
+SET    applied_code_owner_id = owner.id
+FROM   profiles owner
+WHERE  p.applied_code_owner_id IS NULL
+  AND  p.applied_affiliate_code IS NOT NULL
+  AND  owner.affiliate_code = p.applied_affiliate_code
+  AND  owner.id <> p.id;
+
+-- Anyone whose applied code no longer resolves to a real owner has already been
+-- earning nobody anything, so they are left null and the fallback ignores them.
+--
+-- Speeds up the per-settlement lookup:
+CREATE INDEX IF NOT EXISTS idx_profiles_applied_code_owner ON profiles(applied_code_owner_id);
+
+-- Check the backfill:
+--   SELECT count(*) FROM profiles
+--   WHERE applied_affiliate_code IS NOT NULL AND applied_code_owner_id IS NULL;

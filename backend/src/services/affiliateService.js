@@ -13,49 +13,68 @@ function validateCode(code) {
   return CODE_RE.test(code.trim().toUpperCase());
 }
 
-// Resolve which profile IDs own valid affiliate codes for the two players.
+// Resolve which profile IDs earn on this match.
 // Returns { owner1: uuid|null, owner2: uuid|null }
+//
+// The owner is read from applied_code_owner_id, pinned when the player applied
+// the code. It used to be resolved from the code STRING at settlement time, and
+// codes can be renamed — so the earnings went to whoever held the string at that
+// moment rather than to whoever the player actually signed up under. Rename your
+// code, and the next person to claim the freed string inherits your entire
+// downstream. The string is now for display; the money follows the id.
+//
+// Falls back to the old string lookup when the column is absent or null, so
+// this works before PENDING_SQL section 8 is run and for rows the backfill
+// could not match. Paying an affiliate must never depend on a migration.
 async function resolveAffiliates(supabase, p1Id, p2Id) {
   const ids = [p1Id, p2Id].filter(Boolean);
   if (ids.length === 0) return { owner1: null, owner2: null };
 
   const now = new Date().toISOString();
 
-  const { data: players } = await supabase
-    .from('profiles')
-    .select('id, applied_affiliate_code, applied_code_expires_at')
-    .in('id', ids);
+  const COLS = 'id, applied_affiliate_code, applied_code_expires_at, applied_code_owner_id';
+  let { data: players, error } = await supabase.from('profiles').select(COLS).in('id', ids);
+  if (error && /applied_code_owner_id/i.test(error.message || '')) {
+    ({ data: players } = await supabase
+      .from('profiles')
+      .select('id, applied_affiliate_code, applied_code_expires_at')
+      .in('id', ids));
+  }
 
   if (!players || players.length === 0) return { owner1: null, owner2: null };
 
   const p1 = players.find(p => p.id === p1Id);
   const p2 = players.find(p => p.id === p2Id);
 
-  function validCode(p) {
-    return p?.applied_affiliate_code &&
-      p?.applied_code_expires_at &&
-      p.applied_code_expires_at > now
-      ? p.applied_affiliate_code : null;
+  // A code only earns while it is unexpired, whichever way the owner is found.
+  const active = (p) => Boolean(
+    p?.applied_affiliate_code && p?.applied_code_expires_at && p.applied_code_expires_at > now
+  );
+
+  const pinned = (p) => (active(p) && p.applied_code_owner_id) || null;
+  const code   = (p) => (active(p) && !p.applied_code_owner_id ? p.applied_affiliate_code : null);
+
+  // Only players with no pinned owner need the string lookup.
+  const uniqueCodes = [...new Set([code(p1), code(p2)].filter(Boolean))];
+  const codeToOwner = {};
+  if (uniqueCodes.length) {
+    const { data: codeOwners } = await supabase
+      .from('profiles')
+      .select('id, affiliate_code')
+      .in('affiliate_code', uniqueCodes);
+    for (const o of (codeOwners || [])) codeToOwner[o.affiliate_code] = o.id;
   }
 
-  const code1 = validCode(p1);
-  const code2 = validCode(p2);
-  const uniqueCodes = [...new Set([code1, code2].filter(Boolean))];
-
-  if (uniqueCodes.length === 0) return { owner1: null, owner2: null };
-
-  const { data: codeOwners } = await supabase
-    .from('profiles')
-    .select('id, affiliate_code')
-    .in('affiliate_code', uniqueCodes);
-
-  const codeToOwner = {};
-  for (const o of (codeOwners || [])) codeToOwner[o.affiliate_code] = o.id;
-
-  return {
-    owner1: code1 ? (codeToOwner[code1] || null) : null,
-    owner2: code2 ? (codeToOwner[code2] || null) : null,
+  const ownerFor = (p, selfId) => {
+    const owner = pinned(p) || (code(p) ? codeToOwner[code(p)] || null : null);
+    // Nobody earns on their own play. apply-code already refuses your own code,
+    // but that check reads the code as it was AT THAT MOMENT — a later rename
+    // can still leave you pointing at yourself. Cheap to assert where the money
+    // actually moves.
+    return owner && owner !== selfId ? owner : null;
   };
+
+  return { owner1: ownerFor(p1, p1Id), owner2: ownerFor(p2, p2Id) };
 }
 
 // Pay affiliates and return { platformFee } — the percentage admin receives.

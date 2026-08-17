@@ -224,27 +224,58 @@ test('collecting platform fees reserves what referrals are owed', () => {
 // changing or removing the applied code does not move it; and it keeps
 // tracking with no deadline until the reward is earned.
 
+// Both of these read a specific ROUTE HANDLER, matched by braces. They used to
+// slice the file between two literal fragments, which silently pointed at the
+// wrong text the moment a second `const patch = {` appeared in the file — and a
+// test reading the wrong text can pass or fail for reasons unrelated to what it
+// claims to check.
+function affiliateHandler(method, route) {
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'routes', 'affiliate.js'), 'utf8');
+  const at = src.indexOf(`router.${method}('${route}'`);
+  assert.notEqual(at, -1, `${method.toUpperCase()} ${route} not found — was it renamed?`);
+  const open = src.indexOf('{', src.indexOf('=>', at));
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}' && --depth === 0) return src.slice(open, i + 1);
+  }
+  assert.fail(`unbalanced braces in ${method.toUpperCase()} ${route}`);
+}
+
 test('changing the applied code does NOT move the referral', () => {
   // applied_affiliate_code can be swapped freely — that is the affiliate cut.
   // referred_by is the reward attribution and must survive the swap, or a
   // player could be re-referred and pay out repeatedly.
-  const src = fs.readFileSync(
-    path.join(__dirname, '..', 'src', 'routes', 'affiliate.js'), 'utf8');
-  const patch = src.slice(src.indexOf('const patch = { applied_affiliate_code'),
-                          src.indexOf('const { error } = await supabase'));
-  assert.match(patch, /if \(!existing\?\.referred_by\) patch\.referred_by = owner\.id;/,
+  const body = affiliateHandler('post', '/apply-code');
+
+  assert.match(body, /if \(!existing\?\.referred_by\)\s*patch\.referred_by = owner\.id;/,
     'referred_by may only be written when it is currently empty');
-  assert.ok(!/patch\.referred_by = owner\.id;\s*$/m.test(patch.replace(/if \(![^\n]*\n/, '')),
-    'there must be no unconditional assignment');
+
+  // Every assignment to referred_by must be the guarded one. Counting them
+  // catches an unconditional write added alongside the guarded one, which a
+  // simple "does the guard exist" check would miss.
+  const writes = [...body.matchAll(/patch\.referred_by\s*=/g)].length;
+  assert.equal(writes, 1, `referred_by is assigned ${writes} times — exactly one guarded write is allowed`);
 });
 
 test('removing the applied code does NOT clear the referral', () => {
-  const src = fs.readFileSync(
-    path.join(__dirname, '..', 'src', 'routes', 'affiliate.js'), 'utf8');
-  const del = src.slice(src.indexOf("applied_affiliate_code: null"));
-  const stmt = del.slice(0, del.indexOf(';'));
-  assert.ok(!/referred_by/.test(stmt),
+  const body = affiliateHandler('delete', '/apply-code');
+  assert.match(body, /applied_affiliate_code: null/, 'the route must still clear the code');
+  assert.ok(!/referred_by/.test(body),
     'clearing the code must leave referred_by intact — the referral still happened');
+});
+
+// The whole point of section 8: the owner is pinned when the code is applied,
+// and cleared when it is removed. Without the clear, a removed code keeps
+// paying whoever it pointed at.
+test('the applied code pins its owner, and removing it unpins', () => {
+  const apply  = affiliateHandler('post', '/apply-code');
+  const remove = affiliateHandler('delete', '/apply-code');
+  assert.match(apply, /applied_code_owner_id: owner\.id/,
+    'apply-code must pin the owner, or earnings resolve from a renameable string');
+  assert.match(remove, /applied_code_owner_id: null/,
+    'removing the code must unpin the owner, or it keeps earning');
 });
 
 test('there is exactly one place that writes referred_by', () => {
