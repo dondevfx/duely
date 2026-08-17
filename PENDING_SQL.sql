@@ -400,3 +400,50 @@ CREATE INDEX IF NOT EXISTS idx_profiles_applied_code_owner ON profiles(applied_c
 -- Check the backfill:
 --   SELECT count(*) FROM profiles
 --   WHERE applied_affiliate_code IS NOT NULL AND applied_code_owner_id IS NULL;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 9. URGENT — allow 'deposit_raw', or BTC/ETH/LTC/DOGE/BNB/TRX deposits fail
+-- ─────────────────────────────────────────────────────────────────────────────
+--
+-- Symptom in the logs, repeating every 45 seconds forever:
+--
+--   [monitor] deposit detected ... coin=btc amount=0.00016388 tx=c004a08a...
+--   [monitor] claim failed for c004a08a... — not crediting:
+--     new row for relation "transactions" violates check constraint
+--     "transactions_type_check"
+--
+-- Every coin except SOL and USDC is forwarded to ChangeNow to be swapped, and
+-- the on-chain transaction is claimed first as a 'deposit_raw' row so two
+-- polls cannot both forward the same coins. transactions_type_check does not
+-- list 'deposit_raw', so that insert is rejected and the deposit never moves.
+--
+-- NOTHING WAS LOST. The claim is taken BEFORE the funds are forwarded, so a
+-- failed claim means nothing was forwarded and nothing was credited — the coins
+-- are still sitting in the player's deposit address. The monitor retries every
+-- poll, so the moment this runs, every stuck deposit is picked up and credited
+-- on the next pass. No manual recovery needed.
+--
+-- The list below is every type the backend writes today. Adding them all at
+-- once means the next new type is the only thing that can break this again.
+
+ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_type_check;
+
+ALTER TABLE transactions ADD CONSTRAINT transactions_type_check CHECK (type IN (
+  'deposit',          -- credited deposit
+  'deposit_raw',      -- on-chain receipt, claimed before forwarding to ChangeNow
+  'withdrawal',
+  'match_win',
+  'match_loss',
+  'match_draw',
+  'match_refund',
+  'tip_sent',
+  'tip_received',
+  'daily_bonus',
+  'diamond_bonus',
+  'rewards_spin',
+  'referral_bonus',
+  'fee_collection'
+));
+
+-- Confirm it took, and see what is waiting to be picked up:
+--   SELECT type, status, count(*) FROM transactions GROUP BY type, status ORDER BY 1,2;
