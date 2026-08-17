@@ -91,7 +91,37 @@ export default function GameLobby({
   const isDiamonds = betCurrency === 'diamonds';
   const fees       = isDiamonds ? DIAMOND_FEES : COIN_FEES;
   const currLabel  = isDiamonds ? '💎' : <CoinIcon size="0.85em" />;
-  const insufficient = entryFee > 0 && balance < entryFee;
+
+  // ── Starting a match freezes the affordability check ──────────────────────
+  //
+  // The stake is deducted server-side and the new balance arrives on the socket
+  // BEFORE this screen is replaced by the match. So for the moment in between,
+  // balance < entryFee is true and the button flipped to "Insufficient 💎 — Get
+  // More" on a match that was starting normally.
+  //
+  // Here that was worse than the cosmetic flash on the withdraw form, because
+  // this button also changes WHAT IT DOES: while insufficient it navigates to
+  // the top-up page. A second tap in that window — and people do tap again when
+  // a button looks unresponsive — threw the player onto the rewards page while
+  // the match they had just paid for was starting.
+  //
+  // The window is bounded rather than tied to a response, because the parent
+  // has no single "it started" callback to hang it on. If the start actually
+  // failed, the parent surfaces that through statusMsg and the button comes
+  // back on its own.
+  const [committing, setCommitting] = useState(false);
+  const commitTimer = useRef(null);
+  useEffect(() => () => clearTimeout(commitTimer.current), []);
+  function commit(fn) {
+    return (...args) => {
+      setCommitting(true);
+      clearTimeout(commitTimer.current);
+      commitTimer.current = setTimeout(() => setCommitting(false), 5000);
+      return fn?.(...args);
+    };
+  }
+
+  const insufficient = !committing && entryFee > 0 && balance < entryFee;
 
   // Safety net on mount — catch case where betCurrency is already set but entryFee is stale
   useEffect(() => {
@@ -208,7 +238,7 @@ export default function GameLobby({
           onClick={
             !session      ? () => navigate('/login')
             : insufficient ? () => navigate(topUpRoute(betCurrency))
-            : onQueue
+            : commit(onQueue)
           }
           variant="primary"
           size="lg"
@@ -241,7 +271,7 @@ export default function GameLobby({
                 the same as the main action above. */}
             {onBot && isDiamonds && entryFee > 0 && (
               <button
-                onClick={insufficient ? () => navigate(topUpRoute(betCurrency)) : onBot}
+                onClick={insufficient ? () => navigate(topUpRoute(betCurrency)) : commit(onBot)}
                 className={SMALL_BTN}
               >
                 {insufficient ? 'Insufficient 💎 — Get More' : `Bet vs Bot — ${fmtFee(entryFee)} 💎`}
@@ -249,7 +279,7 @@ export default function GameLobby({
             )}
             <div className="flex gap-2 sm:gap-2">
               {onBotFree && (
-                <button onClick={onBotFree} className={SMALL_BTN}>
+                <button onClick={commit(onBotFree)} className={SMALL_BTN}>
                   {botLabel || 'Play vs Bot'}
                 </button>
               )}

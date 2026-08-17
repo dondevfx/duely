@@ -70,3 +70,44 @@ test('the real outcome is still reported', () => {
   assert.match(src, /setWitMsg\(\{ type: 'error'/, 'a genuine failure must still be shown');
   assert.match(src, /setWitMsg\(\{ type: 'success'/, 'and so must success');
 });
+
+// ── The same race on the betting screen ────────────────────────────────────
+//
+// Worse here than on the withdraw form, because this button also changes what
+// it DOES: while it reads "Insufficient", it navigates to the top-up page. The
+// stake is deducted and pushed down the socket before the lobby is replaced by
+// the match, so a second tap in that window — and people do tap again when a
+// button looks unresponsive — threw the player onto the rewards page while the
+// match they had just paid for was starting.
+
+const lobby = () => fs.readFileSync(
+  path.join(__dirname, '..', '..', 'frontend', 'src', 'components', 'GameLobby.jsx'), 'utf8');
+
+test('starting a match freezes the lobby affordability check', () => {
+  const line = lobby().split(/\r?\n/).find(l => l.includes('const insufficient'));
+  assert.ok(line, 'the insufficient check is gone — was it renamed?');
+  assert.match(line, /!committing/,
+    'the button flips to "Insufficient" mid-start, and in that state it navigates away instead of playing');
+});
+
+test('every action that spends the stake sets the in-flight flag', () => {
+  // Miss one and that button keeps the old behaviour, which is exactly how
+  // this drifted across six games before.
+  const src = lobby();
+  // String match, not a regex: the parentheses here are literal, and escaping
+  // them through a template string is how this test silently passed on
+  // "commitonQueue" the first time it was written.
+  for (const handler of ['onQueue', 'onBot', 'onBotFree']) {
+    assert.ok(src.includes(`commit(${handler})`),
+      `${handler} does not freeze the check, so starting a match through it still flashes`);
+  }
+});
+
+test('the freeze releases itself', () => {
+  // There is no single "it started" callback to hang this on, so it is bounded
+  // by time. Without release, a failed start would leave the button lying about
+  // affordability for the rest of the session.
+  const src = lobby();
+  assert.match(src, /setTimeout\(\(\) => setCommitting\(false\)/, 'the freeze must expire');
+  assert.match(src, /clearTimeout\(commitTimer\.current\)/, 'and must not outlive the component');
+});
