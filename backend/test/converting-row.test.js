@@ -97,11 +97,11 @@ test('a paid withdrawal that cannot be recorded says so', () => {
     path.join(__dirname, '..', 'src', 'routes', 'wallet.js'), 'utf8')
     .split(/\r?\n/).filter(l => !l.trim().startsWith('//')).join('\n');
 
-  // Anchored on the payout hash, which only the SUCCESS row carries. Matching
-  // on type:'withdrawal' finds recordFailure first — a different insert, with
-  // different (correct) handling — and the test then passes or fails for the
-  // wrong reason.
-  const at = wallet.indexOf('tx_hash:       String(payoutId)');
+  // Anchored on the tx_hash expression, which only the SUCCESS row carries.
+  // Matching on type:'withdrawal' finds recordFailure first — a different
+  // insert, with different (correct) handling — and the test then passes or
+  // fails for the wrong reason.
+  const at = wallet.indexOf('tx_hash:       String(pending ? exchangeId : payoutId)');
   assert.notEqual(at, -1, 'the withdrawal record insert is gone');
   const block = wallet.slice(Math.max(0, at - 400), at + 900);
   assert.match(block, /const \{ error/,

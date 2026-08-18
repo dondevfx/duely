@@ -55,18 +55,26 @@ function init(supabase) {
   // Resume any conversions that were in progress before a restart
   setTimeout(async () => {
     try {
+      // Withdrawals as well as deposits. A restart used to drop every
+      // withdrawal conversion on the floor — and unlike a deposit, an
+      // unwatched withdrawal that fails leaves the player's coins deducted
+      // with nothing delivered.
       const { data: pending } = await supabase
         .from('transactions')
-        .select('tx_hash, user_id, created_at, extra_id')
+        .select('tx_hash, user_id, created_at, extra_id, type')
         .in('status', ['converting', 'stuck'])
-        .eq('type', 'deposit');
+        .in('type', ['deposit', 'withdrawal']);
 
       if (pending?.length) {
         console.log(`[swapPoller] resuming ${pending.length} pending conversion(s)`);
         pending.forEach(row => {
+          const startedAt = new Date(row.created_at).getTime();
+          if (row.type === 'withdrawal') {
+            watchWithdrawal(row.tx_hash, row.user_id, startedAt);
+            return;
+          }
           // extra_id='no_credit' means deposit was below user minimum — platform keeps USDC
-          const creditUser = row.extra_id !== 'no_credit';
-          watch(row.tx_hash, row.user_id, new Date(row.created_at).getTime(), creditUser);
+          watch(row.tx_hash, row.user_id, startedAt, row.extra_id !== 'no_credit');
         });
       }
     } catch (e) {
@@ -77,19 +85,36 @@ function init(supabase) {
 
 // Start watching an exchange. Called immediately after creating the swap.
 // creditUser: if false, platform keeps the USDC (deposit was below user-visible minimum)
-function watch(exchangeId, userId, startedAt = Date.now(), creditUser = true) {
+function watch(exchangeId, userId, startedAt = Date.now(), creditUser = true, kind = 'deposit') {
   if (activePolls.has(exchangeId)) return;
   activePolls.add(exchangeId);
-  console.log(`[swapPoller] watching exchange ${exchangeId} for user ${userId} creditUser=${creditUser}`);
-  scheduleNext(exchangeId, userId, startedAt, creditUser);
+  console.log(`[swapPoller] watching ${kind} exchange ${exchangeId} for user ${userId} creditUser=${creditUser}`);
+  scheduleNext(exchangeId, userId, startedAt, creditUser, kind);
 }
 
-function scheduleNext(exchangeId, userId, startedAt, creditUser) {
-  setTimeout(() => poll(exchangeId, userId, startedAt, creditUser), pollDelay(Date.now() - startedAt));
+/**
+ * Watch a WITHDRAWAL conversion.
+ *
+ * Nothing watched these. Once the USDC was handed to ChangeNow the row was
+ * marked confirmed and forgotten — so a conversion that failed, expired or was
+ * refunded left the player's coins deducted, no crypto delivered, and our
+ * records insisting it had gone fine. Silent, and only discovered by complaint.
+ *
+ * The failure modes are the mirror image of a deposit's: a deposit that fails
+ * means we never took the money, while a withdrawal that fails means we took it
+ * and delivered nothing. So this one refunds.
+ */
+function watchWithdrawal(exchangeId, userId, startedAt = Date.now()) {
+  watch(exchangeId, userId, startedAt, false, 'withdrawal');
 }
 
-async function poll(exchangeId, userId, startedAt, creditUser) {
+function scheduleNext(exchangeId, userId, startedAt, creditUser, kind = 'deposit') {
+  setTimeout(() => poll(exchangeId, userId, startedAt, creditUser, kind), pollDelay(Date.now() - startedAt));
+}
+
+async function poll(exchangeId, userId, startedAt, creditUser, kind = 'deposit') {
   if (!supabaseRef) return;
+  if (kind === 'withdrawal') return pollWithdrawal(exchangeId, userId, startedAt);
 
   try {
     const result = await getExchangeStatus(exchangeId);
@@ -177,16 +202,93 @@ async function poll(exchangeId, userId, startedAt, creditUser) {
 
     } else {
       // Still in progress — poll again
-      scheduleNext(exchangeId, userId, startedAt, creditUser);
+      scheduleNext(exchangeId, userId, startedAt, creditUser, kind);
     }
 
   } catch (e) {
     console.error(`[swapPoller] error polling ${exchangeId}:`, e.message);
     // Don't stop polling on transient errors — try again
     if (Date.now() - startedAt < MAX_WAIT_MS) {
-      scheduleNext(exchangeId, userId, startedAt, creditUser);
+      scheduleNext(exchangeId, userId, startedAt, creditUser, kind);
     }
   }
 }
 
-module.exports = { init, watch };
+// ── A withdrawal's conversion ──────────────────────────────────────────────
+//
+// Mirror image of a deposit. A deposit that fails means we never took the
+// money; a withdrawal that fails means we took it and delivered nothing. So
+// the terminal-failure branch REFUNDS rather than merely recording.
+//
+// The row is claimed before the refund, exactly as the deposit credit is
+// claimed before crediting. Two polls of the same exchange — or a poll racing
+// the restart-resume — would otherwise both refund, handing the player their
+// stake back twice for one failed withdrawal.
+async function pollWithdrawal(exchangeId, userId, startedAt) {
+  const { creditCoins } = require('./walletService');
+
+  try {
+    const result = await getExchangeStatus(exchangeId);
+    console.log(`[swapPoller] withdrawal ${exchangeId} status=${result.status}`);
+
+    if (result.status === 'finished') {
+      await supabaseRef.from('transactions')
+        .update({ status: 'confirmed' })
+        .eq('tx_hash', exchangeId).eq('type', 'withdrawal').eq('status', 'converting');
+      console.log(`[swapPoller] ✓ withdrawal ${exchangeId} delivered`);
+      activePolls.delete(exchangeId);
+      return;
+    }
+
+    if (['failed', 'refunded', 'expired'].includes(result.status)) {
+      // Claim first. Only the poll that actually flips the row refunds.
+      const { data: claimed } = await supabaseRef.from('transactions')
+        .update({ status: 'refunding' })
+        .eq('tx_hash', exchangeId).eq('type', 'withdrawal').eq('status', 'converting')
+        .select('id, amount_c, user_id');
+
+      if (!claimed?.length) { activePolls.delete(exchangeId); return; }
+      const row = claimed[0];
+
+      try {
+        await creditCoins(supabaseRef, row.user_id || userId, parseFloat(row.amount_c));
+        await supabaseRef.from('transactions')
+          .update({ status: 'refunded', notes: `ChangeNow ${result.status} — coins returned` })
+          .eq('id', row.id);
+        console.warn(`[swapPoller] withdrawal ${exchangeId} ${result.status} — refunded ${row.amount_c} to ${row.user_id}`);
+      } catch (e) {
+        // Coins are owed to a real person and the automatic path could not
+        // deliver them. refund_failed is already top of the admin queue and on
+        // the critical alert list.
+        await supabaseRef.from('transactions')
+          .update({ status: 'refund_failed', notes: `ChangeNow ${result.status}; refund failed: ${String(e.message).slice(0, 200)}` })
+          .eq('id', row.id).then().catch(() => {});
+        console.error(`CRITICAL: withdrawal ${exchangeId} ${result.status} and the refund failed — ${row.amount_c} owed to ${row.user_id}:`, e.message);
+      }
+      activePolls.delete(exchangeId);
+      return;
+    }
+
+    if (Date.now() - startedAt > MAX_WAIT_MS) {
+      // Deliberately NOT refunded. A conversion still running after a day has
+      // not told us it failed, and refunding a withdrawal that later completes
+      // pays the player twice. A person decides.
+      console.error(`[swapPoller] withdrawal ${exchangeId} unresolved after 24h — manual review needed`);
+      await supabaseRef.from('transactions')
+        .update({ status: 'stuck' })
+        .eq('tx_hash', exchangeId).eq('type', 'withdrawal');
+      activePolls.delete(exchangeId);
+      return;
+    }
+
+    scheduleNext(exchangeId, userId, startedAt, false, 'withdrawal');
+
+  } catch (e) {
+    console.error(`[swapPoller] error polling withdrawal ${exchangeId}:`, e.message);
+    if (Date.now() - startedAt < MAX_WAIT_MS) {
+      scheduleNext(exchangeId, userId, startedAt, false, 'withdrawal');
+    }
+  }
+}
+
+module.exports = { init, watch, watchWithdrawal };

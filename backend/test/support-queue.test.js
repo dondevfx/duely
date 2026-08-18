@@ -68,8 +68,11 @@ test('the attention queue covers every stuck state', () => {
     for (const m of src.matchAll(/status:\s*'([a-z_]+)'/g)) written.add(m[1]);
     for (const m of src.matchAll(/update\(\{\s*status:\s*'([a-z_]+)'/g)) written.add(m[1]);
   }
+  // 'refunded' is benign: a withdrawal whose conversion failed and whose refund
+  // SUCCEEDED. The player has their coins back, so there is nothing to action.
+  // The failure of that refund is 'refund_failed', which is top of the queue.
   const benign = new Set(['confirmed', 'paid', 'pending', 'claiming', 'forwarded',
-                          'below_min', 'failed', 'resolved', 'accepted']);
+                          'below_min', 'failed', 'resolved', 'accepted', 'refunded']);
   const stuck = [...written].filter(s => !benign.has(s));
 
   const listed = adminSrc.match(/const ATTENTION_STATUSES = \[([^\]]+)\]/)[1];
@@ -88,7 +91,7 @@ test('worst first, then oldest', () => {
   // successfully, so the player is whole, whereas a 'pending' withdrawal is a
   // state nothing currently writes — nothing will ever move it on, and the
   // coins may have been deducted without a payout.
-  const rank = ['refund_failed', 'payout_uncertain', 'pending', 'payout_failed', 'stuck', 'pending_retry', 'converting'];
+  const rank = ['refund_failed', 'payout_uncertain', 'pending', 'payout_failed', 'refunding', 'stuck', 'pending_retry', 'converting'];
   const listed = adminSrc.match(/const ATTENTION_STATUSES = \[([^\]]+)\]/)[1]
     .split(',').map(s => s.trim().replace(/'/g, ''));
   assert.deepEqual(listed, rank, 'order encodes severity — the queue sorts by it');

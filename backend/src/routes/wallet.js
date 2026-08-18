@@ -353,8 +353,12 @@ module.exports = function walletRoutes(supabase, io) {
       // manual recovery, but the user sees an error rather than silent loss.
       await deductCoins(supabase, req.user.id, amount);
 
-      let payoutId  = null;
-      let cryptoAmt = null;
+      let payoutId   = null;
+      let cryptoAmt  = null;
+      // Set only on the ChangeNow path. The direct payouts (SOL, USDC, USDT)
+      // are delivered by the time their send returns, so there is nothing left
+      // to watch and nothing that can fail afterwards.
+      let exchangeId = null;
 
       try {
         if (coin.toLowerCase() === 'sol') {
@@ -414,6 +418,12 @@ module.exports = function walletRoutes(supabase, io) {
             amount,
           });
           payoutId = sendTx || swap.exchangeId;
+          // Kept so the conversion can be WATCHED. Handing USDC to ChangeNow is
+          // not delivery — they still have to convert and send. Until now the
+          // row was marked confirmed here and forgotten, so a conversion that
+          // failed left the coins deducted, nothing delivered, and our records
+          // saying it went fine.
+          exchangeId = swap.exchangeId;
           console.log(`[withdraw] ChangeNow payout ${amount} USDC → ${coin} → ${address.trim()} exchange=${swap.exchangeId}`);
         }
 
@@ -519,20 +529,39 @@ module.exports = function walletRoutes(supabase, io) {
       // trail rather than the money. It still needs a human, because the
       // withdrawal will not appear in the player's history or count toward
       // their withdrawn total.
+      // 'confirmed' means DELIVERED. A ChangeNow withdrawal is not delivered
+      // when we send the USDC — it is delivered when they convert and pay out,
+      // which can still fail. Those rows are 'converting' until the poller sees
+      // a terminal status, and tx_hash carries the EXCHANGE id so the poller
+      // and support can both find it. A direct payout has already landed, so it
+      // keeps the on-chain hash and is confirmed immediately.
+      const pending = Boolean(exchangeId);
       const { error: recErr } = await supabase.from('transactions').insert({
         user_id:       req.user.id,
         type:          'withdrawal',
         amount_c:      amount,
         crypto_amount: cryptoAmt,
         crypto_symbol: coin.toUpperCase(),
-        tx_hash:       String(payoutId),
+        tx_hash:       String(pending ? exchangeId : payoutId),
         extra_id:      memo?.trim() || null,
-        status:        'confirmed',
+        status:        pending ? 'converting' : 'confirmed',
+        notes:         pending ? `USDC sent to ChangeNow tx=${payoutId}` : null,
       });
       if (recErr) {
         console.error(
           `CRITICAL: withdrawal PAID but not recorded — user=${req.user.id} amount=${amount} ` +
           `coin=${coin.toUpperCase()} tx=${payoutId} — the money has gone, the row has not:`, recErr.message);
+      }
+
+      // Watch the conversion. Only meaningful once the row exists — the poller
+      // claims that row before refunding, so without it a failure could refund
+      // repeatedly.
+      if (pending && !recErr) {
+        try {
+          require('../services/swapPoller').watchWithdrawal(exchangeId, req.user.id);
+        } catch (e) {
+          console.error(`[withdraw] could not watch exchange ${exchangeId}:`, e.message);
+        }
       }
 
       await recordWithdrawal(supabase, req.user.id, amount, 'crypto').catch(e =>
