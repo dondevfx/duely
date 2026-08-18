@@ -21,14 +21,22 @@ const SRC = fs.readFileSync(
 // explains it. (A test in this suite passed on its own documentation once.)
 const CODE = SRC.split(/\r?\n/).filter(l => !l.trim().startsWith('//')).join('\n');
 
+// The end marker MUST be found. When it is not, indexOf returns -1 and
+// String.slice treats that as "one character from the end" — silently handing
+// back the rest of the file. That is exactly what happened when fetchEthTxs
+// became an arrow function: this helper started returning half the module and
+// the assertions began matching unrelated code.
 function fn(name, endMarker) {
   const at = CODE.indexOf(`async function ${name}`);
   assert.notEqual(at, -1, `${name} is gone`);
-  return CODE.slice(at, CODE.indexOf(endMarker, at));
+  const end = CODE.indexOf(endMarker, at);
+  assert.notEqual(end, -1,
+    `the end marker "${endMarker}" no longer exists — this slice would silently run to the end of the file`);
+  return CODE.slice(at, end);
 }
 
 test('BTC detection survives one provider being down', () => {
-  const btc = fn('fetchBtcTxs', 'async function fetchEthTxs');
+  const btc = fn('fetchBtcTxs', 'function explorerMiss');
   assert.match(btc, /blockstream/, 'the primary provider');
   assert.match(btc, /fetchBlockcypherTxs\('btc'/,
     'with a single provider, an outage stops every Bitcoin deposit being noticed');
@@ -38,7 +46,7 @@ test('a total outage reports an error rather than "no deposits"', () => {
   // The dangerous failure is returning [] when we could not read the address:
   // that is indistinguishable from "nothing arrived", and the deposit is
   // silently ignored. Same shape of lie as a price of 0 meaning "worthless".
-  const btc = fn('fetchBtcTxs', 'async function fetchEthTxs');
+  const btc = fn('fetchBtcTxs', 'function explorerMiss');
   const fallback = btc.slice(btc.indexOf('catch'));
   assert.ok(!/return \[\]/.test(fallback),
     'swallowing a double outage into an empty list hides real deposits');
