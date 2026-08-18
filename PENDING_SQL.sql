@@ -447,3 +447,81 @@ ALTER TABLE transactions ADD CONSTRAINT transactions_type_check CHECK (type IN (
 
 -- Confirm it took, and see what is waiting to be picked up:
 --   SELECT type, status, count(*) FROM transactions GROUP BY type, status ORDER BY 1,2;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 10. URGENT — drop the unique indexes on extra_id
+-- ─────────────────────────────────────────────────────────────────────────────
+--
+-- These two exist and must not:
+--
+--   uniq_tx_extra_id            UNIQUE (extra_id) WHERE extra_id IS NOT NULL
+--   uniq_transactions_extra_id  UNIQUE (extra_id) WHERE extra_id IS NOT NULL
+--                                                   AND type = 'deposit'
+--
+-- extra_id is NOT an identifier. blockchainMonitor writes the literal string
+-- 'credit' or 'no_credit' into it on EVERY ChangeNow deposit row, and
+-- swapPoller reads it back to decide whether the player gets credited. wallet.js
+-- also stores withdrawal memos there, and the withdrawal failure path stores the
+-- destination address.
+--
+-- So a unique index allows exactly ONE deposit ever to carry extra_id='credit'.
+-- The first one succeeded; every deposit since has been rejected by the index,
+-- and the insert had no error check, so it failed in total silence.
+--
+-- The visible effect: BTC (and ETH/LTC/DOGE/BNB/TRX) was forwarded to ChangeNow,
+-- the swap completed, the USDC arrived in the bank — and no row existed to tell
+-- swapPoller to credit anybody. Money in, player unpaid, no trace.
+--
+-- Section 3 of this file has said not to create these since it was written.
+-- Dropping them loses nothing: uniq_deposit_tx_hash already provides the real
+-- protection, and it is on tx_hash, which IS an identifier.
+
+DROP INDEX IF EXISTS uniq_tx_extra_id;
+DROP INDEX IF EXISTS uniq_transactions_extra_id;
+
+-- Confirm only the tx_hash uniqueness remains:
+--   SELECT indexname FROM pg_indexes
+--   WHERE tablename = 'transactions' AND indexdef ILIKE '%UNIQUE%';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 11. ONE-OFF — pay the BTC deposit that section 10 caused to be lost
+-- ─────────────────────────────────────────────────────────────────────────────
+--
+-- Exchange ccc4c25b8fde82. The player's BTC was forwarded, ChangeNow completed
+-- the swap, and 8.49 USDC arrived in the bank — but the unique index on
+-- extra_id rejected the row that would have told swapPoller to credit them, so
+-- nobody was paid.
+--
+-- 8.49 USDC minus the standard 0.1% platform fee = 8.48 coins, which is exactly
+-- what swapPoller would have credited: floor(8.49 * 0.999 * 100) / 100.
+--
+-- RUN SECTION 10 FIRST. This inserts a row, and the index would reject it too.
+--
+-- Guarded so it cannot pay twice: the INSERT is conditional on no row already
+-- existing for this exchange, and the credit only runs if the insert landed.
+
+DO $recover$
+DECLARE
+  v_user   uuid    := '423d2b0c-1dae-4947-8340-b07575954383';
+  v_amount numeric := 8.48;
+  v_rows   int;
+BEGIN
+  INSERT INTO transactions (user_id, type, amount_c, crypto_amount, crypto_symbol, tx_hash, status, notes)
+  SELECT v_user, 'deposit', v_amount, 8.49, 'USDC', 'ccc4c25b8fde82', 'confirmed',
+         'manual recovery: swap finished but the converting row was rejected by uniq_tx_extra_id'
+  WHERE NOT EXISTS (SELECT 1 FROM transactions WHERE tx_hash = 'ccc4c25b8fde82');
+
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  IF v_rows = 0 THEN
+    RAISE NOTICE 'Already recorded — nothing credited.';
+    RETURN;
+  END IF;
+
+  PERFORM credit_coins(user_id => v_user, amount => v_amount);
+  PERFORM increment_crypto_deposited(user_id => v_user, amount => v_amount);
+  RAISE NOTICE 'Credited % coins to %', v_amount, v_user;
+END
+$recover$;
+
+-- Check it landed:
+--   SELECT username, c_coins FROM profiles WHERE id = '423d2b0c-1dae-4947-8340-b07575954383';
