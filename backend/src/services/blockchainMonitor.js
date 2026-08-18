@@ -647,12 +647,32 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
   _swapFailures.delete(txHash);
 
   // Record as 'converting' — swapPoller polls until done then credits (if creditUser)
-  await supabase.from('transactions').insert({
+  //
+  // This is the single most load-bearing row in the deposit flow. It is the
+  // only record that a swap is in flight, and the ONLY thing swapPoller's
+  // restart-resume reads. Without it, a container restart — which Railway does
+  // on every deploy — loses the watcher, and when ChangeNow finishes, the USDC
+  // lands in our wallet and the player is never credited.
+  //
+  // Its failure used to be silent: no error check, no log, no retry. So the one
+  // row that must exist could fail to be written and nothing would say so.
+  const { error: convErr } = await supabase.from('transactions').insert({
     user_id: userId, type: 'deposit', amount_c: 0,
     crypto_amount: netAmount, crypto_symbol: coin.toUpperCase(),
     tx_hash: swap.exchangeId, status: 'converting',
     extra_id: creditUser ? 'credit' : 'no_credit',
   });
+  if (convErr) {
+    // The coins are ALREADY at ChangeNow by this point, so there is nothing to
+    // undo — this is purely about not losing track of them. The in-memory watch
+    // below still runs, so it credits normally as long as the process survives;
+    // what is lost is the ability to resume after a restart. Everything needed
+    // to recover by hand goes in the log line.
+    console.error(
+      `CRITICAL: could not record the converting row for exchange ${swap.exchangeId} ` +
+      `(user ${userId}, ${netAmount} ${coin}, creditUser=${creditUser}) — the coins ARE forwarded, ` +
+      `but this credit will not survive a restart:`, convErr.message);
+  }
 
   try {
     const sendTx = await sendCrypto({ coin, privKey, toAddress: swap.depositAddress, amount: netAmount });
