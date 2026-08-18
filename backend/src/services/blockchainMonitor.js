@@ -122,24 +122,49 @@ async function fetchBtcTxs(address) {
 // An Etherscan-family response that is not a success.
 //
 // status '0' with "No transactions found" is the normal empty case for an
-// address nobody has paid yet. Anything else — a rejected API key, a rate
-// limit, a malformed request — was being returned as an empty list, which is
-// indistinguishable from "no deposits arrived". That is how BNB detection ran
-// for its whole life against a key BscScan rejects without anyone noticing.
+// address nobody has paid yet. Anything else — a rejected key, a rate limit, a
+// retired endpoint — was being returned as an empty list, indistinguishable
+// from "no deposits arrived".
+//
+// `result` is the field that actually says WHY. message is always the useless
+// "NOTOK"; result carries "Invalid API Key", "Max rate limit reached", or the
+// deprecation notice. Logging only message told us something was wrong without
+// telling us what, which cost a round trip.
 function explorerMiss(coin, address, d) {
   const msg = String(d?.message || '');
   if (/no transactions found/i.test(msg)) return;   // genuinely empty, not a fault
-  console.warn(`[monitor] ${coin} explorer returned status=${d?.status} message="${msg}" ` +
-    `for ${address} — treating as no deposits, which may be wrong`);
+  const why = typeof d?.result === 'string' ? d.result : JSON.stringify(d?.result ?? null);
+  console.warn(`[monitor] ${coin} explorer refused: status=${d?.status} message="${msg}" ` +
+    `result="${String(why).slice(0, 200)}" address=${address} — treating as no deposits, which may be wrong`);
 }
 
-async function fetchEthTxs(address) {
-  const key = process.env.ETHERSCAN_API_KEY || '';
+// ETH and BNB share one client, because Etherscan V2 serves every chain from a
+// single endpoint keyed by chainid — and one Etherscan API key covers them all.
+//
+// The V1 hosts these used (api.etherscan.io/api and api.bscscan.com/api) are
+// retired. Every request to them comes back status=0 message="NOTOK", which the
+// old code turned into an empty list — so ETH and BNB deposits were never
+// detected and nothing said so.
+//
+// That also explains BSCSCAN_API_KEY being configured and referenced nowhere:
+// under V2 there is no separate BscScan key to reference. It is still accepted
+// as a fallback for BNB in case the two keys really are different here.
+const EVM_CHAIN_IDS = { eth: 1, bnb: 56 };
+
+async function fetchEvmTxs(coin, address) {
+  const key = coin === 'bnb'
+    ? (process.env.ETHERSCAN_API_KEY || process.env.BSCSCAN_API_KEY || '')
+    : (process.env.ETHERSCAN_API_KEY || '');
+  const chainId = EVM_CHAIN_IDS[coin];
+
   const r = await fetchWithTimeout(
-    `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&sort=desc&apikey=${key}`
+    `https://api.etherscan.io/v2/api?chainid=${chainId}` +
+    `&module=account&action=txlist&address=${address}&sort=desc&apikey=${key}`
   );
   const d = await r.json();
-  if (d.status !== '1') { explorerMiss('eth', address, d); return []; }
+  if (d.status !== '1') { explorerMiss(coin, address, d); return []; }
+  if (!Array.isArray(d.result)) { explorerMiss(coin, address, d); return []; }
+
   return d.result
     .filter(tx => tx.to?.toLowerCase() === address.toLowerCase() && tx.isError === '0')
     .map(tx => ({
@@ -150,27 +175,8 @@ async function fetchEthTxs(address) {
     .filter(t => t.amount > 0);
 }
 
-async function fetchBnbTxs(address) {
-  // BscScan is a separate service from Etherscan and needs its OWN key. This
-  // read ETHERSCAN_API_KEY, while BSCSCAN_API_KEY was configured and used
-  // nowhere — so the request was authenticated with a key BscScan rejects,
-  // status came back '0', and the line below turned that into "no deposits".
-  // BNB deposits were never detected, and nothing said so.
-  const key = process.env.BSCSCAN_API_KEY || process.env.ETHERSCAN_API_KEY || '';
-  const r = await fetchWithTimeout(
-    `https://api.bscscan.com/api?module=account&action=txlist&address=${address}&sort=desc&apikey=${key}`
-  );
-  const d = await r.json();
-  if (d.status !== '1') { explorerMiss('bnb', address, d); return []; }
-  return d.result
-    .filter(tx => tx.to?.toLowerCase() === address.toLowerCase() && tx.isError === '0')
-    .map(tx => ({
-      txHash:    tx.hash,
-      amount:    parseFloat(tx.value) / 1e18,
-      confirmed: parseInt(tx.confirmations) >= 1,
-    }))
-    .filter(t => t.amount > 0);
-}
+const fetchEthTxs = (address) => fetchEvmTxs('eth', address);
+const fetchBnbTxs = (address) => fetchEvmTxs('bnb', address);
 
 async function fetchUsdcSplTxs(walletAddress) {
   const splToken = require('@solana/spl-token');
