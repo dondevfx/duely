@@ -44,6 +44,28 @@ async function getMinAmount(coin) {
   return parseFloat(data.minAmount || 0);
 }
 
+// Minimum for the WITHDRAWAL direction: USDC → coin, in USDC.
+//
+// getMinAmount above is the deposit direction (coin → USDC) and is the wrong
+// number for a payout. ChangeNow's floor moves with the destination network's
+// fees, so it is routinely higher than our own for ETH and can change hour to
+// hour — which is why this is asked live rather than hardcoded.
+//
+// Returns 0 when it cannot be determined. Callers treat that as "no opinion"
+// and fall back to the static minimum: a ChangeNow outage must not block every
+// withdrawal on the site.
+async function getWithdrawalMinUsd(coin) {
+  const ticker = SS_TICKERS[coin.toLowerCase()];
+  if (!ticker || ticker === BASE_STABLE) return 0;   // USDC needs no swap
+  try {
+    const data = await cnGet(`/min-amount/${BASE_STABLE}_${ticker}?api_key=${API_KEY}`);
+    const min = parseFloat(data.minAmount);
+    return Number.isFinite(min) && min > 0 ? min : 0;
+  } catch {
+    return 0;
+  }
+}
+
 // Estimate how much USDC we receive for a given coin amount
 async function estimateDeposit(coin, amount) {
   const ticker = SS_TICKERS[coin.toLowerCase()];
@@ -123,6 +145,7 @@ module.exports = {
   BASE_STABLE,
   SS_TICKERS,
   getMinAmount,
+  getWithdrawalMinUsd,
   estimateDeposit,
   estimateWithdrawal,
   createDepositSwap,

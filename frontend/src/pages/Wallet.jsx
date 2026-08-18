@@ -36,7 +36,14 @@ const WITHDRAW_COINS = [
   { id: 'trx',  label: 'TRX',  network: 'TRON'     },
 ];
 
-const WITHDRAW_MINS = { sol: 5, usdc: 5, default: 10 };
+// $5 everywhere except BTC. BTC keeps $10 because its network fee is a real
+// fraction of the payout — a $5 withdrawal would arrive noticeably smaller
+// than the number the player typed.
+//
+// These must match WITHDRAW_MINS in backend/src/routes/wallet.js. The server
+// also asks ChangeNow for its live minimum per coin, which can be higher than
+// any of these when a network is busy.
+const WITHDRAW_MINS = { btc: 10, default: 5 };
 const getWithdrawMin = (coinId) => WITHDRAW_MINS[coinId] ?? WITHDRAW_MINS.default;
 
 function fmt(n) {

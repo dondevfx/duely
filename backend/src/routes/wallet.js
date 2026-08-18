@@ -10,7 +10,7 @@ const {
 } = require('../services/walletService');
 const { getOrCreateAddress } = require('../services/addressService');
 const { sendCrypto, checkSolanaSignature } = require('../services/chainSend');
-const { createWithdrawalSwap, estimateWithdrawal, SS_TICKERS } = require('../services/simpleSwapService');
+const { createWithdrawalSwap, estimateWithdrawal, getWithdrawalMinUsd, SS_TICKERS } = require('../services/simpleSwapService');
 const { isValidAddressFor } = require('../services/addressValidator');
 const { swapUsdcToSol }      = require('../services/jupiterService');
 const { isLocked } = require('../services/lockService');
@@ -35,15 +35,19 @@ const DEPOSIT_MAX_SINGLE   = 50_000;      // $50k hard cap per deposit
 const MAX_TIP_COINS    = 1_000;
 const MAX_TIP_DIAMONDS = 100_000_000;
 
-// Per-coin withdrawal minimums
-// SOL/USDC go direct (Jupiter / SPL send) — no ChangeNow minimum
-// Everything else goes through ChangeNow — keep $5 to cover their minimums
+// Per-coin withdrawal minimums.
+//
+// $5 everywhere except BTC, whose network fee is a real fraction of a small
+// payout — at $5 the player would receive noticeably less than they asked for.
+//
+// These are OUR floors. ChangeNow has its own, per coin, and it moves with
+// network fees — it is routinely higher than $5 for ETH. Lowering our floor
+// without checking theirs would just move the failure later, into a payout that
+// deducts, fails and refunds. So the handler asks them before taking any coins.
 const WITHDRAW_MINS = {
-  sol:     5,
-  usdc:    5,
-  default: 10,  // BTC, ETH, BNB, LTC, TRX, DOGE — ChangeNow minimum
+  btc:     10,
+  default: 5,   // SOL, USDC, ETH, BNB, LTC, TRX, DOGE
 };
-const MIN_WITHDRAWAL = 10;   // fallback
 
 // Coins accepted for deposit (Plisio supports all of these)
 const DEPOSIT_COINS = new Set(['btc','eth','sol','ltc','trx','doge','bnb','usdc']);
@@ -297,6 +301,29 @@ module.exports = function walletRoutes(supabase, io) {
       const balance = await getBalance(supabase, req.user.id);
       if (balance < amount) {
         return res.status(400).json({ error: 'Insufficient balance' });
+      }
+
+      // ── ChangeNow's own floor ────────────────────────────────────────
+      //
+      // Ours is $5 for most coins; theirs moves with the destination network's
+      // fees and is routinely higher for ETH. Without this, dropping our floor
+      // to $5 would not make small withdrawals work — it would make them fail
+      // LATER, after the coins had been deducted, in the payout path that then
+      // has to refund. The player would see "Payout failed" and a raw provider
+      // error for something we could have told them up front.
+      //
+      // Asked before anything is deducted, so a rejection costs nothing.
+      //
+      // Fails OPEN: getWithdrawalMinUsd returns 0 when it cannot find out, and
+      // 0 means "no opinion". A ChangeNow outage must not block withdrawals
+      // across the whole site — the payout path still refunds if it turns out
+      // to be under after all.
+      const liveMin = await getWithdrawalMinUsd(coin.toLowerCase()).catch(() => 0);
+      if (liveMin > 0 && amount < liveMin) {
+        return res.status(400).json({
+          error: `${coin.toUpperCase()} withdrawals need at least $${liveMin.toFixed(2)} right now — ` +
+                 `network fees set this and it changes. Try a larger amount, or withdraw USDC or SOL instead.`,
+        });
       }
 
       // ── Decode admin private key ─────────────────────────────────────
