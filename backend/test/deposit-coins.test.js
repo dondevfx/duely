@@ -13,6 +13,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const BACKEND = fs.readFileSync(
+  path.join(__dirname, '..', 'src', 'services', 'coinConfig.js'), 'utf8');
+const MONITOR_SRC = fs.readFileSync(
+  path.join(__dirname, '..', 'src', 'services', 'blockchainMonitor.js'), 'utf8');
+const WALLET_SRC = fs.readFileSync(
   path.join(__dirname, '..', 'src', 'routes', 'wallet.js'), 'utf8');
 const FRONTEND = fs.readFileSync(
   path.join(__dirname, '..', '..', 'frontend', 'src', 'pages', 'Wallet.jsx'), 'utf8');
@@ -94,4 +98,35 @@ test('every offered deposit coin has a detector', () => {
   for (const coin of backendDepositCoins()) {
     assert.ok(handled.has(coin), `${coin} is offered for deposit but fetchTxs has no branch for it`);
   }
+});
+
+// ── One list, two readers ──────────────────────────────────────────────────
+//
+// The deposit list lived in the HTTP route, so the blockchain monitor had no
+// idea it existed and polled every address row in the table. Disabling BNB
+// stopped new addresses being issued but left the poller warning about the old
+// ones every 45 seconds, forever — burying every other message in the log.
+
+test('the route and the monitor read the same list', () => {
+  assert.match(WALLET_SRC, /require\('\.\.\/services\/coinConfig'\)/,
+    'the route must not keep its own copy');
+  assert.match(MONITOR_SRC, /require\('\.\/coinConfig'\)/,
+    'the monitor must know which coins are still accepted');
+});
+
+test('disabled coins are not polled', () => {
+  const fn = MONITOR_SRC.slice(MONITOR_SRC.indexOf('async function loadAddresses'),
+                               MONITOR_SRC.indexOf('const COIN_DELAY_MS'));
+  assert.match(fn, /DEPOSIT_COINS\.has/,
+    'polling an address for a coin we no longer accept produces a warning nobody can act on');
+});
+
+test('a repeating explorer failure does not repeat in the log', () => {
+  // A plan limit or an outage affects every address at once and does not change
+  // between polls. One line per address per pass makes the log unreadable.
+  const fn = MONITOR_SRC.slice(MONITOR_SRC.indexOf('function explorerMiss'),
+                               MONITOR_SRC.indexOf('async function fetchEthTxs'));
+  assert.match(fn, /MISS_REPEAT_MS/, 'identical failures must be throttled');
+  assert.match(fn, /\$\{coin\}:\$\{String\(why\)/,
+    'the reason must be part of the key, so a DIFFERENT failure still reports immediately');
 });

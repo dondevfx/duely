@@ -49,15 +49,10 @@ const WITHDRAW_MINS = {
   default: 5,   // SOL, USDC, ETH, BNB, LTC, TRX, DOGE
 };
 
-// Coins we can actually DETECT arriving. Handing out an address for a coin we
-// cannot see is how money gets taken and never credited.
-//
-// BNB is out: BSC deposit detection needs a paid Etherscan plan — the free
-// tier answers "Free API access is not supported for this chain" — so nothing
-// notices a BNB deposit landing. It stays withdrawable, because a withdrawal
-// sends USDC to ChangeNow and never reads a BSC explorer.
-//
-// Must match the COINS list in frontend/src/pages/Wallet.jsx.
+// Shared with the blockchain monitor, so disabling a coin stops the poller
+// too rather than leaving it warning about an address nobody can deposit to.
+const { DEPOSIT_COINS } = require('../services/coinConfig');
+
 // Paid out by us, on Solana, with no exchange in the path:
 //   SOL   USDC → SOL on Jupiter, then send
 //   USDC  sent straight from the payout wallet
@@ -67,8 +62,6 @@ const WITHDRAW_MINS = {
 // on a payout that never touches that exchange would reject withdrawals for no
 // reason — their USDC→coin minimum is about their costs, not ours.
 const DIRECT_PAYOUT_COINS = new Set(['sol', 'usdc', 'usdt']);
-
-const DEPOSIT_COINS = new Set(['btc','eth','sol','ltc','trx','doge','usdc','usdt']);
 
 // Per-coin deposit minimums shown in UI (must match the frontend coin grid).
 // Actual crediting is more generous — anything that nets >= $3 in USDC is

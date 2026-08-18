@@ -18,6 +18,7 @@ const { getAddress }        = require('./addressService');
 const { sendCrypto, sweepUsdc, sweepSplToken } = require('./chainSend');
 const { createDepositSwap } = require('./simpleSwapService');
 const { swapSolToUsdc }     = require('./jupiterService');
+const { DEPOSIT_COINS }     = require('./coinConfig');
 
 const POLL_INTERVAL_MS      = 45_000;
 const OUR_FEE               = 0.001; // 0.1% platform fee on all deposits
@@ -131,12 +132,27 @@ async function fetchBtcTxs(address) {
 // "NOTOK"; result carries "Invalid API Key", "Max rate limit reached", or the
 // deprecation notice. Logging only message told us something was wrong without
 // telling us what, which cost a round trip.
+const _missLogged = new Map();
+const MISS_REPEAT_MS = 30 * 60 * 1000;
+
 function explorerMiss(coin, address, d) {
   const msg = String(d?.message || '');
   if (/no transactions found/i.test(msg)) return;   // genuinely empty, not a fault
   const why = typeof d?.result === 'string' ? d.result : JSON.stringify(d?.result ?? null);
+
+  // Once per coin+reason per half hour. A provider outage or a plan limit
+  // affects every address at once and does not change between polls, so
+  // logging it per address per pass buries everything else — which is how the
+  // BNB plan limit produced a line every 45 seconds and nothing else was
+  // readable. The reason is part of the key, so a DIFFERENT failure still
+  // reports immediately.
+  const key = `${coin}:${String(why).slice(0, 80)}`;
+  const last = _missLogged.get(key) || 0;
+  if (Date.now() - last < MISS_REPEAT_MS) return;
+  _missLogged.set(key, Date.now());
+
   console.warn(`[monitor] ${coin} explorer refused: status=${d?.status} message="${msg}" ` +
-    `result="${String(why).slice(0, 200)}" address=${address} — treating as no deposits, which may be wrong`);
+    `result="${String(why).slice(0, 200)}" (e.g. ${address}) — treating as no deposits, which may be wrong`);
 }
 
 // ETH and BNB share one client, because Etherscan V2 serves every chain from a
@@ -749,11 +765,33 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
 let supabaseRef = null;
 
 // Load all watched addresses from DB
+// Only addresses for coins we still accept.
+//
+// The table keeps every address ever issued, so a coin that gets disabled would
+// otherwise be polled forever — one warning per address per pass, about a coin
+// nobody can deposit to. Those warnings exist to be read, and an unactionable
+// one repeating every 45 seconds trains you to scroll past the ones that matter.
+//
+// Announced ONCE at startup instead. Funds already sitting at a disabled coin's
+// address are not lost: they are in an address derived from the master secret
+// and recoverable by hand, which is the same position polling would leave them
+// in anyway, since the reason the coin is disabled is that we cannot read it.
+let _skipAnnounced = false;
 async function loadAddresses() {
   const { data } = await supabaseRef
     .from('deposit_addresses')
     .select('user_id, coin, address');
-  return data || [];
+
+  const all = data || [];
+  const live = all.filter(a => DEPOSIT_COINS.has(String(a.coin).toLowerCase()));
+
+  if (!_skipAnnounced && live.length !== all.length) {
+    _skipAnnounced = true;
+    const skipped = [...new Set(all.filter(a => !DEPOSIT_COINS.has(String(a.coin).toLowerCase()))
+      .map(a => String(a.coin).toUpperCase()))];
+    console.log(`[monitor] not polling ${all.length - live.length} address(es) for disabled coin(s): ${skipped.join(', ')}`);
+  }
+  return live;
 }
 
 // Per-address delay, chosen per provider rather than one number for everything.
