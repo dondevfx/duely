@@ -663,15 +663,24 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     extra_id: creditUser ? 'credit' : 'no_credit',
   });
   if (convErr) {
-    // The coins are ALREADY at ChangeNow by this point, so there is nothing to
-    // undo — this is purely about not losing track of them. The in-memory watch
-    // below still runs, so it credits normally as long as the process survives;
-    // what is lost is the ability to resume after a restart. Everything needed
-    // to recover by hand goes in the log line.
+    // Do NOT forward. This runs BEFORE sendCrypto, so the coins are still in
+    // the player's deposit address and nothing has moved yet.
+    //
+    // Forwarding anyway would send real money to ChangeNow with no record that
+    // it is owed back — recoverable only from a log line, and only until the
+    // container restarts. Stopping here keeps the coins where they are, which
+    // is the same claim-before-act discipline the rest of this path uses.
+    //
+    // The deposit_raw claim is handed back so a later poll retries the whole
+    // thing from the top once the database is accepting the row again.
     console.error(
-      `CRITICAL: could not record the converting row for exchange ${swap.exchangeId} ` +
-      `(user ${userId}, ${netAmount} ${coin}, creditUser=${creditUser}) — the coins ARE forwarded, ` +
-      `but this credit will not survive a restart:`, convErr.message);
+      `[monitor] could not record the converting row for ${txHash} ` +
+      `(user ${userId}, ${netAmount} ${coin}) — NOT forwarding; coins stay in the deposit address:`,
+      convErr.message);
+    await supabase.from('transactions')
+      .update({ status: 'pending_retry' }).eq('tx_hash', txHash).eq('type', 'deposit_raw')
+      .then().catch(() => {});
+    return;   // deliberately not _seenTxs — the next poll must try again
   }
 
   try {

@@ -27,16 +27,16 @@ test('the converting row reports its own failure', () => {
   const block = CODE.slice(Math.max(0, at - 400), at + 900);
   assert.match(block, /error:\s*convErr|const \{ error/,
     'the insert result must be inspected — a silent failure here loses the credit on the next restart');
-  assert.match(block, /CRITICAL/,
-    'losing this row means a player is owed money nobody is tracking; it must be loud');
+  assert.match(block, /could not record the converting row/,
+    'losing this row means a player is owed money nobody is tracking; it must be logged');
 });
 
-test('the failure log carries what is needed to recover by hand', () => {
+test('the failure log carries what is needed to diagnose it', () => {
   const at = CODE.indexOf('could not record the converting row');
   assert.notEqual(at, -1, 'the failure log is gone');
   const line = CODE.slice(at, at + 500);
   for (const [what, re] of [
-    ['the exchange id', /swap\.exchangeId/],
+    ['the deposit tx',  /\$\{txHash\}/],
     ['the user',        /\$\{userId\}/],
     ['the amount',      /\$\{netAmount\}/],
     ['the reason',      /convErr\.message/],
@@ -45,15 +45,28 @@ test('the failure log carries what is needed to recover by hand', () => {
   }
 });
 
-test('a failed insert does not stop the watch', () => {
-  // The coins are already at ChangeNow by this point, so there is nothing to
-  // undo. Bailing out here would guarantee the loss it is trying to report.
-  const at = CODE.indexOf('could not record the converting row');
-  const after = CODE.slice(at, CODE.indexOf('}', CODE.indexOf('convErr.message', at)) + 400);
-  assert.ok(!/\breturn\b/.test(after),
-    'returning early abandons a swap whose coins have already been sent');
-  assert.match(CODE.slice(at), /watch\(swap\.exchangeId/,
-    'the in-memory watch must still start, so it credits if the process survives');
+test('a failed insert stops the forward, so nothing is sent unrecorded', () => {
+  // The insert runs BEFORE sendCrypto, so the coins are still in the player's
+  // deposit address at this point. Forwarding anyway would send real money to
+  // ChangeNow with no record that it is owed back — recoverable only from a log
+  // line, and only until the container restarts.
+  //
+  // My first version of this fix continued past the failure on the belief the
+  // coins had already gone. They had not. Checking the ORDER is what settles
+  // it, so that is what this asserts.
+  const insertAt = CODE.indexOf("tx_hash: swap.exchangeId");
+  const sendAt   = CODE.indexOf('sendCrypto({ coin, privKey, toAddress: swap.depositAddress');
+  assert.ok(insertAt !== -1 && sendAt !== -1, 'the insert or the forward is gone');
+  assert.ok(insertAt < sendAt,
+    'the record must be written before the coins move, or a failure cannot be made safe');
+
+  const handler = CODE.slice(CODE.indexOf('if (convErr)'), sendAt);
+  assert.match(handler, /return;/,
+    'a deposit whose record could not be written must not be forwarded');
+  assert.match(handler, /pending_retry/,
+    'the claim must be handed back, or the deposit is never retried');
+  assert.ok(!/_seenTxs\.add/.test(handler),
+    'marking it seen would make a transient database failure permanent');
 });
 
 test('every insert in the deposit path is checked or explicitly best-effort', () => {
