@@ -19,13 +19,25 @@ export default function DailyBonus() {
   const [message, setMessage] = useState(null);
   const [remaining, setRemaining] = useState(0);
 
+  // Both numbers come from the server. They were written out by hand in three
+  // places here, so changing the offer meant remembering all three — and any
+  // one missed advertises a bonus the server will not give.
+  const amount = status?.bonusAmount;
+  const period = (() => {
+    const ms = status?.cooldownMs;
+    if (!ms) return null;
+    const mins = Math.round(ms / 60000);
+    if (mins >= 60) { const h = Math.round(mins / 60); return h === 1 ? 'hour' : h + ' hours'; }
+    return mins === 1 ? 'minute' : mins + ' minutes';
+  })();
+
   const fetchStatus = useCallback(async () => {
     try {
       const data = await api.get('/bonus/diamond-status');
       setStatus(data);
       if (data.nextClaimAt) setRemaining(new Date(data.nextClaimAt).getTime() - Date.now());
     } catch {
-      setStatus({ canClaim: true, bonusAmount: 250 });
+      setStatus({ canClaim: true, bonusAmount: null });
     }
   }, []);
 
@@ -63,12 +75,14 @@ export default function DailyBonus() {
       <div className="text-2xl">💎</div>
       <div className="text-center">
         <div className="font-bold text-white">Diamond Bonus</div>
-        <div className="text-sm text-muted">Claim 250 Diamonds every 5 minutes</div>
+        <div className="text-sm text-muted">
+          {amount && period ? `Claim ${amount.toLocaleString()} Diamonds every ${period}` : 'Free diamonds, regularly'}
+        </div>
       </div>
 
       {status.canClaim ? (
         <GlowButton variant="success" onClick={handleClaim} disabled={claiming} className="w-full">
-          {claiming ? 'Claiming...' : 'Claim 250 💎'}
+          {claiming ? 'Claiming...' : `Claim ${amount ? amount.toLocaleString() : ''} 💎`}
         </GlowButton>
       ) : (
         <div className="text-center">

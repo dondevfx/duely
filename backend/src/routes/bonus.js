@@ -4,8 +4,8 @@ const { requireAuth } = require('../middleware/auth');
 const COIN_BONUS       = 1;
 const COIN_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
-const DIAMOND_BONUS       = 250;
-const DIAMOND_COOLDOWN_MS = 5 * 60 * 1000;
+const DIAMOND_BONUS       = 500;
+const DIAMOND_COOLDOWN_MS = 1 * 60 * 1000;
 
 const SPIN_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const SPIN_PRIZES = [
@@ -73,6 +73,10 @@ module.exports = function bonusRoutes(supabase) {
       canClaim,
       nextClaimAt: canClaim ? null : new Date(last + DIAMOND_COOLDOWN_MS).toISOString(),
       bonusAmount: DIAMOND_BONUS,
+      // Sent so the page can label itself. It used to hardcode "250 every 5
+      // minutes" in three places, which is three things to remember when the
+      // numbers change and three ways to advertise the wrong offer.
+      cooldownMs:  DIAMOND_COOLDOWN_MS,
       diamonds:    data.diamonds || 0,
     });
   });
