@@ -47,7 +47,7 @@ async function getPriceUsd(coin) {
   if (Date.now() - _priceTime > 60_000) {
     try {
       const ids = Object.values(COINGECKO_IDS).join(',');
-      const r   = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`);
+      const r   = await fetchWithTimeout(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`);
       const d   = await r.json();
       _prices = {};
       for (const [coin, id] of Object.entries(COINGECKO_IDS)) {
@@ -63,25 +63,65 @@ async function getPriceUsd(coin) {
 
 // ── Blockchain API fetchers ───────────────────────────────────────────────────
 
+// A request that cannot hang forever.
+//
+// node-fetch has no default timeout, so a provider that accepts the connection
+// and then goes quiet stalls that coin's entire poll pass — every address
+// behind it waits on one dead socket.
+async function fetchWithTimeout(url, opts = {}, ms = 12_000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...opts, signal: ctrl.signal });
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 // Returns array of { txHash, amount (in coin units), confirmed }
+//
+// Two providers, because this is the ONLY way a BTC deposit is noticed. It read
+// blockstream.info alone, so when they were unreachable —
+//
+//   [monitor] poll error btc/17pF7...: request to https://blockstream.info/... failed
+//
+// — Bitcoin deposits simply stopped being detected. Nothing was lost (the coins
+// sit in the deposit address and the next successful poll finds them), but
+// every player depositing during the outage waits with no explanation.
+//
+// BlockCypher is the fallback rather than the primary because its free tier
+// caps per hour as well as per second, and it is already the sole provider for
+// LTC and DOGE. Used only when blockstream fails, that budget is untouched on a
+// normal day.
 async function fetchBtcTxs(address) {
-  const r = await fetch(`https://blockstream.info/api/address/${address}/txs`);
-  const txs = await r.json();
-  if (!Array.isArray(txs)) return [];
-  return txs.map(tx => {
-    const out = tx.vout?.find(o => o.scriptpubkey_address === address);
-    const satoshis = out?.value || 0;
-    return {
-      txHash:    tx.txid,
-      amount:    satoshis / 1e8,
-      confirmed: tx.status?.confirmed ?? false,
-    };
-  }).filter(t => t.amount > 0);
+  try {
+    const r = await fetchWithTimeout(`https://blockstream.info/api/address/${address}/txs`);
+    const txs = await r.json();
+    if (Array.isArray(txs)) {
+      return txs.map(tx => {
+        const out = tx.vout?.find(o => o.scriptpubkey_address === address);
+        const satoshis = out?.value || 0;
+        return {
+          txHash:    tx.txid,
+          amount:    satoshis / 1e8,
+          confirmed: tx.status?.confirmed ?? false,
+        };
+      }).filter(t => t.amount > 0);
+    }
+    throw new Error('blockstream returned a non-array response');
+  } catch (e) {
+    console.warn(`[monitor] blockstream failed for ${address} (${e.message}) — trying BlockCypher`);
+    // Let this one throw: if BOTH providers are down, the caller's per-address
+    // catch logs it and the next poll retries. Swallowing it would report "no
+    // deposits" for an address we could not actually read, which is the same
+    // shape of lie as a price of 0 meaning "worthless".
+    return fetchBlockcypherTxs('btc', address);
+  }
 }
 
 async function fetchEthTxs(address) {
   const key = process.env.ETHERSCAN_API_KEY || '';
-  const r = await fetch(
+  const r = await fetchWithTimeout(
     `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&sort=desc&apikey=${key}`
   );
   const d = await r.json();
@@ -98,7 +138,7 @@ async function fetchEthTxs(address) {
 
 async function fetchBnbTxs(address) {
   const key = process.env.ETHERSCAN_API_KEY || '';
-  const r = await fetch(
+  const r = await fetchWithTimeout(
     `https://api.bscscan.com/api?module=account&action=txlist&address=${address}&sort=desc&apikey=${key}`
   );
   const d = await r.json();
@@ -130,7 +170,7 @@ async function fetchUsdcSplTxs(walletAddress) {
   }
 
   // Get recent signatures for the token account
-  const sigRes = await fetch(rpc, {
+  const sigRes = await fetchWithTimeout(rpc, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -146,7 +186,7 @@ async function fetchUsdcSplTxs(walletAddress) {
   for (const sig of sigs) {
     if (sig.err) continue;
     try {
-      const txRes = await fetch(rpc, {
+      const txRes = await fetchWithTimeout(rpc, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -182,7 +222,7 @@ async function fetchUsdcSplTxs(walletAddress) {
 
 async function fetchSolTxs(address) {
   const rpc = process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
-  const r   = await fetch(rpc, {
+  const r   = await fetchWithTimeout(rpc, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -198,7 +238,7 @@ async function fetchSolTxs(address) {
   for (const sig of sigs) {
     if (sig.err) continue;
     try {
-      const txR = await fetch(rpc, {
+      const txR = await fetchWithTimeout(rpc, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -232,7 +272,7 @@ async function fetchSolTxs(address) {
 }
 
 async function fetchTrxTxs(address) {
-  const r = await fetch(
+  const r = await fetchWithTimeout(
     `https://api.trongrid.io/v1/accounts/${address}/transactions?only_confirmed=true&limit=20&direction=in`
   );
   const d = await r.json();
@@ -256,7 +296,7 @@ async function fetchTrxTxs(address) {
 
 async function fetchUsdtTrc20Txs(address) {
   const usdtContract = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
-  const r = await fetch(
+  const r = await fetchWithTimeout(
     `https://api.trongrid.io/v1/accounts/${address}/transactions/trc20?only_confirmed=true&limit=20&contract_address=${usdtContract}`
   );
   const d = await r.json();
@@ -274,7 +314,7 @@ async function fetchBlockcypherTxs(coin, address) {
   const chains = { btc: 'btc/main', ltc: 'ltc/main', doge: 'doge/main' };
   const chain  = chains[coin];
   const token  = process.env.BLOCKCYPHER_TOKEN ? `?token=${process.env.BLOCKCYPHER_TOKEN}` : '';
-  const r = await fetch(`https://api.blockcypher.com/v1/${chain}/addrs/${address}/full?limit=5${token}`);
+  const r = await fetchWithTimeout(`https://api.blockcypher.com/v1/${chain}/addrs/${address}/full?limit=5${token}`);
   const d = await r.json();
   if (!d.txs) return [];
   return d.txs.map(tx => {
