@@ -443,7 +443,18 @@ module.exports = function walletRoutes(supabase, io) {
       }
 
       // ── Record transaction ───────────────────────────────────────────
-      await supabase.from('transactions').insert({
+      //
+      // Checked, for the same reason the deposit path now is: an insert whose
+      // result is discarded can fail in total silence, and that is exactly how
+      // a live BTC deposit went missing — a unique index on extra_id rejected
+      // the row and nothing anywhere said so. This row also writes extra_id.
+      //
+      // Unlike the deposit case there is nothing to undo: the payout has
+      // already gone on-chain by this point, so a failure here costs the audit
+      // trail rather than the money. It still needs a human, because the
+      // withdrawal will not appear in the player's history or count toward
+      // their withdrawn total.
+      const { error: recErr } = await supabase.from('transactions').insert({
         user_id:       req.user.id,
         type:          'withdrawal',
         amount_c:      amount,
@@ -453,6 +464,11 @@ module.exports = function walletRoutes(supabase, io) {
         extra_id:      memo?.trim() || null,
         status:        'confirmed',
       });
+      if (recErr) {
+        console.error(
+          `CRITICAL: withdrawal PAID but not recorded — user=${req.user.id} amount=${amount} ` +
+          `coin=${coin.toUpperCase()} tx=${payoutId} — the money has gone, the row has not:`, recErr.message);
+      }
 
       await recordWithdrawal(supabase, req.user.id, amount, 'crypto').catch(e =>
         console.error('recordWithdrawal failed:', e.message)

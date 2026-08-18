@@ -119,13 +119,27 @@ async function fetchBtcTxs(address) {
   }
 }
 
+// An Etherscan-family response that is not a success.
+//
+// status '0' with "No transactions found" is the normal empty case for an
+// address nobody has paid yet. Anything else — a rejected API key, a rate
+// limit, a malformed request — was being returned as an empty list, which is
+// indistinguishable from "no deposits arrived". That is how BNB detection ran
+// for its whole life against a key BscScan rejects without anyone noticing.
+function explorerMiss(coin, address, d) {
+  const msg = String(d?.message || '');
+  if (/no transactions found/i.test(msg)) return;   // genuinely empty, not a fault
+  console.warn(`[monitor] ${coin} explorer returned status=${d?.status} message="${msg}" ` +
+    `for ${address} — treating as no deposits, which may be wrong`);
+}
+
 async function fetchEthTxs(address) {
   const key = process.env.ETHERSCAN_API_KEY || '';
   const r = await fetchWithTimeout(
     `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&sort=desc&apikey=${key}`
   );
   const d = await r.json();
-  if (d.status !== '1') return [];
+  if (d.status !== '1') { explorerMiss('eth', address, d); return []; }
   return d.result
     .filter(tx => tx.to?.toLowerCase() === address.toLowerCase() && tx.isError === '0')
     .map(tx => ({
@@ -137,12 +151,17 @@ async function fetchEthTxs(address) {
 }
 
 async function fetchBnbTxs(address) {
-  const key = process.env.ETHERSCAN_API_KEY || '';
+  // BscScan is a separate service from Etherscan and needs its OWN key. This
+  // read ETHERSCAN_API_KEY, while BSCSCAN_API_KEY was configured and used
+  // nowhere — so the request was authenticated with a key BscScan rejects,
+  // status came back '0', and the line below turned that into "no deposits".
+  // BNB deposits were never detected, and nothing said so.
+  const key = process.env.BSCSCAN_API_KEY || process.env.ETHERSCAN_API_KEY || '';
   const r = await fetchWithTimeout(
     `https://api.bscscan.com/api?module=account&action=txlist&address=${address}&sort=desc&apikey=${key}`
   );
   const d = await r.json();
-  if (d.status !== '1') return [];
+  if (d.status !== '1') { explorerMiss('bnb', address, d); return []; }
   return d.result
     .filter(tx => tx.to?.toLowerCase() === address.toLowerCase() && tx.isError === '0')
     .map(tx => ({

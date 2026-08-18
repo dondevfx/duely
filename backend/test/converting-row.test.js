@@ -83,3 +83,29 @@ test('every insert in the deposit path is checked or explicitly best-effort', ()
       `an unchecked transactions insert at offset ${m.index} — a silent failure here loses money tracking`);
   }
 });
+
+// ── The same discipline on the withdrawal side ─────────────────────────────
+//
+// The withdrawal success row also writes extra_id, so the index that ate the
+// deposit could reject it too — and its insert result was discarded the same
+// way. The payout has already gone on-chain by then, so a failure costs the
+// audit trail rather than the money, but it still needs a human: the
+// withdrawal appears in no history and counts toward no total.
+
+test('a paid withdrawal that cannot be recorded says so', () => {
+  const wallet = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'routes', 'wallet.js'), 'utf8')
+    .split(/\r?\n/).filter(l => !l.trim().startsWith('//')).join('\n');
+
+  // Anchored on the payout hash, which only the SUCCESS row carries. Matching
+  // on type:'withdrawal' finds recordFailure first — a different insert, with
+  // different (correct) handling — and the test then passes or fails for the
+  // wrong reason.
+  const at = wallet.indexOf('tx_hash:       String(payoutId)');
+  assert.notEqual(at, -1, 'the withdrawal record insert is gone');
+  const block = wallet.slice(Math.max(0, at - 400), at + 900);
+  assert.match(block, /const \{ error/,
+    'a discarded insert result is how the deposit went missing; the same shape is here');
+  assert.match(block, /CRITICAL/,
+    'a payout with no record needs a person, not a silent success');
+});
