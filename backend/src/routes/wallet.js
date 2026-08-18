@@ -49,8 +49,16 @@ const WITHDRAW_MINS = {
   default: 5,   // SOL, USDC, ETH, BNB, LTC, TRX, DOGE
 };
 
-// Coins accepted for deposit (Plisio supports all of these)
-const DEPOSIT_COINS = new Set(['btc','eth','sol','ltc','trx','doge','bnb','usdc']);
+// Coins we can actually DETECT arriving. Handing out an address for a coin we
+// cannot see is how money gets taken and never credited.
+//
+// BNB is out: BSC deposit detection needs a paid Etherscan plan — the free
+// tier answers "Free API access is not supported for this chain" — so nothing
+// notices a BNB deposit landing. It stays withdrawable, because a withdrawal
+// sends USDC to ChangeNow and never reads a BSC explorer.
+//
+// Must match the COINS list in frontend/src/pages/Wallet.jsx.
+const DEPOSIT_COINS = new Set(['btc','eth','sol','ltc','trx','doge','usdc']);
 
 // Per-coin deposit minimums shown in UI (must match the frontend coin grid).
 // Actual crediting is more generous — anything that nets >= $3 in USDC is

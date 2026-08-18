@@ -18,7 +18,14 @@ const COINS = [
   { id: 'usdc', label: 'USDC', network: 'Solana',   minUsd: 5  },
   { id: 'btc',  label: 'BTC',  network: 'Bitcoin',  minUsd: 10 },
   { id: 'eth',  label: 'ETH',  network: 'Ethereum', minUsd: 5  },
-  { id: 'bnb',  label: 'BNB',  network: 'BSC',      minUsd: 5  },
+  // BNB is deliberately absent. Deposit detection for BSC needs a paid
+  // Etherscan plan ("Free API access is not supported for this chain"), so
+  // nothing can see a BNB deposit arrive — it would be taken and never
+  // credited. Offering a deposit we cannot detect is worse than not offering
+  // it. Withdrawals to BNB still work: those send USDC to ChangeNow, which
+  // does the conversion, and never touch a BSC explorer.
+  // Restore this line and 'bnb' in DEPOSIT_COINS (backend/src/routes/wallet.js)
+  // together, once detection has a working provider.
   { id: 'ltc',  label: 'LTC',  network: 'Litecoin', minUsd: 5  },
   { id: 'doge', label: 'DOGE', network: 'Dogecoin', minUsd: 5  },
   { id: 'trx',  label: 'TRX',  network: 'TRON',     minUsd: 5  },
