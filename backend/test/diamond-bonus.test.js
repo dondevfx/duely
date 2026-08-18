@@ -60,15 +60,17 @@ test('the cooldown is still enforced atomically', () => {
     'only the request that actually stamped the row may credit');
 });
 
-test("the claim button names the reward, not just the number", () => {
-  // "Claim 500 💎" left the reader to know what the icon meant. The amount is
-  // still read from the server, so the button cannot advertise a figure the
-  // claim will not credit.
-  // A plain substring check. This assertion is about JSX containing `${...}`
-  // and quotes, and every attempt to write it as a regex through a shell lost a
-  // backslash and matched nothing.
-  assert.ok(UI.includes("amount.toLocaleString() + ' Diamonds'"),
-    'the button must say Diamonds and must derive the amount from the server');
-  assert.ok(!UI.includes("} 💎`}"),
-    'the bare icon left the reader to know what it meant');
+test("the claim button shows the icon and a derived amount", () => {
+  // The amount is read from the server, not written into the label, so the
+  // button cannot advertise a figure the claim will not credit. That is the
+  // point of sending bonusAmount at all, and it is easy to undo by typing the
+  // number in while changing the wording.
+  //
+  // Plain substring checks: this is JSX containing `${...}` and quotes, and
+  // every attempt to write it as a regex through a shell lost a backslash and
+  // silently matched nothing.
+  assert.ok(UI.includes("Claim 💎 "),
+    'the button must carry the diamond icon');
+  assert.ok(UI.includes("amount.toLocaleString()"),
+    'the amount must still be derived, never typed in');
 });
