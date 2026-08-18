@@ -19,6 +19,7 @@ const splToken = require('@solana/spl-token');
 const JUPITER_API = process.env.JUPITER_API_URL || 'https://lite-api.jup.ag/swap/v1';
 const SOL_MINT    = 'So11111111111111111111111111111111111111112';
 const USDC_MINT   = new solWeb3.PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+const USDT_MINT   = new solWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
 
 /**
  * Swap SOL → USDC using Jupiter.
@@ -154,4 +155,64 @@ async function swapUsdcToSol(adminPrivKey, amountUsdc, playerAddress) {
   return { txHash: sendTxHash, solReceived: solSent };
 }
 
-module.exports = { swapSolToUsdc, swapUsdcToSol };
+/**
+ * Swap USDC → USDT in the admin wallet, for a USDT withdrawal.
+ *
+ * Both are dollar stablecoins on the same chain, so this is the cheapest swap
+ * on the site — deep liquidity, near-1:1, and no second chain to wait for.
+ * ChangeNow would charge several percent and add two confirmation waits for
+ * what Jupiter does in one transaction.
+ *
+ * The output lands in the ADMIN wallet's own USDT account, not the player's.
+ * Sending it on is a separate step through sendSplToken, which creates the
+ * recipient's token account if they have never held USDT — Jupiter cannot be
+ * relied on to do that for an arbitrary destination, and a swap that lands
+ * nowhere is worse than one more transaction.
+ *
+ * Slippage is 50bps rather than the 150 used for USDC → SOL. A stablecoin pair
+ * does not move like a volatile one, and a loose tolerance here would just be
+ * accepting a worse price than the market is offering.
+ *
+ * @param {Buffer} adminPrivKey - 32-byte seed of the admin wallet
+ * @param {number} amountUsdc   - USDC to swap
+ * @returns {{ txHash, usdtReceived }}
+ */
+async function swapUsdcToUsdt(adminPrivKey, amountUsdc) {
+  const rpc        = process.env.SOLANA_RPC || 'https://mainnet.helius-rpc.com/?api-key=' + (process.env.HELIUS_API_KEY || '');
+  const connection = new solWeb3.Connection(rpc, 'confirmed');
+  const keypair    = solWeb3.Keypair.fromSeed(new Uint8Array(adminPrivKey));
+  const usdcUnits  = Math.floor(amountUsdc * 1_000_000);   // both are 6 decimals
+
+  const quoteUrl = `${JUPITER_API}/quote?inputMint=${USDC_MINT.toBase58()}` +
+                   `&outputMint=${USDT_MINT.toBase58()}&amount=${usdcUnits}&slippageBps=50`;
+  const quoteRes = await fetch(quoteUrl);
+  if (!quoteRes.ok) throw new Error(`Jupiter quote HTTP ${quoteRes.status}`);
+  const quote = await quoteRes.json();
+  if (quote.error) throw new Error(`Jupiter quote error: ${quote.error}`);
+
+  const swapRes = await fetch(`${JUPITER_API}/swap`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({
+      quoteResponse: quote,
+      userPublicKey: keypair.publicKey.toBase58(),
+      wrapAndUnwrapSol: false,   // neither side of this pair is native SOL
+    }),
+  });
+  if (!swapRes.ok) throw new Error(`Jupiter swap HTTP ${swapRes.status}`);
+  const swapData = await swapRes.json();
+  if (swapData.error) throw new Error(`Jupiter swap error: ${swapData.error}`);
+
+  const tx = solWeb3.VersionedTransaction.deserialize(Buffer.from(swapData.swapTransaction, 'base64'));
+  tx.sign([keypair]);
+  const txHash = await connection.sendRawTransaction(tx.serialize(), {
+    skipPreflight: false, preflightCommitment: 'confirmed',
+  });
+  await connection.confirmTransaction(txHash, 'confirmed');
+
+  const usdtReceived = parseFloat(quote.outAmount) / 1e6;
+  console.log(`[jupiter] swapped ${amountUsdc} USDC → ${usdtReceived} USDT, tx=${txHash}`);
+  return { txHash, usdtReceived };
+}
+
+module.exports = { swapSolToUsdc, swapUsdcToSol, swapUsdcToUsdt };

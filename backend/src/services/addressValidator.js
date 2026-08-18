@@ -110,6 +110,7 @@ const VALIDATORS = {
   bnb:  isEvm,          // BNB Smart Chain uses EVM addresses
   sol:  isSolana,
   usdc: isSolana,       // USDC is issued on Solana here
+  usdt: isSolana,       // and so is the USDT we accept — NOT the TRON or ETH one
   ltc:  isLtc,
   doge: isDoge,
   trx:  isTrx,

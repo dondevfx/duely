@@ -12,7 +12,7 @@ const { getOrCreateAddress } = require('../services/addressService');
 const { sendCrypto, checkSolanaSignature } = require('../services/chainSend');
 const { createWithdrawalSwap, estimateWithdrawal, getWithdrawalMinUsd, SS_TICKERS } = require('../services/simpleSwapService');
 const { isValidAddressFor } = require('../services/addressValidator');
-const { swapUsdcToSol }      = require('../services/jupiterService');
+const { swapUsdcToSol, swapUsdcToUsdt } = require('../services/jupiterService');
 const { isLocked } = require('../services/lockService');
 const cryptomus = require('../services/cryptomusService');
 
@@ -58,6 +58,16 @@ const WITHDRAW_MINS = {
 // sends USDC to ChangeNow and never reads a BSC explorer.
 //
 // Must match the COINS list in frontend/src/pages/Wallet.jsx.
+// Paid out by us, on Solana, with no exchange in the path:
+//   SOL   USDC → SOL on Jupiter, then send
+//   USDC  sent straight from the payout wallet
+//   USDT  USDC → USDT on Jupiter, then send
+//
+// These skip ChangeNow's minimum check entirely. Enforcing an exchange's floor
+// on a payout that never touches that exchange would reject withdrawals for no
+// reason — their USDC→coin minimum is about their costs, not ours.
+const DIRECT_PAYOUT_COINS = new Set(['sol', 'usdc', 'usdt']);
+
 const DEPOSIT_COINS = new Set(['btc','eth','sol','ltc','trx','doge','usdc','usdt']);
 
 // Per-coin deposit minimums shown in UI (must match the frontend coin grid).
@@ -327,7 +337,9 @@ module.exports = function walletRoutes(supabase, io) {
       // 0 means "no opinion". A ChangeNow outage must not block withdrawals
       // across the whole site — the payout path still refunds if it turns out
       // to be under after all.
-      const liveMin = await getWithdrawalMinUsd(coin.toLowerCase()).catch(() => 0);
+      const liveMin = DIRECT_PAYOUT_COINS.has(coin.toLowerCase())
+        ? 0
+        : await getWithdrawalMinUsd(coin.toLowerCase()).catch(() => 0);
       if (liveMin > 0 && amount < liveMin) {
         return res.status(400).json({
           error: `${coin.toUpperCase()} withdrawals need at least $${liveMin.toFixed(2)} right now — ` +
@@ -368,6 +380,30 @@ module.exports = function walletRoutes(supabase, io) {
           payoutId  = sendTx;
           cryptoAmt = amount;
           console.log(`[withdraw] Direct USDC send ${amount} → ${address.trim()} tx=${sendTx}`);
+
+        } else if (coin.toLowerCase() === 'usdt') {
+          // Two steps, both on Solana and both ours.
+          //
+          // Jupiter's output goes to the ADMIN wallet's USDT account, not the
+          // player's — a swap cannot be relied on to create a token account for
+          // an arbitrary destination, and a swap that lands nowhere is worse
+          // than one extra transaction. sendSplToken creates the recipient's
+          // account if they have never held USDT.
+          //
+          // The player is sent what the swap ACTUALLY produced, not what they
+          // asked for. On a stablecoin pair those are near-identical, but
+          // sending the requested figure would mean covering the difference out
+          // of the bank on every single withdrawal.
+          const swapped = await swapUsdcToUsdt(privKey, amount);
+          const sendTx = await sendCrypto({
+            coin:      'usdt',
+            privKey,
+            toAddress: address.trim(),
+            amount:    swapped.usdtReceived,
+          });
+          payoutId  = sendTx;
+          cryptoAmt = swapped.usdtReceived;
+          console.log(`[withdraw] USDC → USDT ${amount} → ${swapped.usdtReceived} → ${address.trim()} tx=${sendTx}`);
 
         } else {
           const swap = await createWithdrawalSwap({

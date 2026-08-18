@@ -1,4 +1,4 @@
-// Which coins may be deposited.
+// Which coins may be deposited, and which may be withdrawn.
 //
 // A deposit address we hand out for a coin we cannot DETECT is money taken and
 // never credited. That is not a bug that shows up as an error — the player
@@ -23,16 +23,23 @@ const backendDepositCoins = () => {
   return new Set([...m[1].matchAll(/'(\w+)'/g)].map(x => x[1]));
 };
 
-// The frontend deposit grid, ignoring commented-out entries.
-const frontendDepositCoins = () => {
-  const at = FRONTEND.indexOf('const COINS = [');
-  assert.notEqual(at, -1, 'the deposit coin grid is gone');
+// A coin list from the page, ignoring commented-out entries — a coin explained
+// in a comment is not a coin on offer, and counting it would let a disabled one
+// look enabled.
+function coinsInList(constName) {
+  const at = FRONTEND.indexOf(constName);
+  assert.notEqual(at, -1, `${constName} is gone`);
   const end = FRONTEND.indexOf('];', at);
-  assert.notEqual(end, -1, 'could not bound the deposit coin grid');
+  assert.notEqual(end, -1, `could not bound ${constName}`);
   const body = FRONTEND.slice(at, end)
-    .split(/\r?\n/).filter(l => !l.trim().startsWith('//')).join('\n');
+    .split(/\r?\n/)
+    .filter(l => !l.trim().startsWith('//'))
+    .join('\n');
   return new Set([...body.matchAll(/id:\s*'(\w+)'/g)].map(x => x[1]));
-};
+}
+
+const frontendDepositCoins = () => coinsInList('const COINS = [');
+const withdrawCoins        = () => coinsInList('const WITHDRAW_COINS');
 
 test('the page offers exactly the coins the server will accept', () => {
   // Drift either way is a real failure: offering more than the server accepts
@@ -49,14 +56,32 @@ test('BNB is not offered for deposit while BSC detection is unavailable', () => 
     'the page must not offer it either');
 });
 
-test('BNB can still be withdrawn', () => {
-  // Withdrawals send USDC to ChangeNow, which does the conversion. They never
-  // read a BSC explorer, so the detection problem does not touch them —
-  // removing BNB from withdrawals would strand anyone holding a balance.
-  const at = FRONTEND.indexOf('const WITHDRAW_COINS');
-  assert.notEqual(at, -1, 'the withdrawal coin list is gone');
-  const block = FRONTEND.slice(at, FRONTEND.indexOf('];', at));
-  assert.match(block, /id:\s*'bnb'/, 'BNB withdrawals are unaffected and must stay');
+test('BNB is gone from withdrawals too, replaced by USDT', () => {
+  // Earlier BNB was deposit-disabled but left withdrawable, on the reasoning
+  // that removing it would strand anyone holding a balance. That reasoning was
+  // wrong: a balance is coins, not BNB — it can be withdrawn as USDC, SOL, BTC
+  // or anything else still listed. Nobody is stranded.
+  //
+  // USDT takes its place and is strictly better here: one Jupiter swap on
+  // Solana at near-1:1, against ChangeNow at several percent and two
+  // confirmation waits.
+  assert.ok(!withdrawCoins().has('bnb'), 'BNB is no longer offered for withdrawal');
+  assert.ok(withdrawCoins().has('usdt'), 'USDT replaces it');
+});
+
+test('every withdrawable coin can actually be paid out', () => {
+  // A coin on the page with no ticker is rejected by the route as unsupported —
+  // a button that looks live and cannot work.
+  const service = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'services', 'simpleSwapService.js'), 'utf8');
+  const start = service.indexOf('SS_TICKERS = {');
+  assert.notEqual(start, -1, 'SS_TICKERS is gone');
+  const tickers = service.slice(start, service.indexOf('};', start));
+
+  for (const coin of withdrawCoins()) {
+    assert.ok(new RegExp('\\b' + coin + ':').test(tickers),
+      `${coin} is offered for withdrawal but has no ticker — the route rejects it as unsupported`);
+  }
 });
 
 test('every offered deposit coin has a detector', () => {

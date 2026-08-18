@@ -83,3 +83,67 @@ test('the admin fee-payer trick still applies', () => {
   assert.match(fn.slice(0, 2000), /tx\.feePayer = adminKp\.publicKey/,
     'the admin wallet pays; the deposit address only signs as authority');
 });
+
+// ── Withdrawals ────────────────────────────────────────────────────────────
+//
+// USDT replaces BNB here too. It pays out through a USDC→USDT Jupiter swap on
+// Solana — one transaction, near-1:1, no exchange in the path — where BNB went
+// through ChangeNow at several percent and two confirmation waits.
+
+const WALLET  = strip(read('src', 'routes', 'wallet.js'));
+const JUPITER = strip(read('src', 'services', 'jupiterService.js'));
+const FRONT   = fs.readFileSync(
+  path.join(__dirname, '..', '..', 'frontend', 'src', 'pages', 'Wallet.jsx'), 'utf8');
+
+test('USDT is withdrawable and BNB is not', () => {
+  const at = FRONT.indexOf('const WITHDRAW_COINS');
+  const block = FRONT.slice(at, FRONT.indexOf('];', at))
+    .split(/\r?\n/).filter(l => !l.trim().startsWith('//')).join('\n');
+  assert.match(block, /id:\s*'usdt'/, 'USDT must be offered');
+  assert.ok(!/id:\s*'bnb'/.test(block), 'BNB is replaced');
+});
+
+test('the player is sent what the swap produced, not what they asked for', () => {
+  // Sending the requested figure would mean covering the difference out of the
+  // bank on every withdrawal. Small per trade, unbounded in aggregate.
+  const branch = WALLET.slice(WALLET.indexOf("coin.toLowerCase() === 'usdt'"),
+                              WALLET.indexOf('const swap = await createWithdrawalSwap'));
+  assert.match(branch, /amount:\s*swapped\.usdtReceived/,
+    'the send amount must come from the swap output');
+  assert.match(branch, /cryptoAmt = swapped\.usdtReceived/,
+    'and the recorded amount must be what actually left');
+});
+
+test('the swap output goes to the admin wallet, then is sent on', () => {
+  // Jupiter cannot be relied on to create a token account for an arbitrary
+  // destination, and a swap that lands nowhere is worse than one more
+  // transaction. sendSplToken creates the recipient's account.
+  const fn = JUPITER.slice(JUPITER.indexOf('async function swapUsdcToUsdt'));
+  assert.ok(!/destinationTokenAccount/.test(fn.slice(0, 2000)),
+    'the output must stay in the admin wallet, not be aimed at a player account');
+  const branch = WALLET.slice(WALLET.indexOf("coin.toLowerCase() === 'usdt'"),
+                              WALLET.indexOf('const swap = await createWithdrawalSwap'));
+  assert.match(branch, /sendCrypto\(\{[\s\S]*coin:\s*'usdt'/, 'a second step sends it on');
+});
+
+test('a stablecoin pair uses tight slippage', () => {
+  // 150bps is right for USDC→SOL. On a stablecoin pair it is just accepting a
+  // worse price than the market is offering.
+  const fn = JUPITER.slice(JUPITER.indexOf('async function swapUsdcToUsdt'));
+  assert.match(fn.slice(0, 1500), /slippageBps=50/);
+});
+
+test('a direct payout is not held to an exchange minimum', () => {
+  // ChangeNow's USDC→coin floor is about their costs. Enforcing it on a payout
+  // that never touches them would reject withdrawals for no reason.
+  assert.match(WALLET, /DIRECT_PAYOUT_COINS = new Set\(\['sol', 'usdc', 'usdt'\]\)/);
+  const guard = WALLET.slice(WALLET.indexOf('const liveMin'), WALLET.indexOf('const liveMin') + 300);
+  assert.match(guard, /DIRECT_PAYOUT_COINS\.has/, 'direct payouts must skip the ChangeNow check');
+});
+
+test('a USDT withdrawal address is validated as Solana', () => {
+  // The same ticker exists on TRON and Ethereum. Accepting one of those would
+  // send real money to an address on a chain we are not paying out on.
+  const v = strip(read('src', 'services', 'addressValidator.js'));
+  assert.match(v, /usdt:\s*isSolana/, 'a TRON or ETH address must be rejected');
+});

@@ -16,6 +16,7 @@ const SS_TICKERS = {
   doge: 'doge',
   bnb:  'bnbbsc',
   usdc: 'usdcsol',
+  usdt: 'usdtsol',
 };
 
 async function cnGet(path) {

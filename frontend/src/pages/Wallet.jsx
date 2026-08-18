@@ -36,9 +36,12 @@ const COINS = [
 const WITHDRAW_COINS = [
   { id: 'sol',  label: 'SOL',  network: 'Solana'   },
   { id: 'usdc', label: 'USDC', network: 'Solana'   },
+  // USDT replaces BNB here too. It pays out through a USDC→USDT Jupiter swap
+  // on Solana — one transaction, near-1:1, no exchange in the path — where BNB
+  // went through ChangeNow at several percent and two confirmation waits.
+  { id: 'usdt', label: 'USDT', network: 'Solana'   },
   { id: 'btc',  label: 'BTC',  network: 'Bitcoin'  },
   { id: 'eth',  label: 'ETH',  network: 'Ethereum' },
-  { id: 'bnb',  label: 'BNB',  network: 'BSC'      },
   { id: 'ltc',  label: 'LTC',  network: 'Litecoin' },
   { id: 'doge', label: 'DOGE', network: 'Dogecoin' },
   { id: 'trx',  label: 'TRX',  network: 'TRON'     },
