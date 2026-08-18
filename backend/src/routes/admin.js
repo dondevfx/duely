@@ -137,10 +137,10 @@ module.exports = function adminRoutes(supabase, io) {
   //   payout_uncertain  broadcast, but the chain could not be read. NOT refunded
   //                     on purpose: the player may already hold the crypto, so
   //                     look up the tx_hash before crediting anything back
-  //   refunding         a withdrawal's conversion failed and the refund is
-  //                     mid-flight. Transient by design; if one sits here the
-  //                     process died between claiming the row and crediting,
-  //                     and the player is owed
+  //   withdraw_failed   ChangeNow could not deliver a withdrawal. Coins are
+  //                     deducted and DELIBERATELY not auto-refunded: their
+  //                     terminal statuses do not all mean the same thing, so
+  //                     check the exchange, then Refund or Money arrived
   //   payout_failed     funds may be in flight; verify on-chain before touching
   //   pending           a withdrawal in a state NOTHING in the current code
   //                     writes. Left over from an older version, so no process
@@ -152,7 +152,7 @@ module.exports = function adminRoutes(supabase, io) {
   //   stuck             the swap gave up after an hour
   //   pending_retry     funds still in the deposit wallet; usually self-heals
   //   converting        normal in the short term, a problem when it is hours old
-  const ATTENTION_STATUSES = ['refund_failed', 'payout_uncertain', 'pending', 'payout_failed', 'refunding', 'stuck', 'pending_retry', 'converting'];
+  const ATTENTION_STATUSES = ['refund_failed', 'withdraw_failed', 'payout_uncertain', 'pending', 'payout_failed', 'stuck', 'pending_retry', 'converting'];
   const ATTENTION_RANK = Object.fromEntries(ATTENTION_STATUSES.map((s, i) => [s, i]));
   // 'converting' is transient by design, so only count it once it has clearly
   // outlived a normal swap. Without this the queue is permanently full of

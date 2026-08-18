@@ -102,7 +102,9 @@ function watch(exchangeId, userId, startedAt = Date.now(), creditUser = true, ki
  *
  * The failure modes are the mirror image of a deposit's: a deposit that fails
  * means we never took the money, while a withdrawal that fails means we took it
- * and delivered nothing. So this one refunds.
+ * and delivered nothing.
+ *
+ * It does NOT refund automatically. See pollWithdrawal for why.
  */
 function watchWithdrawal(exchangeId, userId, startedAt = Date.now()) {
   watch(exchangeId, userId, startedAt, false, 'withdrawal');
@@ -218,14 +220,12 @@ async function poll(exchangeId, userId, startedAt, creditUser, kind = 'deposit')
 //
 // Mirror image of a deposit. A deposit that fails means we never took the
 // money; a withdrawal that fails means we took it and delivered nothing. So
-// the terminal-failure branch REFUNDS rather than merely recording.
+// the terminal-failure branch flags it for a person.
 //
-// The row is claimed before the refund, exactly as the deposit credit is
-// claimed before crediting. Two polls of the same exchange — or a poll racing
-// the restart-resume — would otherwise both refund, handing the player their
-// stake back twice for one failed withdrawal.
+// The row is still CLAIMED before being flagged, exactly as the deposit credit
+// is claimed before crediting — two polls of the same exchange, or a poll
+// racing the restart-resume, would otherwise both act on one failure.
 async function pollWithdrawal(exchangeId, userId, startedAt) {
-  const { creditCoins } = require('./walletService');
 
   try {
     const result = await getExchangeStatus(exchangeId);
@@ -241,29 +241,38 @@ async function pollWithdrawal(exchangeId, userId, startedAt) {
     }
 
     if (['failed', 'refunded', 'expired'].includes(result.status)) {
-      // Claim first. Only the poll that actually flips the row refunds.
-      const { data: claimed } = await supabaseRef.from('transactions')
-        .update({ status: 'refunding' })
+      // FLAG, do not refund.
+      //
+      // An automatic refund looks obviously right and is not. ChangeNow's
+      // terminal statuses do not all mean the same thing to us:
+      //
+      //   refunded  they sent the crypto BACK to our refund address, so the
+      //             USDC is returning to the bank and the player is owed coins
+      //   failed    could be anything, including a payout that partly went
+      //   expired   usually nothing moved, but that wants checking rather than
+      //             assuming
+      //
+      // Crediting on all three would sometimes pay a player who already has
+      // their crypto, and the status alone cannot tell them apart. A person can
+      // check the exchange and the chain in under a minute; a wrong automatic
+      // refund is real money gone with nothing to reverse it.
+      //
+      // So it stops here with everything needed to decide, and the admin queue
+      // offers Refund / Money arrived / Decline.
+      const { data: flagged } = await supabaseRef.from('transactions')
+        .update({
+          status: 'withdraw_failed',
+          notes:  `ChangeNow reported "${result.status}" - coins NOT auto-refunded, needs a decision. exchange=${exchangeId}`,
+        })
         .eq('tx_hash', exchangeId).eq('type', 'withdrawal').eq('status', 'converting')
         .select('id, amount_c, user_id');
 
-      if (!claimed?.length) { activePolls.delete(exchangeId); return; }
-      const row = claimed[0];
-
-      try {
-        await creditCoins(supabaseRef, row.user_id || userId, parseFloat(row.amount_c));
-        await supabaseRef.from('transactions')
-          .update({ status: 'refunded', notes: `ChangeNow ${result.status} — coins returned` })
-          .eq('id', row.id);
-        console.warn(`[swapPoller] withdrawal ${exchangeId} ${result.status} — refunded ${row.amount_c} to ${row.user_id}`);
-      } catch (e) {
-        // Coins are owed to a real person and the automatic path could not
-        // deliver them. refund_failed is already top of the admin queue and on
-        // the critical alert list.
-        await supabaseRef.from('transactions')
-          .update({ status: 'refund_failed', notes: `ChangeNow ${result.status}; refund failed: ${String(e.message).slice(0, 200)}` })
-          .eq('id', row.id).then().catch(() => {});
-        console.error(`CRITICAL: withdrawal ${exchangeId} ${result.status} and the refund failed — ${row.amount_c} owed to ${row.user_id}:`, e.message);
+      if (flagged?.length) {
+        const row = flagged[0];
+        console.error(
+          `[swapPoller] withdrawal ${exchangeId} ended as "${result.status}" - ` +
+          `${row.amount_c} coins deducted from ${row.user_id} and NOT refunded. ` +
+          `Awaiting a decision in the admin queue.`);
       }
       activePolls.delete(exchangeId);
       return;

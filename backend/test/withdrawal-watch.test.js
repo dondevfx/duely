@@ -8,8 +8,8 @@
 // our records said the withdrawal had gone fine. Silent, and discoverable only
 // by complaint — the same shape as every deposit bug in this codebase.
 //
-// A deposit that fails means we never took the money. A withdrawal that fails
-// means we took it and delivered nothing, so this path REFUNDS.
+// It is now watched and flagged. It is deliberately NOT auto-refunded: see the
+// failure-path tests below for why that looks right and is not.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -36,8 +36,7 @@ test('a direct payout is still confirmed immediately', () => {
   // SOL, USDC and USDT are delivered by the time their send returns. Making
   // them wait on a poller that has nothing to poll would leave them pending
   // forever.
-  const at = WALLET.indexOf('let exchangeId = null;');
-  assert.notEqual(at, -1, 'the exchange id is not tracked');
+  assert.match(WALLET, /let exchangeId = null;/, 'the exchange id is not tracked');
   assert.match(WALLET, /const pending = Boolean\(exchangeId\)/,
     'only the ChangeNow path should be treated as in flight');
 });
@@ -51,8 +50,8 @@ test('the exchange id is stored, not just logged', () => {
 });
 
 test('the watcher starts only once the row exists', () => {
-  // The poller claims that row before refunding. Watching before it is written
-  // means a failure has nothing to claim, and the refund could run repeatedly.
+  // The poller claims that row before acting on it. Watching before it is
+  // written means a failure has nothing to claim.
   const insertAt = WALLET.indexOf('const { error: recErr }');
   const watchAt  = WALLET.indexOf('watchWithdrawal(exchangeId');
   assert.ok(insertAt !== -1 && watchAt !== -1, 'the insert or the watch is gone');
@@ -63,39 +62,44 @@ test('the watcher starts only once the row exists', () => {
 
 // ── The failure path ───────────────────────────────────────────────────────
 
-test('a failed conversion refunds the player', () => {
+test('a failed conversion is flagged, NOT auto-refunded', () => {
+  // An automatic refund looks obviously right and is not. ChangeNow's terminal
+  // statuses do not all mean the same thing to us: 'refunded' means the crypto
+  // is coming BACK to our address, 'failed' can include a payout that partly
+  // went, 'expired' usually means nothing moved. Crediting on all three would
+  // sometimes pay a player who already holds their crypto, and a wrong refund
+  // is real money gone with nothing to reverse it.
   const fn = POLLER.slice(POLLER.indexOf('async function pollWithdrawal'));
   assert.match(fn, /\['failed', 'refunded', 'expired'\]\.includes\(result\.status\)/,
     'every terminal failure must be handled, not just one');
-  assert.match(fn, /creditCoins\(/, 'the player must get their coins back');
+  assert.match(fn, /'withdraw_failed'/, 'it must be flagged for a decision');
+  assert.ok(!/creditCoins/.test(fn),
+    'the poller must not refund on its own — the status alone cannot tell these cases apart');
 });
 
-test('the refund cannot run twice', () => {
-  // Two polls of the same exchange, or a poll racing the restart-resume, would
-  // otherwise both refund — handing back the stake twice for one failure.
+test('the flag carries what a person needs to decide', () => {
   const fn = POLLER.slice(POLLER.indexOf('async function pollWithdrawal'));
-  const claim = fn.slice(fn.indexOf("update({ status: 'refunding' })"));
-  assert.match(claim.slice(0, 300), /\.eq\('status', 'converting'\)/,
-    'the claim must only take a row that is still converting');
-  assert.match(claim.slice(0, 500), /if \(!claimed\?\.length\)/,
-    'only the poll that actually flipped the row may refund');
+  assert.match(fn, /ChangeNow reported/, 'the notes must say what ChangeNow actually said');
+  assert.match(fn, /exchange=\$\{exchangeId\}/, 'the exchange id is how it is looked up');
+  assert.match(fn, /NOT auto-refunded/,
+    'the row must be explicit that the coins are still deducted');
 });
 
-test('a refund that itself fails is escalated', () => {
+test('flagging cannot happen twice for one failure', () => {
+  // Two polls of the same exchange, or a poll racing the restart-resume.
   const fn = POLLER.slice(POLLER.indexOf('async function pollWithdrawal'));
-  assert.match(fn, /'refund_failed'/,
-    'coins owed with no automatic path to deliver them need a person');
-  assert.match(fn, /CRITICAL/);
+  const claim = fn.slice(fn.indexOf("status: 'withdraw_failed'"));
+  assert.match(claim.slice(0, 400), /\.eq\('status', 'converting'\)/,
+    'only a row still converting may be flagged');
 });
 
-test('an unresolved conversion is NOT refunded automatically', () => {
-  // A conversion still running after a day has not told us it failed. Refunding
-  // one that later completes pays the player twice.
+test('an unresolved conversion is left alone, not assumed failed', () => {
+  // A conversion still running after a day has not told us it failed.
   const fn = POLLER.slice(POLLER.indexOf('async function pollWithdrawal'));
   const timeout = fn.slice(fn.indexOf('MAX_WAIT_MS'));
   assert.match(timeout.slice(0, 600), /'stuck'/, 'it must be flagged for review');
   assert.ok(!/creditCoins/.test(timeout.slice(0, 600)),
-    'a timeout is not evidence of failure, and refunding on it can pay twice');
+    'a timeout is not evidence of failure');
 });
 
 // ── Surviving a restart ────────────────────────────────────────────────────
@@ -111,10 +115,37 @@ test('withdrawals are resumed after a restart, not just deposits', () => {
 
 // ── It reaches a human ─────────────────────────────────────────────────────
 
-test('a stalled refund reaches the attention queue', () => {
-  // 'refunding' is transient by design. One sitting there means the process
-  // died between claiming the row and crediting, and the player is owed.
-  const listed = ADMIN.match(/const ATTENTION_STATUSES = \[([^\]]+)\]/)[1];
-  assert.ok(listed.includes("'refunding'"),
-    'a refund that stalled mid-flight is money owed and must be visible');
+test('a failed withdrawal reaches the attention queue near the top', () => {
+  // Coins are deducted and nothing is coming automatically, so it outranks
+  // everything except money already known to be owed.
+  const listed = ADMIN.match(/const ATTENTION_STATUSES = \[([^\]]+)\]/)[1]
+    .split(',').map(x => x.trim().replace(/'/g, ''));
+  const at = listed.indexOf('withdraw_failed');
+  assert.notEqual(at, -1, 'a failed withdrawal must be visible to an operator');
+  assert.ok(at <= 1, "it holds a player's money — it belongs at the top");
+});
+
+test('it alerts on the first occurrence', () => {
+  // Anchored on the constant and bounded by length, rather than split on a
+  // newline. Writing this file through a shell turned the newline ESCAPE into a
+  // real newline three times over, which splits the string literal and makes
+  // the whole file a syntax error — and a test that cannot parse asserts
+  // nothing at all.
+  const alerts = read('src', 'services', 'alertService.js');
+  const critAt = alerts.indexOf('const CRITICAL');
+  assert.notEqual(critAt, -1, 'the CRITICAL list is gone');
+  assert.match(alerts.slice(critAt, critAt + 200), /withdraw_failed/,
+    'one player unable to withdraw is not something to sit on until three accumulate');
+});
+
+test('the admin page labels it and offers a choice', () => {
+  const ui = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'src', 'pages', 'Admin.jsx'), 'utf8');
+  assert.match(ui, /withdraw_failed:\s*\{ label:/, 'it needs a human-readable label, not a raw status');
+  // The decision itself: pay them back, or record that they were paid after all.
+  assert.match(ui, /onResolve\('credit'/, 'Refund');
+  assert.match(ui, /onResolve\('mark_sent'/, 'Money arrived');
+  assert.match(ui, /onResolve\('decline'/, 'Decline');
+  assert.match(ui, /useState\(String\(tx\.amount_c/,
+    'the amount must be prefilled, or every refund is retyped from the row above it');
 });

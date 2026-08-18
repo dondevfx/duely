@@ -48,6 +48,14 @@ function StatCard({ label, value, sub, color = 'text-white' }) {
 // always credited would pay twice.
 const SEVERITY = {
   refund_failed:    { label: 'Money owed',      cls: 'text-danger border-danger/50 bg-danger/10' },
+  // ChangeNow could not deliver a withdrawal. The coins are deducted and
+  // DELIBERATELY not auto-refunded: their terminal statuses do not all mean the
+  // same thing to us — 'refunded' means the crypto is coming BACK to us, while
+  // 'failed' can include a payout that partly went. Crediting on all of them
+  // would sometimes pay a player who already has their crypto, so this waits
+  // for a person. The notes line carries what ChangeNow said; the buttons below
+  // are Refund, Money arrived, or Decline.
+  withdraw_failed:  { label: 'Withdrawal failed', cls: 'text-danger border-danger/50 bg-danger/10' },
   // Broadcast, but the chain could not be read, so it was deliberately NOT
   // refunded — the player may already hold the crypto. Check the hash first.
   payout_uncertain: { label: 'Outcome unknown', cls: 'text-danger border-danger/50 bg-danger/10' },

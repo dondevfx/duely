@@ -11,7 +11,7 @@
 const SWEEP_MS = 15 * 60 * 1000;
 
 // Money owed to a real person — one is worth waking up for.
-const CRITICAL = ['refund_failed', 'payout_failed', 'payout_uncertain'];
+const CRITICAL = ['refund_failed', 'payout_failed', 'payout_uncertain', 'withdraw_failed'];
 // Usually self-healing, so only interesting in bulk or when old.
 //
 // 'failed' is a withdrawal whose payout failed and whose refund SUCCEEDED — the
@@ -19,7 +19,7 @@ const CRITICAL = ['refund_failed', 'payout_failed', 'payout_uncertain'];
 // means the chain, the payout wallet or ChangeNow is down, and every player
 // trying to withdraw is being turned away. That was invisible before, because
 // the sweep only looked for the statuses where money was already lost.
-const WARNING  = ['stuck', 'pending_retry', 'failed', 'refunding'];
+const WARNING  = ['stuck', 'pending_retry', 'failed'];
 const WARN_AT  = 3;
 // A swap that has been converting for hours is not converting.
 const STALE_CONVERTING_MS = 2 * 60 * 60 * 1000;
