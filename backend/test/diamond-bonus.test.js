@@ -59,3 +59,16 @@ test('the cooldown is still enforced atomically', () => {
   assert.match(claim.slice(0, 1200), /if \(!claimed \|\| claimed\.length === 0\)/,
     'only the request that actually stamped the row may credit');
 });
+
+test("the claim button names the reward, not just the number", () => {
+  // "Claim 500 💎" left the reader to know what the icon meant. The amount is
+  // still read from the server, so the button cannot advertise a figure the
+  // claim will not credit.
+  // A plain substring check. This assertion is about JSX containing `${...}`
+  // and quotes, and every attempt to write it as a regex through a shell lost a
+  // backslash and matched nothing.
+  assert.ok(UI.includes("amount.toLocaleString() + ' Diamonds'"),
+    'the button must say Diamonds and must derive the amount from the server');
+  assert.ok(!UI.includes("} 💎`}"),
+    'the bare icon left the reader to know what it meant');
+});

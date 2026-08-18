@@ -82,7 +82,7 @@ export default function DailyBonus() {
 
       {status.canClaim ? (
         <GlowButton variant="success" onClick={handleClaim} disabled={claiming} className="w-full">
-          {claiming ? 'Claiming...' : `Claim ${amount ? amount.toLocaleString() : ''} 💎`}
+          {claiming ? 'Claiming...' : `Claim ${amount ? amount.toLocaleString() + ' Diamonds' : 'Diamonds'}`}
         </GlowButton>
       ) : (
         <div className="text-center">
