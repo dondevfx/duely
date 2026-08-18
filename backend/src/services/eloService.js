@@ -152,4 +152,45 @@ async function applyEloUpdate(supabase, userId, newElo, force = false) {
   }
 }
 
-module.exports = { eloGain, eloLoss, applyMatchStreaks, calculateNewRatings, updateElo, updateStreaks, applyEloUpdate };
+
+/**
+ * Compute new ratings from what the players are rated RIGHT NOW.
+ *
+ * calculateNewRatings returns an ABSOLUTE value, and every engine was feeding
+ * it the elo cached on the socket when the player joined the queue. Those drift
+ * apart the moment a player finishes another match, and the absolute write then
+ * produces a delta that is not the gain at all:
+ *
+ *   socket says 1000, profile is actually 1016
+ *   calculateNewRatings(1000, 1000) -> 1020
+ *   writing 1020 over 1016 is +4, on a win worth +20
+ *
+ * That is the whole bug. The swing is only ever eloGain or eloLoss when it is
+ * computed from the rating as it stands at settlement.
+ *
+ * Bots have no profile row, so their nominal rating is used as-is. A read that
+ * fails falls back to the cached value — a rating that moves by slightly the
+ * wrong amount beats a match that fails to settle.
+ *
+ * Returns the BEFORE values too, so a result screen can show the true delta
+ * rather than subtracting from its own stale copy.
+ */
+async function freshRatings(supabase, winner, loser) {
+  const read = async (p) => {
+    const cached = Number(p && p.elo) || 1000;
+    if (!supabase || !p || p.isBot || !p.userId) return cached;
+    try {
+      const { data } = await supabase.from('profiles').select('elo').eq('id', p.userId).single();
+      if (data && Number.isFinite(Number(data.elo))) return Number(data.elo);
+    } catch (e) {
+      console.error('[elo] could not read current rating:', e.message);
+    }
+    return cached;
+  };
+
+  const winnerBefore = await read(winner);
+  const loserBefore  = await read(loser);
+  const { newWinnerElo, newLoserElo } = calculateNewRatings(winnerBefore, loserBefore);
+  return { winnerBefore, loserBefore, newWinnerElo, newLoserElo };
+}
+module.exports = { eloGain, eloLoss, applyMatchStreaks, calculateNewRatings, freshRatings, updateElo, updateStreaks, applyEloUpdate };

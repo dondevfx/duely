@@ -75,9 +75,13 @@ test('a free run in Block Burst solo still writes no rating at all', () => {
 });
 
 test('the rated path is untouched — a staked match still rates', () => {
+  // Through freshRatings now, not calculateNewRatings directly. The engines fed
+  // that the elo cached on the socket at queue time, and since it returns an
+  // ABSOLUTE rating, a stale baseline made a +20 win land as +4. The property
+  // here is unchanged: a staked match must still move a rating.
   for (const file of Object.keys(ENGINES)) {
     const src = read(file);
-    assert.match(src, /calculateNewRatings\(/,
+    assert.match(src, /freshRatings\(/,
       `${file} must still compute ratings for staked matches`);
   }
 });

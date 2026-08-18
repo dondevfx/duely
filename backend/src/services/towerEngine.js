@@ -8,7 +8,7 @@
 const { randomInt } = require('node:crypto');
 const { closestByElo } = require('./queueMatch');
 const { findRoomBySocket } = require('./roomLookup');
-const { calculateNewRatings, applyMatchStreaks, applyEloUpdate } = require('./eloService');
+const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const { v4: uuidv4 } = require('uuid');
@@ -290,17 +290,14 @@ async function handleTowerComplete(io, supabase, roomId, socketId, score = 0, ta
       // 1003, and the card reports +3 on a defeat. The swing is only ever
       // eloGain or eloLoss when it is computed from what the rating actually is
       // right now.
-      let currentElo = player.elo ?? 1000;
-      try {
-        const { data: fresh } = await supabase
-          .from('profiles').select('elo').eq('id', player.userId).single();
-        if (fresh && Number.isFinite(Number(fresh.elo))) currentElo = Number(fresh.elo);
-      } catch (e) { console.error('[tower] elo read:', e.message); }
-      eloBefore = currentElo;
-
-      const { newWinnerElo, newLoserElo } = humanWon
-        ? calculateNewRatings(currentElo, BOT_ELO)
-        : calculateNewRatings(BOT_ELO, currentElo);
+      // Same read every other engine now does, through the shared helper —
+      // this was the bespoke copy it was generalised from.
+      const BOT = { isBot: true, elo: BOT_ELO };
+      const r = humanWon
+        ? await freshRatings(supabase, player, BOT)
+        : await freshRatings(supabase, BOT, player);
+      eloBefore = humanWon ? r.winnerBefore : r.loserBefore;
+      const { newWinnerElo, newLoserElo } = r;
       humanNewElo = humanWon ? newWinnerElo : newLoserElo;
       try { await supabase.from('profiles').update({ elo: humanNewElo }).eq('id', player.userId); } catch (e) { console.error('[tower] elo:', e.message); }
       try { await supabase.rpc(humanWon ? 'increment_win' : 'increment_loss', { uid: player.userId }); } catch (e) { console.error('[tower] rpc:', e.message); }
@@ -397,7 +394,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
   // rather than printing an unchanged number as if something had happened.
   const { newWinnerElo, newLoserElo } = isFree
     ? { newWinnerElo: null, newLoserElo: null }
-    : calculateNewRatings(winner.elo, loser.elo);
+    : await freshRatings(supabase, winner, loser);
 
   let balanceChange = null;
   if (supabase && room.entryFee > 0) {

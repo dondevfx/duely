@@ -2,7 +2,7 @@ const { v4: uuidv4 } = require('uuid');
 const { closestByElo } = require('./queueMatch');
 const { findRoomBySocket } = require('./roomLookup');
 const { isValidWord } = require('./wordValidator');
-const { calculateNewRatings, applyMatchStreaks, applyEloUpdate } = require('./eloService');
+const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const { updateHighscore } = require('./highscoreService');
@@ -403,7 +403,8 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
     // Leaving the rating null for a free match is therefore not just a display
     // change; it is what makes the write below stop happening.
     if (winner && loser && !isFree) {
-      const ratings = calculateNewRatings(winner.elo || 1000, loser.elo || 1000);
+      // Current ratings, not the ones cached on the socket at queue time.
+      const ratings = await freshRatings(supabase, winner, loser);
       newWinnerElo  = ratings.newWinnerElo;
       newLoserElo   = ratings.newLoserElo;
     }

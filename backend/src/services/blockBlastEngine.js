@@ -7,7 +7,7 @@
 const { randomInt } = require('node:crypto');
 const { closestByElo } = require('./queueMatch');
 const { findRoomBySocket } = require('./roomLookup');
-﻿const { calculateNewRatings, applyMatchStreaks, applyEloUpdate } = require('./eloService');
+﻿const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const { v4: uuidv4 } = require('uuid');
@@ -309,9 +309,14 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
       let humanNewElo = null;
       if (supabase && !freeSolo) {
         const BOT_ELO = 1000;
+        // Read the rating as it stands now. player.elo is whatever the socket
+        // cached at queue time, and calculateNewRatings returns an ABSOLUTE
+        // value — writing one derived from a stale baseline lands a few points
+        // above the real rating and reports +4 on a win worth +20.
+        const BOT = { isBot: true, elo: BOT_ELO };
         const { newWinnerElo, newLoserElo } = humanWon
-          ? calculateNewRatings(player.elo, BOT_ELO)
-          : calculateNewRatings(BOT_ELO, player.elo);
+          ? await freshRatings(supabase, player, BOT)
+          : await freshRatings(supabase, BOT, player);
         humanNewElo = humanWon ? newWinnerElo : newLoserElo;
         try { await supabase.from('profiles').update({ elo: humanNewElo }).eq('id', player.userId); } catch (e) { console.error('[blockBlastEngine] elo update:', e.message); }
         try { await supabase.rpc(humanWon ? 'increment_win' : 'increment_loss', { uid: player.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
@@ -400,7 +405,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
   // did this; the rest did not.
   const { newWinnerElo, newLoserElo } = isFree
     ? { newWinnerElo: null, newLoserElo: null }
-    : calculateNewRatings(winner.elo, loser.elo);
+    : await freshRatings(supabase, winner, loser);
 
   // Settle wallet immediately so payout is accurate in the result
   let balanceChange = null;

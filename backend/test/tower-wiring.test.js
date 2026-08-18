@@ -518,12 +518,15 @@ test('a bot match rates against the current rating, not a cached one', () => {
   // on the socket at queue time, it produces a swing that is not the gain or
   // loss at all — a socket holding 1020 against a profile of 1000 writes
   // 1020 - 17 = 1003, which the card reports as +3 on a defeat.
+  // Tower had a bespoke copy of this read. It has since been generalised into
+  // eloService.freshRatings and adopted by all six engines — the same flaw was
+  // left in the other five and resurfaced as a +4 win in Rush Hour, which is
+  // the argument for one implementation rather than six.
   const solo = engine.slice(engine.indexOf('if (room.isSolo)'));
-  assert.match(solo, /select\('elo'\)\.eq\('id', player\.userId\)/,
+  assert.match(solo, /await freshRatings\(supabase, player, BOT\)/,
     'the current rating must be read before it is changed');
-  assert.match(solo, /calculateNewRatings\(currentElo, BOT_ELO\)/);
-  assert.match(solo, /calculateNewRatings\(BOT_ELO, currentElo\)/);
-  const at = solo.indexOf('calculateNewRatings');
+  assert.match(solo, /await freshRatings\(supabase, BOT, player\)/);
+  const at = solo.indexOf('freshRatings');
   assert.doesNotMatch(solo.slice(at, at + 200), /player\.elo/,
     'the cached socket rating must not feed the calculation');
 });

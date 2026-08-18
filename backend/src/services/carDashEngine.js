@@ -21,7 +21,7 @@ const { findRoomBySocket } = require('./roomLookup');
  */
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
 const { unlockUser } = require('./lockService');
-const { calculateNewRatings, applyMatchStreaks, applyEloUpdate } = require('./eloService');
+const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings } = require('./eloService');
 const { updateHighscorePair } = require('./highscoreService');
 const gameEvents = require('./gameEvents');
 const { v4: uuidv4 } = require('uuid');
@@ -471,9 +471,13 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
   // and must never move your rating.
   const vsBot = !!(winner.isBot || loser.isBot);
   const ranked = !isFree || !vsBot;
-  const { newWinnerElo, newLoserElo } = ranked
-    ? calculateNewRatings(winner.elo, loser.elo)
-    : { newWinnerElo: null, newLoserElo: null };
+  // Ratings computed from the CURRENT profile values, not the elo cached on
+  // the socket at queue time. See freshRatings — a stale baseline turns a +20
+  // win into +4 because the absolute write lands only a few points above what
+  // the player is already rated.
+  const { newWinnerElo, newLoserElo, winnerBefore, loserBefore } = ranked
+    ? await freshRatings(supabase, winner, loser)
+    : { newWinnerElo: null, newLoserElo: null, winnerBefore: null, loserBefore: null };
 
   let balanceChange = null;
   if (supabase && room.entryFee > 0 && !room.feesDeducted) {

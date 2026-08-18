@@ -8,7 +8,7 @@ const { randomInt } = require('node:crypto');
 const { closestByElo } = require('./queueMatch');
 const { findRoomBySocket } = require('./roomLookup');
 const { v4: uuidv4 } = require('uuid');
-const { calculateNewRatings, applyMatchStreaks, applyEloUpdate } = require('./eloService');
+const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings } = require('./eloService');
 const { settleMatch, settleCoinFlip, settleMatchDiamonds, settleBotMatch } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const gameEvents = require('./gameEvents');
@@ -110,7 +110,7 @@ async function resolveCoinFlip(io, supabase, roomId) {
   // did this; the rest did not.
   const { newWinnerElo, newLoserElo } = isFree
     ? { newWinnerElo: null, newLoserElo: null }
-    : calculateNewRatings(winner.elo, loser.elo);
+    : await freshRatings(supabase, winner, loser);
 
   let balanceChange = null;
   if (supabase && room.entryFee > 0 && !room.feesDeducted) {
