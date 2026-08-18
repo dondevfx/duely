@@ -146,9 +146,14 @@ test('payout_uncertain is on the critical alert list', () => {
 });
 
 // The payout path must not go back to a helper that discards the signature.
-test('the USDC payout does not use a wrapper that throws the signature away', () => {
+test('the SPL payout does not use a wrapper that throws the signature away', () => {
+  // sendSplToken serves both USDC and USDT now; it was sendUsdcSpl.
   const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'chainSend.js'), 'utf8');
-  const fn = src.slice(src.indexOf('async function sendUsdcSpl'), src.indexOf('// ── TRX'));
+  const at = src.indexOf('async function sendSplToken');
+  assert.notEqual(at, -1, 'the SPL send is gone — was it renamed?');
+  const end = src.indexOf('// ── TRX', at);
+  assert.notEqual(end, -1, 'the end marker no longer exists; this slice would run to EOF');
+  const fn = src.slice(at, end);
   assert.ok(!/splToken\.transfer\s*\(/.test(fn),
     'splToken.transfer wraps sendAndConfirmTransaction and loses the signature on timeout');
   assert.match(fn, /sendAndVerify\s*\(/, 'it must use the path that captures the signature');

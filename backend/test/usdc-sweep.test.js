@@ -29,21 +29,22 @@ const read = (rel) => fs
 const monitor   = read('blockchainMonitor.js');
 const chainSend = read('chainSend.js');
 
-test('the USDC deposit branch forwards instead of stopping at the credit', () => {
-  // The branch runs from the `coin === 'usdc'` test to its `return`.
-  const start = monitor.indexOf("if (coin === 'usdc')");
-  assert.ok(start > 0, 'USDC deposit branch not found');
+// USDT shares this branch — both are dollar stablecoins on Solana, so the
+// amount that arrives is the amount credited and neither needs a swap.
+test('the stablecoin deposit branch sweeps instead of stopping at the credit', () => {
+  const start = monitor.indexOf("if (coin === 'usdc' || coin === 'usdt')");
+  assert.ok(start > 0, 'stablecoin deposit branch not found');
   const branch = monitor.slice(start, monitor.indexOf('const creditUser', start));
 
-  assert.match(branch, /sweepUsdc\(/, 'USDC deposits must be swept to the payout wallet');
+  assert.match(branch, /sweepSplToken\(/, 'stablecoin deposits must be swept to the payout wallet');
   assert.ok(
-    branch.indexOf('creditCoins') < branch.indexOf('sweepUsdc'),
+    branch.indexOf('creditCoins') < branch.indexOf('sweepSplToken'),
     'sweep must come after the credit — a failed sweep costs nothing, an uncredited player does'
   );
 });
 
 test('a failed sweep cannot block or undo the credit', () => {
-  const start = monitor.indexOf('sweepUsdc(');
+  const start = monitor.indexOf('sweepSplToken(');
   const around = monitor.slice(start - 400, start + 400);
   assert.match(around, /try\s*\{/, 'the sweep must be wrapped — the player is already paid');
   assert.match(around, /catch/, 'a sweep failure must be caught, not thrown');

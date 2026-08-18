@@ -16,6 +16,7 @@ import { fmtCoins, fmtExact } from '../utils/format';
 const COINS = [
   { id: 'sol',  label: 'SOL',  network: 'Solana',   minUsd: 5  },
   { id: 'usdc', label: 'USDC', network: 'Solana',   minUsd: 5  },
+  { id: 'usdt', label: 'USDT', network: 'Solana',   minUsd: 5  },
   { id: 'btc',  label: 'BTC',  network: 'Bitcoin',  minUsd: 10 },
   { id: 'eth',  label: 'ETH',  network: 'Ethereum', minUsd: 5  },
   // BNB is deliberately absent. Deposit detection for BSC needs a paid

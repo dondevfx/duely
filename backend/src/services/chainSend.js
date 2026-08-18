@@ -16,6 +16,10 @@ const bs58    = require('bs58');
 bitcoin.initEccLib(ecc);
 
 const USDC_MINT = new solWeb3.PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+// Tether on Solana. Same 6 decimals as USDC, so every amount conversion below
+// is shared rather than special-cased.
+const USDT_MINT = new solWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
+const SPL_MINTS = { usdc: USDC_MINT, usdt: USDT_MINT };
 
 // ── Sending money is not the same as failing to confirm it ───────────────────
 //
@@ -184,12 +188,12 @@ async function sendSol(privKey, toAddress, amount) {
 
 // ── USDC SPL ──────────────────────────────────────────────────────────────────
 
-async function sendUsdcSpl(privKey, toAddress, amount) {
+async function sendSplToken(coin, privKey, toAddress, amount) {
   const splToken   = require('@solana/spl-token');
   const rpc        = process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
   const connection = new solWeb3.Connection(rpc, 'confirmed');
   const keypair    = solWeb3.Keypair.fromSeed(new Uint8Array(privKey));
-  const usdcMint   = USDC_MINT;
+  const usdcMint   = SPL_MINTS[coin.toLowerCase()] || USDC_MINT;
   const units      = Math.floor(amount * 1_000_000);   // USDC = 6 decimals
 
   // Source is always the admin keypair's own USDC ATA, derived from its pubkey.
@@ -397,7 +401,7 @@ async function sendUtxoCoin(coin, privKey, toAddress, amount) {
  * is nothing to move, which makes it safe to call on every deposit and safe to
  * re-run after a failure.
  */
-async function sweepUsdc(fromPrivKey) {
+async function sweepSplToken(fromPrivKey, coin = 'usdc') {
   const splToken   = require('@solana/spl-token');
   const rpc        = process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
   const connection = new solWeb3.Connection(rpc, 'confirmed');
@@ -422,9 +426,12 @@ async function sweepUsdc(fromPrivKey) {
     );
   }
 
+  const MINT    = SPL_MINTS[coin.toLowerCase()];
+  if (!MINT) throw new Error(`sweepSplToken: unsupported token ${coin}`);
+
   const fromKp  = solWeb3.Keypair.fromSeed(new Uint8Array(fromPrivKey));
-  const fromAta = splToken.getAssociatedTokenAddressSync(USDC_MINT, fromKp.publicKey);
-  const toAta   = splToken.getAssociatedTokenAddressSync(USDC_MINT, adminPub);
+  const fromAta = splToken.getAssociatedTokenAddressSync(MINT, fromKp.publicKey);
+  const toAta   = splToken.getAssociatedTokenAddressSync(MINT, adminPub);
 
   let units;
   try {
@@ -437,7 +444,7 @@ async function sweepUsdc(fromPrivKey) {
   const tx = new solWeb3.Transaction();
   if (!(await connection.getAccountInfo(toAta))) {
     tx.add(splToken.createAssociatedTokenAccountInstruction(
-      adminKp.publicKey, toAta, adminPub, USDC_MINT
+      adminKp.publicKey, toAta, adminPub, MINT
     ));
   }
   tx.add(splToken.createTransferInstruction(fromAta, toAta, fromKp.publicKey, units));
@@ -445,9 +452,12 @@ async function sweepUsdc(fromPrivKey) {
 
   const txHash = await solWeb3.sendAndConfirmTransaction(connection, tx, [adminKp, fromKp]);
   const amount = Number(units) / 1e6;
-  console.log(`[chainSend] swept ${amount} USDC ${fromKp.publicKey.toBase58()} → ${adminAddress} tx=${txHash}`);
+  console.log(`[chainSend] swept ${amount} ${coin.toUpperCase()} ${fromKp.publicKey.toBase58()} → ${adminAddress} tx=${txHash}`);
   return { txHash, amount };
 }
+
+// Kept so existing callers read the same. USDC is the common case.
+const sweepUsdc = (fromPrivKey) => sweepSplToken(fromPrivKey, 'usdc');
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
@@ -457,7 +467,8 @@ async function sendCrypto({ coin, privKey, toAddress, amount }) {
     case 'eth':  return sendEth(privKey, toAddress, amount);
     case 'bnb':  return sendBnb(privKey, toAddress, amount);
     case 'sol':  return sendSol(privKey, toAddress, amount);
-    case 'usdc': return sendUsdcSpl(privKey, toAddress, amount);
+    case 'usdc':
+    case 'usdt': return sendSplToken(coin, privKey, toAddress, amount);
     case 'trx':  return sendTrx(privKey, toAddress, amount);
     case 'btc':
     case 'ltc':
@@ -466,4 +477,4 @@ async function sendCrypto({ coin, privKey, toAddress, amount }) {
   }
 }
 
-module.exports = { sendCrypto, sweepUsdc, GAS_RESERVE, PayoutError, checkSolanaSignature, sendAndVerify, derEncode };
+module.exports = { sendCrypto, sweepUsdc, sweepSplToken, USDC_MINT, USDT_MINT, GAS_RESERVE, PayoutError, checkSolanaSignature, sendAndVerify, derEncode };

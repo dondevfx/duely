@@ -120,7 +120,11 @@ function getAddress(userId, coin) {
       address = bnbAddress(privKey);
       break;
     case 'usdc':
-      // USDC SPL lives on Solana — same address format as SOL
+    case 'usdt':
+      // Both stablecoins are SPL tokens on Solana, so the deposit address is a
+      // Solana address in each case. They derive to DIFFERENT addresses because
+      // the coin id is part of the derivation — which is what keeps one coin's
+      // deposits from being scanned under the other's account.
       address = solAddress(privKey);
       break;
     default:

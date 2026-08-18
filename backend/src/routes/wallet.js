@@ -58,7 +58,7 @@ const WITHDRAW_MINS = {
 // sends USDC to ChangeNow and never reads a BSC explorer.
 //
 // Must match the COINS list in frontend/src/pages/Wallet.jsx.
-const DEPOSIT_COINS = new Set(['btc','eth','sol','ltc','trx','doge','usdc']);
+const DEPOSIT_COINS = new Set(['btc','eth','sol','ltc','trx','doge','usdc','usdt']);
 
 // Per-coin deposit minimums shown in UI (must match the frontend coin grid).
 // Actual crediting is more generous — anything that nets >= $3 in USDC is
@@ -79,6 +79,7 @@ const DEPOSIT_COINS = new Set(['btc','eth','sol','ltc','trx','doge','usdc']);
 const DEPOSIT_MINS = {
   sol:     5,
   usdc:    5,   // direct credit, no swap in the path
+  usdt:    5,   // same — a dollar stablecoin on the same chain
   btc:     10,
   default: 5,   // ETH, BNB, LTC, TRX, DOGE
 };

@@ -15,7 +15,7 @@
 
 const fetch = require('node-fetch');
 const { getAddress }        = require('./addressService');
-const { sendCrypto, sweepUsdc } = require('./chainSend');
+const { sendCrypto, sweepUsdc, sweepSplToken } = require('./chainSend');
 const { createDepositSwap } = require('./simpleSwapService');
 const { swapSolToUsdc }     = require('./jupiterService');
 
@@ -37,6 +37,7 @@ const COINGECKO_IDS = {
   doge: 'dogecoin',
   bnb:  'binancecoin',
   usdc: 'usd-coin',
+  usdt: 'tether',
 };
 
 // Price cache
@@ -178,17 +179,21 @@ async function fetchEvmTxs(coin, address) {
 const fetchEthTxs = (address) => fetchEvmTxs('eth', address);
 const fetchBnbTxs = (address) => fetchEvmTxs('bnb', address);
 
-async function fetchUsdcSplTxs(walletAddress) {
+// One scanner for every SPL token we accept. It was hardcoded to the USDC mint;
+// USDC and USDT are the same shape on Solana (both 6 decimals, both plain SPL),
+// so the only thing that differs is which mint's token account to watch.
+async function fetchSplTxs(walletAddress, coin = 'usdc') {
   const splToken = require('@solana/spl-token');
   const solWeb3  = require('@solana/web3.js');
-  const USDC_MINT = new solWeb3.PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+  const { USDC_MINT, USDT_MINT } = require('./chainSend');
+  const MINT = (coin.toLowerCase() === 'usdt') ? USDT_MINT : USDC_MINT;
   const rpc = process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
 
   // Derive the associated token account address for USDC on this wallet
   let tokenAccountStr;
   try {
     const walletPubkey = new solWeb3.PublicKey(walletAddress);
-    const tokenAccount = splToken.getAssociatedTokenAddressSync(USDC_MINT, walletPubkey);
+    const tokenAccount = splToken.getAssociatedTokenAddressSync(MINT, walletPubkey);
     tokenAccountStr = tokenAccount.toBase58();
   } catch {
     return [];
@@ -360,7 +365,8 @@ async function fetchTxs(coin, address) {
     case 'bnb':  return fetchBnbTxs(address);
     case 'sol':  return fetchSolTxs(address);
     case 'trx':  return fetchTrxTxs(address);
-    case 'usdc': return fetchUsdcSplTxs(address);
+    case 'usdc': return fetchSplTxs(address, 'usdc');
+    case 'usdt': return fetchSplTxs(address, 'usdt');
     case 'ltc':
     case 'doge': return fetchBlockcypherTxs(coin, address);
     default:     return [];
@@ -485,10 +491,20 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
   const gameEvents = require('./gameEvents');
   const usdcAddress = process.env.USDC_SPL_ADDRESS;
 
-  // ── USDC: credit directly, no swap needed — apply 0.1% fee ──────────────────
-  if (coin === 'usdc') {
+  // ── Stablecoins on Solana: credit directly, no swap needed — 0.1% fee ───────
+  //
+  // USDT joins USDC here rather than going through ChangeNow. Both are dollar
+  // stablecoins with 6 decimals on the same chain, so the amount that arrives
+  // IS the amount credited — no swap, no price lookup, no second confirmation
+  // wait. It is the fastest deposit path on the site and the cheapest to run.
+  //
+  // The gas problem that blocks this on other chains does not exist here: the
+  // sweep has the admin wallet pay the fee while the deposit address signs only
+  // as transfer authority, so a deposit address holding nothing but tokens can
+  // still be emptied.
+  if (coin === 'usdc' || coin === 'usdt') {
     if (amount < MIN_CREDIT_USD) {
-      console.warn(`[monitor] USDC $${amount.toFixed(2)} below $${MIN_CREDIT_USD} minimum — skipping ${txHash}`);
+      console.warn(`[monitor] ${coin.toUpperCase()} $${amount.toFixed(2)} below $${MIN_CREDIT_USD} minimum — skipping ${txHash}`);
       _seenTxs.add(txHash);
       return;
     }
@@ -499,7 +515,7 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     // reconcilable by hand.
     const claim = await claimDeposit(supabase, {
       user_id: userId, type: 'deposit', amount_c: credited,
-      crypto_amount: amount, crypto_symbol: 'USDC', tx_hash: txHash, status: 'confirmed',
+      crypto_amount: amount, crypto_symbol: coin.toUpperCase(), tx_hash: txHash, status: 'confirmed',
     });
     // 'taken' — already credited by an earlier pass; stop looking at it.
     if (claim === 'taken') { _seenTxs.add(txHash); return; }
@@ -508,7 +524,7 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
 
     await creditCoins(supabase, userId, credited);
     await recordDeposit(supabase, userId, credited, 'crypto');
-    console.log(`[monitor] USDC deposit — received $${amount}, credited $${credited} (0.1% fee) to user ${userId}`);
+    console.log(`[monitor] ${coin.toUpperCase()} deposit — received $${amount}, credited $${credited} (0.1% fee) to user ${userId}`);
     gameEvents.emit('deposit_credited', { userId, amount: credited, currency: 'coins' });
     _seenTxs.add(txHash);
 
@@ -521,11 +537,11 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
     // secret, so a failed sweep costs nothing — and sweepUsdc moves the whole
     // balance, so the next deposit to this address collects what this run missed.
     try {
-      const { privKey } = getAddress(userId, 'usdc');
-      const swept = await sweepUsdc(privKey);
-      if (swept) console.log(`[monitor] swept ${swept.amount} USDC to payout wallet tx=${swept.txHash}`);
+      const { privKey } = getAddress(userId, coin);
+      const swept = await sweepSplToken(privKey, coin);
+      if (swept) console.log(`[monitor] swept ${swept.amount} ${coin.toUpperCase()} to payout wallet tx=${swept.txHash}`);
     } catch (e) {
-      console.error(`[monitor] USDC sweep failed for user ${userId} (funds are safe in the deposit address):`, e.message);
+      console.error(`[monitor] ${coin.toUpperCase()} sweep failed for user ${userId} (funds are safe in the deposit address):`, e.message);
     }
     return;
   }
@@ -751,7 +767,7 @@ async function loadAddresses() {
 const COIN_DELAY_MS = {
   btc: 500, ltc: 500, doge: 500,   // BlockCypher
   eth: 250, bnb: 250, trx: 250,    // Etherscan / BscScan / TronGrid
-  sol: 120, usdc: 120,             // Helius
+  sol: 120, usdc: 120, usdt: 120,  // Helius
 };
 const DEFAULT_DELAY_MS = 500;
 
@@ -830,25 +846,31 @@ const SWEEP_MAX_PER_RUN = 25;
  * is no deadline here; anything missed is picked up an hour later.
  */
 async function sweepStrandedUsdc(supabase) {
+  // Both stablecoins, because both sit in per-user addresses the same way and a
+  // backfill that only knew about USDC would let USDT accumulate untouched.
   const { data, error } = await supabase
-    .from('deposit_addresses').select('user_id').eq('coin', 'usdc').limit(500);
+    .from('deposit_addresses').select('user_id, coin').in('coin', ['usdc', 'usdt']).limit(500);
   if (error) {
-    console.error('[monitor] stranded-USDC query failed:', error.message);
+    console.error('[monitor] stranded-stablecoin query failed:', error.message);
     return;
   }
 
-  let swept = 0, total = 0;
+  let swept = 0;
+  const total = {};
   for (const row of data || []) {
     if (swept >= SWEEP_MAX_PER_RUN) break;
     try {
-      const { privKey } = getAddress(row.user_id, 'usdc');
-      const res = await sweepUsdc(privKey);
-      if (res) { swept++; total += res.amount; }
+      const { privKey } = getAddress(row.user_id, row.coin);
+      const res = await sweepSplToken(privKey, row.coin);
+      if (res) { swept++; total[row.coin] = (total[row.coin] || 0) + res.amount; }
     } catch (e) {
-      console.error(`[monitor] stranded sweep failed for user ${row.user_id}:`, e.message);
+      console.error(`[monitor] stranded sweep failed for user ${row.user_id} (${row.coin}):`, e.message);
     }
   }
-  if (swept) console.log(`[monitor] stranded sweep collected ${total} USDC from ${swept} address(es)`);
+  if (swept) {
+    const summary = Object.entries(total).map(([c, a]) => `${a} ${c.toUpperCase()}`).join(', ');
+    console.log(`[monitor] stranded sweep collected ${summary} from ${swept} address(es)`);
+  }
 }
 
 function init(supabase) {
