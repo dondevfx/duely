@@ -91,7 +91,10 @@ test('worst first, then oldest', () => {
   // successfully, so the player is whole, whereas a 'pending' withdrawal is a
   // state nothing currently writes — nothing will ever move it on, and the
   // coins may have been deducted without a payout.
-  const rank = ['refund_failed', 'withdraw_failed', 'payout_uncertain', 'pending', 'payout_failed', 'stuck', 'pending_retry', 'converting'];
+  // sending ranks last: a fiat payout in flight is the NORMAL state for days,
+  // and it only appears here at all as a backstop for a watcher that has
+  // stopped running.
+  const rank = ['refund_failed', 'withdraw_failed', 'payout_uncertain', 'pending', 'payout_failed', 'stuck', 'pending_retry', 'converting', 'sending'];
   const listed = adminSrc.match(/const ATTENTION_STATUSES = \[([^\]]+)\]/)[1]
     .split(',').map(s => s.trim().replace(/'/g, ''));
   assert.deepEqual(listed, rank, 'order encodes severity — the queue sorts by it');

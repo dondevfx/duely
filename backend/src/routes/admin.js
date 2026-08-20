@@ -152,12 +152,19 @@ module.exports = function adminRoutes(supabase, io) {
   //   stuck             the swap gave up after an hour
   //   pending_retry     funds still in the deposit wallet; usually self-heals
   //   converting        normal in the short term, a problem when it is hours old
-  const ATTENTION_STATUSES = ['refund_failed', 'withdraw_failed', 'payout_uncertain', 'pending', 'payout_failed', 'stuck', 'pending_retry', 'converting'];
+  const ATTENTION_STATUSES = ['refund_failed', 'withdraw_failed', 'payout_uncertain', 'pending', 'payout_failed', 'stuck', 'pending_retry', 'converting', 'sending'];
   const ATTENTION_RANK = Object.fromEntries(ATTENTION_STATUSES.map((s, i) => [s, i]));
   // 'converting' is transient by design, so only count it once it has clearly
   // outlived a normal swap. Without this the queue is permanently full of
   // deposits that are simply in progress, and a real problem hides among them.
   const CONVERTING_STALE_MS = 60 * 60 * 1000;
+  // A fiat payout in flight is NOT stale after an hour. ACH takes one to
+  // three business days and a PayPal payout can sit unclaimed for a month,
+  // so the same window would fill this queue with healthy payouts and bury
+  // the real failures. The watcher flips anything genuinely overdue to
+  // withdraw_failed or payout_uncertain, so this is only a backstop for a
+  // watcher that has stopped running.
+  const SENDING_STALE_MS = 5 * 24 * 60 * 60 * 1000;
 
   router.get('/transactions', requireAuth, requireAdmin, async (req, res) => {
     const limit  = Math.min(parseInt(req.query.limit) || 50, 200);
@@ -183,6 +190,8 @@ module.exports = function adminRoutes(supabase, io) {
 
     const now = Date.now();
     const rows = (data || [])
+      .filter(t => t.status !== 'sending'
+        || now - new Date(t.created_at).getTime() > SENDING_STALE_MS)
       .filter(t => t.status !== 'converting'
         || now - new Date(t.created_at).getTime() > CONVERTING_STALE_MS)
       // Worst first, then oldest — a row that has been broken for three days

@@ -66,6 +66,9 @@ const SEVERITY = {
   stuck:            { label: 'Swap gave up',    cls: 'text-warning border-warning/50 bg-warning/10' },
   pending_retry:    { label: 'Retrying',        cls: 'text-warning border-warning/40 bg-warning/5' },
   converting:       { label: 'Converting >1h',  cls: 'text-muted border-border' },
+  // A fiat payout still in flight. Normal for days on ACH, so it only reaches
+  // this queue once it is well past any reasonable window.
+  sending:          { label: 'Payout in flight', cls: 'text-muted border-border' },
 };
 
 function AttentionRow({ tx, busy, onResolve }) {
