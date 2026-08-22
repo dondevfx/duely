@@ -77,17 +77,22 @@ const HELP = {
 // It was floated at top-right on all six, and every single one has something
 // there: the opponent's tower height, the opponent's score, the opponent's
 // guess count, the lap timer, the turn timer. So it covered the one number the
-// player most needs mid-match. Corner-hunting does not fix that — the corners
-// are where HUDs go — so games with a header row put the button IN the header,
-// where the layout makes room for it and nothing can be hidden behind it.
+// player most needs mid-match.
 //
-//   'inline'      — flows in a header row. Nothing can ever overlap.
+// Every placement is a corner. What keeps the button off the HUD is not the
+// corner it picks but the space the game's own layout sets aside for it: the
+// header games pad their score row (pl-12 / padding-left 60px) so the row
+// starts to the RIGHT of the button. Remove that padding and the button lands
+// straight back on the player's own score — measured, not assumed. So a new
+// game using 'top-left' must reserve the room too.
+//
+//   'top-left'    — games with a header row, which reserves space for it.
 //   'bottom-left' — full-bleed canvas games, whose HUD is along the top.
-//   'top-right'   — only where the corner is genuinely empty.
+//   'top-right'   — only where the corner is genuinely empty (Coin Flip).
 const PLACEMENT = {
-  inline: '',
   'bottom-left': 'absolute bottom-3 left-3 z-30',
   'top-right':   'absolute top-3 right-3 z-30',
+  'top-left':    'absolute top-3 left-3 z-30',
 };
 
 export default function GameHelp({ gameType, onPauseChange, canPause = false, placement = 'top-right' }) {
@@ -130,9 +135,9 @@ export default function GameHelp({ gameType, onPauseChange, canPause = false, pl
       </button>
 
       {open && (
-        // fixed, not absolute. Inline placement puts the button inside a header
-        // row, and an absolute overlay would then be sized to that row rather
-        // than to the screen.
+        // fixed, not absolute. The button sits inside a positioned header row,
+        // and an absolute overlay would then be sized to that row rather than
+        // to the screen.
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 px-4 py-6 overflow-y-auto"
           onPointerDown={(e) => e.stopPropagation()}

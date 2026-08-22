@@ -918,8 +918,8 @@ export default function BlockBlastGame() {
           {/* HUD */}
           {/* The help button sits IN this row, not floating over it. Floated at
               top-right it landed squarely on the opponent's score. */}
-          <div className="flex items-center justify-between w-full max-w-lg gap-2">
-            <GameHelp gameType="blockBlast" placement="inline" />
+          <div className="flex items-center justify-between w-full max-w-lg gap-2 pl-12">
+            <GameHelp gameType="blockBlast" placement="top-left" />
             {/* My score */}
             <div className="text-center min-w-[72px]">
               <div className="text-xl font-black font-mono text-success">{score.toLocaleString()}</div>

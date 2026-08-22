@@ -831,16 +831,15 @@ function BlackjackGame() {
         {/* Top bar */}
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '12px 16px',
+          // Left padding reserves the corner for the help button, so the title
+          // starts clear of it and nothing can end up underneath.
+          padding: '12px 16px 12px 60px',
           borderBottom: divider,
         }}>
-          {/* In the top bar beside the title. Floated at top-right it sat on
-              the turn timer, which is the one thing you cannot afford to lose
-              sight of in this game. */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <GameHelp gameType="blackjack" placement="inline" />
-            <span style={{ fontWeight: 900, fontSize: 16, color: textPrimary, letterSpacing: 0.5 }}>🃏 Blackjack</span>
-          </div>
+          {/* Tucked into the top-left corner. Top-RIGHT is the turn timer,
+              which is the one thing you cannot afford to lose sight of. */}
+          <GameHelp gameType="blackjack" placement="top-left" />
+          <span style={{ fontWeight: 900, fontSize: 16, color: textPrimary, letterSpacing: 0.5 }}>🃏 Blackjack</span>
           {phase === 'playing' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ width: 120, height: 6, background: timerTrack, borderRadius: 3, overflow: 'hidden' }}>

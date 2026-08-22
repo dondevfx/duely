@@ -92,17 +92,30 @@ test('the help button never sits where a score does', () => {
   }
 });
 
-test('an inline help button cannot overlap anything', () => {
-  // 'inline' means it flows in the header row and takes real space, so no
-  // amount of later layout change can put a score underneath it.
-  const src = readFE('components', 'GameHelp.jsx');
-  const placements = src.slice(src.indexOf('const PLACEMENT'), src.indexOf('};', src.indexOf('const PLACEMENT')));
-  assert.match(placements, /inline:\s*''/, 'inline must apply no positioning at all');
+test('a corner-placed help button has space reserved for it', () => {
+  // This is the invariant that actually holds the button off the HUD, and the
+  // only one worth pinning. Measured in a browser at 320-768px: with the
+  // reservation the button overlaps nothing; with it removed, it lands on the
+  // player's own score at EVERY width. The corner alone does nothing.
+  //
+  // A reservation is a left pad wide enough to clear a 36px button at left-3
+  // (12px) — so 48px minimum. pl-12 is exactly that.
+  const MIN_RESERVE = 48;
+  for (const game of ['BlockBlastGame', 'WordleGame', 'BlackjackGame']) {
+    const src = readFE('pages', `${game}.jsx`);
+    assert.match(src, /placement="top-left"/, `${game} is not using the reserved-corner placement`);
+
+    const tw  = /\bpl-12\b/.test(src);                       // 3rem = 48px
+    const css = [...src.matchAll(/padding:\s*'[^']*?(\d+)px'/g)]
+      .some(m => Number(m[1]) >= MIN_RESERVE);               // 4-value shorthand, last = left
+    assert.ok(tw || css,
+      `${game} pins the help button in a corner but reserves no room for it, so the layout puts a score underneath`);
+  }
 });
 
 test('the help panel covers the screen, not its container', () => {
-  // Inline places the button inside a header row; an absolutely positioned
-  // overlay would then be sized to that row.
+  // The button sits inside a positioned header row; an absolutely positioned
+  // overlay would then be sized to that row rather than to the screen.
   const src = readFE('components', 'GameHelp.jsx');
   assert.match(src, /fixed inset-0/, 'the panel must be fixed, or inline placement traps it in a header');
 });

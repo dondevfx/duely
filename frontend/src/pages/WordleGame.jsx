@@ -784,8 +784,8 @@ export default function WordleGame() {
         {/* HUD — matches Block Blast layout exactly */}
         {/* In the row, not over it — floated top-right it covered the
             opponent's guess count. */}
-        <div className="flex items-center justify-between w-full max-w-lg gap-2">
-          <GameHelp gameType="scrabble" placement="inline" />
+        <div className="flex items-center justify-between w-full max-w-lg gap-2 pl-12">
+          <GameHelp gameType="scrabble" placement="top-left" />
           {/* My guess count */}
           <div className="text-center min-w-[72px]">
             <div className="text-xl font-black font-mono text-success">{guessNum}</div>
