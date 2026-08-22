@@ -60,6 +60,24 @@ test('a forfeit pays out through the same settlement as a normal match', () => {
   assert.match(fn, /settleBotMatch/, 'leaving a bot match must still take the stake');
 });
 
+test('a forfeit is recorded on the row, not inferred from it', () => {
+  // The profile showed "Opponent disconnected" under ordinary matches — and
+  // under BOT matches, which cannot disconnect. Nothing on the row said a
+  // forfeit had happened, so the frontend guessed from early_click and
+  // reaction_time_ms. Those belong to the reaction game and are empty on every
+  // other game, so every staked match matched the guess.
+  const fn = HANDLERS.slice(HANDLERS.indexOf('async function _handleForfeit'));
+  const insert = fn.slice(fn.indexOf("from('matches').insert("));
+  assert.match(insert, /ended_by_forfeit:\s*true/,
+    'the forfeit path must mark the row, or the label has nothing truthful to read');
+
+  const profile = readFE('pages', 'Profile.jsx');
+  assert.match(profile, /ended_by_forfeit === true/,
+    'the label must read the column');
+  assert.ok(!/isForfeit\s*=.*reaction_time_ms/.test(profile),
+    'inferring a forfeit from the reaction game\'s columns is the bug itself');
+});
+
 // ── The help button ────────────────────────────────────────────────────────
 //
 // It floated at top-right on all six games, and every one of them puts

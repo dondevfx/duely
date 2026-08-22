@@ -2086,6 +2086,11 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
             await supabase.from('matches').insert({
               player1_id: stayer.userId, player2_id: leaver.userId,
               winner_id:  stayer.userId, game_type: gameType,
+              // The only place this is ever true. Recorded rather than inferred:
+              // the profile used to guess a forfeit from the reaction game's
+              // columns, which are empty on every other game, so ordinary
+              // matches — and bot matches — were labelled "disconnected".
+              ended_by_forfeit: true,
               entry_fee_c:        cur === 'coins'    ? fee : 0,
               entry_fee_diamonds: cur === 'diamonds' ? fee : 0,
               prize_pool_c:        cur === 'coins'    ? fee * 2 : 0,

@@ -4,15 +4,29 @@ import { api } from '../utils/api';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
 
+// Every filter has to fit on ONE line, on a phone, without a scroll bar — a
+// row you have to drag sideways hides its own options, and the two on the end
+// were never being found.
+//
+// Eight full labels come to roughly 500px of text, so they cannot all fit
+// across 375px. `short` is what a phone shows instead; the full label returns
+// at the `sm` breakpoint. `text` is the plain-string form, used by the empty
+// state, which cannot render an element.
+// `label` is what a wide row shows, `short` what a narrow one shows, and
+// `text` the plain-string name — used by the empty state, which cannot render
+// an element, and as the accessible name when the short form is an icon.
+//
+// "Match Wins"/"Match Losses" lost the prefix: with it the long row needed
+// 681px and could never fit, since the row tops out at 640px.
 const FILTERS = [
-  { key: 'all',        label: 'All' },
-  { key: 'deposit',    label: 'Deposits' },
-  { key: 'withdrawal', label: 'Withdrawals' },
-  { key: 'match_win',  label: 'Match Wins' },
-  { key: 'match_loss', label: 'Match Losses' },
-  { key: 'coins',      label: <span className="inline-flex items-center gap-1"><CoinIcon size="0.9em" /> Coins</span>, text: 'Coins' },
-  { key: 'diamonds',   label: '💎 Diamonds' },
-  { key: 'tip',        label: 'Tips' },
+  { key: 'all',        label: 'All',                                                                                    short: 'All',                     text: 'All' },
+  { key: 'deposit',    label: 'Deposits',                                                                               short: 'In',                      text: 'Deposits' },
+  { key: 'withdrawal', label: 'Withdrawals',                                                                            short: 'Out',                     text: 'Withdrawals' },
+  { key: 'match_win',  label: 'Wins',                                                                                   short: 'Wins',                    text: 'Match Wins' },
+  { key: 'match_loss', label: 'Losses',                                                                                 short: 'Losses',                  text: 'Match Losses' },
+  { key: 'coins',      label: <span className="inline-flex items-center gap-1"><CoinIcon size="0.9em" /> Coins</span>,   short: <CoinIcon size="1.1em" />, text: 'Coins' },
+  { key: 'diamonds',   label: '💎 Diamonds',                                                                            short: '💎',                      text: 'Diamonds' },
+  { key: 'tip',        label: 'Tips',                                                                                   short: 'Tips',                    text: 'Tips' },
 ];
 
 const POSITIVE_TYPES = new Set(['deposit', 'match_win', 'bonus', 'tip_received', 'daily_bonus', 'diamond_bonus', 'referral_bonus']);
@@ -190,20 +204,35 @@ export default function Transactions() {
         <p className="text-muted mb-8">Full history of your Coin activity</p>
 
         {/* Filter tabs */}
-        <div className="bg-surface border border-surfaceLight rounded-2xl p-2 mb-6 flex flex-nowrap gap-1 overflow-x-auto">
-          {FILTERS.map(f => (
-            <button
-              key={f.key}
-              onClick={() => setActiveFilter(f.key)}
-              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
-                activeFilter === f.key
-                  ? 'bg-primary text-white shadow-glow'
-                  : 'text-muted hover:text-white hover:bg-surfaceLight'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+        {/* One straight line, no sideways scroll and no second row. The outer
+            div is the query container; the label length and spacing inside
+            follow ITS width. See .tx-filters in index.css. */}
+        <div className="tx-filters mb-6">
+          <div className="tx-row bg-surface border border-surfaceLight rounded-2xl p-1.5 flex flex-nowrap">
+            {FILTERS.map(f => (
+              <button
+                key={f.key}
+                onClick={() => setActiveFilter(f.key)}
+                // flex-auto, not flex-1: equal widths would size every button
+                // to the longest label, which left "Losses" flush against its
+                // own edge at 320px. Sized by content, sharing the slack.
+                //
+                // The short form can be an icon alone, which says nothing to a
+                // screen reader, so the name is always spelled out here.
+                aria-label={f.text}
+                aria-pressed={activeFilter === f.key}
+                className={`tx-btn flex-auto flex items-center justify-center px-1 py-1.5
+                            text-[11px] font-bold rounded-xl transition-all whitespace-nowrap ${
+                  activeFilter === f.key
+                    ? 'bg-primary text-white shadow-glow'
+                    : 'text-muted hover:text-white hover:bg-surfaceLight'
+                }`}
+              >
+                <span className="tx-abbr">{f.short}</span>
+                <span className="tx-full">{f.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Content card */}

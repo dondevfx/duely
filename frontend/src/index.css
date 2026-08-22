@@ -140,3 +140,32 @@ html.light { --rh-surround: #ffffff; }
     line-height: 1.4;
   }
 }
+
+/* Transactions filter row: one straight line, no sideways scroll, at every
+   width — including the widths the viewport alone cannot tell you about.
+   The row lives inside `main`, which the left sidebar and the chat panel
+   both shrink, so a 1024px viewport can leave the row only ~480px. A
+   viewport breakpoint would have shown full labels there and brought the
+   scroll bar straight back. A container query asks the row how wide IT is.
+
+   Measured: the long labels need 602px and the short ones 282px, and the row
+   can never exceed 640px (max-w-2xl minus its page padding). */
+.tx-filters { container-type: inline-size; }
+
+.tx-filters .tx-row  { gap: 2px; }
+.tx-filters .tx-full { display: none; }
+.tx-filters .tx-abbr { display: inline-flex; align-items: center; }
+
+/* The long labels fit from ~450px at this tight spacing. That matters: a
+   1024px desktop with the sidebar and the chat open leaves the row about
+   480px, and holding the switch until 610px showed "In"/"Out" there. */
+@container (min-width: 470px) {
+  .tx-filters .tx-full { display: inline-flex; align-items: center; }
+  .tx-filters .tx-abbr { display: none; }
+}
+
+/* Only once there is room to spare does it get its full spacing back. */
+@container (min-width: 610px) {
+  .tx-filters .tx-row { gap: 4px; }
+  .tx-filters .tx-btn { font-size: 12px; padding-left: 0.75rem; padding-right: 0.75rem; }
+}

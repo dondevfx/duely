@@ -173,7 +173,14 @@ function AffiliateCodeCard() {
 
 function MatchRow({ match, myId }) {
   const isWinner  = match.winner_id === myId;
-  const isForfeit = match.early_click === false && match.reaction_time_ms === null && (match.prize_pool_c > 0 || match.prize_pool_diamonds > 0);
+  // Read, not inferred. This used to be guessed from early_click and
+  // reaction_time_ms — columns only the reaction game fills in — so every
+  // staked match on every other game looked like a forfeit, bot matches
+  // included. A bot does not disconnect.
+  //
+  // Strict true: on an older backend the field is absent, and undefined must
+  // mean "no label" rather than an accidental one.
+  const isForfeit = match.ended_by_forfeit === true;
   const opponent  = match.player1_id === myId ? match.player2 : match.player1;
   const opponentId = match.player1_id === myId ? match.player2_id : match.player1_id;
 

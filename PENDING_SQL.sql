@@ -525,3 +525,28 @@ $recover$;
 
 -- Check it landed:
 --   SELECT username, c_coins FROM profiles WHERE id = '423d2b0c-1dae-4947-8340-b07575954383';
+
+
+-- ============================================================================
+-- 12. Record forfeits instead of guessing at them
+-- ============================================================================
+-- The profile's match list showed "Opponent disconnected" under ordinary
+-- matches, including matches against bots — which cannot disconnect.
+--
+-- Nothing on the row said whether a match ended in a forfeit, so the frontend
+-- inferred it:
+--
+--   early_click === false && reaction_time_ms === null && prize_pool > 0
+--
+-- Those two columns belong to the reaction game. Every OTHER game type leaves
+-- them false and null, so every staked match on every other game matched the
+-- pattern and got the label.
+--
+-- This adds the fact as a column. Existing rows default to false: a forfeit
+-- that already happened cannot be recovered from the data, and showing nothing
+-- is right where showing "disconnected" was wrong.
+ALTER TABLE matches
+  ADD COLUMN IF NOT EXISTS ended_by_forfeit boolean NOT NULL DEFAULT false;
+
+-- Check:
+--   SELECT ended_by_forfeit, count(*) FROM matches GROUP BY 1;
