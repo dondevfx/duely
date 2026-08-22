@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabase';
 import GlowButton from '../components/GlowButton';
+import { AUTOFOCUS } from '../utils/device';
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -100,7 +101,7 @@ export default function ResetPassword() {
                   onChange={e => setPassword(e.target.value)}
                   required
                   minLength={6}
-                  autoFocus
+                  autoFocus={AUTOFOCUS}
                   className="w-full bg-bg border border-surfaceLight rounded-lg px-4 py-3 text-base text-white placeholder-muted focus:outline-none focus:border-primary transition-colors"
                   placeholder="••••••••"
                 />

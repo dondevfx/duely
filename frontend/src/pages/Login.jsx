@@ -8,6 +8,7 @@ import { PENDING_CHALLENGE_KEY } from './ChallengeJoin';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
 import { takePendingInvite } from '../utils/pendingInvite';
+import { AUTOFOCUS } from '../utils/device';
 
 // If the user arrived from a shared challenge link, resume it after login.
 const GAME_ROUTES = {
@@ -194,7 +195,7 @@ export default function Login() {
                   required
                   minLength={3}
                   maxLength={20}
-                  autoFocus
+                  autoFocus={AUTOFOCUS}
                   className="w-full bg-bg border border-surfaceLight rounded-lg px-4 py-3 text-base text-white placeholder-muted focus:outline-none focus:border-primary transition-colors"
                   placeholder="CoolPlayer99"
                 />
@@ -240,7 +241,7 @@ export default function Login() {
                 maxLength={6}
                 value={mfaCode}
                 onChange={e => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                autoFocus
+                autoFocus={AUTOFOCUS}
                 placeholder="000000"
                 className="w-full bg-bg border border-surfaceLight rounded-lg px-4 py-3 text-white text-center text-2xl font-mono tracking-[0.5em] placeholder-muted focus:outline-none focus:border-primary transition-colors"
               />
@@ -289,7 +290,7 @@ export default function Login() {
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     required
-                    autoFocus
+                    autoFocus={AUTOFOCUS}
                     className="w-full bg-bg border border-surfaceLight rounded-lg px-4 py-3 text-base text-white placeholder-muted focus:outline-none focus:border-primary transition-colors"
                     placeholder="you@example.com"
                   />

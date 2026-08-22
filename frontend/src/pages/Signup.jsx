@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
 import { takePendingInvite } from '../utils/pendingInvite';
+import { AUTOFOCUS } from '../utils/device';
 
 export default function Signup() {
   const ready = usePageReady();
@@ -86,8 +87,18 @@ export default function Signup() {
                 required
                 minLength={3}
                 maxLength={20}
-                autoComplete="off"
-                autoFocus
+                // autoComplete="off" is what iOS IGNORES. Left off, Safari
+                // falls back to guessing from the label and offers the contact
+                // card — so tapping "Username" suggested the person's Apple
+                // email. "username" names the field explicitly, and iOS then
+                // offers account names instead of contact details.
+                name="username"
+                id="username"
+                autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                autoFocus={AUTOFOCUS}
                 className="w-full bg-bg border border-surfaceLight rounded-lg px-4 py-3 text-base text-white placeholder-muted focus:outline-none focus:border-primary transition-colors"
                 placeholder="CoolPlayer99"
               />

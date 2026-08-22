@@ -119,3 +119,34 @@ test('the help panel covers the screen, not its container', () => {
   const src = readFE('components', 'GameHelp.jsx');
   assert.match(src, /fixed inset-0/, 'the panel must be fixed, or inline placement traps it in a header');
 });
+
+test('every help button has a positioning context to sit in', () => {
+  // The bug behind the floating '?' on Coin Flip. Every placement is
+  // `absolute`, which resolves against the nearest POSITIONED ancestor — and
+  // if the intended container is not positioned, the button silently sails
+  // past it and anchors to whatever is. On Coin Flip it anchored to a small
+  // centred block and floated next to the coin, mid-screen.
+  //
+  // It is invisible in review because the markup looks right: the button is
+  // written inside the container it belongs to. Only the CSS disagrees.
+  const GAMES = [
+    'TowerGame', 'CarDashGame', 'BlockBlastGame',
+    'WordleGame', 'BlackjackGame', 'CoinFlipGame',
+  ];
+  for (const game of GAMES) {
+    const src = readFE('pages', `${game}.jsx`);
+    const at = src.indexOf('<GameHelp');
+    assert.notEqual(at, -1, `${game} has no help button`);
+
+    // The element it is written inside: the nearest <div opened before it.
+    const open = src.lastIndexOf('<div', at);
+    assert.notEqual(open, -1, `${game}: could not find the containing element`);
+    // Everything from that <div up to the button: the whole opening tag,
+    // however it is spread over lines and whether it styles by class or by
+    // inline object.
+    const tag = src.slice(open, at);
+
+    assert.ok(/className="[^"]*\brelative\b/.test(tag) || /position:\s*'relative'/.test(tag),
+      `${game} puts the help button in a container that is not positioned, so it will anchor somewhere else on the page`);
+  }
+});

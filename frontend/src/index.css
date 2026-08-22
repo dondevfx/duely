@@ -122,3 +122,21 @@ html.light .hover\:bg-surfaceLight:hover { background-color: #cdd4e0 !important;
    play area and must match the page behind it. */
 :root { --rh-surround: #000000; }
 html.light { --rh-surround: #ffffff; }
+
+/* iOS zooms the whole page in whenever you focus a field whose text is under
+   16px — and it does not zoom back out afterwards, so you are left pinching to
+   read the page again. The fix is the font size, not the viewport: locking
+   maximum-scale would stop the zoom by taking pinch-to-zoom away from
+   everybody, which is worse.
+   Only the small sizes are raised. text-base is already 16px, and the two
+   text-lg fields are larger still, so a blanket floor would have SHRUNK them.
+   These are element+class selectors, so they outrank the bare Tailwind class
+   without !important. */
+@media (hover: none) and (pointer: coarse) {
+  input.text-xs, input.text-sm,
+  textarea.text-xs, textarea.text-sm,
+  select.text-xs, select.text-sm {
+    font-size: 16px;
+    line-height: 1.4;
+  }
+}

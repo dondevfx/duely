@@ -831,8 +831,13 @@ function BlackjackGame() {
         {/* Top bar */}
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          // Left padding reserves the corner for the help button, so the title
-          // starts clear of it and nothing can end up underneath.
+          // relative: the help button is absolutely positioned into this bar's
+          // corner. Without a positioning context here it escapes the bar and
+          // lands wherever the nearest positioned ancestor happens to be — which
+          // is how it ended up floating in the middle of the screen.
+          position: 'relative',
+          // Left padding reserves that corner, so the title starts clear of it
+          // and nothing can end up underneath.
           padding: '12px 16px 12px 60px',
           borderBottom: divider,
         }}>
