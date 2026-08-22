@@ -34,10 +34,28 @@
 // customer, ACH in converting to USDC, USDC out paying by ACH, so the treasury
 // never holds dollars.
 
+// ── Submitting is not the same as failing to submit ─────────────────────────
+//
+// The same distinction chainSend needed for Solana. A provider call that times
+// out may or may not have created the payout, and refunding on the error alone
+// is how a player ends up paid twice.
+//
+// So a failure carries whether the request definitely never left. Only
+// `submitted === false` is safe to refund; anything else goes to a person.
+class PayoutSubmitError extends Error {
+  constructor(message, submitted, payoutId = null) {
+    super(message);
+    this.name = 'PayoutSubmitError';
+    this.submitted = submitted;   // false = certainly not sent; true/undefined = unknown
+    this.payoutId = payoutId;
+  }
+}
+
 const NOT_CONFIGURED = (name) => {
-  const e = new Error(
+  const e = new PayoutSubmitError(
     `Fiat payout provider "${name}" is not configured. ` +
-    `No credentials, no integration — refusing rather than pretending to send.`);
+    `No credentials, no integration — refusing rather than pretending to send.`,
+    false);   // nothing was contacted, so refunding here is safe
   e.code = 'PROVIDER_NOT_CONFIGURED';
   return e;
 };
@@ -124,6 +142,7 @@ function pollDelay(ageMs) {
 }
 
 module.exports = {
+  PayoutSubmitError,
   providers,
   providerFor,
   isConfigured,

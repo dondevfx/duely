@@ -15,6 +15,10 @@ const { isValidAddressFor } = require('../services/addressValidator');
 const { swapUsdcToSol, swapUsdcToUsdt } = require('../services/jupiterService');
 const { isLocked } = require('../services/lockService');
 const cryptomus = require('../services/cryptomusService');
+const fiatPay = require('../services/fiatPayouts');
+const fiatCfg = require('../services/fiatConfig');
+const payoutWatcher = require('../services/payoutWatcher');
+const { validateBankDetails, maskAccountNumber } = require('../services/bankValidator');
 
 const WITHDRAW_COOLDOWN_MS = 60 * 1000;   // 60s between withdrawals
 const activeWithdrawals = new Set();       // in-memory per-user lock to prevent concurrent withdrawals
@@ -228,10 +232,21 @@ module.exports = function walletRoutes(supabase, io) {
   });
 
   // ── Withdraw via SimpleSwap (any coin → player's address) ─────────────
-  router.post('/withdraw', requireAuth, async (req, res) => {
-    if (isDemo(req.user.id)) return res.status(403).json({ error: 'Demo accounts cannot withdraw.' });
+  // ── Guards every withdrawal shares, whatever the rail ────────────────────
+  //
+  // One implementation, used by both the crypto and the fiat route. These are
+  // the checks that decide whether this person may take money out AT ALL —
+  // they have nothing to do with which rail carries it, so a second copy would
+  // only ever be a second thing to keep in step. Two near-identical copies of
+  // one rule is how ETH and BNB ended up on different API keys.
+  //
+  // Returns null when everything passes, or an object to send back.
+  async function withdrawalGuards(req) {
+    if (isDemo(req.user.id)) {
+      return { status: 403, body: { error: 'Demo accounts cannot withdraw.' } };
+    }
     if (!req.user.email_confirmed_at) {
-      return res.status(403).json({ error: 'Please verify your email before withdrawing.' });
+      return { status: 403, body: { error: 'Please verify your email before withdrawing.' } };
     }
 
     // MFA step-up enforcement: if the account has a verified authenticator, the
@@ -244,18 +259,25 @@ module.exports = function walletRoutes(supabase, io) {
         const { data: u } = await supabase.auth.admin.getUserById(req.user.id);
         const hasMfa = (u?.user?.factors || []).some(f => f.status === 'verified');
         if (hasMfa) {
-          return res.status(403).json({ error: 'Verify with your authenticator app to withdraw.', mfaRequired: true });
+          return { status: 403, body: { error: 'Verify with your authenticator app to withdraw.', mfaRequired: true } };
         }
       }
     } catch (e) {
       console.error('[withdraw] MFA/aal check error (allowing):', e.message);
     }
+
     if (isLocked(req.user.id)) {
-      return res.status(400).json({ error: 'Cannot withdraw while in a queue or active match' });
+      return { status: 400, body: { error: 'Cannot withdraw while in a queue or active match' } };
     }
     if (activeWithdrawals.has(req.user.id)) {
-      return res.status(429).json({ error: 'A withdrawal is already in progress' });
+      return { status: 429, body: { error: 'A withdrawal is already in progress' } };
     }
+    return null;
+  }
+
+  router.post('/withdraw', requireAuth, async (req, res) => {
+    const blocked = await withdrawalGuards(req);
+    if (blocked) return res.status(blocked.status).json(blocked.body);
 
     const { coin, address, memo } = req.body;
 
@@ -570,6 +592,179 @@ module.exports = function walletRoutes(supabase, io) {
 
       const newBalance = await getBalance(supabase, req.user.id);
       res.json({ success: true, new_balance: newBalance });
+
+    } catch (err) {
+      const isBalanceError = err.message?.includes('Insufficient');
+      res.status(isBalanceError ? 400 : 500).json({ error: err.message });
+    } finally {
+      activeWithdrawals.delete(req.user.id);
+    }
+  });
+
+  // ── Fiat withdrawal ───────────────────────────────────────────────────
+  //
+  // Bank, PayPal and Venmo. Shares every guard with the crypto route above and
+  // differs only in what it validates and what it hands the money to.
+  //
+  // Nothing can pay out today: fiatConfig.ENABLED is empty and both provider
+  // adapters throw. That is deliberate — the route exists so it can be written
+  // and tested before an approval lands, and so enabling a rail later is a
+  // config change against tested code rather than new code written in a hurry.
+
+  // Where the money is going, per method. A bank account and a PayPal address
+  // have nothing in common, so this cannot be one shape.
+  function validateDestination(method, destination) {
+    const d = destination || {};
+    if (method === 'bank') {
+      const v = validateBankDetails(d);
+      return v.ok ? { ok: true, summary: maskAccountNumber(d.accountNumber) } : v;
+    }
+    if (method === 'paypal' || method === 'venmo') {
+      const email = String(d.email || '').trim().toLowerCase();
+      // Deliberately loose. An address that looks wrong is worth rejecting; an
+      // address that looks right is still only proven by the payout landing,
+      // which is what the unclaimed state exists to report.
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 254) {
+        return { ok: false, error: `Enter the email address on the ${method === 'venmo' ? 'Venmo' : 'PayPal'} account.` };
+      }
+      return { ok: true, summary: email };
+    }
+    return { ok: false, error: 'Unsupported withdrawal method' };
+  }
+
+  // Identity has to be verified before money leaves by a fiat rail — every
+  // provider requires it and so does the tax reporting.
+  //
+  // Fails CLOSED. A missing column, an unreadable profile or an error all mean
+  // "not verified", because the alternative is paying out to someone we cannot
+  // identify on the one path where that is not recoverable.
+  async function kycApproved(userId) {
+    try {
+      const { data } = await supabase
+        .from('profiles').select('kyc_status').eq('id', userId).single();
+      return data?.kyc_status === 'approved';
+    } catch {
+      return false;
+    }
+  }
+
+  router.post('/withdraw-fiat', requireAuth, async (req, res) => {
+    const blocked = await withdrawalGuards(req);
+    if (blocked) return res.status(blocked.status).json(blocked.body);
+
+    const method = String(req.body?.method || '').toLowerCase();
+
+    // Validation before the in-flight lock, for the reason the crypto route
+    // documents: a rejected request that leaked the lock would bar the player
+    // from withdrawing until the process restarted.
+    if (!fiatCfg.canWithdraw(method)) {
+      return res.status(400).json({
+        error: fiatCfg.METHODS[method]
+          ? `${fiatCfg.METHODS[method].label} withdrawals are not available yet.`
+          : 'Unsupported withdrawal method',
+      });
+    }
+
+    const dest = validateDestination(method, req.body?.destination);
+    if (!dest.ok) return res.status(400).json({ error: dest.error });
+
+    const min = fiatCfg.minFor(method, 'withdraw');
+    let amount;
+    try { amount = sanitizeAmount(req.body?.amount, min, MAX_SINGLE_AMOUNT); }
+    catch (e) { return res.status(400).json({ error: e.message }); }
+
+    activeWithdrawals.add(req.user.id);
+    try {
+      const lastWit = await getLastWithdrawal(supabase, req.user.id);
+      if (lastWit && Date.now() - new Date(lastWit).getTime() < WITHDRAW_COOLDOWN_MS) {
+        const waitSec = Math.ceil((WITHDRAW_COOLDOWN_MS - (Date.now() - new Date(lastWit).getTime())) / 1000);
+        return res.status(429).json({ error: `Please wait ${waitSec}s before withdrawing again` });
+      }
+
+      const balance = await getBalance(supabase, req.user.id);
+      if (balance < amount) return res.status(400).json({ error: 'Insufficient balance' });
+
+      if (!(await kycApproved(req.user.id))) {
+        return res.status(403).json({
+          error: 'Verify your identity before withdrawing to a bank or wallet.',
+          kycRequired: true,
+        });
+      }
+
+      // Deducted before the send, so the balance cannot be spent while a payout
+      // is in flight. Same ordering as the crypto route.
+      await deductCoins(supabase, req.user.id, amount);
+
+      let payoutId;
+      try {
+        const result = await fiatPay.providerFor(method).send({
+          method, amount, destination: req.body.destination, userId: req.user.id,
+        });
+        payoutId = result?.payoutId;
+        if (!payoutId) throw new fiatPay.PayoutSubmitError('provider returned no payout id', undefined);
+      } catch (e) {
+        // submitted === false is the ONLY case where nothing left. Anything
+        // else — a timeout, an ambiguous error, a missing id — might have
+        // created a real payout, and refunding on top of that pays twice.
+        if (e.submitted === false) {
+          try {
+            await creditCoins(supabase, req.user.id, amount);
+          } catch (refundErr) {
+            console.error(
+              `CRITICAL: fiat payout refund failed user=${req.user.id} amount=${amount} ` +
+              `method=${method} — manual credit required:`, refundErr.message);
+            await supabase.from('transactions').insert({
+              user_id: req.user.id, type: 'withdrawal', amount_c: amount,
+              crypto_symbol: method.toUpperCase(), status: 'refund_failed',
+              notes: `payout not submitted: ${String(e.message).slice(0, 150)} | refund failed: ${String(refundErr.message).slice(0, 150)}`,
+            }).then().catch(() => {});
+            return res.status(500).json({ error: 'Payout failed and the refund failed — contact support.' });
+          }
+          return res.status(503).json({ error: `${fiatCfg.METHODS[method].label} payouts are unavailable right now. Nothing was taken.` });
+        }
+
+        // Unknown. Coins stay deducted and a person decides — the same call the
+        // ChangeNow path makes, for the same reason.
+        console.error(
+          `CRITICAL: fiat payout outcome unknown user=${req.user.id} amount=${amount} ` +
+          `method=${method} payoutId=${e.payoutId || 'none'} — NOT refunded:`, e.message);
+        await supabase.from('transactions').insert({
+          user_id: req.user.id, type: 'withdrawal', amount_c: amount,
+          crypto_symbol: method.toUpperCase(), tx_hash: e.payoutId || null,
+          status: 'payout_uncertain',
+          notes: `Could not confirm whether this payout was submitted: ${String(e.message).slice(0, 200)}`,
+        }).then().catch(() => {});
+        return res.status(500).json({
+          error: 'Your withdrawal is being verified. Your balance will be corrected shortly — please do not retry.',
+        });
+      }
+
+      // 'sending', not 'confirmed'. Handing a payout to a provider is not
+      // delivery — the watcher decides which it becomes.
+      const { error: recErr } = await supabase.from('transactions').insert({
+        user_id: req.user.id, type: 'withdrawal', amount_c: amount,
+        crypto_amount: amount, crypto_symbol: method.toUpperCase(),
+        tx_hash: String(payoutId), status: 'sending',
+        notes: `${fiatCfg.METHODS[method].label} → ${dest.summary}`,
+      });
+      if (recErr) {
+        console.error(
+          `CRITICAL: fiat payout SUBMITTED but not recorded — user=${req.user.id} ` +
+          `amount=${amount} method=${method} payout=${payoutId}:`, recErr.message);
+      }
+
+      // Only watch a payout that has a row: the watcher claims that row before
+      // acting, so without it a failure would have nothing to claim.
+      if (!recErr) {
+        try { payoutWatcher.watch(String(payoutId), req.user.id, method); }
+        catch (e) { console.error(`[withdraw] could not watch payout ${payoutId}:`, e.message); }
+      }
+
+      await recordWithdrawal(supabase, req.user.id, amount, 'fiat').catch(e =>
+        console.error('recordWithdrawal failed:', e.message));
+
+      const newBalance = await getBalance(supabase, req.user.id);
+      res.json({ success: true, new_balance: newBalance, payoutId, status: 'sending' });
 
     } catch (err) {
       const isBalanceError = err.message?.includes('Insufficient');
