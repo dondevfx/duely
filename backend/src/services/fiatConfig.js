@@ -10,11 +10,11 @@
  *
  * ── The rule that matters most ──
  *
- * Direction is per method and is NOT symmetric. Cash App can take money and can
- * never send it — no third-party payout API exists — and Apple Pay is the same.
- * A player who funds with either has to withdraw somewhere else, and that has to
- * be enforced in code rather than remembered, because the failure mode is a
- * player who deposits expecting to cash out the same way.
+ * Direction is per method and is NOT symmetric. Apple Pay can take money and
+ * can never send it — it is a wallet presenting a card, and there is nothing to
+ * pay back to. A player who funds with it has to withdraw somewhere else, and
+ * that has to be enforced in code rather than remembered, because the failure
+ * mode is a player who deposits expecting to cash out the same way.
  */
 
 // ── Method table ────────────────────────────────────────────────────────────
@@ -50,15 +50,6 @@ const METHODS = {
     label:       'Apple Pay',
     deposit:     true,
     withdraw:    false, // a wallet presenting a card; there is nothing to pay back to
-    minDeposit:  10,
-    minWithdraw: null,
-    feeShape:    'percent',
-    instant:     true,
-  },
-  cash_app: {
-    label:       'Cash App',
-    deposit:     true,
-    withdraw:    false, // no third-party payout API exists. Not a toggle.
     minDeposit:  10,
     minWithdraw: null,
     feeShape:    'percent',

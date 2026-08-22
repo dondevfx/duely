@@ -7,9 +7,9 @@
 //   HTTP route, so the monitor had its own idea of which coins existed and
 //   disabling BNB left the poller warning about it every 45 seconds forever.
 //
-//   A method offered in a direction it cannot go. Cash App and Apple Pay can
-//   take money and can never send it, and a player who funds with one has to
-//   withdraw somewhere else. That must be enforced, not remembered.
+//   A method offered in a direction it cannot go. Apple Pay can take money
+//   and can never send it, and a player who funds with it has to withdraw
+//   somewhere else. That must be enforced, not remembered.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -23,7 +23,7 @@ const {
 test('the one-way rails can never be made two-way by config', () => {
   // Not a toggle. There is no third-party payout API for either, so a future
   // edit that "enables" the withdrawal is enabling something that cannot work.
-  for (const m of ['cash_app', 'apple_pay', 'card']) {
+  for (const m of ['apple_pay', 'card']) {
     assert.equal(fiat.METHODS[m].withdraw, false, `${m} cannot send money`);
     assert.equal(fiat.METHODS[m].minWithdraw, null,
       `${m} has a withdrawal minimum, which implies a withdrawal exists`);
@@ -31,28 +31,28 @@ test('the one-way rails can never be made two-way by config', () => {
 });
 
 test('enabling a method does not grant it a direction it lacks', () => {
-  // The dangerous interaction: someone adds cash_app to ENABLED expecting
+  // The dangerous interaction: someone adds apple_pay to ENABLED expecting
   // deposits, and payouts quietly come with it.
-  fiat.ENABLED.add('cash_app');
+  fiat.ENABLED.add('apple_pay');
   try {
-    assert.equal(fiat.canDeposit('cash_app'), true, 'deposits should switch on');
-    assert.equal(fiat.canWithdraw('cash_app'), false, 'payouts must stay impossible');
-    assert.ok(!fiat.withdrawMethods().includes('cash_app'));
+    assert.equal(fiat.canDeposit('apple_pay'), true, 'deposits should switch on');
+    assert.equal(fiat.canWithdraw('apple_pay'), false, 'payouts must stay impossible');
+    assert.ok(!fiat.withdrawMethods().includes('apple_pay'));
   } finally {
-    fiat.ENABLED.delete('cash_app');
+    fiat.ENABLED.delete('apple_pay');
   }
 });
 
 test('deposit-only methods are named for the page', () => {
   // So a player is warned when they fund, not when they try to cash out.
-  fiat.ENABLED.add('cash_app');
+  fiat.ENABLED.add('apple_pay');
   fiat.ENABLED.add('bank');
   try {
     const cfg = fiat.publicConfig();
-    assert.ok(cfg.depositOnly.includes('cash_app'), 'cash_app must be flagged one-way');
+    assert.ok(cfg.depositOnly.includes('apple_pay'), 'apple_pay must be flagged one-way');
     assert.ok(!cfg.depositOnly.includes('bank'), 'bank goes both ways');
   } finally {
-    fiat.ENABLED.delete('cash_app');
+    fiat.ENABLED.delete('apple_pay');
     fiat.ENABLED.delete('bank');
   }
 });
