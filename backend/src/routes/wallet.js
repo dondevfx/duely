@@ -272,6 +272,23 @@ module.exports = function walletRoutes(supabase, io) {
     if (activeWithdrawals.has(req.user.id)) {
       return { status: 429, body: { error: 'A withdrawal is already in progress' } };
     }
+
+    // Identity. In the SHARED guards, so it covers crypto and fiat alike — a
+    // gate that only one route runs is a gate with a way around it.
+    //
+    // kycRequired tells the client to send the player to /kyc rather than just
+    // showing an error, which is the whole point of gating here: the answer to
+    // "you can't withdraw" is "here is how to fix that".
+    if (!(await kycApproved(req.user.id))) {
+      return {
+        status: 403,
+        body: {
+          error: 'Verify your identity before withdrawing.',
+          kycRequired: true,
+        },
+      };
+    }
+
     return null;
   }
 
@@ -684,6 +701,10 @@ module.exports = function walletRoutes(supabase, io) {
       const balance = await getBalance(supabase, req.user.id);
       if (balance < amount) return res.status(400).json({ error: 'Insufficient balance' });
 
+      // Deliberately duplicated: withdrawalGuards already refused an unverified
+      // player before this line could run. It stays because a payout to someone
+      // unidentified is the one that cannot be undone, and this route must not
+      // depend on a check living somewhere else to be safe. One cheap read.
       if (!(await kycApproved(req.user.id))) {
         return res.status(403).json({
           error: 'Verify your identity before withdrawing to a bank or wallet.',

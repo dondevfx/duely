@@ -550,3 +550,93 @@ ALTER TABLE matches
 
 -- Check:
 --   SELECT ended_by_forfeit, count(*) FROM matches GROUP BY 1;
+
+
+-- ============================================================================
+-- 13. KYC — identity verification
+-- ============================================================================
+-- kycApproved() in routes/wallet.js has always read profiles.kyc_status, and
+-- the column has never existed — so it returned false for everyone and failed
+-- closed. That was correct behaviour, and it is why no fiat withdrawal has
+-- ever been possible. This creates what it was reading.
+--
+-- Meanwhile the "Verification" panel in Settings wrote the player's name,
+-- address and date of birth to localStorage and nothing else. It showed a
+-- "Saved" tick for data that never left the browser.
+
+-- The gate itself lives on profiles: it is read on every withdrawal, so it
+-- wants to be one cheap lookup with no join.
+ALTER TABLE profiles
+  ADD COLUMN IF NOT EXISTS kyc_status           text NOT NULL DEFAULT 'unverified',
+  ADD COLUMN IF NOT EXISTS kyc_reviewed_at      timestamptz,
+  ADD COLUMN IF NOT EXISTS kyc_rejection_reason text;
+
+DO $kyc$
+BEGIN
+  ALTER TABLE profiles ADD CONSTRAINT profiles_kyc_status_check
+    CHECK (kyc_status IN ('unverified', 'pending', 'approved', 'rejected'));
+EXCEPTION WHEN duplicate_object THEN
+  RAISE NOTICE 'profiles_kyc_status_check already exists';
+END
+$kyc$;
+
+-- The identity data itself lives in its own table, NOT on profiles. Profiles
+-- is read constantly and widely; this holds real personal data and should be
+-- reachable from as few places as possible. Keeping submissions as rows also
+-- leaves an audit trail across a rejection and resubmission, which a set of
+-- columns on profiles would overwrite.
+CREATE TABLE IF NOT EXISTS kyc_submissions (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id          uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  legal_name       text NOT NULL,
+  date_of_birth    date NOT NULL,
+  address_line1    text NOT NULL,
+  address_line2    text,
+  city             text NOT NULL,
+  region           text NOT NULL,
+  postal_code      text NOT NULL,
+  country          text NOT NULL,
+  status           text NOT NULL DEFAULT 'pending',
+  rejection_reason text,
+  submitted_at     timestamptz NOT NULL DEFAULT now(),
+  reviewed_at      timestamptz,
+  reviewed_by      uuid,
+  CONSTRAINT kyc_submissions_status_check
+    CHECK (status IN ('pending', 'approved', 'rejected'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_kyc_submissions_status
+  ON kyc_submissions (status, submitted_at);
+
+-- One review in the queue per person. A partial unique index is what broke the
+-- USDC deposits (uniq_tx_extra_id matched on a literal string, so only one row
+-- could ever exist), so this one is deliberately narrow: it only constrains
+-- rows that are actually pending, and the submit route UPDATES an existing
+-- pending row rather than inserting a second one, so it should never be hit.
+-- It is a backstop against a bug, not part of the normal path.
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_kyc_pending_per_user
+  ON kyc_submissions (user_id) WHERE status = 'pending';
+
+-- Nothing but the backend's service role may read this. Service role bypasses
+-- RLS, so enabling it with no policies means the anon and authenticated keys
+-- cannot reach the table at all.
+ALTER TABLE kyc_submissions ENABLE ROW LEVEL SECURITY;
+
+-- Check:
+--   SELECT kyc_status, count(*) FROM profiles GROUP BY 1;
+--   SELECT status, count(*) FROM kyc_submissions GROUP BY 1;
+
+-- ── Optional: existing players ──────────────────────────────────────────────
+-- Every withdrawal is now gated on KYC, so on deploy EVERY existing player is
+-- 'unverified' and withdrawals stop for all of them until they submit and are
+-- approved. That is the intended behaviour.
+--
+-- If you would rather not strand people who have already withdrawn
+-- successfully, this grandfathers them. Left commented out deliberately: it
+-- marks people approved whose identity was never actually checked, which is
+-- exactly what a provider's audit would ask about. Run it only as a knowing
+-- decision.
+--
+-- UPDATE profiles SET kyc_status = 'approved', kyc_reviewed_at = now()
+--  WHERE id IN (SELECT DISTINCT user_id FROM transactions
+--                WHERE type = 'withdrawal' AND status = 'confirmed');

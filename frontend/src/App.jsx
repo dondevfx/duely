@@ -47,6 +47,7 @@ import TowerCanvas from './components/TowerCanvas';
 // Stripped from production builds by the import.meta.env.DEV guard below.
 function TowerPreview() { return <div style={{position:'fixed',inset:0}}><TowerCanvas running /></div>; }
 import Transactions from './pages/Transactions';
+import Kyc from './pages/Kyc';
 import Rewards from './pages/Rewards';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -163,6 +164,7 @@ function Shell() {
           <Route path="/add-friend/:username" element={<AddFriend />} />
           <Route path="/game/random"        element={<Navigate to="/game/quick-match" replace />} />
           <Route path="/transactions"       element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
+          <Route path="/kyc"                element={<ProtectedRoute><Kyc /></ProtectedRoute>} />
           <Route path="/rewards"            element={<Rewards />} />
           <Route path="/reset-password"      element={<ResetPassword />} />
           <Route path="/tos"                element={<ToS />} />

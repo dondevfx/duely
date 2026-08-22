@@ -416,6 +416,93 @@ module.exports = function adminRoutes(supabase, io) {
     res.json(data || []);
   });
 
+  // ── KYC review queue ──────────────────────────────────────────────────
+  //
+  // Approval is a human decision. Nothing here is automated, and nothing here
+  // should be: it is the last check before someone is allowed to take money out
+  // of the platform.
+
+  router.get('/kyc', requireAuth, requireAdmin, async (req, res) => {
+    const status = ['pending', 'approved', 'rejected'].includes(req.query.status)
+      ? req.query.status : 'pending';
+
+    const { data, error } = await supabase
+      .from('kyc_submissions')
+      .select('id, user_id, legal_name, date_of_birth, address_line1, address_line2, city, region, postal_code, country, status, rejection_reason, submitted_at, reviewed_at')
+      .eq('status', status)
+      .order('submitted_at', { ascending: true })
+      .limit(200);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    // The usernames, so a reviewer is not looking at bare UUIDs.
+    const ids = [...new Set((data || []).map(r => r.user_id))];
+    let names = {};
+    if (ids.length) {
+      const { data: profiles } = await supabase
+        .from('profiles').select('id, username, c_coins').in('id', ids);
+      names = Object.fromEntries((profiles || []).map(p => [p.id, p]));
+    }
+
+    res.json((data || []).map(r => ({
+      ...r,
+      username: names[r.user_id]?.username ?? null,
+      balance:  names[r.user_id]?.c_coins ?? null,
+    })));
+  });
+
+  router.post('/kyc/:id/decide', requireAuth, requireAdmin, async (req, res) => {
+    const decision = String(req.body?.decision || '');
+    if (decision !== 'approved' && decision !== 'rejected') {
+      return res.status(400).json({ error: 'decision must be "approved" or "rejected"' });
+    }
+    const reason = decision === 'rejected'
+      ? String(req.body?.reason || '').trim().slice(0, 300)
+      : null;
+    if (decision === 'rejected' && !reason) {
+      return res.status(400).json({ error: 'A rejection needs a reason — the player is shown it.' });
+    }
+
+    // Claim the row before acting on it. Scoping the update to status='pending'
+    // means two admins clicking at once cannot both decide the same submission:
+    // the second update matches nothing.
+    const { data: claimed, error: claimErr } = await supabase
+      .from('kyc_submissions')
+      .update({
+        status:           decision,
+        rejection_reason: reason,
+        reviewed_at:      new Date().toISOString(),
+        reviewed_by:      req.user.id,
+      })
+      .eq('id', req.params.id)
+      .eq('status', 'pending')
+      .select('id, user_id')
+      .single();
+
+    if (claimErr || !claimed) {
+      return res.status(409).json({ error: 'That submission has already been reviewed.' });
+    }
+
+    // The gate moves second. If this fails the submission is decided but the
+    // player is still blocked — visible and fixable, where the other order
+    // would let someone withdraw against a record that was never written.
+    const { error: gateErr } = await supabase
+      .from('profiles')
+      .update({
+        kyc_status:           decision,
+        kyc_reviewed_at:      new Date().toISOString(),
+        kyc_rejection_reason: reason,
+      })
+      .eq('id', claimed.user_id);
+
+    if (gateErr) {
+      console.error(`[admin] KYC ${decision} recorded for ${claimed.user_id} but the gate did not move:`, gateErr.message);
+      return res.status(500).json({ error: 'Decision saved but the account status did not update. Retry.' });
+    }
+
+    res.json({ success: true, decision });
+  });
+
   // ── Clear admin coins ─────────────────────────────────────────────────
   router.post('/clear-coins', requireAuth, requireAdmin, async (req, res) => {
     const { error } = await supabase

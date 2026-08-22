@@ -258,6 +258,8 @@ export default function Admin() {
   const [users, setUsers]           = useState([]);
   const [userSearch, setUserSearch] = useState('');
   const [tab, setTab]               = useState('overview');
+  const [kycQueue, setKycQueue]     = useState([]);
+  const [kycBusy, setKycBusy]       = useState(null);
   const [loading, setLoading]       = useState(true);
   const [coinSupply, setCoinSupply]   = useState(null);
   const [supplyLoading, setSupplyLoading] = useState(false);
@@ -288,7 +290,7 @@ export default function Admin() {
   async function load() {
     setLoading(true);
     try {
-      const [s, t, u, a, tk] = await Promise.all([
+      const [s, t, u, a, tk, kq] = await Promise.all([
         api.get('/admin/stats'),
         api.get('/admin/transactions?limit=100'),
         api.get('/admin/users?limit=100'),
@@ -299,12 +301,15 @@ export default function Admin() {
         // Tickets waiting on staff. A list of every ticket ever raised is not a
         // work queue, so this defaults to the open ones.
         api.get('/admin/support/tickets').catch(() => []),
+        // Pending only — an approved submission is a record, not a task.
+        api.get('/admin/kyc?status=pending').catch(() => []),
       ]);
       setStats(s);
       setTxs(t);
       setUsers(u);
       setAttention(a);
       setTickets(tk);
+      setKycQueue(kq);
     } catch (e) {
       console.error('Admin load error:', e.message);
     } finally {
@@ -346,6 +351,23 @@ export default function Admin() {
   async function closeTicket(id) {
     try { await api.post(`/admin/support/tickets/${id}/close`); setOpenTicket(null); await load(); }
     catch (e) { alert(e.message); }
+  }
+
+  // Approve or reject one submission. The row is removed locally rather than
+  // reloading the whole dashboard: the queue is the work list, and a decided
+  // item leaving it is the feedback.
+  async function decideKyc(id, decision, reason) {
+    setKycBusy(id);
+    try {
+      await api.post(`/admin/kyc/${id}/decide`, { decision, reason });
+      setKycQueue(q => q.filter(k => k.id !== id));
+    } catch (e) {
+      // 409 means somebody else already reviewed it, so drop it either way.
+      if (e.status === 409) setKycQueue(q => q.filter(k => k.id !== id));
+      else alert(`Could not save that decision: ${e.message}`);
+    } finally {
+      setKycBusy(null);
+    }
   }
 
   async function loadCoinSupply() {
@@ -728,7 +750,7 @@ export default function Admin() {
 
             {/* Tabs */}
             <div className="flex gap-2 mb-6">
-              {['attention', 'support', 'transactions', 'users'].map(t => (
+              {['attention', 'kyc', 'support', 'transactions', 'users'].map(t => (
                 <button key={t} onClick={() => setTab(t)}
                   className={`px-4 py-2 rounded-xl text-sm font-semibold capitalize transition-all ${
                     tab === t ? 'bg-primary text-white'
@@ -737,12 +759,70 @@ export default function Admin() {
                         : 'text-muted border border-border hover:border-primary hover:text-white'
                   }`}>
                   {t === 'attention'    ? `⚠ Needs Attention (${attention.length})`
+                    : t === 'kyc'          ? `KYC (${kycQueue.length})`
                     : t === 'support'      ? `Support (${tickets.length})`
                     : t === 'transactions' ? `Transactions (${txs.length})`
                     : `Users (${users.length})`}
                 </button>
               ))}
             </div>
+
+            {/* KYC review queue.
+                Approval is a human decision and stays one — this is the last
+                check before somebody is allowed to take money off the platform. */}
+            {tab === 'kyc' && (
+              <div className="bg-surface border border-border rounded-2xl p-4">
+                {kycQueue.length === 0 ? (
+                  <p className="text-muted text-sm text-center py-8">Nothing waiting for review.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {kycQueue.map(k => (
+                      <div key={k.id} className="border border-border rounded-xl p-4">
+                        <div className="flex items-start justify-between gap-4 flex-wrap">
+                          <div className="min-w-0">
+                            <div className="text-white font-bold text-sm">
+                              {k.legal_name}
+                              <span className="text-muted font-normal"> · @{k.username ?? 'unknown'}</span>
+                            </div>
+                            <div className="text-xs text-muted mt-1 leading-relaxed">
+                              Born {k.date_of_birth}<br />
+                              {k.address_line1}{k.address_line2 ? `, ${k.address_line2}` : ''}<br />
+                              {k.city}, {k.region} {k.postal_code} · {k.country}
+                            </div>
+                            <div className="text-[11px] text-muted/70 mt-1.5">
+                              Balance {Number(k.balance ?? 0).toFixed(2)} · submitted{' '}
+                              {new Date(k.submitted_at).toLocaleString()}
+                            </div>
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            <button
+                              onClick={() => decideKyc(k.id, 'approved')}
+                              disabled={kycBusy === k.id}
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-success/15 text-success border border-success/40 hover:bg-success/25 disabled:opacity-50"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => {
+                                // A reason is required by the API, because the
+                                // player is shown it and "rejected" alone tells
+                                // them nothing they can act on.
+                                const reason = window.prompt('Why is this rejected? The player sees this.');
+                                if (reason && reason.trim()) decideKyc(k.id, 'rejected', reason.trim());
+                              }}
+                              disabled={kycBusy === k.id}
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-danger/15 text-danger border border-danger/40 hover:bg-danger/25 disabled:opacity-50"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Needs-attention queue */}
             {tab === 'attention' && (

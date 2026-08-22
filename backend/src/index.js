@@ -18,6 +18,7 @@ const adminRoutes = require('./routes/admin');
 const webhookRoutes = require('./routes/webhooks');
 const affiliateRoutes = require('./routes/affiliate');
 const rakebackRoutes = require('./routes/rakeback');
+const kycRoutes      = require('./routes/kyc');
 const supportRoutes = require('./routes/support');
 const { apiLimiter, authLimiter } = require('./middleware/rateLimit');
 const registerSocketHandlers = require('./socket/handlers');
@@ -85,6 +86,7 @@ app.use('/api/admin', adminRoutes(supabase, io));
 app.use('/api/support', supportRoutes(supabase, io));
 app.use('/api/affiliate', affiliateRoutes(supabase));
 app.use('/api/rakeback', rakebackRoutes(supabase));
+app.use('/api/kyc', kycRoutes(supabase));
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.get('/ping',   (_req, res) => res.send('pong'));

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
 import { supabase } from '../utils/supabase';
@@ -123,6 +123,7 @@ function TxRow({ tx }) {
 // ── Main component ────────────────────────────────────────────────────
 export default function Wallet() {
   const ready = usePageReady();
+  const navigate = useNavigate();
   const { profile, session, refreshProfile, verifyMfaStepUp } = useAuth();
 
   // Deposit state
@@ -264,6 +265,13 @@ export default function Wallet() {
       await refreshProfile();
       api.get('/wallet/transactions?limit=50').then(setTransactions).catch(() => {});
     } catch (err) {
+      // An unverified player is not being told "no" — they are being told to go
+      // and do something. Sending them straight there beats an error message
+      // that names a page they then have to find.
+      if (err.data?.kycRequired) {
+        navigate('/kyc?from=wallet');
+        return;
+      }
       setWitMsg({ type: 'error', text: err.message });
     } finally {
       setWitLoading(false);
