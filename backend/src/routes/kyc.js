@@ -120,5 +120,70 @@ module.exports = function kycRoutes(supabase) {
     res.json({ url: session.url });
   });
 
+  /**
+   * Asks Didit directly, rather than waiting for a webhook that may never come.
+   *
+   * The webhook is the normal path. This is the recovery one: a delivery that
+   * was dropped, retried past its window, or discarded leaves a player finished
+   * at Didit and 'pending' here forever, with nothing able to move them. It is
+   * safe to call at any time — it reads Didit's answer and applies exactly the
+   * same mapping the webhook does, so it can only ever agree with it.
+   */
+  router.post('/refresh', requireAuth, async (req, res) => {
+    const userId = req.user.id;
+
+    const { data: row, error: rowErr } = await supabase
+      .from('kyc_submissions')
+      .select('id, didit_session_id')
+      .eq('user_id', userId)
+      .not('didit_session_id', 'is', null)
+      .order('submitted_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (rowErr) return res.status(500).json({ error: rowErr.message });
+    if (!row?.didit_session_id) {
+      return res.status(400).json({ error: 'You have not started a verification yet.' });
+    }
+
+    let session;
+    try {
+      session = await didit.fetchSession(row.didit_session_id);
+    } catch (e) {
+      if (e.notConfigured) return res.status(503).json({ error: 'Identity verification is not switched on yet.' });
+      console.error('[kyc] refresh lookup failed:', e.message);
+      return res.status(502).json({ error: 'Could not reach the verification provider.' });
+    }
+
+    // Same mapping as the webhook. Two places deciding what "In Review" means
+    // is how they end up disagreeing.
+    const status = didit.mapStatus(session.status);
+    const reason = status === 'rejected' ? (session.reason || 'Your verification was not approved.') : null;
+
+    await supabase.from('kyc_submissions').update({
+      didit_status: session.status,
+      status:       status === 'approved' ? 'approved' : status === 'rejected' ? 'rejected' : 'pending',
+      decision:     session ?? null,
+      reviewed_at:  new Date().toISOString(),
+    }).eq('id', row.id);
+
+    const { error: gateErr } = await supabase
+      .from('profiles')
+      .update({
+        kyc_status:           status,
+        kyc_reviewed_at:      new Date().toISOString(),
+        kyc_rejection_reason: reason,
+      })
+      .eq('id', userId);
+
+    if (gateErr) {
+      console.error(`[kyc] refresh read ${session.status} for ${userId} but the gate did not move:`, gateErr.message);
+      return res.status(500).json({ error: 'Could not update your status. Contact support.' });
+    }
+
+    console.log(`[kyc] refresh: ${userId} -> ${session.status} (${status})`);
+    res.json({ status, diditStatus: session.status });
+  });
+
   return router;
 };

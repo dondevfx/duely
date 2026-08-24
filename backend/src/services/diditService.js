@@ -101,6 +101,34 @@ async function createSession(userId, { callbackUrl } = {}) {
 }
 
 /**
+ * Asks Didit what a session's decision actually is.
+ *
+ * The webhook is the normal path, but it is a delivery — and deliveries get
+ * missed. Without a way to ask, one dropped or discarded event strands a player
+ * on 'pending' with no route back: their verification is finished at Didit and
+ * our gate never hears. That happened the first time this ran end to end, when
+ * every event was correctly discarded for an environment mismatch and the
+ * decision had nowhere else to come from.
+ */
+async function fetchSession(sessionId) {
+  if (!API_KEY) {
+    const err = new Error('Identity verification is not configured yet.');
+    err.notConfigured = true;
+    throw err;
+  }
+
+  const res = await fetch(`${API_BASE}/v3/session/${encodeURIComponent(sessionId)}/decision/`, {
+    headers: { 'x-api-key': API_KEY },
+  });
+
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body?.detail || body?.message || `Didit session lookup failed (${res.status})`);
+  }
+  return body;
+}
+
+/**
  * Verifies a webhook came from Didit and is not a replay.
  *
  * X-Signature-V2 is HMAC-SHA256 over the canonical (key-sorted) JSON, which is
@@ -153,6 +181,7 @@ function verifyWebhook(rawBody, headers) {
 
 module.exports = {
   isConfigured,
+  fetchSession,
   createSession,
   verifyWebhook,
   mapStatus,

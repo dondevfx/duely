@@ -159,6 +159,22 @@ test('the session is recorded before the player is sent to it', () => {
     'an unrecorded session means the webhook arrives matching no row');
 });
 
+test('a missed webhook can be recovered by asking Didit', () => {
+  // The webhook is a delivery, and deliveries get missed. Without this a player
+  // whose event was dropped is finished at Didit and 'pending' here forever,
+  // with nothing able to move them. It happened on the first live run: every
+  // event was correctly discarded for an environment mismatch, and the decision
+  // had nowhere else to come from.
+  assert.match(KYC, /router\.post\('\/refresh'/, 'the recovery path is gone');
+});
+
+test('refresh and the webhook cannot disagree', () => {
+  // Two places deciding what "In Review" means is how they drift apart.
+  const refresh = KYC.slice(KYC.indexOf("router.post('/refresh'"));
+  assert.match(refresh, /didit\.mapStatus\(session\.status\)/,
+    'refresh must use the same mapping as the webhook, not its own');
+});
+
 test('there is no manual identity form left', () => {
   // It collected a name, address and date of birth for an admin to eyeball,
   // which verified nothing — anyone could type a plausible name.
