@@ -77,7 +77,7 @@ async function createSession(userId, { callbackUrl } = {}) {
     throw err;
   }
 
-  const res = await fetch(`${API_BASE}/v2/session/`, {
+  const res = await fetch(`${API_BASE}/v3/session/`, {
     method: 'POST',
     headers: { 'x-api-key': API_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({
