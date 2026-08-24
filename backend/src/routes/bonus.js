@@ -151,29 +151,23 @@ module.exports = function bonusRoutes(supabase) {
 
       const prize = rollSpinPrize();
 
-      // Try RPC first (atomic), fall back to direct update
-      let credited = false;
+      // credit_diamonds only. The old fallback here read the balance, added the
+      // prize in JS, and wrote it back — not atomic, unlike the row-locked stamp
+      // above it. Two spins whose RPC both failed in the same instant could read
+      // the same starting balance and one prize would vanish, or double-add if a
+      // credit succeeded but reported an error the caller mis-read. Diamonds
+      // aren't withdrawable, which is the only reason this sat unfixed as long as
+      // it did — it is still a real balance, and "small blast radius" was true
+      // right up until it wasn't. Fail closed and let them retry, same as the
+      // diamond-claim handler above.
       const { error: credErr } = await supabase.rpc('credit_diamonds', {
         user_id: req.user.id,
         amount:  prize,
       });
-      if (!credErr) {
-        credited = true;
-      } else {
-        console.error('[bonus] credit_diamonds RPC failed:', credErr.message);
-        const { data: cur, error: readErr } = await supabase
-          .from('profiles').select('diamonds').eq('id', req.user.id).single();
-        if (!readErr && cur != null) {
-          const { error: updErr } = await supabase
-            .from('profiles')
-            .update({ diamonds: (cur.diamonds || 0) + prize })
-            .eq('id', req.user.id);
-          if (!updErr) credited = true;
-        }
-      }
 
-      if (!credited) {
-        // Reset cooldown so user can try again
+      if (credErr) {
+        console.error('[bonus] credit_diamonds RPC failed:', credErr.message);
+        // Reset cooldown so user can try again — they got nothing.
         await supabase.from('profiles')
           .update({ last_spin_claimed: null }).eq('id', req.user.id).then().catch(() => {});
         return res.status(500).json({ error: 'Could not credit diamonds. Please try again.' });

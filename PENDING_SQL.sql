@@ -680,3 +680,38 @@ DROP INDEX IF EXISTS uniq_kyc_pending_per_user;
 
 -- Check:
 --   SELECT status, didit_status, count(*) FROM kyc_submissions GROUP BY 1,2;
+
+
+-- ============================================================================
+-- 15. Closed: direct-write access via the anon/authenticated keys
+-- ============================================================================
+-- A real incident, not a hardening exercise. A registered player (no deposit,
+-- no match ever played) had profiles.c_coins = 1,000.00 and tried seven
+-- withdrawals across four coins in twenty minutes. All seven failed only
+-- because the payout wallet held $4.44 — had it been funded, $755 would have
+-- gone out.
+--
+-- The frontend makes NO direct Supabase table calls; it uses Supabase only for
+-- auth, and talks to every table through this backend's service role. But the
+-- anon key is (correctly, by design) embedded in the shipped JS bundle, and
+-- Postgres' default GRANTs on a fresh Supabase project hand the anon and
+-- authenticated roles INSERT/UPDATE/DELETE on every table, independent of RLS
+-- policies. RLS was enabled on profiles, but permissive UPDATE policies plus
+-- those default grants meant a browser could PATCH its own c_coins directly
+-- against Supabase's REST API — never touching this backend, never creating a
+-- transaction row, which is exactly why it showed no deposit.
+--
+-- Fixed by revoking write access outright: nothing in this app needs it.
+REVOKE INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
+
+-- Verified by attempting the exact exploit from a real logged-in session
+-- (PATCH .../rest/v1/profiles with the anon key) — it now returns
+-- 403 { "code": "42501", "message": "permission denied for table profiles" }.
+--
+-- Re-check after adding any new table — this does not apply automatically to
+-- ones created later:
+--   SELECT grantee, table_name, privilege_type
+--   FROM information_schema.role_table_grants
+--   WHERE table_schema = 'public' AND grantee IN ('anon','authenticated')
+--     AND privilege_type IN ('INSERT','UPDATE','DELETE');
+-- Expected: zero rows.
