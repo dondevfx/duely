@@ -67,15 +67,15 @@ export const GAMES = [
     icon:     '🃏',
     route:    '/game/blackjack',
     countKey: 'blackjack',
-    // 68% — found with the ?cropdebug=1 live slider (GameVideoCard.jsx),
-    // dialed in on a real phone rather than guessed from here. Two earlier
-    // attempts (default 50%, then 36%) were each verified by every offline
-    // method available — extracted frames, simulated canvas crops, the
-    // deployed CSS read straight off production — and each still came back
-    // wrong on a real screen, in two different ways. canvas drawImage does
-    // not reproduce what object-fit:cover actually paints, so none of that
-    // verification meant anything; the slider reads the real computed style
-    // off the real render, which is the only thing that turned out reliable.
-    clipPosition: '68% 50%',
+    // 72% — dialed in on a real phone via the ?cropdebug=1 slider
+    // (GameVideoCard.jsx), same as the 68% before it. Two earlier offline
+    // attempts (default 50%, then 36%) each checked out under every method
+    // available here — extracted frames, simulated canvas crops, the
+    // deployed CSS read straight off production — and both still came back
+    // wrong on a real screen. canvas drawImage does not reproduce what
+    // object-fit:cover actually paints, so that verification meant nothing;
+    // the slider reads the real computed style off the real render, which is
+    // the only thing that has turned out reliable for this.
+    clipPosition: '72% 50%',
   },
 ];
