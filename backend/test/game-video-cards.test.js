@@ -94,10 +94,18 @@ test('the clip is muted, so autoplay is not silently blocked', () => {
   assert.match(CARD, /\bmuted\b/);
 });
 
-test('a video only loads once its card is actually on screen', () => {
-  // Seven autoplaying clips loading at once — especially on a phone on
-  // cellular — is the kind of thing that quietly makes the whole page slow.
-  assert.match(CARD, /IntersectionObserver/);
+test('every clip starts loading immediately, not on scroll-into-view', () => {
+  // Used to be gated behind an IntersectionObserver — right for a long page,
+  // wrong for Home and Games, which both show all seven cards in one compact
+  // grid. That gate was the reported bug: the icon sat there until a card
+  // scrolled into view before its clip even started fetching. All seven
+  // clips together are under 1.5MB, cheap enough to just load.
+  // Checks actual usage, not the bare word — a comment explaining that the
+  // gate used to exist legitimately mentions the class name too.
+  assert.ok(!/new IntersectionObserver/.test(CARD),
+    'a scroll-into-view gate must not come back — it reintroduces the exact delay this fixed');
+  assert.match(CARD, /preload="auto"/,
+    '"metadata" only fetches duration/dimensions and defers real frame data — auto is what makes the clip actually arrive promptly');
 });
 
 test('prefers-reduced-motion is honoured, not just declared', () => {
@@ -125,6 +133,17 @@ test('a missing clip or poster degrades to the icon, not a blank square', () => 
 test('the old duplicated GameCard component is gone', () => {
   assert.ok(!fs.existsSync(FE('components', 'GameCard.jsx')),
     'GameCard.jsx should be deleted, not left behind unused alongside GameVideoCard');
+});
+
+test('every listed game has a poster image on disk', () => {
+  // The gap this closes: with no poster, nothing bridges the icon and the
+  // moment the video actually paints a frame, which on a real network is
+  // long enough to see as a flash. A poster is a few KB and decodes almost
+  // immediately, so it covers that gap — but only for games that have one.
+  // Catches a new game shipping with a clip and no poster to go with it.
+  const slugs = [...GAMES_DATA.matchAll(/slug:\s*'([a-z-]+)'/g)].map(m => m[1]);
+  const missing = slugs.filter(s => !fs.existsSync(FE('..', 'public', 'game-clips', `${s}.jpg`)));
+  assert.deepEqual(missing, [], `no poster on disk for: ${missing.join(', ')}`);
 });
 
 // ── The crop-debug slider ───────────────────────────────────────────────────
