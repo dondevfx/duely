@@ -121,7 +121,12 @@ export default function Home() {
         <div className="flex flex-col md:flex-row gap-8">
           <div className="flex-1">
             <h2 className="text-xl md:text-2xl font-bold text-white mb-4 md:mb-6">Choose a Game</h2>
-            <div className="grid grid-cols-2 gap-3 md:gap-5">
+            {/* sm: 3 across — mobile stays 2, which already sizes well. The
+                jump happens at sm rather than md: below md there is no
+                sidebar yet, so the grid has the full column width to itself
+                and 3-up has room; at md+ the sidebar (256–288px) starts
+                eating into this column, so 3-up needs the smaller gap. */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4">
               {GAMES.map(game => (
                 <GameVideoCard
                   key={game.slug}

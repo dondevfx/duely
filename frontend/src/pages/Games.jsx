@@ -18,7 +18,10 @@ export default function Games() {
           <p className="text-muted">Pick a game, set your bet, and play.</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
+        {/* Same 2/3 columns as before — just a touch more breathing room
+            between cards, which is what actually shrinks each square a
+            little without changing how many fit per row. */}
+        <div className="grid grid-cols-2 gap-4 sm:gap-5 lg:grid-cols-3">
           {GAMES.map(game => (
             <GameVideoCard
               key={game.slug}
