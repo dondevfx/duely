@@ -67,14 +67,19 @@ export const GAMES = [
     icon:     '🃏',
     route:    '/game/blackjack',
     countKey: 'blackjack',
-    // 480×444 — landscape, so object-cover crops left/right. The default
-    // centered crop (18px off each side) left HIT tight against the left
-    // edge while STAND kept a visible gap on the right — the recorded
-    // content itself isn't centered in its own frame. Found by extracting a
-    // real frame via canvas and testing actual crop candidates against it
-    // (not guessed): 8px off the left overshot and started clipping STAND
-    // on the right; 13px off the left (36% 50%, vs the 50% 50% default)
-    // balanced both buttons evenly.
-    clipPosition: '36% 50%',
+    // clipPosition deliberately removed, back to the plain center crop.
+    //
+    // A prior attempt set this to '36% 50%' after testing candidate crops
+    // against real extracted frames from the clip — every one of them looked
+    // balanced. Confirmed the value was genuinely deployed (live DOM, live
+    // video bytes both checked directly against production). Reported back
+    // as looking WORSE on a real device regardless — HIT effectively gone.
+    //
+    // That is a real disagreement between what this environment can verify
+    // (frame math, deployed bytes, computed CSS) and what an actual screen
+    // shows, and there is no way to get a true rendered screenshot here to
+    // settle it. Reverting to the known-safe baseline rather than guessing
+    // again. If this still isn't centered, it needs a fresh real screenshot
+    // to work from rather than another blind attempt.
   },
 ];

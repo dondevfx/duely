@@ -56,7 +56,7 @@ export default function Home() {
                 </span>
               </h1>
               <p className="text-lg md:text-xl text-muted max-w-2xl mx-auto md:mx-0 mb-5 md:mb-10">
-                Challenge opponents in real-time skill-based games. Wager{' '}
+                Challenge opponents in real-time player vs player games. Wager{' '}
                 <span className="text-primary font-semibold whitespace-nowrap"><CoinIcon size="1em" /> Coins</span>, climb the leaderboard,
                 and prove you're the best.
               </p>
@@ -111,7 +111,7 @@ export default function Home() {
               { label: 'Wins', value: profile.wins ?? 0 },
               { label: 'Losses', value: profile.losses ?? 0 },
             ].map(stat => (
-              <div key={stat.label} className="bg-surface border border-surfaceLight rounded-xl p-1.5 sm:p-3 md:p-4 text-center overflow-hidden min-w-0">
+              <div key={stat.label} className="bg-surface border border-surfaceLight rounded-xl py-3 px-1.5 sm:py-4 sm:px-3 md:p-4 text-center overflow-hidden min-w-0">
                 <div className="text-sm sm:text-xl md:text-2xl font-black text-white font-mono overflow-hidden">{stat.value}</div>
                 <div className="text-[10px] sm:text-xs text-muted mt-0.5 sm:mt-1">{stat.label}</div>
               </div>
