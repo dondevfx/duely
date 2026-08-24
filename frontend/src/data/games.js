@@ -67,5 +67,14 @@ export const GAMES = [
     icon:     '🃏',
     route:    '/game/blackjack',
     countKey: 'blackjack',
+    // 480×444 — landscape, so object-cover crops left/right. The default
+    // centered crop (18px off each side) left HIT tight against the left
+    // edge while STAND kept a visible gap on the right — the recorded
+    // content itself isn't centered in its own frame. Found by extracting a
+    // real frame via canvas and testing actual crop candidates against it
+    // (not guessed): 8px off the left overshot and started clipping STAND
+    // on the right; 13px off the left (36% 50%, vs the 50% 50% default)
+    // balanced both buttons evenly.
+    clipPosition: '36% 50%',
   },
 ];
