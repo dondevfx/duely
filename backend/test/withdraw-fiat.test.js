@@ -78,7 +78,7 @@ test('the identity check fails closed', () => {
   // A missing column, an unreadable profile and an error all have to mean "no".
   const fn = WALLET.slice(
     WALLET.indexOf('async function kycApproved'),
-    WALLET.indexOf("router.post('/withdraw-fiat'"));
+    WALLET.indexOf('async function withdrawalGuards'));
   assert.match(fn, /catch\s*\{\s*return false;/, 'an error must not read as approved');
   assert.match(fn, /=== 'approved'/, 'only an explicit approval counts');
 });
@@ -145,7 +145,7 @@ test('a submitted payout that cannot be recorded says so', () => {
 function destinationFn() {
   const at = WALLET.indexOf('function validateDestination');
   assert.notEqual(at, -1, 'validateDestination is gone');
-  const end = WALLET.indexOf('async function kycApproved', at);
+  const end = WALLET.indexOf("router.post('/withdraw-fiat'", at);
   assert.notEqual(end, -1, 'could not bound validateDestination');
   return WALLET.slice(at, end);
 }
@@ -163,7 +163,7 @@ test('the account number is masked before it reaches a record', () => {
 test('a wallet destination requires an email', () => {
   const fn = WALLET.slice(
     WALLET.indexOf('function validateDestination'),
-    WALLET.indexOf('async function kycApproved'));
+    WALLET.indexOf("router.post('/withdraw-fiat'"));
   assert.match(fn, /paypal|venmo/, 'both wallet rails must be handled');
   assert.match(fn, /@/, 'an address is the destination for both');
 });
@@ -171,7 +171,7 @@ test('a wallet destination requires an email', () => {
 test('an unknown method cannot reach a provider', () => {
   const fn = WALLET.slice(
     WALLET.indexOf('function validateDestination'),
-    WALLET.indexOf('async function kycApproved'));
+    WALLET.indexOf("router.post('/withdraw-fiat'"));
   assert.match(fn, /Unsupported withdrawal method/,
     'a method with no destination shape must be refused, not passed through');
 });

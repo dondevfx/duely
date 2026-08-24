@@ -4,6 +4,7 @@ const { verifyWebhook, createPayout, COINS } = require('../services/cryptomusSer
 const { createDepositSwap } = require('../services/simpleSwapService');
 const { creditCoins, recordDeposit } = require('../services/walletService');
 const { watch } = require('../services/swapPoller');
+const didit = require('../services/diditService');
 
 // Our USDC SPL wallet address — SimpleSwap sends converted funds here
 const OUR_USDC_ADDRESS = process.env.USDC_SPL_ADDRESS;
@@ -215,6 +216,106 @@ module.exports = function webhookRoutes(supabase) {
     } catch (err) {
       console.error('[cryptomus webhook] error:', err.message, err.stack);
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Didit identity verification ───────────────────────────────────────
+  //
+  // Didit decides, then tells us. This turns its answer into kyc_status, which
+  // is what the bank-withdrawal gate reads.
+  //
+  // express.raw, not express.json: the signature is computed over the body, so
+  // it has to be verified before anything is allowed to re-encode it.
+  router.post('/didit', express.raw({ type: '*/*' }), async (req, res) => {
+    const check = didit.verifyWebhook(req.body, req.headers);
+    if (!check.ok) {
+      // 401, not 400. A rejected webhook is an authentication failure, and
+      // saying which part failed to an unauthenticated caller tells a forger
+      // how close they got — so the detail is logged, not returned.
+      console.warn('[didit webhook] rejected:', check.reason);
+      return res.status(401).json({ error: 'invalid signature' });
+    }
+
+    const p = check.payload;
+
+    // A sandbox event must never touch a real player. Without this check,
+    // anyone who obtained the sandbox secret could approve production accounts.
+    if (p.environment && p.environment !== didit.ENVIRONMENT) {
+      console.warn(`[didit webhook] ignoring ${p.environment} event (we are ${didit.ENVIRONMENT})`);
+      return res.json({ ignored: true });
+    }
+
+    const userId    = p.vendor_data;
+    const sessionId = p.session_id;
+    const status    = didit.mapStatus(p.status);
+
+    if (!userId || !sessionId) {
+      console.error('[didit webhook] no vendor_data or session_id — cannot match a player');
+      return res.json({ ignored: true });
+    }
+
+    // Acknowledge fast. Didit retries on a non-2xx, and a slow database write
+    // would earn duplicate deliveries on top of the work already in flight.
+    res.json({ ok: true });
+
+    try {
+      // Out-of-order delivery is real: a retried "In Progress" can arrive after
+      // "Approved". created_at is when the record actually changed, so an event
+      // older than what we already hold is dropped rather than applied.
+      const eventAt = Number(p.created_at || p.timestamp || 0);
+
+      const { data: existing } = await supabase
+        .from('kyc_submissions')
+        .select('id, didit_updated_at')
+        .eq('didit_session_id', sessionId)
+        .maybeSingle();
+
+      if (existing && Number(existing.didit_updated_at || 0) > eventAt) {
+        console.log(`[didit webhook] stale event for ${sessionId} — ignored`);
+        return;
+      }
+
+      const row = {
+        user_id:           userId,
+        didit_session_id:  sessionId,
+        didit_status:      p.status,
+        didit_updated_at:  eventAt,
+        status:            status === 'approved' ? 'approved'
+                         : status === 'rejected' ? 'rejected' : 'pending',
+        decision:          p.decision ?? null,
+        reviewed_at:       new Date().toISOString(),
+      };
+
+      if (existing) {
+        await supabase.from('kyc_submissions').update(row).eq('id', existing.id);
+      } else {
+        await supabase.from('kyc_submissions').insert(row);
+      }
+
+      // The gate moves last, and only for a decision we understand. 'pending'
+      // deliberately writes 'pending' rather than leaving a stale 'approved' in
+      // place — Kyc Expired has to be able to close the gate again.
+      const reason = status === 'rejected'
+        ? (p.decision?.reason || 'Your verification was not approved.')
+        : null;
+
+      const { error: gateErr } = await supabase
+        .from('profiles')
+        .update({
+          kyc_status:           status,
+          kyc_reviewed_at:      new Date().toISOString(),
+          kyc_rejection_reason: reason,
+        })
+        .eq('id', userId);
+
+      if (gateErr) {
+        console.error(`[didit webhook] CRITICAL: decision ${p.status} recorded for ${userId} but the gate did not move:`, gateErr.message);
+        return;
+      }
+
+      console.log(`[didit webhook] ${userId} -> ${p.status} (${status})`);
+    } catch (e) {
+      console.error('[didit webhook] processing failed:', e.message);
     }
   });
 

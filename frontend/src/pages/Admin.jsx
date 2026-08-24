@@ -781,13 +781,15 @@ export default function Admin() {
                         <div className="flex items-start justify-between gap-4 flex-wrap">
                           <div className="min-w-0">
                             <div className="text-white font-bold text-sm">
-                              {k.legal_name}
+                              {k.legal_name || '(name not returned)'}
                               <span className="text-muted font-normal"> · @{k.username ?? 'unknown'}</span>
                             </div>
                             <div className="text-xs text-muted mt-1 leading-relaxed">
-                              Born {k.date_of_birth}<br />
-                              {k.address_line1}{k.address_line2 ? `, ${k.address_line2}` : ''}<br />
-                              {k.city}, {k.region} {k.postal_code} · {k.country}
+                              {/* Didit's own word for it. "In Review" means a
+                                  reviewer THERE is looking — usually the right
+                                  move is to wait, not to decide it here. */}
+                              Didit says: <span className="text-white">{k.didit_status || 'no result yet'}</span><br />
+                              {[k.city, k.region, k.country].filter(Boolean).join(', ') || 'no address returned'}
                             </div>
                             <div className="text-[11px] text-muted/70 mt-1.5">
                               Balance {Number(k.balance ?? 0).toFixed(2)} · submitted{' '}

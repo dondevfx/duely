@@ -41,26 +41,6 @@ const HIGHSCORE_LABELS = {
 
 const SOLO_GAME_TYPES = new Set(['blockBlast']);
 
-// Verification, as shown in Settings. Every withdrawal is gated on this, so the
-// help text says what it means for the player rather than naming the state.
-const KYC_BADGE = {
-  unverified: {
-    icon: '🪪', label: 'Not verified', cls: 'text-muted border-surfaceLight bg-bg',
-    help: 'You need to verify your identity before you can withdraw.',
-  },
-  pending: {
-    icon: '⏳', label: 'Under review', cls: 'text-warning border-warning/40 bg-warning/10',
-    help: 'We are checking your details. Withdrawals open once this is approved.',
-  },
-  approved: {
-    icon: '✅', label: 'Verified', cls: 'text-success border-success/40 bg-success/10',
-    help: 'Your identity is confirmed and withdrawals are open.',
-  },
-  rejected: {
-    icon: '⚠️', label: 'Not approved', cls: 'text-danger border-danger/40 bg-danger/10',
-    help: 'We could not verify your details. Open verification to see why and try again.',
-  },
-};
 
 // Survival time for a Rush Hour best, stored in ms. Runs are short, so seconds
 // stay readable to one decimal; minutes only appear once they exist.
@@ -285,13 +265,10 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
   const [language, setLangState] = useState(() => localStorage.getItem('language') || 'en');
   const [soundOn, setSoundOn]    = useState(() => !isMuted());
   const [showLang, setShowLang]  = useState(false);
-  const [showVerify, setShowVerify] = useState(false);
   const [isPrivate, setIsPrivate]   = useState(profile?.is_private || false);
   const [invitesEnabled, setInvitesEnabled] = useState(profile?.invites_enabled !== false);
   const [savingInvites, setSavingInvites] = useState(false);
   const [savingPrivate, setSavingPrivate] = useState(false);
-  const [kycStatus, setKycStatus] = useState('unverified');
-  const navigate = useNavigate();
   const panelRef = useRef(null);
 
   // Affiliate state
@@ -403,16 +380,6 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
     }
   }
 
-  // The real status, from the server. Fails to 'unverified' rather than
-  // guessing, because that is the state that shows the player something to do.
-  useEffect(() => {
-    let alive = true;
-    api.get('/kyc/status')
-      .then(d => { if (alive) setKycStatus(d.status || 'unverified'); })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, []);
-
   const langLabel = LANGUAGES.find(l => l.code === language)?.label || 'English';
 
   return (
@@ -492,39 +459,6 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
           </div>
 
           <div className="h-px bg-surfaceLight mb-5" />
-
-          {/* Verification */}
-          <div className="mb-5">
-            <button
-              onClick={() => setShowVerify(v => !v)}
-              className="w-full flex items-center justify-between text-sm font-bold text-white py-1"
-            >
-              <span>✅ Verification</span>
-              <span className="text-muted text-xs">{showVerify ? '▲ Hide' : '▼ Show'}</span>
-            </button>
-            {showVerify && (
-              // The form itself lives on /kyc, not here. This panel used to
-              // collect a name, address and date of birth into localStorage and
-              // show a "Saved" tick — the data never left the browser and no
-              // withdrawal was ever unblocked by it. So this now reports the
-              // real server-side status and sends the player to the real form.
-              <div className="mt-3 space-y-3">
-                <div className={`flex items-center gap-2 text-xs font-bold px-2.5 py-1.5 rounded-lg border ${KYC_BADGE[kycStatus].cls}`}>
-                  <span aria-hidden="true">{KYC_BADGE[kycStatus].icon}</span>
-                  <span>{KYC_BADGE[kycStatus].label}</span>
-                </div>
-                <p className="text-xs text-muted">{KYC_BADGE[kycStatus].help}</p>
-                {kycStatus !== 'approved' && (
-                  <GlowButton
-                    variant="primary" size="sm" className="w-full"
-                    onClick={() => { onClose?.(); navigate('/kyc'); }}
-                  >
-                    {kycStatus === 'unverified' ? 'Verify my identity' : 'View verification'}
-                  </GlowButton>
-                )}
-              </div>
-            )}
-          </div>
 
           <div className="h-px bg-surfaceLight mb-5" />
 

@@ -241,6 +241,23 @@ module.exports = function walletRoutes(supabase, io) {
   // one rule is how ETH and BNB ended up on different API keys.
   //
   // Returns null when everything passes, or an object to send back.
+  // Identity has to be verified before money leaves by a BANK rail — the
+  // provider requires it. Crypto withdrawals are not gated; see the note in
+  // withdrawalGuards for why, and what that trades away.
+  //
+  // Fails CLOSED. A missing column, an unreadable profile or an error all mean
+  // "not verified", because the alternative is paying out to someone we cannot
+  // identify on the one path where that is not recoverable.
+  async function kycApproved(userId) {
+    try {
+      const { data } = await supabase
+        .from('profiles').select('kyc_status').eq('id', userId).single();
+      return data?.kyc_status === 'approved';
+    } catch {
+      return false;
+    }
+  }
+
   async function withdrawalGuards(req) {
     if (isDemo(req.user.id)) {
       return { status: 403, body: { error: 'Demo accounts cannot withdraw.' } };
@@ -273,22 +290,18 @@ module.exports = function walletRoutes(supabase, io) {
       return { status: 429, body: { error: 'A withdrawal is already in progress' } };
     }
 
-    // Identity. In the SHARED guards, so it covers crypto and fiat alike — a
-    // gate that only one route runs is a gate with a way around it.
+    // Identity is deliberately NOT checked here.
     //
-    // kycRequired tells the client to send the player to /kyc rather than just
-    // showing an error, which is the whole point of gating here: the answer to
-    // "you can't withdraw" is "here is how to fix that".
-    if (!(await kycApproved(req.user.id))) {
-      return {
-        status: 403,
-        body: {
-          error: 'Verify your identity before withdrawing.',
-          kycRequired: true,
-        },
-      };
-    }
-
+    // It gates bank withdrawals only, inside /withdraw-fiat. A verification
+    // costs real money past the free monthly allowance, so players verify at
+    // the moment they need to and never again — and someone who only ever
+    // withdraws crypto never pays for one.
+    //
+    // The trade-off, recorded because it is not obvious from the code: crypto
+    // payouts leave through our own wallet with no licensed partner in the
+    // middle, so nothing screens the recipient against sanctions lists. Bank
+    // payouts go through a licensed provider that screens as a condition of its
+    // licence. That asymmetry is a known, accepted choice, not an oversight.
     return null;
   }
 
@@ -649,22 +662,6 @@ module.exports = function walletRoutes(supabase, io) {
     return { ok: false, error: 'Unsupported withdrawal method' };
   }
 
-  // Identity has to be verified before money leaves by a fiat rail — every
-  // provider requires it and so does the tax reporting.
-  //
-  // Fails CLOSED. A missing column, an unreadable profile or an error all mean
-  // "not verified", because the alternative is paying out to someone we cannot
-  // identify on the one path where that is not recoverable.
-  async function kycApproved(userId) {
-    try {
-      const { data } = await supabase
-        .from('profiles').select('kyc_status').eq('id', userId).single();
-      return data?.kyc_status === 'approved';
-    } catch {
-      return false;
-    }
-  }
-
   router.post('/withdraw-fiat', requireAuth, async (req, res) => {
     const blocked = await withdrawalGuards(req);
     if (blocked) return res.status(blocked.status).json(blocked.body);
@@ -701,13 +698,14 @@ module.exports = function walletRoutes(supabase, io) {
       const balance = await getBalance(supabase, req.user.id);
       if (balance < amount) return res.status(400).json({ error: 'Insufficient balance' });
 
-      // Deliberately duplicated: withdrawalGuards already refused an unverified
-      // player before this line could run. It stays because a payout to someone
-      // unidentified is the one that cannot be undone, and this route must not
-      // depend on a check living somewhere else to be safe. One cheap read.
+      // The only identity gate in the codebase. Bank payouts require a verified
+      // person; crypto payouts do not (see withdrawalGuards for why).
+      //
+      // kycRequired is what lets the wallet open the verification flow instead
+      // of showing an error naming a page the player then has to find.
       if (!(await kycApproved(req.user.id))) {
         return res.status(403).json({
-          error: 'Verify your identity before withdrawing to a bank or wallet.',
+          error: 'Verify your identity before withdrawing to a bank account.',
           kycRequired: true,
         });
       }

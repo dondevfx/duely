@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
 import { supabase } from '../utils/supabase';
+import VerifyModal from '../components/VerifyModal';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
@@ -124,6 +125,8 @@ function TxRow({ tx }) {
 export default function Wallet() {
   const ready = usePageReady();
   const navigate = useNavigate();
+  // Shown only when a bank withdrawal is refused for want of verification.
+  const [verifyPrompt, setVerifyPrompt] = useState(null);
   const { profile, session, refreshProfile, verifyMfaStepUp } = useAuth();
 
   // Deposit state
@@ -265,11 +268,13 @@ export default function Wallet() {
       await refreshProfile();
       api.get('/wallet/transactions?limit=50').then(setTransactions).catch(() => {});
     } catch (err) {
-      // An unverified player is not being told "no" — they are being told to go
-      // and do something. Sending them straight there beats an error message
-      // that names a page they then have to find.
+      // Only bank withdrawals can return this. An unverified player is not
+      // being told "no" — they are being told what to do, so the flow opens
+      // right here rather than sending them off to find a page.
       if (err.data?.kycRequired) {
-        navigate('/kyc?from=wallet');
+        api.get('/kyc/status')
+          .then(k => setVerifyPrompt({ status: k.status, rejectionReason: k.rejectionReason, configured: k.configured }))
+          .catch(() => setVerifyPrompt({ status: 'unverified', configured: true }));
         return;
       }
       setWitMsg({ type: 'error', text: err.message });
@@ -294,6 +299,14 @@ export default function Wallet() {
   return (
     <div className="min-h-screen bg-bg pt-16" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}>
       <div className="max-w-2xl mx-auto px-4 py-12">
+        {verifyPrompt && (
+          <VerifyModal
+            status={verifyPrompt.status}
+            rejectionReason={verifyPrompt.rejectionReason}
+            configured={verifyPrompt.configured}
+            onClose={() => setVerifyPrompt(null)}
+          />
+        )}
         <h1 className="text-4xl font-black text-white mb-2">Wallet</h1>
         <p className="text-muted mb-8">Manage your Coins — 1 <CoinIcon size="0.85em" /> = $1 USD</p>
 

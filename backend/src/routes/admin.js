@@ -418,9 +418,10 @@ module.exports = function adminRoutes(supabase, io) {
 
   // ── KYC review queue ──────────────────────────────────────────────────
   //
-  // Approval is a human decision. Nothing here is automated, and nothing here
-  // should be: it is the last check before someone is allowed to take money out
-  // of the platform.
+  // Didit decides automatically and reports by webhook, so this is not the
+  // normal path any more — it is the override. It exists for the cases Didit
+  // cannot close on its own: a session stuck In Review, or a decline the player
+  // disputes with support. Everything here is still a human decision.
 
   router.get('/kyc', requireAuth, requireAdmin, async (req, res) => {
     const status = ['pending', 'approved', 'rejected'].includes(req.query.status)
@@ -428,7 +429,7 @@ module.exports = function adminRoutes(supabase, io) {
 
     const { data, error } = await supabase
       .from('kyc_submissions')
-      .select('id, user_id, legal_name, date_of_birth, address_line1, address_line2, city, region, postal_code, country, status, rejection_reason, submitted_at, reviewed_at')
+      .select('id, user_id, legal_name, date_of_birth, city, region, country, status, rejection_reason, submitted_at, reviewed_at, didit_session_id, didit_status, decision')
       .eq('status', status)
       .order('submitted_at', { ascending: true })
       .limit(200);

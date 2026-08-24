@@ -640,3 +640,43 @@ ALTER TABLE kyc_submissions ENABLE ROW LEVEL SECURITY;
 -- UPDATE profiles SET kyc_status = 'approved', kyc_reviewed_at = now()
 --  WHERE id IN (SELECT DISTINCT user_id FROM transactions
 --                WHERE type = 'withdrawal' AND status = 'confirmed');
+
+
+-- ============================================================================
+-- 14. KYC via Didit — replacing the manual form
+-- ============================================================================
+-- Section 13 built a manual review queue: the player typed a name, address and
+-- date of birth and an admin approved it. That verified nothing — anyone could
+-- type a plausible name. Didit now does the real check (genuine document, face
+-- matches the document, live person) and reports the decision by webhook.
+--
+-- The identity fields become nullable because we no longer collect them; Didit
+-- holds the document and we keep only its verdict. Existing rows are untouched.
+ALTER TABLE kyc_submissions
+  ADD COLUMN IF NOT EXISTS didit_session_id text,
+  ADD COLUMN IF NOT EXISTS didit_url        text,
+  ADD COLUMN IF NOT EXISTS didit_status     text,
+  ADD COLUMN IF NOT EXISTS didit_updated_at bigint,
+  ADD COLUMN IF NOT EXISTS decision         jsonb;
+
+ALTER TABLE kyc_submissions
+  ALTER COLUMN legal_name    DROP NOT NULL,
+  ALTER COLUMN date_of_birth DROP NOT NULL,
+  ALTER COLUMN address_line1 DROP NOT NULL,
+  ALTER COLUMN city          DROP NOT NULL,
+  ALTER COLUMN region        DROP NOT NULL,
+  ALTER COLUMN postal_code   DROP NOT NULL,
+  ALTER COLUMN country       DROP NOT NULL;
+
+-- One row per Didit session. The webhook looks a session up by this id, and a
+-- duplicate would mean a decision applied to the wrong row.
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_kyc_didit_session
+  ON kyc_submissions (didit_session_id) WHERE didit_session_id IS NOT NULL;
+
+-- Section 13 allowed only one pending row per user, which was right when a
+-- person submitted a form once. With Didit a player can abandon a session and
+-- start another, so that constraint would block them from ever retrying.
+DROP INDEX IF EXISTS uniq_kyc_pending_per_user;
+
+-- Check:
+--   SELECT status, didit_status, count(*) FROM kyc_submissions GROUP BY 1,2;
