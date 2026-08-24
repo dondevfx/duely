@@ -67,19 +67,15 @@ export const GAMES = [
     icon:     '🃏',
     route:    '/game/blackjack',
     countKey: 'blackjack',
-    // clipPosition deliberately removed, back to the plain center crop.
-    //
-    // A prior attempt set this to '36% 50%' after testing candidate crops
-    // against real extracted frames from the clip — every one of them looked
-    // balanced. Confirmed the value was genuinely deployed (live DOM, live
-    // video bytes both checked directly against production). Reported back
-    // as looking WORSE on a real device regardless — HIT effectively gone.
-    //
-    // That is a real disagreement between what this environment can verify
-    // (frame math, deployed bytes, computed CSS) and what an actual screen
-    // shows, and there is no way to get a true rendered screenshot here to
-    // settle it. Reverting to the known-safe baseline rather than guessing
-    // again. If this still isn't centered, it needs a fresh real screenshot
-    // to work from rather than another blind attempt.
+    // 68% — found with the ?cropdebug=1 live slider (GameVideoCard.jsx),
+    // dialed in on a real phone rather than guessed from here. Two earlier
+    // attempts (default 50%, then 36%) were each verified by every offline
+    // method available — extracted frames, simulated canvas crops, the
+    // deployed CSS read straight off production — and each still came back
+    // wrong on a real screen, in two different ways. canvas drawImage does
+    // not reproduce what object-fit:cover actually paints, so none of that
+    // verification meant anything; the slider reads the real computed style
+    // off the real render, which is the only thing that turned out reliable.
+    clipPosition: '68% 50%',
   },
 ];
