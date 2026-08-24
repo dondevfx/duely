@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import GameCard from '../components/GameCard';
+import GameVideoCard from '../components/GameVideoCard';
 import DailyBonus from '../components/DailyBonus';
 import SpinWheel from '../components/SpinWheel';
 import MatchTicker from '../components/MatchTicker';
@@ -8,64 +8,7 @@ import { useSocket } from '../context/SocketContext';
 import CoinIcon from '../components/CoinIcon';
 import ReferralCard from '../components/ReferralCard';
 import { fmtCoins, fmtExact } from '../utils/format';
-
-const GAMES = [
-  {
-    title: 'Quick Match',
-    description: 'Pick your bet and get matched instantly. Fast, competitive, no bots.',
-    icon: '⚡',
-    route: '/game/quick-match',
-    available: true,
-  },
-  {
-    title: 'Block Burst',
-    description: 'Drag blocks onto the grid to fill rows and columns. Clear them to earn points. Fill the energy bar to unlock Blast Mode!',
-    icon: '🟦',
-    route: '/game/block-blast',
-    available: true,
-    countKey: 'block-blast',
-  },
-  {
-    title: 'Coin Flip',
-    description: 'Pick a side — get matched with the opposite. Instant result.',
-    icon: '🟡',
-    route: '/game/coin-flip',
-    available: true,
-    countKey: 'coin-flip',
-  },
-  {
-    title: 'Word VS',
-    description: 'Guess the same 5-letter word as your opponent. Solve it first and win instantly — 6 tries each.',
-    icon: '🔤',
-    route: '/game/scrabble',
-    available: true,
-    countKey: 'scrabble',
-  },
-  {
-    title: 'Rush Hour',
-    description: 'Weave through highway traffic at full speed. Both players face the exact same road — whoever survives longest takes the pot.',
-    icon: '🚗',
-    route: '/game/car-dash',
-    available: true,
-    countKey: 'car-dash',
-  },
-  {
-    title: 'Tower',
-    description: 'Stack sliding blocks as high as you can. Miss the edge and it gets sliced away — the taller tower takes the pot.',
-    icon: '🗼',
-    route: '/game/tower',
-    available: true,
-    countKey: 'tower',
-  },
-  {
-    title: 'Blackjack',
-    description: 'Get closer to 21 than your opponent. Both players act simultaneously — no waiting.',
-    icon: '🃏',
-    route: '/game/blackjack',
-    available: true,
-    countKey: 'blackjack',
-  },
-];
+import { GAMES } from '../data/games';
 
 function DailySpinWidget({ profile }) {
   return profile ? (
@@ -180,7 +123,11 @@ export default function Home() {
             <h2 className="text-xl md:text-2xl font-bold text-white mb-4 md:mb-6">Choose a Game</h2>
             <div className="grid grid-cols-2 gap-3 md:gap-5">
               {GAMES.map(game => (
-                <GameCard key={game.title} {...game} liveCount={playerCounts?.[game.countKey] ?? 0} />
+                <GameVideoCard
+                  key={game.slug}
+                  {...game}
+                  liveCount={game.countKey ? (playerCounts?.[game.countKey] ?? 0) : 0}
+                />
               ))}
             </div>
 

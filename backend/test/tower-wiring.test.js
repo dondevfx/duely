@@ -140,15 +140,24 @@ test('the page exists and is routed', () => {
 });
 
 test('the game is reachable from every place a game is listed', () => {
+  // Home.jsx and Games.jsx used to keep their own separate copies of this
+  // list, which had already drifted apart in wording before both were merged
+  // into one shared data/games.js that both pages read from.
   const places = {
-    'pages/Home.jsx':             /route: '\/game\/tower'/,
-    'pages/Games.jsx':            /route: '\/game\/tower'/,
+    'data/games.js':              /route:\s+'\/game\/tower'/,
     'components/LeftSidebar.jsx': /'\/game\/tower'/,
     'components/Navbar.jsx':      /to: '\/game\/tower'/,
     'pages/QuickMatch.jsx':       /queueKey: 'tower'/,
   };
   for (const [file, re] of Object.entries(places)) {
     assert.match(fe(...file.split('/')), re, `${file} does not list Tower`);
+  }
+
+  // And both pages must actually be reading from the shared list rather than
+  // having quietly grown a new copy of their own.
+  for (const page of ['pages/Home.jsx', 'pages/Games.jsx']) {
+    assert.match(fe(...page.split('/')), /from ['"]\.\.\/data\/games['"]/,
+      `${page} must import GAMES from data/games.js, not list games itself`);
   }
 });
 
