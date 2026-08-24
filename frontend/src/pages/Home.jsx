@@ -95,7 +95,11 @@ export default function Home() {
       {/* Stats bar */}
       {profile && (
         <section className="max-w-7xl mx-auto px-4 mb-6 md:mb-10">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* Always 4 across, mobile included — these read as one strip of
+              stats, not two rows of two. Mobile gets tighter padding/gap and
+              a smaller number so four columns actually have room; md+ steps
+              back up to the original sizing. */}
+          <div className="grid grid-cols-4 gap-1.5 sm:gap-4">
             {[
               { label: 'Balance', value: (
                 <span className="inline-flex items-center gap-1 max-w-full" title={`${fmtExact(profile.c_coins)} coins`}>
@@ -107,9 +111,9 @@ export default function Home() {
               { label: 'Wins', value: profile.wins ?? 0 },
               { label: 'Losses', value: profile.losses ?? 0 },
             ].map(stat => (
-              <div key={stat.label} className="bg-surface border border-surfaceLight rounded-xl p-3 md:p-4 text-center overflow-hidden">
-                <div className="text-xl md:text-2xl font-black text-white font-mono overflow-hidden">{stat.value}</div>
-                <div className="text-xs text-muted mt-1">{stat.label}</div>
+              <div key={stat.label} className="bg-surface border border-surfaceLight rounded-xl p-1.5 sm:p-3 md:p-4 text-center overflow-hidden min-w-0">
+                <div className="text-sm sm:text-xl md:text-2xl font-black text-white font-mono overflow-hidden">{stat.value}</div>
+                <div className="text-[10px] sm:text-xs text-muted mt-0.5 sm:mt-1">{stat.label}</div>
               </div>
             ))}
           </div>
