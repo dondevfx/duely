@@ -4,6 +4,7 @@ import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { isRanked, placementMatches } from '../utils/ranks';
 import DailyBonus from '../components/DailyBonus';
+import CoinIcon from '../components/CoinIcon';
 import SpinWheel from '../components/SpinWheel';
 import ReferralCard from '../components/ReferralCard';
 import { playWheelSpin, playWin } from '../utils/sound';
@@ -129,9 +130,18 @@ function labelXY(cx, cy, r, midDeg) {
   };
 }
 
-// Map server prize amount → best visual segment index for the tier's wheel
-function prizeToSegIdx(prize, tierPrizes) {
-  // Find segments whose prize value matches (skip index 2 = coin slot)
+// Map a spin response → which wedge actually won.
+//
+// The server now says exactly which segment it landed on (segIdx), coin slot
+// included — it is the only source of truth for that, since a coin prize (1)
+// cannot be told apart from a diamond prize by value alone. segIdx is trusted
+// when present; the old value-matching search is the fallback for a stray
+// deploy moment where the frontend has updated ahead of the backend.
+function prizeToSegIdx(res, tierPrizes) {
+  if (Number.isInteger(res?.segIdx) && res.segIdx >= 0 && res.segIdx < tierPrizes.length) {
+    return res.segIdx;
+  }
+  const prize = res?.prize ?? res; // fallback path may be called with the bare number
   const candidates = tierPrizes
     .map((p, i) => ({ p, i }))
     .filter(({ i }) => i !== 2)
@@ -140,7 +150,8 @@ function prizeToSegIdx(prize, tierPrizes) {
   if (candidates.length > 0) {
     return candidates[Math.floor(Math.random() * candidates.length)].i;
   }
-  // Fallback: closest non-coin segment
+  // Last resort: closest non-coin segment. Never guess the coin slot — it
+  // must only ever be reached by an explicit segIdx from the server.
   const nonCoin = tierPrizes
     .map((p, i) => ({ p, i }))
     .filter(({ i }) => i !== 2);
@@ -219,10 +230,11 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
     setWon(null);
     setErr('');
     try {
-      const { prize, nextSpinAt } = await api.post('/rewards/spin', { tier: tier.id });
-      if (onPrizeWon) onPrizeWon(prize);
+      const res = await api.post('/rewards/spin', { tier: tier.id });
+      const { prize, currency = 'diamonds', nextSpinAt } = res;
+      if (onPrizeWon) onPrizeWon(prize, currency);
 
-      const idx = prizeToSegIdx(prize, tier.prizes);
+      const idx = prizeToSegIdx(res, tier.prizes);
       const center = idx * STEP + STEP / 2;
       const curMod = ((rotRef.current % 360) + 360) % 360;
       const jitter = (Math.random() - 0.5) * (STEP * 0.4);
@@ -238,7 +250,7 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
       setLocalNextSpinAt(nextSpinAt);
 
       setTimeout(() => {
-        setWon(prize);
+        setWon({ amount: prize, currency });
         setSpinning(false);
         playWin();
         if (onSpinComplete) onSpinComplete();
@@ -485,7 +497,7 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
             className="font-black text-2xl"
             style={{ color: tier.color, textShadow: `0 0 16px ${tier.color}` }}
           >
-            +{won.toLocaleString()} 💎
+            +{won.amount.toLocaleString()} {won.currency === 'coins' ? <CoinIcon size="0.85em" /> : '💎'}
           </div>
           <div className="text-xs mt-0.5" style={{ color: '#64748b' }}>Added to your balance!</div>
         </div>
@@ -603,7 +615,11 @@ export default function Rewards() {
                 isActive={isActive}
                 statusInfo={session ? statusMap[tier.id] : undefined}
                 onSpinComplete={() => { fetchStatus(); refreshProfile(); }}
-                onPrizeWon={(prize) => updateProfile({ diamonds: Math.max(0, (profile?.diamonds ?? 0) + prize) })}
+                onPrizeWon={(prize, currency) => updateProfile(
+                  currency === 'coins'
+                    ? { c_coins:  Math.max(0, (profile?.c_coins  ?? 0) + prize) }
+                    : { diamonds: Math.max(0, (profile?.diamonds ?? 0) + prize) }
+                )}
                 lockText={lockText}
               />
             );

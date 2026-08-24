@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const { requireAuth } = require('../middleware/auth');
+const { creditCoins } = require('../services/walletService');
 
 const COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
@@ -19,19 +20,50 @@ const TIER_IDS = ['bronze', 'silver', 'gold', 'diamond', 'champion'];
 
 const COL_NAME = tier => `last_spin_${tier}`;
 
-// Weighted roll — index 2 is coin slot (weight=0, never selected)
-const WEIGHTS = [20, 15, 0, 15, 10, 15, 5, 20]; // total = 100
+// Weighted roll among the seven diamond segments — index 2 is the coin slot
+// and is NOT in this array. It never was reachable through this pool (weight
+// 0 before, absent now); it is handled as its own roll below, before this one
+// even runs. Untouched otherwise — every diamond tier keeps exactly the odds
+// it always had.
+const WEIGHTS = [20, 15, 15, 10, 15, 5, 20]; // total = 100
+const DIAMOND_IDX = [0, 1, 3, 4, 5, 6, 7]; // tier-array indices these weights line up with (skips 2)
 
+// The coin segment is drawn on every wheel and has sat at literal zero odds —
+// index 2's weight was 0, and the frontend separately excluded index 2 from
+// ever being the landing segment. Both of those still made it impossible, not
+// just rare, which is different from what was asked for: real odds, just
+// vanishingly small, with no floor or pity timer forcing it to ever land.
+//
+// 1 in 10,000,000. At one spin per tier per day this would take, on average,
+// over 27,000 YEARS of daily spins to hit — a number chosen to be a genuine
+// probability rather than a disguised "never", while still being something
+// that will not visibly move the story of this feature.
+const COIN_ODDS = 1 / 10_000_000;
+
+// { kind: 'coins', amount: 1, segIdx: 2 } | { kind: 'diamonds', amount, segIdx }
+//
+// The type is explicit rather than inferred from the amount. A coin win pays
+// 1 — a value that happens not to collide with any diamond prize today, but
+// inferring the currency from a number that could collide by a future tier
+// change is exactly the kind of bug that pays out the wrong currency.
 function rollPrize(tier) {
   const prizes = TIER_PRIZES[tier];
-  if (!prizes) return 1000;
+  if (!prizes) return { kind: 'diamonds', amount: 1000, segIdx: 0 };
+
+  if (Math.random() < COIN_ODDS) {
+    return { kind: 'coins', amount: 1, segIdx: 2 };
+  }
+
   const total = WEIGHTS.reduce((a, b) => a + b, 0);
   let r = Math.random() * total;
-  for (let i = 0; i < prizes.length; i++) {
+  for (let i = 0; i < WEIGHTS.length; i++) {
     r -= WEIGHTS[i];
-    if (r < 0) return prizes[i];
+    if (r < 0) {
+      const segIdx = DIAMOND_IDX[i];
+      return { kind: 'diamonds', amount: prizes[segIdx], segIdx };
+    }
   }
-  return prizes[0];
+  return { kind: 'diamonds', amount: prizes[0], segIdx: 0 };
 }
 
 function getTierForElo(elo) {
@@ -165,7 +197,7 @@ module.exports = function rewardsRoutes(supabase) {
       }
 
       // Roll prize
-      const prize = rollPrize(tier);
+      const roll = rollPrize(tier);
       const nextSpinAt = new Date(now.getTime() + COOLDOWN_MS).toISOString();
 
       // Helper: reset cooldown so user can retry if credit fails
@@ -173,52 +205,46 @@ module.exports = function rewardsRoutes(supabase) {
         await supabase.from('profiles').update({ [col]: null }).eq('id', req.user.id).then().catch(() => {});
       }
 
-      // Try RPC first (atomic increment)
-      let credited = false;
-      const { error: rpcErr } = await supabase.rpc('credit_diamonds', {
-        user_id: req.user.id,
-        amount: prize,
-      });
-      if (!rpcErr) {
-        credited = true;
+      // credit_diamonds (or creditCoins on the rare coin roll) only — no manual
+      // read-add-write fallback. That fallback used to sit here: read the
+      // balance, add the prize in JS, write it back. Not row-locked like the
+      // cooldown stamp above it, so two requests hitting the fallback in the
+      // same instant could read the same starting balance and one prize would
+      // vanish, or double-credit if a "failed" RPC had actually partly gone
+      // through. Fail closed instead and let the player retry — the same
+      // pattern the cooldown stamp already uses correctly.
+      let credErr;
+      if (roll.kind === 'coins') {
+        try { await creditCoins(supabase, req.user.id, roll.amount); }
+        catch (e) { credErr = e; }
       } else {
-        console.error('[rewards] credit_diamonds RPC failed:', rpcErr.message);
-        // Fallback: direct atomic-ish update
-        const { data: cur, error: readErr } = await supabase
-          .from('profiles')
-          .select('diamonds')
-          .eq('id', req.user.id)
-          .single();
-        if (!readErr && cur != null) {
-          const { error: updErr } = await supabase
-            .from('profiles')
-            .update({ diamonds: (cur.diamonds || 0) + prize })
-            .eq('id', req.user.id);
-          if (!updErr) credited = true;
-          else console.error('[rewards] diamond direct update failed:', updErr.message);
-        }
+        ({ error: credErr } = await supabase.rpc('credit_diamonds', {
+          user_id: req.user.id,
+          amount: roll.amount,
+        }));
       }
 
-      if (!credited) {
-        // Reset cooldown so user can try again
+      if (credErr) {
+        console.error(`[rewards] credit failed (${roll.kind}):`, credErr.message || credErr);
         await resetCooldown();
-        return res.status(500).json({ error: 'Could not credit diamonds. Please try again.' });
+        return res.status(500).json({ error: 'Could not credit your prize. Please try again.' });
       }
 
       supabase
         .from('transactions')
-        .insert({
-          user_id: req.user.id,
-          type: 'rewards_spin',
-          amount_c: 0,
-          crypto_amount: prize,
-          crypto_symbol: 'diamonds',
-          status: 'confirmed',
-        })
+        .insert(roll.kind === 'coins'
+          ? { user_id: req.user.id, type: 'rewards_spin', amount_c: roll.amount, status: 'confirmed' }
+          : { user_id: req.user.id, type: 'rewards_spin', amount_c: 0, crypto_amount: roll.amount, crypto_symbol: 'diamonds', status: 'confirmed' })
         .then()
         .catch(e => console.error('[rewards] tx insert failed:', e.message));
 
-      return res.json({ success: true, prize, tier, nextSpinAt });
+      return res.json({
+        success: true,
+        prize:   roll.amount,
+        currency: roll.kind,   // 'coins' | 'diamonds' — the frontend must not infer this from the amount
+        segIdx:  roll.segIdx,  // which wedge actually won, so the wheel lands where it truly landed
+        tier, nextSpinAt,
+      });
     } catch (err) {
       console.error('[rewards] spin error:', err.message);
       return res.status(500).json({ error: err.message });
