@@ -54,6 +54,35 @@ test('the clip is looked up by slug, not hardcoded per game', () => {
   assert.match(CARD, /`\/game-clips\/\$\{slug\}\.jpg`/);
 });
 
+test('a clip can be told which edge is safe to crop, per game', () => {
+  // A square card cropping a non-square recording always loses something off
+  // two opposite edges — there is no universal safe side, only what happens
+  // to be near the edge of a given clip. clipPosition lets one game override
+  // the default center crop without affecting any other.
+  assert.match(GAMES_DATA, /clipPosition:/, 'no game currently overrides the crop — is that still true?');
+  assert.match(CARD, /objectPosition:\s*clipPosition/,
+    'the override must reach the actual CSS object-position, not just exist in the data');
+});
+
+test('the poster and the video crop the same way', () => {
+  // If only one of them reads clipPosition, the still frame jumps to a
+  // different crop the instant playback takes over.
+  //
+  // Anchored on the real ELEMENTS (attribute follows on the next line), not
+  // the bare substring "<img" / "<video" — a first version of this test
+  // matched those same words inside a comment above each real tag, which put
+  // the slice before either element and passed with clipPosition removed.
+  const imgAt   = CARD.search(/<img\s*\n/);
+  const videoAt = CARD.search(/<video\s*\n/);
+  assert.notEqual(imgAt, -1, 'the poster <img> element is gone');
+  assert.notEqual(videoAt, -1, 'the <video> element is gone');
+
+  const imgBlock   = CARD.slice(imgAt, CARD.indexOf('/>', imgAt));
+  const videoBlock = CARD.slice(videoAt, CARD.indexOf('/>', videoAt));
+  assert.match(imgBlock,   /clipPosition/, 'the poster must honour clipPosition too');
+  assert.match(videoBlock, /clipPosition/, 'the video must honour clipPosition too');
+});
+
 test('iOS cannot hijack the clip into fullscreen', () => {
   // Without playsInline specifically, Safari on iOS takes an autoplaying
   // video fullscreen the instant it starts instead of playing inside the card.

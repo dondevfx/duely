@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 // Clips live at /game-clips/{slug}.mp4 with a /game-clips/{slug}.jpg poster.
 // Both are plain static files (public/, not imported), so adding a game is
 // dropping two files in a folder, not a build change.
-export default function GameVideoCard({ slug, title, icon, route, liveCount = 0, available = true }) {
+export default function GameVideoCard({ slug, title, icon, route, liveCount = 0, available = true, clipPosition }) {
   const navigate = useNavigate();
   const containerRef = useRef(null);
   const videoRef = useRef(null);
@@ -74,11 +74,15 @@ export default function GameVideoCard({ slug, title, icon, route, liveCount = 0,
       {/* Poster layers over the icon once it loads; the video, once it loads,
           covers the poster. Nothing here needs to be removed from the DOM — a
           slow or missing file just leaves the layer underneath visible. */}
+      {/* clipPosition falls through to CSS object-position on both layers —
+          the poster and the video have to agree, or the still frame jumps to
+          a different crop the instant the clip takes over. */}
       <img
         src={posterSrc}
         alt=""
         aria-hidden="true"
         className="absolute inset-0 w-full h-full object-cover"
+        style={clipPosition ? { objectPosition: clipPosition } : undefined}
         onError={(e) => { e.currentTarget.style.display = 'none'; }}
       />
 
@@ -96,6 +100,7 @@ export default function GameVideoCard({ slug, title, icon, route, liveCount = 0,
           preload="metadata"
           onError={() => setVideoFailed(true)}
           className="absolute inset-0 w-full h-full object-cover"
+          style={clipPosition ? { objectPosition: clipPosition } : undefined}
         />
       )}
 
