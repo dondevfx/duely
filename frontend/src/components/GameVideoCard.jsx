@@ -51,7 +51,6 @@ export default function GameVideoCard({ slug, title, icon, route, liveCount = 0,
   // "off screen" barely ever applied, and the visible cost was the exact
   // thing being fixed — the icon sitting there while the clip caught up.
   // All seven clips together are under 1.5MB, cheap enough to just load.
-  const inView = true;
 
   // Respected, not just declared. Someone with this OS setting sees the still
   // poster only — this page is for browsing, not gameplay itself, so there is
@@ -60,12 +59,28 @@ export default function GameVideoCard({ slug, title, icon, route, liveCount = 0,
     () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
   );
 
+  // Whether the clip can actually run smoothly, not just whether it has
+  // started downloading. autoPlay starts the instant the browser judges
+  // playback is technically possible, which on a real network with all seven
+  // clips fetching at once is well before there is a real buffer ahead of the
+  // playhead — the video plays a beat, the buffer runs dry, it stalls to
+  // catch up, then resumes. That is the stutter being reported here.
+  //
+  // canplaythrough is the browser's own estimate that, at the current
+  // download rate, it can play to the end without pausing again — waiting
+  // for it instead of autoPlay is what actually fixes a mid-playback stall,
+  // as opposed to just moving it earlier. The video itself stays invisible
+  // (poster showing) until then, so what appears on screen is never a paused
+  // frame or a stall — it is either the poster, or the clip already playing.
+  const [ready, setReady] = useState(false);
   useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    if (inView && !reducedMotion) v.play().catch(() => {}); // autoplay can be refused; the poster covers that
-    else v.pause();
-  }, [inView, reducedMotion]);
+    // A canplaythrough that fires before this timeout expires is the common
+    // case; the timeout exists only for the rare browser/network combination
+    // where the event never fires at all, so the card never gets stuck
+    // showing the poster forever over a clip that was actually fine.
+    const t = setTimeout(() => setReady(true), 4000);
+    return () => clearTimeout(t);
+  }, []);
 
   const clipSrc   = `/game-clips/${slug}.mp4`;
   const posterSrc = `/game-clips/${slug}.jpg`;
@@ -106,12 +121,15 @@ export default function GameVideoCard({ slug, title, icon, route, liveCount = 0,
         onError={(e) => { e.currentTarget.style.display = 'none'; }}
       />
 
-      {showVideo && inView && (
+      {showVideo && (
         <video
           ref={videoRef}
           src={clipSrc}
           poster={posterSrc}
-          autoPlay
+          // No autoPlay attribute — that starts playback the instant it is
+          // merely POSSIBLE, which is exactly the early start that runs the
+          // buffer dry and stalls. onCanPlayThrough below starts it once the
+          // browser expects to make it through without stopping again.
           muted
           loop
           playsInline
@@ -123,8 +141,15 @@ export default function GameVideoCard({ slug, title, icon, route, liveCount = 0,
           // frame data was deferred until playback intent, which is exactly
           // what made the icon sit there while the real clip caught up.
           preload="auto"
+          onCanPlayThrough={(e) => {
+            setReady(true);
+            e.currentTarget.play().catch(() => {}); // autoplay can still be refused; the poster covers that
+          }}
           onError={() => setVideoFailed(true)}
-          className="absolute inset-0 w-full h-full object-cover"
+          // Invisible (poster still showing underneath) until ready — the
+          // viewer never sees a paused frame or a mid-clip stall, only the
+          // poster, then the clip already in motion.
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${ready ? 'opacity-100' : 'opacity-0'}`}
           style={clipPosition ? { objectPosition: clipPosition } : undefined}
         />
       )}

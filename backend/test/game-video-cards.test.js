@@ -10,6 +10,10 @@ const path = require('node:path');
 
 const FE = (...p) => path.join(__dirname, '..', '..', 'frontend', 'src', ...p);
 const read = (...p) => fs.readFileSync(FE(...p), 'utf8');
+// A comment explaining why something is absent still contains the word for
+// it — this file has tripped on that more than once. Anything checking for
+// the ABSENCE of a token strips comments first.
+const strip = (s) => s.split(/\r?\n/).filter(l => !l.trim().startsWith('//')).join('\n');
 
 const GAMES_DATA = read('data', 'games.js');
 const CARD       = read('components', 'GameVideoCard.jsx');
@@ -92,6 +96,39 @@ test('the clip is muted, so autoplay is not silently blocked', () => {
   // Browsers refuse to autoplay video with sound. Muted is not a preference
   // here — it is the only way the clip plays automatically at all.
   assert.match(CARD, /\bmuted\b/);
+});
+
+test('playback waits for canplaythrough, not the autoPlay attribute', () => {
+  // autoPlay starts a clip the instant playback is merely POSSIBLE, which —
+  // especially with all seven clips now fetching at once — is well before
+  // there is a real buffer ahead of the playhead. It plays a beat, the buffer
+  // runs dry, playback stalls to catch up, then resumes: the reported
+  // stutter. canplaythrough is the browser's own estimate that it can finish
+  // without stopping again, so gating on it instead of racing to start early
+  // is what actually removes the stall rather than just moving it sooner.
+  const videoAt = CARD.search(/<video\s*\n/);
+  const videoBlock = strip(CARD.slice(videoAt, CARD.indexOf('/>', videoAt)));
+  assert.ok(!/\bautoPlay\b/.test(videoBlock),
+    'autoPlay must be gone — it is the thing that starts playback before the buffer is ready');
+  assert.match(videoBlock, /onCanPlayThrough/, 'playback must be gated on canplaythrough');
+});
+
+test('the clip stays invisible until it can play smoothly', () => {
+  // Otherwise the viewer sees a paused frame appear, then a stall — the two
+  // beats of "not smooth" reported. Staying on the poster until ready means
+  // what appears is either the poster, or the clip already in motion.
+  assert.match(CARD, /const \[ready, setReady\] = useState\(false\)/,
+    'must start NOT ready — showing the poster until canplaythrough proves otherwise');
+  const videoBlock = CARD.slice(CARD.search(/<video\s*\n/), CARD.indexOf('/>', CARD.search(/<video\s*\n/)));
+  assert.match(videoBlock, /ready \? 'opacity-100' : 'opacity-0'/,
+    'the video element must stay hidden until ready flips true');
+});
+
+test('a canplaythrough that never fires cannot hide a card forever', () => {
+  // The event not firing at all is a real, if rare, browser/network
+  // possibility — there must be a way out that does not depend on it.
+  assert.match(CARD, /setTimeout\(\(\) => setReady\(true\), 4000\)/,
+    'a fallback timer must force the clip visible even if canplaythrough never comes');
 });
 
 test('every clip starts loading immediately, not on scroll-into-view', () => {
