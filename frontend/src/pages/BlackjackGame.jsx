@@ -828,23 +828,25 @@ function BlackjackGame() {
       }}>
         <style>{CARD_DEAL_CSS}</style>
 
-        {/* Top bar */}
+        {/* Top bar — the turn timer, and nothing else.
+            No title: you know which game you opened, and the row is worth more
+            as clear space above the cards. No bottom rule either; the opponent
+            section below already carries one, so the two stacked read as a box
+            around an empty strip. */}
         <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          display: 'flex', justifyContent: 'center', alignItems: 'center',
           // relative: the help button is absolutely positioned into this bar's
           // corner. Without a positioning context here it escapes the bar and
           // lands wherever the nearest positioned ancestor happens to be — which
           // is how it ended up floating in the middle of the screen.
           position: 'relative',
-          // Left padding reserves that corner, so the title starts clear of it
-          // and nothing can end up underneath.
-          padding: '12px 16px 12px 60px',
-          borderBottom: divider,
+          // Symmetric 60px reserves the left corner for the help button AND
+          // keeps the timer centred on the screen rather than on the space left
+          // over beside it. Padding on one side only would push it off by 30px.
+          padding: '12px 60px',
         }}>
-          {/* Tucked into the top-left corner. Top-RIGHT is the turn timer,
-              which is the one thing you cannot afford to lose sight of. */}
+          {/* Tucked into the top-left corner, clear of the centred timer. */}
           <GameHelp gameType="blackjack" placement="top-left" />
-          <span style={{ fontWeight: 900, fontSize: 16, color: textPrimary, letterSpacing: 0.5 }}>🃏 Blackjack</span>
           {phase === 'playing' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ width: 120, height: 6, background: timerTrack, borderRadius: 3, overflow: 'hidden' }}>
