@@ -11,12 +11,39 @@ import { useNavigate } from 'react-router-dom';
 // Clips live at /game-clips/{slug}.mp4 with a /game-clips/{slug}.jpg poster.
 // Both are plain static files (public/, not imported), so adding a game is
 // dropping two files in a folder, not a build change.
+// ?cropdebug=1 on any page using this card turns on a live crop-position
+// slider, per card, that writes straight to object-position and shows the
+// number. It exists because a crop that looks right in every tool available
+// here (extracted frames, simulated canvas crops, the deployed CSS value
+// itself) still came back wrong on a real phone, twice — canvas drawImage
+// does not reproduce what object-fit:cover actually paints, so nothing built
+// on it can be trusted for this. The fastest real fix is handing the dial to
+// whoever is looking at the real screen. Reads the value back out of the URL
+// hash so it survives a reload while testing.
+function useCropDebug(slug) {
+  const enabled = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('cropdebug') === '1';
+  const [pos, setPos] = useState(() => {
+    if (!enabled) return null;
+    const saved = new URLSearchParams(window.location.hash.slice(1)).get(slug);
+    return saved ? Number(saved) : 50;
+  });
+  const setAndPersist = (v) => {
+    setPos(v);
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    params.set(slug, v);
+    history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${params}`);
+  };
+  return enabled ? [pos, setAndPersist] : [null, null];
+}
+
 export default function GameVideoCard({ slug, title, icon, route, liveCount = 0, available = true, clipPosition }) {
   const navigate = useNavigate();
   const containerRef = useRef(null);
   const videoRef = useRef(null);
   const [inView, setInView] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
+  const [debugX, setDebugX] = useCropDebug(slug);
+  if (debugX !== null) clipPosition = `${debugX}% 50%`;
 
   // Only load and play the clip once the card is actually on screen. Seven
   // autoplaying videos loading at once — especially on a phone on cellular —
@@ -102,6 +129,23 @@ export default function GameVideoCard({ slug, title, icon, route, liveCount = 0,
           className="absolute inset-0 w-full h-full object-cover"
           style={clipPosition ? { objectPosition: clipPosition } : undefined}
         />
+      )}
+
+      {debugX !== null && (
+        // Sits above the scrim, doesn't block the title/button below it, and
+        // stops the card's own onClick from firing when you're dragging.
+        <div
+          className="absolute top-2 left-2 right-2 z-20 bg-black/80 rounded-lg px-2 py-1.5 flex items-center gap-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <input
+            type="range" min="0" max="100" value={debugX}
+            onChange={(e) => setDebugX(Number(e.target.value))}
+            onClick={(e) => e.stopPropagation()}
+            className="flex-1 accent-primary"
+          />
+          <span className="text-[11px] font-mono text-white w-9 text-right">{debugX}%</span>
+        </div>
       )}
 
       {liveCount > 0 && (

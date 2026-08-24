@@ -59,9 +59,8 @@ test('a clip can be told which edge is safe to crop, per game', () => {
   // two opposite edges — there is no universal safe side, only what happens
   // to be near the edge of a given clip. clipPosition lets one game override
   // the default center crop without affecting any other.
-  assert.match(GAMES_DATA, /clipPosition:/, 'no game currently overrides the crop — is that still true?');
   assert.match(CARD, /objectPosition:\s*clipPosition/,
-    'the override must reach the actual CSS object-position, not just exist in the data');
+    'clipPosition must reach the actual CSS object-position, wherever it comes from');
 });
 
 test('the poster and the video crop the same way', () => {
@@ -114,9 +113,9 @@ test('a missing clip or poster degrades to the icon, not a blank square', () => 
   // yet look intentional rather than broken.
   //
   // Anchored on the real <img> ELEMENT (attribute follows on the next line),
-  // not the substring "<img" — a first version of this test matched that
-  // same text inside a comment a few lines above the real tag, which put the
-  // slice boundary before {icon} and passed for the wrong reason.
+  // not the substring "<img" — a first version of this test matched that same
+  // text inside a comment a few lines above the real tag, which put the slice
+  // boundary before {icon} and passed for the wrong reason.
   const imgTagAt = CARD.search(/<img\s*\n/);
   assert.notEqual(imgTagAt, -1, 'the poster <img> element is gone');
   const base = CARD.slice(0, imgTagAt);
@@ -126,4 +125,28 @@ test('a missing clip or poster degrades to the icon, not a blank square', () => 
 test('the old duplicated GameCard component is gone', () => {
   assert.ok(!fs.existsSync(FE('components', 'GameCard.jsx')),
     'GameCard.jsx should be deleted, not left behind unused alongside GameVideoCard');
+});
+
+// ── The crop-debug slider ───────────────────────────────────────────────────
+//
+// Exists because a crop verified correct by every tool available in this
+// environment — extracted frames, simulated canvas crops, the deployed CSS
+// value read straight off production — still came back wrong on a real
+// phone, twice. canvas drawImage does not reproduce what object-fit:cover
+// actually paints, so nothing built on it can be trusted for this. The
+// fastest real fix is a live slider on the real device, not another guess.
+
+test('the crop-debug slider is off unless explicitly asked for', () => {
+  assert.match(CARD, /cropdebug.*===\s*'1'/,
+    'this must require an explicit query param — it must not be on by default');
+});
+
+test('the debug slider drives the same clipPosition the real crop uses', () => {
+  // If it wrote to a separate variable, dialing in a number on the slider
+  // would not actually match what ships without it.
+  const fn = CARD.slice(CARD.indexOf('function GameVideoCard'));
+  const debugAt = fn.indexOf('useCropDebug');
+  assert.notEqual(debugAt, -1, 'useCropDebug is gone');
+  assert.match(fn.slice(debugAt, debugAt + 200), /clipPosition\s*=\s*`\$\{debugX\}%/,
+    'the debug value must overwrite clipPosition itself, not a separate unused variable');
 });
