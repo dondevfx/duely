@@ -154,7 +154,7 @@ export default function GameLobby({
           descriptions off mid-sentence with an ellipsis — and the rules are the
           one thing a new player actually needs to read. */}
       {description && (
-        <p className="text-center text-muted text-xs sm:text-base leading-snug sm:leading-relaxed mb-1 sm:mb-6 px-2">{description}</p>
+        <p className="text-center text-muted text-sm sm:text-base leading-snug sm:leading-relaxed mb-1 sm:mb-6 px-2">{description}</p>
       )}
 
       {/* ── Entry Fee ── */}

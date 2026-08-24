@@ -633,7 +633,7 @@ export default function CoinFlipGame() {
         {phase === 'lobby' && (
           <div className="text-center mb-1 sm:mb-6">
             <h1 className="text-4xl sm:text-6xl font-black text-white mb-0.5 sm:mb-2 leading-tight">🟡 Coin Flip</h1>
-            <p className="text-center text-muted text-xs sm:text-base leading-snug sm:leading-relaxed px-2 line-clamp-2 sm:line-clamp-none">Pick heads or tails — you get matched with someone on the opposite side. One flip decides it.</p>
+            <p className="text-center text-muted text-sm sm:text-base leading-snug sm:leading-relaxed px-2">Pick heads or tails — you get matched with someone on the opposite side. One flip decides it.</p>
           </div>
         )}
 

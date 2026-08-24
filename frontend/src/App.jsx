@@ -134,7 +134,12 @@ function Shell() {
         </div>
       </div>
       {/* Main content always interactive */}
-      <main className={`absolute top-14 bottom-0 left-0 right-0 overflow-y-auto transition-[left,right] duration-300 md:left-56 ${chatOpen ? 'lg:right-80' : 'md:right-0'}`}>
+      {/* md:left-60 must match LeftSidebar's w-60. It was left-56 (224px)
+          against a 240px sidebar, so 16px of every page sat underneath it —
+          which clipped the games' bottom-left help button and let Tower's
+          black background run under the sidebar edge. The right side pairs
+          lg:right-80 with the chat panel's w-80 and is already correct. */}
+      <main className={`absolute top-14 bottom-0 left-0 right-0 overflow-y-auto transition-[left,right] duration-300 md:left-60 ${chatOpen ? 'lg:right-80' : 'md:right-0'}`}>
         <div className={isGamePage ? '' : 'tv-scale'}>
         <ErrorBoundary resetKey={location.pathname}>
         <Routes>

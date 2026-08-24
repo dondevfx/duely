@@ -1118,7 +1118,7 @@ function BlackjackGame() {
 
         <div className="text-center mb-1.5 sm:mb-6">
           <h1 className="text-4xl sm:text-6xl font-black text-white mb-0.5 sm:mb-2 leading-tight">🃏 Blackjack</h1>
-          <p className="text-center text-muted text-xs sm:text-base leading-snug sm:leading-relaxed px-2 line-clamp-2 sm:line-clamp-none">Get closer to 21 than your opponent. Both players act at the same time — no waiting.</p>
+          <p className="text-center text-muted text-sm sm:text-base leading-snug sm:leading-relaxed px-2">Get closer to 21 than your opponent. Both players act at the same time — no waiting.</p>
         </div>
 
         <div className="mb-1.5 sm:mb-4 bg-surface border border-border rounded-2xl p-2.5 sm:p-5">
