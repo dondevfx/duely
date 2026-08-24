@@ -458,8 +458,10 @@ export default function Navbar() {
               <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-primary/20 animate-pulse" />
             ) : (
               <>
-                <Link to="/login" className="text-sm text-muted hover:text-white transition-colors hidden sm:block">Sign in</Link>
-                <Link to="/signup" className="text-sm font-semibold px-3 py-1.5 bg-primary rounded-lg text-white hover:bg-blue-500 shadow-glow transition-all">
+                {/* Shown at every width now — mobile only had Sign up before,
+                    with Login hidden until sm. */}
+                <Link to="/login" className="text-sm text-muted hover:text-white transition-colors whitespace-nowrap">Login</Link>
+                <Link to="/signup" className="text-sm font-semibold px-3 py-1.5 bg-primary rounded-lg text-white hover:bg-blue-500 shadow-glow transition-all whitespace-nowrap">
                   Sign up
                 </Link>
               </>

@@ -40,25 +40,18 @@ export default function GameVideoCard({ slug, title, icon, route, liveCount = 0,
   const navigate = useNavigate();
   const containerRef = useRef(null);
   const videoRef = useRef(null);
-  const [inView, setInView] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
   const [debugX, setDebugX] = useCropDebug(slug);
   if (debugX !== null) clipPosition = `${debugX}% 50%`;
 
-  // Only load and play the clip once the card is actually on screen. Seven
-  // autoplaying videos loading at once — especially on a phone on cellular —
-  // is the kind of thing that quietly makes a page miserable. margin gives it
-  // a head start so playback has already begun by the time it's fully visible.
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      ([entry]) => setInView(entry.isIntersecting),
-      { rootMargin: '200px 0px' }
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
+  // Every card mounts and starts fetching its clip immediately — no
+  // IntersectionObserver gate any more. That used to hold each clip until it
+  // scrolled into view, which is right for a long page but wrong for these
+  // two: Home and Games both show all seven cards in one compact grid, so
+  // "off screen" barely ever applied, and the visible cost was the exact
+  // thing being fixed — the icon sitting there while the clip caught up.
+  // All seven clips together are under 1.5MB, cheap enough to just load.
+  const inView = true;
 
   // Respected, not just declared. Someone with this OS setting sees the still
   // poster only — this page is for browsing, not gameplay itself, so there is
@@ -124,7 +117,12 @@ export default function GameVideoCard({ slug, title, icon, route, liveCount = 0,
           playsInline
           // playsInline specifically: without it iOS Safari takes the clip
           // fullscreen the instant it starts instead of playing inside the card.
-          preload="metadata"
+          //
+          // preload="auto": "metadata" only asks the browser to fetch enough
+          // to know the video's dimensions and duration, not actual frames —
+          // frame data was deferred until playback intent, which is exactly
+          // what made the icon sit there while the real clip caught up.
+          preload="auto"
           onError={() => setVideoFailed(true)}
           className="absolute inset-0 w-full h-full object-cover"
           style={clipPosition ? { objectPosition: clipPosition } : undefined}
