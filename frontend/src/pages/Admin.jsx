@@ -267,6 +267,94 @@ export default function Admin() {
   const [tab, setTab]               = useState('overview');
   const [kycQueue, setKycQueue]     = useState([]);
   const [kycBusy, setKycBusy]       = useState(null);
+
+  // ── Player detail panel ──────────────────────────────────────────────
+  const [selectedUserId, setSelectedUserId] = useState(null);
+  const [playerDetail, setPlayerDetail]     = useState(null);
+  const [playerLoading, setPlayerLoading]   = useState(false);
+  const [banReason, setBanReason]           = useState('');
+  const [banBusy, setBanBusy]               = useState(false);
+  const [adjustAmount, setAdjustAmount]     = useState('');
+  const [adjustNote, setAdjustNote]         = useState('');
+  const [adjustBusy, setAdjustBusy]         = useState(false);
+  const [panelMsg, setPanelMsg]             = useState('');
+
+  async function openPlayer(id) {
+    setSelectedUserId(id);
+    setPlayerDetail(null);
+    setPlayerLoading(true);
+    setPanelMsg('');
+    setBanReason('');
+    setAdjustAmount('');
+    setAdjustNote('');
+    try {
+      setPlayerDetail(await api.get(`/admin/users/${id}`));
+    } catch (e) {
+      setPanelMsg(`Could not load player: ${e.message}`);
+    } finally {
+      setPlayerLoading(false);
+    }
+  }
+
+  function closePlayer() {
+    setSelectedUserId(null);
+    setPlayerDetail(null);
+  }
+
+  async function refreshPlayer() {
+    if (!selectedUserId) return;
+    try { setPlayerDetail(await api.get(`/admin/users/${selectedUserId}`)); } catch {}
+  }
+
+  async function banPlayer() {
+    if (!banReason.trim()) { setPanelMsg('A reason is required.'); return; }
+    setBanBusy(true);
+    setPanelMsg('');
+    try {
+      await api.post(`/admin/users/${selectedUserId}/ban`, { reason: banReason.trim() });
+      setBanReason('');
+      await refreshPlayer();
+      setUsers(u => u.map(x => x.id === selectedUserId ? { ...x, banned: true } : x));
+    } catch (e) {
+      setPanelMsg(`Ban failed: ${e.message}`);
+    } finally {
+      setBanBusy(false);
+    }
+  }
+
+  async function unbanPlayer() {
+    setBanBusy(true);
+    setPanelMsg('');
+    try {
+      await api.post(`/admin/users/${selectedUserId}/unban`);
+      await refreshPlayer();
+      setUsers(u => u.map(x => x.id === selectedUserId ? { ...x, banned: false } : x));
+    } catch (e) {
+      setPanelMsg(`Unban failed: ${e.message}`);
+    } finally {
+      setBanBusy(false);
+    }
+  }
+
+  async function adjustPlayerBalance() {
+    const amount = Number(adjustAmount);
+    if (!Number.isFinite(amount) || amount === 0) { setPanelMsg('Enter a non-zero amount.'); return; }
+    if (!adjustNote.trim()) { setPanelMsg('A note is required.'); return; }
+    setAdjustBusy(true);
+    setPanelMsg('');
+    try {
+      await api.post(`/admin/users/${selectedUserId}/adjust-balance`, { amount, note: adjustNote.trim() });
+      setAdjustAmount('');
+      setAdjustNote('');
+      await refreshPlayer();
+      // Keep the Users table's own coin figure in sync without a full reload.
+      setUsers(u => u.map(x => x.id === selectedUserId ? { ...x, c_coins: (x.c_coins ?? 0) + amount } : x));
+    } catch (e) {
+      setPanelMsg(`Adjustment failed: ${e.message}`);
+    } finally {
+      setAdjustBusy(false);
+    }
+  }
   const [loading, setLoading]       = useState(true);
   const [coinSupply, setCoinSupply]   = useState(null);
   const [supplyLoading, setSupplyLoading] = useState(false);
@@ -967,7 +1055,11 @@ export default function Admin() {
                     </thead>
                     <tbody>
                       {users.map(u => (
-                        <tr key={u.id} className="border-b border-border/50 last:border-0 hover:bg-surfaceLight/30 transition-colors">
+                        <tr
+                          key={u.id}
+                          onClick={() => openPlayer(u.id)}
+                          className="border-b border-border/50 last:border-0 hover:bg-surfaceLight/30 transition-colors cursor-pointer"
+                        >
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
                               <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0"
@@ -979,6 +1071,11 @@ export default function Admin() {
                                 {u.username?.[0]?.toUpperCase()}
                               </div>
                               <span className="text-white font-medium">{u.username}</span>
+                              {u.banned && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-danger/15 text-danger border border-danger/40">
+                                  BANNED
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td className="px-4 py-3 text-right font-mono text-accent font-bold">{u.elo}</td>
@@ -1003,6 +1100,167 @@ export default function Admin() {
           </>
         )}
       </div>
+
+      {/* ── Player detail panel ─────────────────────────────────────────── */}
+      {selectedUserId && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/80 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+          onClick={closePlayer}
+        >
+          <div
+            className="w-full max-w-2xl bg-surface border border-border rounded-2xl p-5 my-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {playerLoading && <p className="text-muted text-sm py-8 text-center">Loading…</p>}
+
+            {!playerLoading && playerDetail && (() => {
+              const p = playerDetail.profile;
+              return (
+                <>
+                  <div className="flex items-start justify-between gap-3 mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-full flex items-center justify-center text-lg font-black shrink-0"
+                        style={{
+                          backgroundColor: `${p.profile_color || '#1250B4'}22`,
+                          border: `2px solid ${p.profile_color || '#1250B4'}`,
+                          color: p.profile_color || '#1250B4',
+                        }}>
+                        {p.username?.[0]?.toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-white font-black text-lg">{p.username}</span>
+                          {p.banned && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-danger/15 text-danger border border-danger/40">BANNED</span>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted">
+                          Joined {new Date(p.created_at).toLocaleDateString()} · KYC {p.kyc_status ?? 'unverified'}
+                          {!p.email_confirmed_at && <span className="text-warning"> · email unverified</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <button onClick={closePlayer} aria-label="Close"
+                      className="shrink-0 w-8 h-8 rounded-lg text-muted hover:text-white hover:bg-surfaceLight text-lg font-bold flex items-center justify-center transition-all">
+                      ✕
+                    </button>
+                  </div>
+
+                  {/* Quick stats */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                    {[
+                      ['ELO', p.elo],
+                      ['W / L', `${p.wins} / ${p.losses}`],
+                      ['Coins', fmt(p.c_coins)],
+                      ['Diamonds', (p.diamonds ?? 0).toLocaleString()],
+                    ].map(([label, value]) => (
+                      <div key={label} className="bg-bg border border-border rounded-xl p-3 text-center">
+                        <div className="text-lg font-black text-white font-mono">{value}</div>
+                        <div className="text-[10px] text-muted mt-0.5 uppercase tracking-wide">{label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {panelMsg && <p className="text-xs text-danger mb-3">{panelMsg}</p>}
+
+                  {/* Ban / unban */}
+                  <div className="bg-bg border border-border rounded-xl p-4 mb-4">
+                    {p.banned ? (
+                      <>
+                        <p className="text-xs text-muted mb-2">
+                          Banned {p.banned_at ? new Date(p.banned_at).toLocaleString() : ''} — {p.ban_reason}
+                        </p>
+                        <button onClick={unbanPlayer} disabled={banBusy}
+                          className="px-4 py-2 text-sm font-bold rounded-xl border border-success text-success hover:bg-success hover:text-white transition-all disabled:opacity-50">
+                          {banBusy ? 'Working…' : 'Unban player'}
+                        </button>
+                      </>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          value={banReason}
+                          onChange={e => setBanReason(e.target.value)}
+                          placeholder="Reason — the player sees this"
+                          className="flex-1 bg-surface border border-border rounded-xl px-3 py-2 text-sm text-white placeholder-muted focus:outline-none focus:border-danger"
+                        />
+                        <button onClick={banPlayer} disabled={banBusy || !banReason.trim()}
+                          className="px-4 py-2 text-sm font-bold rounded-xl border border-danger text-danger hover:bg-danger hover:text-white transition-all disabled:opacity-50 whitespace-nowrap">
+                          {banBusy ? 'Working…' : 'Ban player'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Manual balance adjustment */}
+                  <div className="bg-bg border border-border rounded-xl p-4 mb-4">
+                    <p className="text-xs text-muted mb-2">Adjust coin balance — refunds and corrections only. Positive credits, negative debits.</p>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        value={adjustAmount}
+                        onChange={e => setAdjustAmount(e.target.value)}
+                        placeholder="Amount, e.g. 10 or -10"
+                        inputMode="decimal"
+                        className="sm:w-40 bg-surface border border-border rounded-xl px-3 py-2 text-sm text-white placeholder-muted focus:outline-none focus:border-primary"
+                      />
+                      <input
+                        value={adjustNote}
+                        onChange={e => setAdjustNote(e.target.value)}
+                        placeholder="Note — required, kept on the transaction"
+                        className="flex-1 bg-surface border border-border rounded-xl px-3 py-2 text-sm text-white placeholder-muted focus:outline-none focus:border-primary"
+                      />
+                      <button onClick={adjustPlayerBalance} disabled={adjustBusy || !adjustAmount || !adjustNote.trim()}
+                        className="px-4 py-2 text-sm font-bold rounded-xl bg-primary text-white hover:bg-blue-500 transition-all disabled:opacity-50 whitespace-nowrap">
+                        {adjustBusy ? 'Working…' : 'Apply'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Recent matches */}
+                  <div className="mb-4">
+                    <h3 className="text-white font-bold text-sm mb-2">Recent matches</h3>
+                    <div className="max-h-52 overflow-y-auto border border-border rounded-xl divide-y divide-border">
+                      {playerDetail.matches.length === 0 && (
+                        <p className="text-xs text-muted text-center py-4">No matches yet</p>
+                      )}
+                      {playerDetail.matches.map(m => (
+                        <div key={m.id} className="px-3 py-2 flex items-center justify-between text-xs">
+                          <span className="text-white">
+                            {m.game_type} <span className="text-muted">vs {m.opponent}</span>
+                          </span>
+                          <span className={m.won ? 'text-success font-bold' : 'text-danger font-bold'}>
+                            {m.won ? 'WIN' : 'LOSS'}
+                          </span>
+                          <span className="text-muted">{new Date(m.played_at).toLocaleDateString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Recent transactions */}
+                  <div>
+                    <h3 className="text-white font-bold text-sm mb-2">Recent transactions</h3>
+                    <div className="max-h-52 overflow-y-auto border border-border rounded-xl divide-y divide-border">
+                      {playerDetail.transactions.length === 0 && (
+                        <p className="text-xs text-muted text-center py-4">No transactions yet</p>
+                      )}
+                      {playerDetail.transactions.map(t => (
+                        <div key={t.id} className="px-3 py-2 flex items-center justify-between text-xs gap-2">
+                          <span className="text-white capitalize shrink-0">{t.type.replace(/_/g, ' ')}</span>
+                          <span className="text-muted truncate">{t.notes}</span>
+                          <span className={Number(t.amount_c) >= 0 ? 'text-success font-bold shrink-0' : 'text-danger font-bold shrink-0'}>
+                            {Number(t.amount_c) >= 0 ? '+' : ''}{fmt(t.amount_c)}
+                          </span>
+                          <span className="text-muted shrink-0">{t.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
