@@ -311,6 +311,8 @@ export default function TowerGame() {
             : result.loserUsername}
           newWinnerElo={result.isSolo ? (isWinner ? result.newElo : undefined) : result.newWinnerElo}
           newLoserElo={result.isSolo ? (isWinner ? undefined : result.newElo) : result.newLoserElo}
+          winnerBefore={result.isSolo ? (isWinner ? result.eloBefore : undefined) : result.winnerBefore}
+          loserBefore={result.isSolo ? (isWinner ? undefined : result.eloBefore) : result.loserBefore}
           eloBeforeRef={eloBeforeRef}
           balanceChange={result.balanceChange}
           currency={result.currency || betCurrency}

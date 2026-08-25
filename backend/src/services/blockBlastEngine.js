@@ -307,6 +307,7 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
       // number, so the card had nothing to print and hid the row entirely. That
       // reads as "bot matches are unrated", which is not true.
       let humanNewElo = null;
+      let humanEloBefore = null;
       if (supabase && !freeSolo) {
         const BOT_ELO = 1000;
         // Read the rating as it stands now. player.elo is whatever the socket
@@ -314,10 +315,11 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
         // value — writing one derived from a stale baseline lands a few points
         // above the real rating and reports +4 on a win worth +20.
         const BOT = { isBot: true, elo: BOT_ELO };
-        const { newWinnerElo, newLoserElo } = humanWon
+        const { newWinnerElo, newLoserElo, winnerBefore, loserBefore } = humanWon
           ? await freshRatings(supabase, player, BOT)
           : await freshRatings(supabase, BOT, player);
         humanNewElo = humanWon ? newWinnerElo : newLoserElo;
+        humanEloBefore = humanWon ? winnerBefore : loserBefore;
         try { await supabase.from('profiles').update({ elo: humanNewElo }).eq('id', player.userId); } catch (e) { console.error('[blockBlastEngine] elo update:', e.message); }
         try { await supabase.rpc(humanWon ? 'increment_win' : 'increment_loss', { uid: player.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
         // Beating a bot no longer builds a streak — streaks are a PvP record.
@@ -343,6 +345,8 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
       io.to(roomId).emit('block_blast_result', {
         isSolo:      true,
         newElo:      humanNewElo,
+        // The rating this was computed FROM — see carDashEngine.
+        eloBefore:   humanEloBefore,
         winnerId:    humanWon ? player.userId : null,
         playerId:    player.userId,
         playerScore: verifiedScore,
@@ -403,8 +407,8 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
   // a rated match that happened to be worth nothing. null means "this mode
   // does not rate", and the card omits the row entirely. Rush Hour already
   // did this; the rest did not.
-  const { newWinnerElo, newLoserElo } = isFree
-    ? { newWinnerElo: null, newLoserElo: null }
+  const { newWinnerElo, newLoserElo, winnerBefore, loserBefore } = isFree
+    ? { newWinnerElo: null, newLoserElo: null, winnerBefore: null, loserBefore: null }
     : await freshRatings(supabase, winner, loser);
 
   // Settle wallet immediately so payout is accurate in the result
@@ -436,6 +440,9 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
     winnerId: winner.userId, loserId: loser.userId,
     winnerUsername: winner.username, loserUsername: loser.username,
     newWinnerElo, newLoserElo, balanceChange,
+    // See carDashEngine: the card's queue-time baseline goes stale, so the
+    // true before-values travel with the result.
+    winnerBefore, loserBefore,
     // Streaks are a PvP record, so the card needs to know not to mention them.
     vsBot: !!(winner.isBot || loser.isBot),
     winnerScore, loserScore,

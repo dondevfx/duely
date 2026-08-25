@@ -108,8 +108,8 @@ async function resolveCoinFlip(io, supabase, roomId) {
   // a rated match that happened to be worth nothing. null means "this mode
   // does not rate", and the card omits the row entirely. Rush Hour already
   // did this; the rest did not.
-  const { newWinnerElo, newLoserElo } = isFree
-    ? { newWinnerElo: null, newLoserElo: null }
+  const { newWinnerElo, newLoserElo, winnerBefore, loserBefore } = isFree
+    ? { newWinnerElo: null, newLoserElo: null, winnerBefore: null, loserBefore: null }
     : await freshRatings(supabase, winner, loser);
 
   let balanceChange = null;
@@ -178,6 +178,9 @@ async function resolveCoinFlip(io, supabase, roomId) {
     loserUsername: loser.username,
     newWinnerElo,
     newLoserElo,
+    // See carDashEngine: the card's queue-time baseline goes stale, so the
+    // true before-values travel with the result.
+    winnerBefore, loserBefore,
     // Streaks are a PvP record, so the card needs to know not to mention them.
     vsBot: !!(winner.isBot || loser.isBot),
     balanceChange,

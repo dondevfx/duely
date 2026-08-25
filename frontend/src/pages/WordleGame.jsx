@@ -637,6 +637,8 @@ export default function WordleGame() {
           loserUsername={solved ? null : (profile?.username ?? 'You')}
           newWinnerElo={solved ? newElo : undefined}
           newLoserElo={solved ? undefined : newElo}
+          winnerBefore={solved ? (soloResult?.eloBefore ?? null) : null}
+          loserBefore={solved ? null : (soloResult?.eloBefore ?? null)}
           eloBeforeRef={eloBeforeRef}
           entryFee={paidFee}
           balanceChange={paidFee > 0 && solved ? { winnerPayout: paidPayout } : null}
@@ -667,6 +669,8 @@ export default function WordleGame() {
           loserUsername={result.loserUsername}
           newWinnerElo={result.newWinnerElo}
           newLoserElo={result.newLoserElo}
+          winnerBefore={result.winnerBefore}
+          loserBefore={result.loserBefore}
           eloBeforeRef={eloBeforeRef}
           balanceChange={result.balanceChange}
           currency={result.currency || betCurrency}

@@ -378,7 +378,21 @@ async function _maybeResolve(io, supabase, roomId) {
 
 async function _resolveFromTimes(io, supabase, roomId) {
   const room = getCarDashRoom(roomId);
-  if (!room || room.state === 'finished') return;
+  if (!room || room.state === 'finished' || room.resolving) return;
+  // CLAIM the room here, synchronously, before the first await below.
+  //
+  // This function only CHECKED state and left the actual claim to _resolve at
+  // the very end — but there are awaits in between, and every other entry
+  // point into settlement (the crash handler, the 15s catch-up timer, the
+  // idle sweeper, forceResolveCarDash) calls this one. Two of them landing in
+  // the same tick both passed the check, both ran to the end, and
+  // applyEloUpdate fired twice: a +22 win written twice reads as +44, which is
+  // exactly what was reported.
+  //
+  // A separate flag rather than setting state='finished' outright, because the
+  // soloRun branch below and _resolve itself both still need to see a live
+  // room to do their own work correctly.
+  room.resolving = true;
   const [p1, p2] = room.players;
   const key = (p) => p.isBot ? _botKey(room) : p.socketId;
 
@@ -506,6 +520,10 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
     winnerId: winner.userId, loserId: loser.userId,
     winnerUsername: winner.username, loserUsername: loser.username,
     newWinnerElo, newLoserElo, balanceChange,
+    // The ratings these were computed FROM. The result card needs them to
+    // show a true delta — its own baseline is captured at queue time and is
+    // stale by settlement whenever another match resolved in between.
+    winnerBefore, loserBefore,
     // Streaks are a PvP record, so the card needs to know not to mention them.
     vsBot,
     winnerMs, loserMs,

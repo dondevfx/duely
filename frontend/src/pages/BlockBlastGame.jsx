@@ -773,6 +773,8 @@ export default function BlockBlastGame() {
             loserUsername={result.loserUsername}
             newWinnerElo={result.newWinnerElo}
             newLoserElo={result.newLoserElo}
+            winnerBefore={result.winnerBefore}
+            loserBefore={result.loserBefore}
             eloBeforeRef={eloBeforeRef}
             balanceChange={result.balanceChange}
             currency={result.currency || betCurrency}
@@ -804,6 +806,8 @@ export default function BlockBlastGame() {
             loserUsername={result.humanWon ? 'Duely Bot' : profile?.username}
             newWinnerElo={result.humanWon ? result.newElo : undefined}
             newLoserElo={result.humanWon ? undefined : result.newElo}
+            winnerBefore={result.humanWon ? result.eloBefore : undefined}
+            loserBefore={result.humanWon ? undefined : result.eloBefore}
             eloBeforeRef={eloBeforeRef}
             balanceChange={result.balanceChange}
             currency={result.currency || betCurrency}

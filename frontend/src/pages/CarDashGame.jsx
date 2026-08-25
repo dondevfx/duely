@@ -415,6 +415,8 @@ export default function CarDashGame() {
           winnerUsername={result.winnerUsername}
           loserUsername={result.loserUsername}
           newWinnerElo={result.newWinnerElo}
+          winnerBefore={result.winnerBefore}
+          loserBefore={result.loserBefore}
           newLoserElo={result.newLoserElo}
           eloBeforeRef={eloBeforeRef}
           profile={profile}

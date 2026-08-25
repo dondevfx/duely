@@ -66,6 +66,10 @@ export default function ResultScreen({
   loserUsername,
   newWinnerElo,
   newLoserElo,
+  // Authoritative before-values from the engine. Optional: a page that has
+  // not been wired to pass them still falls back to eloBeforeRef.
+  winnerBefore = null,
+  loserBefore = null,
   eloBeforeRef,
   balanceChange,
   currency = 'coins',
@@ -100,8 +104,24 @@ export default function ResultScreen({
 }) {
   // onBackToLobby falls back to onPlayAgain for pages that haven't split the two yet
   const goBack = onBackToLobby ?? onPlayAgain;
-  const elo       = isWinner ? newWinnerElo : newLoserElo; // undefined = no ELO data yet
-  const eloBefore = eloBeforeRef?.current ?? null;
+  const elo = isWinner ? newWinnerElo : newLoserElo; // undefined = no ELO data yet
+
+  // The BEFORE value the server actually computed against, when it sends one.
+  //
+  // eloBeforeRef is captured on the page when the player joins the queue, but
+  // the server computes the new rating from whatever the profile reads at
+  // SETTLEMENT. Those diverge whenever a rating moves in between — most often
+  // the previous match's result landing while this one was queuing or playing.
+  // Subtracting the stale queue-time baseline then reports a delta that never
+  // happened: a real +22 off 1022 lands at 1044, minus a baseline of 1000,
+  // and the card claims +44.
+  //
+  // The rating written was always correct; only the number shown was wrong.
+  // Preferring the server's own before-value makes the displayed delta exactly
+  // the swing that was applied, and no page can reintroduce the bug by
+  // capturing its baseline at the wrong moment.
+  const serverBefore = isWinner ? winnerBefore : loserBefore;
+  const eloBefore = serverBefore ?? eloBeforeRef?.current ?? null;
   const eloDelta  = (elo != null && eloBefore != null) ? elo - eloBefore : null;
 
   const totalMatches = (profile?.wins ?? 0) + (profile?.losses ?? 0);

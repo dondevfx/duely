@@ -1550,9 +1550,11 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       }
 
       let newElo = null;
+      let eloBefore = null;
       try {
         const { data: prof } = await supabase.from('profiles').select('elo').eq('id', userId).single();
         const currentElo = prof?.elo ?? 1000;
+        eloBefore = currentElo;
         const { eloGain, eloLoss } = require('../services/eloService');
         newElo = solved ? currentElo + eloGain() : Math.max(0, currentElo - eloLoss());
         await supabase.from('profiles').update({ elo: newElo }).eq('id', userId);
@@ -1562,7 +1564,11 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       }
 
       socket.emit('wordle_solo_settled', {
-        won: solved, payout, currency: session.currency, entryFee: session.fee, newElo, word: session.word,
+        won: solved, payout, currency: session.currency, entryFee: session.fee, newElo,
+        // The rating this was computed FROM, so the card shows the real swing
+        // rather than subtracting a baseline captured back at queue time.
+        eloBefore,
+        word: session.word,
       });
     });
 

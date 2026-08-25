@@ -387,6 +387,8 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
   // did this; the rest did not.
   let newWinnerElo  = null;
   let newLoserElo   = null;
+  let winnerBefore  = null;
+  let loserBefore   = null;
   let balanceChange = null;
   let winnerStreak  = 0;
   let isFirstWin    = false;
@@ -407,6 +409,8 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
       const ratings = await freshRatings(supabase, winner, loser);
       newWinnerElo  = ratings.newWinnerElo;
       newLoserElo   = ratings.newLoserElo;
+      winnerBefore  = ratings.winnerBefore;
+      loserBefore   = ratings.loserBefore;
     }
 
     if (fee > 0 && supabase && winner && loser && !room.feesDeducted) {
@@ -489,6 +493,9 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
       opponentUsername:  them?.username,
       newWinnerElo,
       newLoserElo,
+      // See carDashEngine: the card's queue-time baseline goes stale, so
+      // the true before-values travel with the result.
+      winnerBefore, loserBefore,
       // Streaks are a PvP record, so the card needs to know not to mention them.
       vsBot: !!(winner?.isBot || loser?.isBot),
       balanceChange,

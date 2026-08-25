@@ -786,6 +786,8 @@ function BlackjackGame() {
           winnerUsername={resultData.winnerUsername}
           loserUsername={resultData.loserUsername}
           newWinnerElo={resultData.newWinnerElo}
+          winnerBefore={resultData.winnerBefore}
+          loserBefore={resultData.loserBefore}
           newLoserElo={resultData.newLoserElo}
           eloBeforeRef={eloBeforeRef}
           balanceChange={resultData.balanceChange}

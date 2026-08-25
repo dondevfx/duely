@@ -392,8 +392,8 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
   const isFree = (room.entryFee || 0) === 0;
   // null means "this mode does not rate", so the result card omits the row
   // rather than printing an unchanged number as if something had happened.
-  const { newWinnerElo, newLoserElo } = isFree
-    ? { newWinnerElo: null, newLoserElo: null }
+  const { newWinnerElo, newLoserElo, winnerBefore, loserBefore } = isFree
+    ? { newWinnerElo: null, newLoserElo: null, winnerBefore: null, loserBefore: null }
     : await freshRatings(supabase, winner, loser);
 
   let balanceChange = null;
@@ -426,6 +426,9 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
     winnerId: winner.userId, loserId: loser.userId,
     winnerUsername: winner.username, loserUsername: loser.username,
     newWinnerElo, newLoserElo, balanceChange,
+    // See carDashEngine: the card's own baseline is captured at queue time
+    // and goes stale, so the true before-values travel with the result.
+    winnerBefore, loserBefore,
     vsBot: !!(winner.isBot || loser.isBot),
     winnerScore, loserScore,
     currency: room.currency || 'coins',

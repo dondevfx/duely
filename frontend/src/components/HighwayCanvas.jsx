@@ -73,6 +73,29 @@ const OD_SPEED     = 780;    // extra u/s at full overdrive
 const OD_CLOSE     = 170;    // extra closing speed at full overdrive
 const CLOSE_MIN    = 250;    // closing speed floor (u/s)
 const CLOSE_MAX    = 470;    // closing speed at full difficulty
+
+// Hard ceiling on how fast anything may close on the player.
+//
+// Closing speed decides the ONLY thing that matters for fairness here: how
+// long a car is visible before it reaches you, which is VIEW_AHEAD / closing.
+// Everything else in the spawn — difficulty ramp, overdrive, the per-vehicle
+// multiplier, the per-car random spread — multiplies together with no upper
+// bound, and the tail of that product was genuinely unreactable:
+//
+//   typical sedan   2060 u/s -> 286ms
+//   fast sedan      2680 u/s -> 220ms
+//   typical semi    2513 u/s -> 235ms
+//   fastest semi    3270 u/s -> 180ms   <- the "flying down the screen" car
+//
+// Human visual reaction time is around 250ms BEFORE any input begins, so the
+// top of that range was not a hard car, it was one nobody could have dodged.
+//
+// 2360 u/s leaves 250ms — still fast, still demanding a quick read, but a
+// window a person can actually act inside. Only the extreme tail is affected:
+// a typical sedan at 2060 never reaches this, so ordinary traffic, density,
+// spread and overtaking are all untouched. This clamps the outliers, it does
+// not slow the game down.
+const CLOSE_HARD_MAX = 2360;
 // ── Traffic ─────────────────────────────────────────────────────────────────
 // The drivable path is generated FIRST, as a ribbon through arrival time, and
 // traffic is then scattered freely around it (see makePath / spawnTraffic).
@@ -1133,7 +1156,12 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         const v = VEHICLES[kind];
         const closingBase = CLOSE_MIN + (CLOSE_MAX - CLOSE_MIN) * d + over() * OD_CLOSE;
         // Per-car speed spread. This is what brings overtaking back.
-        let closing = Math.max(90, closingBase * v.close * (0.72 + rand() * 0.62));
+        //
+        // Clamped at BOTH ends: the floor keeps a car from drifting so slowly
+        // it stops reading as traffic, and CLOSE_HARD_MAX keeps the top of
+        // the random spread inside human reaction time. See its definition —
+        // the spread itself is unchanged, only its unreactable tail is cut.
+        let closing = clamp(closingBase * v.close * (0.72 + rand() * 0.62), 90, CLOSE_HARD_MAX);
         const y = SPAWN_Y + rand() * 150;
         let cspd = S.speed - closing;
 
@@ -1170,6 +1198,12 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
         cspd = clamp(cspd, lo === -Infinity ? cspd : lo, hi === Infinity ? cspd : hi);
         closing = S.speed - cspd;
         if (closing < 70) { if (import.meta.env.DEV) S._rej.lane++; continue; }
+        // The same-lane ordering above can only ever RAISE closing (it slows
+        // the car down to sit behind a slower neighbour), which would put it
+        // straight back past the ceiling the spawn just clamped it under.
+        // Rejected rather than re-clamped: forcing the speed back down would
+        // reintroduce the rear-end ordering problem that clamp exists to fix.
+        if (closing > CLOSE_HARD_MAX) { if (import.meta.env.DEV) S._rej.lane++; continue; }
 
         // Does it close the ribbon?
         const tMid = arrivalTime(y, cspd);
