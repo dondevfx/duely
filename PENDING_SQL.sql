@@ -742,3 +742,45 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 --     WHERE table_name = '_dp_check' AND grantee IN ('anon','authenticated');
 --   -- Expected: zero rows.
 --   DROP TABLE _dp_check;
+
+
+-- ============================================================================
+-- 17. Admin tools: real account bans, and a transaction type for manual
+--     balance corrections
+-- ============================================================================
+-- Bans only ever existed as an in-memory, chat-only Set (chatBanned in
+-- socket/handlers.js) — it stops someone posting in chat and nothing else.
+-- There was no way to actually stop a player using the platform at all.
+ALTER TABLE profiles
+  ADD COLUMN IF NOT EXISTS banned      boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS ban_reason  text,
+  ADD COLUMN IF NOT EXISTS banned_at   timestamptz;
+
+-- 'admin_adjustment' — a manual credit or debit an admin makes from the new
+-- player detail panel, for refunds/compensation/corrections. Every one of
+-- these MUST leave a transaction row — the whole reason transactions_type_check
+-- exists is that a code path writing an unlisted type gets silently rejected
+-- by Postgres, and this is real money moving with no other record of why.
+ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_type_check;
+
+ALTER TABLE transactions ADD CONSTRAINT transactions_type_check CHECK (type IN (
+  'deposit',
+  'deposit_raw',
+  'withdrawal',
+  'match_win',
+  'match_loss',
+  'match_draw',
+  'match_refund',
+  'tip_sent',
+  'tip_received',
+  'daily_bonus',
+  'diamond_bonus',
+  'rewards_spin',
+  'referral_bonus',
+  'fee_collection',
+  'admin_adjustment'
+));
+
+-- Check:
+--   SELECT username, banned, ban_reason FROM profiles WHERE banned = true;
+--   SELECT type, count(*) FROM transactions WHERE type = 'admin_adjustment' GROUP BY 1;

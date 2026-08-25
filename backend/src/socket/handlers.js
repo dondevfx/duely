@@ -355,8 +355,18 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         const user = await verifyToken(token);
         if (!user) { socket.emit('error', { message: 'Authentication failed' }); return; }
         const { data: profile } = await supabase
-          .from('profiles').select('id,username,elo,c_coins,profile_color,current_streak').eq('id', user.id).single();
+          .from('profiles').select('id,username,elo,c_coins,profile_color,current_streak,banned,ban_reason').eq('id', user.id).single();
         if (!profile) { socket.emit('error', { message: 'Profile not found' }); return; }
+        // The real ban, added alongside the admin player panel. The only ban
+        // that existed before this was chatBanned — in-memory, chat-only, and
+        // gone on server restart. This is the actual gate: a banned account
+        // never gets an authenticated socket, so it can queue for nothing,
+        // play nothing, chat nowhere. Read in the SAME query the rest of this
+        // handler already ran, so enforcing it costs nothing extra.
+        if (profile.banned) {
+          socket.emit('error', { message: profile.ban_reason || 'This account has been banned.', banned: true });
+          return;
+        }
         authenticatedUser = { userId: user.id, ...profile, isDemo: isDemoAccount(user.id) };
         socket._authenticatedUserId = user.id;
         socket.emit('authenticated', { userId: user.id, username: profile.username });

@@ -13,11 +13,18 @@ function fmtDate(ts) {
   return new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+// Keys are the real matches.game_type values written by each engine — not
+// guessed, checked against blockBlastEngine/wordleEngine/coinFlipEngine/
+// blackjackEngine/towerEngine/carDashEngine directly. Tower and Rush Hour
+// were missing entirely; their match counts were real in the database the
+// whole time, just never rendered.
 const GAME_LABELS = [
   { key: 'blockBlast', label: 'Block Burst' },
   { key: 'scrabble',   label: 'Word VS' },
   { key: 'coin_flip',  label: 'Coin Flip' },
   { key: 'blackjack',  label: 'Blackjack' },
+  { key: 'tower',      label: 'Tower' },
+  { key: 'carDash',    label: 'Rush Hour' },
 ];
 
 const TYPE_LABELS = {
@@ -542,7 +549,7 @@ export default function Admin() {
             {/* Matches by game */}
             <div className="bg-surface border border-border rounded-2xl p-5 mb-8">
               <h2 className="text-white font-bold text-lg mb-4">Matches by Game</h2>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                 {GAME_LABELS.map(({ key, label }) => (
                   <div key={key} className="bg-bg border border-border rounded-xl p-4 text-center">
                     <div className="text-2xl font-black text-white">{(stats?.matches_by_game?.[key] ?? 0).toLocaleString()}</div>

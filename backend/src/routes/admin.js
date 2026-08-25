@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const { requireAuth } = require('../middleware/auth');
 const { creditDiamonds, creditCoins, deductCoins } = require('../services/walletService');
+const { filterDemos } = require('../services/demoAccounts');
 
 module.exports = function adminRoutes(supabase, io) {
   const router = Router();
@@ -404,7 +405,7 @@ module.exports = function adminRoutes(supabase, io) {
 
     let query = supabase
       .from('profiles')
-      .select('id, username, elo, wins, losses, c_coins, diamonds, created_at, profile_color')
+      .select('id, username, elo, wins, losses, c_coins, diamonds, created_at, profile_color, banned')
       .neq('id', process.env.ADMIN_USER_ID)
       .order('c_coins', { ascending: false })
       .limit(limit);
@@ -414,6 +415,119 @@ module.exports = function adminRoutes(supabase, io) {
     const { data, error } = await query;
     if (error) return res.status(500).json({ error: error.message });
     res.json(data || []);
+  });
+
+  // ── One player, in full ────────────────────────────────────────────────
+  //
+  // Everything the player-detail panel needs from one round trip: the
+  // profile, their recent transactions, and their recent matches. Kept as
+  // one route rather than three so the panel does not open blank and fill in
+  // piece by piece.
+  router.get('/users/:id', requireAuth, requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    const [{ data: profile, error: pErr }, { data: transactions }, { data: matchesAsP1 }, { data: matchesAsP2 }] = await Promise.all([
+      supabase.from('profiles')
+        .select('id, username, elo, wins, losses, c_coins, diamonds, created_at, profile_color, banned, ban_reason, banned_at, kyc_status, email_confirmed_at')
+        .eq('id', id).single(),
+      supabase.from('transactions')
+        .select('id, type, amount_c, crypto_amount, crypto_symbol, status, tx_hash, notes, created_at')
+        .eq('user_id', id).order('created_at', { ascending: false }).limit(50),
+      supabase.from('matches')
+        .select('id, game_type, winner_id, entry_fee_c, entry_fee_diamonds, prize_pool_c, prize_pool_diamonds, played_at, player2_id, player2:profiles!player2_id(username)')
+        .eq('player1_id', id).order('played_at', { ascending: false }).limit(20),
+      supabase.from('matches')
+        .select('id, game_type, winner_id, entry_fee_c, entry_fee_diamonds, prize_pool_c, prize_pool_diamonds, played_at, player1_id, player1:profiles!player1_id(username)')
+        .eq('player2_id', id).order('played_at', { ascending: false }).limit(20),
+    ]);
+
+    if (pErr || !profile) return res.status(404).json({ error: 'Player not found' });
+
+    const matches = [
+      ...(matchesAsP1 || []).map(m => ({ ...m, opponent: m.player2?.username ?? (m.player2_id ? 'Unknown' : 'Bot'), won: m.winner_id === id })),
+      ...(matchesAsP2 || []).map(m => ({ ...m, opponent: m.player1?.username ?? (m.player1_id ? 'Unknown' : 'Bot'), won: m.winner_id === id })),
+    ].sort((a, b) => new Date(b.played_at) - new Date(a.played_at)).slice(0, 20);
+
+    res.json({ profile, transactions: transactions || [], matches });
+  });
+
+  // ── Ban / unban ───────────────────────────────────────────────────────
+  //
+  // The only ban that existed before this was chatBanned in socket/handlers.js
+  // — in-memory, chat-only, gone on restart. This is a real one: it is read at
+  // socket authentication (handlers.js) and in withdrawalGuards (wallet.js),
+  // so a banned account cannot start a new session or move money, not just
+  // post in chat.
+  router.post('/users/:id/ban', requireAuth, requireAdmin, async (req, res) => {
+    const reason = String(req.body?.reason || '').trim().slice(0, 300);
+    if (!reason) return res.status(400).json({ error: 'A reason is required — it is what the player sees, and what you will see reading this back in six months.' });
+
+    const { error } = await supabase.from('profiles')
+      .update({ banned: true, ban_reason: reason, banned_at: new Date().toISOString() })
+      .eq('id', req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+
+    console.log(`[admin] ${req.user.id} banned ${req.params.id}: ${reason}`);
+    res.json({ success: true });
+  });
+
+  router.post('/users/:id/unban', requireAuth, requireAdmin, async (req, res) => {
+    const { error } = await supabase.from('profiles')
+      .update({ banned: false, ban_reason: null, banned_at: null })
+      .eq('id', req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+
+    console.log(`[admin] ${req.user.id} unbanned ${req.params.id}`);
+    res.json({ success: true });
+  });
+
+  // ── Manual balance adjustment ────────────────────────────────────────
+  //
+  // For refunds, compensation, and correcting a mistake — not a general
+  // top-up tool. Goes through the same atomic credit/deduct RPCs every other
+  // balance change in this app uses, and — this is the part that matters —
+  // ALWAYS writes a transaction row. An admin-adjustable balance with no
+  // record of who changed it and why is exactly the kind of gap this session
+  // spent most of its time closing elsewhere; it does not get to be the
+  // exception because it is convenient.
+  router.post('/users/:id/adjust-balance', requireAuth, requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    const amount = Number(req.body?.amount);
+    const note = String(req.body?.note || '').trim().slice(0, 300);
+
+    if (!Number.isFinite(amount) || amount === 0) {
+      return res.status(400).json({ error: 'Amount must be a non-zero number.' });
+    }
+    if (!note) {
+      return res.status(400).json({ error: 'A note is required — this is the only record of why a balance was hand-edited.' });
+    }
+    if (Math.abs(amount) > 50_000) {
+      return res.status(400).json({ error: 'Single adjustments are capped at 50,000 coins as a typo guard. Do it in more than one step if this is genuinely intended.' });
+    }
+
+    try {
+      if (amount > 0) {
+        await creditCoins(supabase, id, amount);
+      } else {
+        await deductCoins(supabase, id, Math.abs(amount));
+      }
+    } catch (e) {
+      return res.status(400).json({ error: e.message || 'Adjustment failed — the player may not have enough balance for a debit this size.' });
+    }
+
+    const { error: txErr } = await supabase.from('transactions').insert({
+      user_id: id,
+      type: 'admin_adjustment',
+      amount_c: amount,
+      status: 'confirmed',
+      notes: `${note} (by ${req.user.id})`,
+    });
+    // The balance move already happened and cannot be silently retried — an
+    // admin re-clicking on a failed insert would double it. Surface the
+    // failure loudly instead of pretending the whole thing failed.
+    if (txErr) console.error(`[admin] CRITICAL: balance adjusted for ${id} (${amount}) but the transaction row failed to write:`, txErr.message);
+
+    console.log(`[admin] ${req.user.id} adjusted ${id} by ${amount}: ${note}`);
+    res.json({ success: true, recorded: !txErr });
   });
 
   // ── KYC review queue ──────────────────────────────────────────────────
@@ -664,17 +778,25 @@ module.exports = function adminRoutes(supabase, io) {
   });
 
   // ── Total coins in circulation ────────────────────────────────────────
+  //
+  // Was summing c_coins across every row in profiles — demo accounts and the
+  // admin account included. Both distort the number away from what it claims
+  // to show: demo accounts play for free and their balance is not real money
+  // owed to anyone, and the admin balance is collected rake, not a player
+  // holding. sum_c_coins (the RPC) has the same problem at the database
+  // level with no way to pass it an exclusion list, so this reads the rows
+  // directly instead and filters them the same way the rest of this file
+  // already excludes both — filterDemos, and .neq(admin id), matching the
+  // Users list a few routes up.
   router.get('/coin-supply', requireAuth, requireAdmin, async (req, res) => {
     try {
-      const { data, error } = await supabase
-        .rpc('sum_c_coins');
-      if (error) {
-        // fallback if RPC doesn't exist
-        const { data: rows } = await supabase.from('profiles').select('c_coins');
-        const total = (rows || []).reduce((sum, r) => sum + (parseFloat(r.c_coins) || 0), 0);
-        return res.json({ total: Math.round(total * 100) / 100 });
-      }
-      res.json({ total: Math.round((data || 0) * 100) / 100 });
+      let query = supabase.from('profiles').select('c_coins').neq('id', process.env.ADMIN_USER_ID);
+      query = filterDemos(query);
+      const { data: rows, error } = await query;
+      if (error) return res.status(500).json({ error: error.message });
+
+      const total = (rows || []).reduce((sum, r) => sum + (parseFloat(r.c_coins) || 0), 0);
+      res.json({ total: Math.round(total * 100) / 100, playerCount: (rows || []).length });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }

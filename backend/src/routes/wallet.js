@@ -266,6 +266,16 @@ module.exports = function walletRoutes(supabase, io) {
       return { status: 403, body: { error: 'Please verify your email before withdrawing.' } };
     }
 
+    // Belt-and-suspenders on top of the socket-level ban gate: that gate
+    // stops a banned account authenticating a NEW session, but this REST
+    // route only needs a still-valid JWT, which can outlive the moment the
+    // ban was applied. Withdrawal is the one place that gap cannot be left
+    // open even briefly, so it gets its own direct check.
+    const { data: p } = await supabase.from('profiles').select('banned, ban_reason').eq('id', req.user.id).single();
+    if (p?.banned) {
+      return { status: 403, body: { error: p.ban_reason || 'This account has been banned.' } };
+    }
+
     // MFA step-up enforcement: if the account has a verified authenticator, the
     // withdrawal must come from an MFA-elevated (aal2) session. Without this the
     // client-side MFA prompt is bypassable — a stolen aal1 token could withdraw

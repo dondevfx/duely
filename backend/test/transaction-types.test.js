@@ -50,8 +50,15 @@ function typesUsedInCode() {
 }
 
 // The types the migration permits.
+//
+// PENDING_SQL.sql is append-only history — a later section can DROP and
+// RE-ADD this same constraint with a longer list (section 17 did, adding
+// 'admin_adjustment'). The block that is actually in effect after running
+// the file top to bottom is the LAST one, not the first — indexOf found the
+// original, now-superseded list and made this fail the moment a real,
+// correctly-migrated type was added.
 function typesAllowedBySql() {
-  const at = SQL.indexOf('transactions_type_check CHECK (type IN (');
+  const at = SQL.lastIndexOf('transactions_type_check CHECK (type IN (');
   assert.notEqual(at, -1, 'the transactions_type_check migration is missing from PENDING_SQL.sql');
   const block = SQL.slice(at, SQL.indexOf('));', at));
   return new Set([...block.matchAll(/'([a-z_]+)'/g)].map(m => m[1]));
