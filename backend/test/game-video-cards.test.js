@@ -205,10 +205,27 @@ test('coming back from the background restarts a clip iOS paused', () => {
   const block = strip(CARD.slice(at, end));
   assert.match(block, /visibilitychange/);
   assert.match(block, /pageshow/);
-  assert.match(block, /v\.paused && ready/,
-    'must only resume a clip that was actually ready and got paused out from under it');
+  assert.match(block, /!ready\) return/,
+    'must only resume a clip that was actually ready before it got frozen');
   assert.match(block, /removeEventListener\('visibilitychange'/,
     'the listener must be cleaned up on unmount, not stack up across navigations');
+});
+
+test('resume checks readyState too, not just paused — the first version of this fix stayed broken', () => {
+  // iOS Safari can go further than pausing a backgrounded tab's video: it can
+  // discard the decoded buffer entirely, and when it does, paused can still
+  // read false — nothing ever called .pause() on it, it just has nothing
+  // left to show. A check that looked only at .paused (the first version of
+  // this fix) missed that case completely and .play() alone was a no-op:
+  // there was no data left to play. This is why it was reported as still
+  // happening after the paused-only version already shipped.
+  const at = CARD.indexOf('Coming back from a long background spell');
+  const end = CARD.indexOf('}, [ready]);', at);
+  const block = strip(CARD.slice(at, end));
+  assert.match(block, /v\.readyState < 2/,
+    'must check readyState — paused alone cannot detect an evicted buffer');
+  assert.match(block, /v\.load\(\)/,
+    'play() alone cannot recover an evicted buffer — load() forces the browser to actually go get data again');
 });
 
 test('every clip starts loading immediately, not on scroll-into-view', () => {

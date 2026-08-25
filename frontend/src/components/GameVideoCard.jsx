@@ -129,17 +129,31 @@ export default function GameVideoCard({ slug, title, icon, route, liveCount = 0,
 
   // Coming back from a long background spell — the reason clips sat frozen
   // after switching back to the app. Nothing here was the bug on the way OUT:
-  // iOS Safari itself suspends a backgrounded tab's video decoder to save
-  // memory, and can silently pause it. play()/canplay only ever fired once,
-  // on mount, so nothing was watching for that afterwards — a card
-  // could sit on its last frame indefinitely with no code path back to
-  // motion. This re-asserts playback once the page is visible again, same
-  // trigger set SocketContext uses for its own resume-from-background fix.
+  // iOS Safari suspends a backgrounded tab's video decoder to save memory,
+  // and can go further than simply pausing it — it can discard the decoded
+  // buffer entirely. play()/canplay only ever fired once, on mount, so
+  // nothing was watching for that afterwards.
+  //
+  // Checking only .paused was not enough, and stayed broken after the first
+  // version of this fix: a video whose buffer iOS reclaimed can still read
+  // paused === false (iOS never called .pause() on it, it just stopped
+  // having anything to show), so .play() alone was a no-op — there was no
+  // data left to play, and nothing forced the browser to go get more.
+  // readyState < 2 (HAVE_CURRENT_DATA) catches that case; load() forces a
+  // full reinitialize, which recovers both a genuinely paused video and one
+  // whose buffer was thrown away. The network resource is normally a cache
+  // hit (same src, preload="auto" already ran once), so this is not a real
+  // re-download in the common case — and restarting from 0 is invisible on
+  // a looping clip regardless.
   useEffect(() => {
     const resume = () => {
       if (document.visibilityState !== 'visible') return;
       const v = videoRef.current;
-      if (v && v.paused && ready) v.play().catch(() => {});
+      if (!v || !ready) return;
+      if (v.paused || v.readyState < 2) {
+        v.load();
+        v.play().catch(() => {});
+      }
     };
     document.addEventListener('visibilitychange', resume);
     window.addEventListener('pageshow', resume);
