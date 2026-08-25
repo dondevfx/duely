@@ -146,6 +146,45 @@ test('a canplay that never fires cannot hide a card forever', () => {
     'the fallback must also start playback — flipping visibility alone leaves the clip frozen, not playing');
 });
 
+// ── Staggered start ──────────────────────────────────────────────────────
+//
+// Seven clips loading at the exact same millisecond is a rounding error on a
+// PC's bandwidth, split seven ways over the same fast pipe. On a phone's much
+// smaller, shared connection, splitting it seven ways leaves each clip with
+// barely any real buffer ahead of the playhead by the time canplay fires —
+// playback starts, catches straight up to that thin buffer, and stutters.
+// That gap between "instant on a PC" and "stutters on mobile" is this.
+
+test('cards claim an increasing, wrapped mount slot without needing a prop', () => {
+  assert.match(CARD, /let mountOrder = 0;/, 'a shared counter is needed — no index prop is passed by either page');
+  assert.match(CARD, /mountOrder\+\+ % 8/,
+    'must wrap — otherwise a long session revisiting these pages grows the delay without bound');
+});
+
+test('a later card genuinely delays its OWN fetch, not just its opacity', () => {
+  // Delaying only the reveal (the earlier bug shape, fixed once already for a
+  // different reason) would still let every video's <video src> mount and
+  // start fetching at the same instant — achieving nothing for bandwidth.
+  const at = CARD.indexOf('{showVideo &&');
+  assert.notEqual(at, -1, 'the video render gate is gone');
+  assert.match(CARD.slice(at, at + 40), /showVideo && canStart &&/,
+    'the <video> element itself — the thing that actually starts the network fetch — must wait on canStart');
+});
+
+test('the fallback timer waits for this card\'s own start, not a shared clock', () => {
+  // The fallback exists so a canplay that never fires cannot hide a card
+  // forever — but starting its countdown from MOUNT rather than from when
+  // THIS card's fetch actually began would let a heavily staggered card's
+  // fallback fire before its video has any data at all, revealing a blank
+  // frame instead of the poster. That is a worse failure than the one this
+  // whole mechanism exists to prevent.
+  const at = CARD.indexOf('const [ready, setReady]');
+  const effectAt = CARD.indexOf('useEffect(() => {', at);
+  const block = strip(CARD.slice(effectAt, CARD.indexOf('}, [canStart]);', effectAt) + 20));
+  assert.match(block, /if \(!canStart\) return;/,
+    'the fallback must not start its countdown until this card has actually begun loading');
+});
+
 test('coming back from the background restarts a clip iOS paused', () => {
   // canplaythrough only ever fires once, on mount. iOS Safari suspends a
   // backgrounded tab's video decoder to save memory and can silently pause

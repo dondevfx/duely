@@ -36,6 +36,13 @@ function useCropDebug(slug) {
   return enabled ? [pos, setAndPersist] : [null, null];
 }
 
+// How many cards have mounted this session, so each new one can claim the
+// next stagger slot below without a parent having to pass it an index.
+// Wrapped past 8 (% 8) so a long session revisiting these pages repeatedly
+// cannot grow this into a real delay — every card still lands in 0..7 slots.
+let mountOrder = 0;
+const STAGGER_MS = 150;
+
 export default function GameVideoCard({ slug, title, icon, route, liveCount = 0, available = true, clipPosition }) {
   const navigate = useNavigate();
   const containerRef = useRef(null);
@@ -44,13 +51,32 @@ export default function GameVideoCard({ slug, title, icon, route, liveCount = 0,
   const [debugX, setDebugX] = useCropDebug(slug);
   if (debugX !== null) clipPosition = `${debugX}% 50%`;
 
-  // Every card mounts and starts fetching its clip immediately — no
-  // IntersectionObserver gate any more. That used to hold each clip until it
-  // scrolled into view, which is right for a long page but wrong for these
-  // two: Home and Games both show all seven cards in one compact grid, so
-  // "off screen" barely ever applied, and the visible cost was the exact
-  // thing being fixed — the icon sitting there while the clip caught up.
-  // All seven clips together are under 1.5MB, cheap enough to just load.
+  // Every card mounts immediately — no IntersectionObserver gate. That used
+  // to hold each clip until it scrolled into view, which is right for a long
+  // page but wrong for these two: Home and Games both show all seven cards in
+  // one compact grid, so "off screen" barely ever applied, and the visible
+  // cost was the exact thing being fixed — the icon sitting there while the
+  // clip caught up.
+  //
+  // But "immediately" does not mean "all at the exact same millisecond" any
+  // more. Seven clips is a rounding error on a PC's bandwidth, split seven
+  // ways over the same fast pipe — but on a phone's much smaller, shared
+  // connection, splitting it seven ways means each clip gets a fraction of
+  // what it would get alone, and by the time canplay fires there is barely
+  // any real buffer ahead of the playhead — playback starts, catches straight
+  // up to that thin buffer, and stutters. That gap between "works instantly
+  // on a PC" and "stutters on a phone" is exactly this. Staggering gives the
+  // first clip(s) the pipe mostly to themselves; on a fast connection
+  // 150ms-per-card is not even perceptible, so this costs desktop nothing.
+  const [myIndex] = useState(() => mountOrder++ % 8);
+  const startDelay = myIndex * STAGGER_MS;
+  const [canStart, setCanStart] = useState(startDelay === 0);
+  useEffect(() => {
+    if (canStart) return;
+    const t = setTimeout(() => setCanStart(true), startDelay);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Respected, not just declared. Someone with this OS setting sees the still
   // poster only — this page is for browsing, not gameplay itself, so there is
@@ -61,7 +87,7 @@ export default function GameVideoCard({ slug, title, icon, route, liveCount = 0,
 
   // Whether the clip can actually be shown, not just whether it has started
   // downloading. autoPlay starts the instant the browser judges playback
-  // technically possible, which on a real network with all seven clips
+  // technically possible, which on a real network with several clips
   // fetching at once is well before there is a real buffer ahead of the
   // playhead — the video plays a beat, the buffer runs dry, it stalls to
   // catch up, then resumes.
@@ -79,6 +105,12 @@ export default function GameVideoCard({ slug, title, icon, route, liveCount = 0,
   // stalls.
   const [ready, setReady] = useState(false);
   useEffect(() => {
+    // Waits for canStart first: this card's clip has not even begun
+    // downloading until then, so starting an 800ms countdown from MOUNT
+    // instead of from canStart would let the fallback fire before the video
+    // has any data at all — revealing a blank frame instead of the poster,
+    // which is worse than the stutter this whole thing exists to avoid.
+    if (!canStart) return;
     // A canplay that fires before this timer expires is the common case —
     // for clips this size it fired in well under a second in every real
     // measurement taken while building this. 800ms is a genuine fallback for
@@ -93,7 +125,7 @@ export default function GameVideoCard({ slug, title, icon, route, liveCount = 0,
       videoRef.current?.play().catch(() => {});
     }, 800);
     return () => clearTimeout(t);
-  }, []);
+  }, [canStart]);
 
   // Coming back from a long background spell — the reason clips sat frozen
   // after switching back to the app. Nothing here was the bug on the way OUT:
@@ -156,7 +188,7 @@ export default function GameVideoCard({ slug, title, icon, route, liveCount = 0,
         onError={(e) => { e.currentTarget.style.display = 'none'; }}
       />
 
-      {showVideo && (
+      {showVideo && canStart && (
         <video
           ref={videoRef}
           src={clipSrc}
