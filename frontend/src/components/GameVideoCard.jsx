@@ -59,46 +59,47 @@ export default function GameVideoCard({ slug, title, icon, route, liveCount = 0,
     () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
   );
 
-  // Whether the clip can actually run smoothly, not just whether it has
-  // started downloading. autoPlay starts the instant the browser judges
-  // playback is technically possible, which on a real network with all seven
-  // clips fetching at once is well before there is a real buffer ahead of the
+  // Whether the clip can actually be shown, not just whether it has started
+  // downloading. autoPlay starts the instant the browser judges playback
+  // technically possible, which on a real network with all seven clips
+  // fetching at once is well before there is a real buffer ahead of the
   // playhead — the video plays a beat, the buffer runs dry, it stalls to
-  // catch up, then resumes. That is the stutter being reported here.
+  // catch up, then resumes.
   //
-  // canplaythrough is the browser's own estimate that, at the current
-  // download rate, it can play to the end without pausing again — waiting
-  // for it instead of autoPlay is what actually fixes a mid-playback stall,
-  // as opposed to just moving it earlier. The video itself stays invisible
-  // (poster showing) until then, so what appears on screen is never a paused
-  // frame or a stall — it is either the poster, or the clip already playing.
+  // canplay, not canplaythrough. canplaythrough is the browser's estimate
+  // that it can play to the END without pausing again, and waiting for that
+  // full guarantee is what made this feel like a 4-second wait before
+  // anything happened — canplay fires far sooner, as soon as there is enough
+  // data for the CURRENT frame. It trades away some of canplaythrough's
+  // stutter protection, but a poster now covers every game (it did not when
+  // canplaythrough was first chosen here), so the video taking over is a
+  // frame-for-frame match to what was already on screen — a brief stutter
+  // right at that handoff reads as nothing next to autoPlay's original
+  // failure mode, an icon replaced mid-scroll by a video that immediately
+  // stalls.
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    // A canplaythrough that fires before this timeout expires is the common
-    // case; the timeout exists only for the rare browser/network combination
-    // where the event never fires at all, so the card never gets stuck
-    // showing the poster forever over a clip that was actually fine.
+    // A canplay that fires before this timer expires is the common case —
+    // for clips this size it fired in well under a second in every real
+    // measurement taken while building this. 800ms is a genuine fallback for
+    // a rare slow/unstable connection, not a target: on a fast connection
+    // this line never runs at all, canplay already got there first.
     //
-    // This must also call play(), not just flip ready. It did not, and that
-    // was a real bug: on a slow connection — now more likely than before,
-    // with all seven clips competing for bandwidth at once — canplaythrough
-    // can genuinely take longer than 4s, or never fire at all. The old
-    // fallback made the video VISIBLE and stopped there, revealing a clip
-    // sitting in its default paused state that nothing had ever told to
-    // play. That is a frozen clip, not a playing one — the fallback path was
-    // producing the exact symptom it was meant to prevent.
+    // Must also call play(), not just flip ready — a fallback that only
+    // reveals the video without starting it leaves a frozen frame on screen,
+    // which is worse than the poster it replaced.
     const t = setTimeout(() => {
       setReady(true);
       videoRef.current?.play().catch(() => {});
-    }, 4000);
+    }, 800);
     return () => clearTimeout(t);
   }, []);
 
   // Coming back from a long background spell — the reason clips sat frozen
   // after switching back to the app. Nothing here was the bug on the way OUT:
   // iOS Safari itself suspends a backgrounded tab's video decoder to save
-  // memory, and can silently pause it. play()/canplaythrough only ever fired
-  // once, on mount, so nothing was watching for that afterwards — a card
+  // memory, and can silently pause it. play()/canplay only ever fired once,
+  // on mount, so nothing was watching for that afterwards — a card
   // could sit on its last frame indefinitely with no code path back to
   // motion. This re-asserts playback once the page is visible again, same
   // trigger set SocketContext uses for its own resume-from-background fix.
@@ -161,9 +162,11 @@ export default function GameVideoCard({ slug, title, icon, route, liveCount = 0,
           src={clipSrc}
           poster={posterSrc}
           // No autoPlay attribute — that starts playback the instant it is
-          // merely POSSIBLE, which is exactly the early start that runs the
-          // buffer dry and stalls. onCanPlayThrough below starts it once the
-          // browser expects to make it through without stopping again.
+          // merely POSSIBLE, before there is any real buffer ahead of the
+          // playhead. onCanPlay below starts it once there is enough data for
+          // the current frame — far sooner than waiting for a full-playthrough
+          // guarantee, and safe to be less strict about now that a poster
+          // already matches what the video opens on.
           muted
           loop
           playsInline
@@ -175,7 +178,7 @@ export default function GameVideoCard({ slug, title, icon, route, liveCount = 0,
           // frame data was deferred until playback intent, which is exactly
           // what made the icon sit there while the real clip caught up.
           preload="auto"
-          onCanPlayThrough={(e) => {
+          onCanPlay={(e) => {
             setReady(true);
             e.currentTarget.play().catch(() => {}); // autoplay can still be refused; the poster covers that
           }}

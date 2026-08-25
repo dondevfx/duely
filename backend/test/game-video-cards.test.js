@@ -98,38 +98,44 @@ test('the clip is muted, so autoplay is not silently blocked', () => {
   assert.match(CARD, /\bmuted\b/);
 });
 
-test('playback waits for canplaythrough, not the autoPlay attribute', () => {
+test('playback waits for canplay, not the autoPlay attribute', () => {
   // autoPlay starts a clip the instant playback is merely POSSIBLE, which —
   // especially with all seven clips now fetching at once — is well before
   // there is a real buffer ahead of the playhead. It plays a beat, the buffer
-  // runs dry, playback stalls to catch up, then resumes: the reported
-  // stutter. canplaythrough is the browser's own estimate that it can finish
-  // without stopping again, so gating on it instead of racing to start early
-  // is what actually removes the stall rather than just moving it sooner.
+  // runs dry, playback stalls to catch up, then resumes: the earlier reported
+  // stutter. canplay is a real signal too, just an earlier and less strict
+  // one than canplaythrough — fired as soon as there is enough data for the
+  // current frame, rather than waiting for a full-playthrough guarantee.
+  // Chosen over canplaythrough once posters covered every game: the video
+  // taking over from an accurate poster makes a brief stutter at that handoff
+  // far less noticeable than the multi-second wait canplaythrough required.
   const videoAt = CARD.search(/<video\s*\n/);
   const videoBlock = strip(CARD.slice(videoAt, CARD.indexOf('/>', videoAt)));
   assert.ok(!/\bautoPlay\b/.test(videoBlock),
     'autoPlay must be gone — it is the thing that starts playback before the buffer is ready');
-  assert.match(videoBlock, /onCanPlayThrough/, 'playback must be gated on canplaythrough');
+  assert.match(videoBlock, /onCanPlay=/, 'playback must be gated on canplay');
 });
 
-test('the clip stays invisible until it can play smoothly', () => {
-  // Otherwise the viewer sees a paused frame appear, then a stall — the two
-  // beats of "not smooth" reported. Staying on the poster until ready means
-  // what appears is either the poster, or the clip already in motion.
+test('the clip stays invisible until it can actually be shown', () => {
+  // Otherwise the viewer sees a paused frame appear before playback starts.
+  // Staying on the poster until ready means what appears is either the
+  // poster, or the clip already in motion — never a static video frame.
   assert.match(CARD, /const \[ready, setReady\] = useState\(false\)/,
-    'must start NOT ready — showing the poster until canplaythrough proves otherwise');
+    'must start NOT ready — showing the poster until canplay proves otherwise');
   const videoBlock = CARD.slice(CARD.search(/<video\s*\n/), CARD.indexOf('/>', CARD.search(/<video\s*\n/)));
   assert.match(videoBlock, /ready \? 'opacity-100' : 'opacity-0'/,
     'the video element must stay hidden until ready flips true');
 });
 
-test('a canplaythrough that never fires cannot hide a card forever', () => {
+test('a canplay that never fires cannot hide a card forever', () => {
   // The event not firing at all is a real, if rare, browser/network
-  // possibility — there must be a way out that does not depend on it.
+  // possibility — there must be a way out that does not depend on it. 800ms,
+  // not several seconds: for clips this size canplay fires in well under a
+  // second in every real measurement, so this line is a genuine fallback for
+  // a rare slow connection, not something a normal load is expected to hit.
   const at = CARD.indexOf('setTimeout(() => {', CARD.indexOf('const [ready, setReady]'));
   assert.notEqual(at, -1, 'the fallback timer is gone');
-  const block = strip(CARD.slice(at, CARD.indexOf('}, 4000)', at) + 10));
+  const block = strip(CARD.slice(at, CARD.indexOf('}, 800)', at) + 10));
   assert.match(block, /setReady\(true\)/, 'the fallback must still reveal the clip');
   // This is the actual bug: the fallback used to ONLY flip ready, which made
   // the video VISIBLE without ever telling it to play — on a slow connection
