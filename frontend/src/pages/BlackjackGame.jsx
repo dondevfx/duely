@@ -342,7 +342,20 @@ function BlackjackGame() {
   const currLabel = isDiamonds ? '💎' : <CoinIcon size="0.85em" />;
   const myBalance = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const insufficient = entryFee > 0 && myBalance < entryFee;
+  // Falls back to 0, silently, when entryFee is not one of this currency's
+  // fees — clamps only what the SLIDER shows. The Bet-vs-Bot label below
+  // reads entryFee directly, not fees[sliderIdx], so it could show a stale
+  // value (a coin-tier fee left over from location.state, or from
+  // betCurrency changing after mount via the shared CurrencyContext) that
+  // the slider itself had already visibly moved on from. Same gap fixed the
+  // same way in CoinFlipGame.jsx, which renders this identical button
+  // separately and needs its own copy of the guard.
   const sliderIdx = Math.max(0, fees.indexOf(entryFee));
+
+  useEffect(() => {
+    if (!fees.includes(entryFee)) setEntryFee(fees[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [betCurrency]);
 
   const payoutAmt = isDiamonds
     ? `${(entryFee * 2).toLocaleString()}`

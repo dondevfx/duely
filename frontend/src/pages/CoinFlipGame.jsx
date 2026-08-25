@@ -300,7 +300,28 @@ export default function CoinFlipGame() {
   const currLabel = isDiamonds ? '💎' : <CoinIcon size="0.85em" />;
   const myBalance = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const insufficient = entryFee > 0 && myBalance < entryFee;
+  // Falls back to 0, silently, when entryFee is not actually one of this
+  // currency's fees — which only clamps what the SLIDER shows. Nothing here
+  // corrected entryFee itself, so the Bet-vs-Bot label a few lines down
+  // (which reads entryFee directly, not fees[sliderIdx]) could show a number
+  // the slider disagreed with — "1 💎" was a leftover coin-tier value from
+  // location.state, initialised once on mount, never re-checked against the
+  // currency actually in effect. betCurrency is read from CurrencyContext,
+  // shared across every game, so it can already have changed by the time
+  // this page mounts, or change later from a source this page never asked
+  // for. GameLobby.jsx guards this exact case for its own bot button; this
+  // page has the identical button rendered separately and needs the same
+  // guard, not a shared one, since neither page uses the other's copy.
   const sliderIdx = Math.max(0, fees.indexOf(entryFee));
+
+  // Corrects entryFee itself, not just where the slider points — on mount
+  // (location.state can seed a fee from the wrong currency's tier list) and
+  // whenever betCurrency changes for any reason, including one this page did
+  // not initiate itself.
+  useEffect(() => {
+    if (!fees.includes(entryFee)) setEntryFee(fees[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [betCurrency]);
 
   function switchCurrency(cur) {
     setBetCurrency(cur);
