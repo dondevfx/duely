@@ -363,25 +363,73 @@ async function recordWithdrawal(supabase, userId, amount, source) {
   }
 }
 
-// Returns how much the user can withdraw.
+// Returns how much of the user's balance is actually safe to withdraw, and
+// whether they are allowed to withdraw at all.
 //
-// The entire c_coins balance is withdrawable — including game winnings and
-// affiliate earnings — because there is no free coin faucet (new accounts start
-// at 0, PvP is zero-sum minus rake, bot coin games are free-entry only, and the
-// only bonus that mints coins is the 1/day daily bonus). Every coin therefore
-// traces back to a real deposit, real rake, or a zero-sum transfer, so gating by
-// funding source would only serve to trap users' legitimate winnings.
+// The reasoning this replaces was correct on its own terms — "there is no
+// free coin faucet, every coin traces back to a real deposit, real rake, or a
+// zero-sum transfer" — but it assumed every credit to a balance came through
+// code that enforced that. The RLS hole proved that assumption false: a
+// direct-to-database write minted a balance with no deposit and no rake
+// behind it at all, invisible to this reasoning because it never went through
+// any of the paths the reasoning was about. That specific hole is closed
+// (PENDING_SQL 15/16), but the same SHAPE of gap was still open through
+// routes that are entirely legitimate — deposit with a stolen card and
+// withdraw before the chargeback lands; tip a fresh account and cash it
+// straight out. Neither of those needs a database exploit, and neither was
+// checked before this.
 //
-// NOTE: profiles.crypto_deposited / crypto_withdrawn (and fiat_*) are still
-// tracked (see recordDeposit/recordWithdrawal) and remain available if strict
-// source-of-funds / AML gating is ever required — wire them in here to cap each
-// method to (deposited − withdrawn). Not enforced today by design.
+// Two rules, because they catch different things:
+//
+// 1. hasPlayed — must have played at least one real match, ever, any
+//    currency. Coins reach an account by depositing, winning a match, or
+//    being tipped; a balance built ENTIRELY from tips with zero matches
+//    played has never been risked on the platform at all, which is
+//    indistinguishable from a laundering hop. An absolute gate: it blocks a
+//    withdrawal outright, not a cap on how much.
+//
+// 2. withdrawable — the balance minus whatever portion of lifetime deposits
+//    has never once been wagered. lifetimeDeposited minus lifetimeWagered is
+//    exactly the money that arrived and could leave again with nothing
+//    platform-side happening to it in between — the shape of a
+//    deposit-then-withdraw pass. Match winnings never add to
+//    lifetimeDeposited, so they are never touched by this and stay fully,
+//    immediately withdrawable regardless of how little has been wagered —
+//    the thing the ORIGINAL reasoning above got right and this preserves.
+//
+// Deliberately an aggregate across the account's whole history, not a
+// per-deposit ledger tracking which specific deposit funds which later
+// withdrawal: it cannot tell a small legitimate winning apart from an
+// untouched deposit once both are sitting in the same balance, so a heavy
+// depositor who has barely played can see a real winning blocked alongside
+// money that should stay locked. A true per-deposit ledger would not have
+// that false positive and is meaningfully more state to keep correct; for a
+// fraud control rather than a payout feature, a blocked legitimate
+// withdrawal (a support ticket) was judged the safer failure mode against an
+// unblocked fraudulent one (money gone).
 async function getWithdrawable(supabase, userId) {
-  const { data } = await supabase.from('profiles')
-    .select('c_coins').eq('id', userId).single();
-  if (!data) return { crypto: 0, fiat: 0 };
-  const bal = parseFloat(data.c_coins) || 0;
-  return { crypto: bal, fiat: bal };
+  const { data: profile } = await supabase
+    .from('profiles').select('c_coins, wins, losses').eq('id', userId).single();
+  if (!profile) return { withdrawable: 0, balance: 0, hasPlayed: false };
+
+  const balance   = parseFloat(profile.c_coins) || 0;
+  const hasPlayed = ((profile.wins ?? 0) + (profile.losses ?? 0)) > 0;
+
+  const [{ data: deposits }, { data: matchesAsP1 }, { data: matchesAsP2 }] = await Promise.all([
+    supabase.from('transactions').select('amount_c')
+      .eq('user_id', userId).eq('type', 'deposit').eq('status', 'confirmed'),
+    supabase.from('matches').select('entry_fee_c').eq('player1_id', userId).gt('entry_fee_c', 0),
+    supabase.from('matches').select('entry_fee_c').eq('player2_id', userId).gt('entry_fee_c', 0),
+  ]);
+
+  const lifetimeDeposited = (deposits || []).reduce((s, r) => s + (parseFloat(r.amount_c) || 0), 0);
+  const lifetimeWagered = [...(matchesAsP1 || []), ...(matchesAsP2 || [])]
+    .reduce((s, r) => s + (parseFloat(r.entry_fee_c) || 0), 0);
+
+  const unplayedDeposits = Math.max(0, lifetimeDeposited - lifetimeWagered);
+  const withdrawable = Math.max(0, balance - unplayedDeposits);
+
+  return { withdrawable, balance, hasPlayed, lifetimeDeposited, lifetimeWagered };
 }
 
 // Forfeit settlement for diamonds — fees already deducted at match start, just credit winner 2x.

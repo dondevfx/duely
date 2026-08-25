@@ -290,6 +290,15 @@ module.exports = function walletRoutes(supabase, io) {
       return { status: 429, body: { error: 'A withdrawal is already in progress' } };
     }
 
+    // Source of funds is deliberately NOT checked in this shared function.
+    //
+    // It needs the requested amount, which the crypto and fiat routes parse
+    // under different field names (amountUsd vs amount) and at slightly
+    // different points — reading it generically here risked silently
+    // matching the wrong one. Each route calls getWithdrawable itself,
+    // right after its own amount is known to be real. See that function's
+    // own comment for the reasoning behind the two rules it enforces.
+
     // Identity is deliberately NOT checked here.
     //
     // It gates bank withdrawals only, inside /withdraw-fiat. A verification
@@ -353,11 +362,20 @@ module.exports = function walletRoutes(supabase, io) {
         return res.status(429).json({ error: `Please wait ${waitSec}s before withdrawing again` });
       }
 
-      // ── Source limit ─────────────────────────────────────────────────
-      const withdrawable = await getWithdrawable(supabase, req.user.id);
-      if (amount > withdrawable.crypto) {
+      // ── Source of funds ──────────────────────────────────────────────
+      // See getWithdrawable's own comment for the reasoning. Crypto is
+      // checked here rather than left to a shared spot because it is the
+      // riskier of the two rails — a crypto payout is irreversible the
+      // moment it lands, where a fiat one still has bank-side recall options.
+      const src = await getWithdrawable(supabase, req.user.id);
+      if (!src.hasPlayed) {
+        return res.status(403).json({ error: 'Play at least one match before withdrawing.' });
+      }
+      if (amount > src.withdrawable) {
         return res.status(400).json({
-          error: `Crypto withdrawable: $${withdrawable.crypto.toFixed(2)}. Non-crypto balance cannot be withdrawn to crypto.`,
+          error: src.withdrawable > 0
+            ? `Part of your balance is from a recent deposit that has not been played yet. You can withdraw up to $${src.withdrawable.toFixed(2)} right now.`
+            : 'Part of your balance is from a recent deposit that has not been played yet. Play a match first, or wait for it to clear.',
         });
       }
 
@@ -697,6 +715,23 @@ module.exports = function walletRoutes(supabase, io) {
 
       const balance = await getBalance(supabase, req.user.id);
       if (balance < amount) return res.status(400).json({ error: 'Insufficient balance' });
+
+      // ── Source of funds ──────────────────────────────────────────────
+      // Same check as the crypto route, and needed just as much here — a
+      // fiat payout is not automatically safer just because a bank sits in
+      // the middle; the deposit-then-withdraw pattern this guards against
+      // works identically on either rail. See getWithdrawable's own comment.
+      const src = await getWithdrawable(supabase, req.user.id);
+      if (!src.hasPlayed) {
+        return res.status(403).json({ error: 'Play at least one match before withdrawing.' });
+      }
+      if (amount > src.withdrawable) {
+        return res.status(400).json({
+          error: src.withdrawable > 0
+            ? `Part of your balance is from a recent deposit that has not been played yet. You can withdraw up to $${src.withdrawable.toFixed(2)} right now.`
+            : 'Part of your balance is from a recent deposit that has not been played yet. Play a match first, or wait for it to clear.',
+        });
+      }
 
       // The only identity gate in the codebase. Bank payouts require a verified
       // person; crypto payouts do not (see withdrawalGuards for why).

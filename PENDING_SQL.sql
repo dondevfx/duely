@@ -715,3 +715,30 @@ REVOKE INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public FROM anon, authenti
 --   WHERE table_schema = 'public' AND grantee IN ('anon','authenticated')
 --     AND privilege_type IN ('INSERT','UPDATE','DELETE');
 -- Expected: zero rows.
+
+
+-- ============================================================================
+-- 16. Close the gap in section 15: make it apply to future tables too
+-- ============================================================================
+-- Section 15 was a one-time sweep — it revoked write access from every table
+-- that existed at the moment it ran, and nothing made that automatic for
+-- tables created afterward. Its own comment already said "re-check after
+-- adding any new table," which just means the fix depended on remembering to
+-- redo it — the same shape of gap that let the original exploit through,
+-- just waiting on the next migration instead of already open.
+--
+-- ALTER DEFAULT PRIVILEGES changes what NEW objects are granted at creation
+-- time, for objects created by the role running this statement. It does not
+-- touch existing tables — section 15 already covers those — and it does not
+-- retroactively change ownership. Run once; every table this project creates
+-- from now on starts with anon/authenticated write access already revoked,
+-- with no step to remember.
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  REVOKE INSERT, UPDATE, DELETE ON TABLES FROM anon, authenticated;
+
+-- Check: create a throwaway table and confirm the grant never appears.
+--   CREATE TABLE _dp_check (id int);
+--   SELECT grantee, privilege_type FROM information_schema.role_table_grants
+--     WHERE table_name = '_dp_check' AND grantee IN ('anon','authenticated');
+--   -- Expected: zero rows.
+--   DROP TABLE _dp_check;
