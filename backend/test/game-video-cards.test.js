@@ -127,8 +127,17 @@ test('the clip stays invisible until it can play smoothly', () => {
 test('a canplaythrough that never fires cannot hide a card forever', () => {
   // The event not firing at all is a real, if rare, browser/network
   // possibility — there must be a way out that does not depend on it.
-  assert.match(CARD, /setTimeout\(\(\) => setReady\(true\), 4000\)/,
-    'a fallback timer must force the clip visible even if canplaythrough never comes');
+  const at = CARD.indexOf('setTimeout(() => {', CARD.indexOf('const [ready, setReady]'));
+  assert.notEqual(at, -1, 'the fallback timer is gone');
+  const block = strip(CARD.slice(at, CARD.indexOf('}, 4000)', at) + 10));
+  assert.match(block, /setReady\(true\)/, 'the fallback must still reveal the clip');
+  // This is the actual bug: the fallback used to ONLY flip ready, which made
+  // the video VISIBLE without ever telling it to play — on a slow connection
+  // (now more likely, with all seven clips competing for bandwidth at once)
+  // that revealed a clip sitting in its default paused state. A frozen clip,
+  // produced by the exact path meant to prevent one.
+  assert.match(block, /videoRef\.current\?\.play\(\)/,
+    'the fallback must also start playback — flipping visibility alone leaves the clip frozen, not playing');
 });
 
 test('coming back from the background restarts a clip iOS paused', () => {
@@ -142,7 +151,13 @@ test('coming back from the background restarts a clip iOS paused', () => {
   // watching for the transition back can.
   const at = CARD.indexOf('Coming back from a long background spell');
   assert.notEqual(at, -1, 'the background-resume effect is gone');
-  const block = strip(CARD.slice(at, at + 1000));
+  // Bounded by the effect's own closing `}, [ready]);`, not a fixed character
+  // count — a fixed window is one comment edit away from silently cutting off
+  // the end of the block it means to check, which is exactly what happened
+  // here once.
+  const end = CARD.indexOf('}, [ready]);', at);
+  assert.notEqual(end, -1, 'could not find the end of the resume effect');
+  const block = strip(CARD.slice(at, end));
   assert.match(block, /visibilitychange/);
   assert.match(block, /pageshow/);
   assert.match(block, /v\.paused && ready/,

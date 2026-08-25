@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { getCurrentSession, readSessionFromStorage, onSessionChange } from '../utils/supabase';
+import { useAuth } from './AuthContext';
 
 const SocketContext = createContext(null);
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
@@ -10,6 +11,9 @@ const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 const SHOW_LIVE_COUNTS = false;
 
 export function SocketProvider({ children }) {
+  // AuthProvider wraps SocketProvider (see App.jsx), so this is always
+  // available — never optional-chained away.
+  const { forceReauth } = useAuth();
   const socketRef = useRef(null);
   // The socket is also held in STATE, not only in the ref.
   //
@@ -83,6 +87,29 @@ export function SocketProvider({ children }) {
     socket.on('disconnect', () => {
       setConnected(false);
       setAuthenticated(false);
+    });
+
+    // The real cause of "loaded into the site and it never connects" — not a
+    // slow reconnect, but a token the socket authenticated with that had
+    // already expired by the time it was sent. The server always answers
+    // that with exactly one of these two messages; nothing was listening for
+    // either, so the failure was invisible and the client sat on
+    // "Connecting…"/"Authenticating…" with no way out short of a manual
+    // reload. authenticate() is fire-and-forget with no error callback, so
+    // this is the only channel the failure can arrive on at all.
+    //
+    // Deliberately narrow: 'error' also carries dozens of unrelated messages
+    // (bad bet amount, insufficient balance, game-state errors) that must
+    // never trigger a token refresh, and 'Not authenticated' is the normal
+    // state before the first auth attempt completes, not a failure.
+    socket.on('error', ({ message } = {}) => {
+      if (message !== 'Authentication failed' && message !== 'Authentication error') return;
+      console.log('[socket] server rejected the token — forcing a refresh and retrying');
+      // On success this calls storeSession(), which fires onSessionChange
+      // below and re-authenticates with the fresh token. forceReauth already
+      // guards against a duplicate concurrent refresh, so this is safe to
+      // call even if AuthContext's own scheduled refresh is about to fire too.
+      forceReauth();
     });
 
     // Live player counts are hidden site-wide for now. Every "X playing / X Live /

@@ -117,3 +117,61 @@ test('the resume listeners are removed on cleanup', () => {
       `${ev} listener is never removed`);
   }
 });
+
+// ── A stale token that never gets retried ───────────────────────────────────
+//
+// Not the resume timing above — a separate failure mode that produces the
+// identical symptom. The server always answers a stale/expired access token
+// with an 'error' event naming exactly why; nothing on the client listened
+// for it, so the failure was invisible and the app sat on "Connecting…" /
+// "Authenticating…" with no way out short of a manual reload. This can
+// happen even while the tab is actively open and was never backgrounded —
+// AuthContext's own refresh timer is a single setTimeout, and setTimeout is
+// throttled or fully suspended in a backgrounded tab, so the timer meant to
+// prevent this can itself run late.
+
+test('the server has exactly two ways to say the token was rejected', () => {
+  // Pinned so the two messages below can never silently drift from what the
+  // server actually sends — matching a different string just means the fix
+  // does nothing.
+  const src = be('socket', 'handlers.js');
+  const at = src.indexOf("socket.on('authenticate'");
+  const body = src.slice(at, src.indexOf("router.post", at) === -1 ? at + 2000 : src.indexOf("router.post", at));
+  assert.match(body, /'Authentication failed'/);
+  assert.match(body, /'Authentication error'/);
+});
+
+test('a rejected token triggers a refresh, not silence', () => {
+  const src = fe('context', 'SocketContext.jsx');
+  const at = src.indexOf("socket.on('error'");
+  assert.notEqual(at, -1, 'nothing listens for the server rejecting the token at all');
+  const body = src.slice(at, src.indexOf('});', at));
+  assert.match(body, /message !== 'Authentication failed'/);
+  assert.match(body, /message !== 'Authentication error'/);
+  assert.match(body, /forceReauth\(\)/,
+    'the failure must trigger an actual refresh, not just be logged and dropped');
+});
+
+test('the auth-failure listener does not fire on unrelated errors', () => {
+  // 'error' also carries dozens of unrelated messages — bad bet amount,
+  // insufficient balance, game-state errors. Any of those triggering a token
+  // refresh would be pure noise at best.
+  const src = fe('context', 'SocketContext.jsx');
+  const at = src.indexOf("socket.on('error'");
+  const body = src.slice(at, src.indexOf('});', at));
+  assert.match(body, /if \(message !== 'Authentication failed' && message !== 'Authentication error'\) return;/,
+    'must return early for every other message, not just the two it acts on');
+});
+
+test('the refresh fix is reachable: exposed by AuthContext, wired above SocketContext', () => {
+  const authSrc = fe('context', 'AuthContext.jsx');
+  assert.match(authSrc, /forceReauth:\s*_doRefresh/,
+    'AuthContext must expose its own refresh function — a duplicate one in ' +
+    'SocketContext risks two refreshes racing on the same refresh_token');
+
+  const appSrc = fe('App.jsx');
+  const authAt = appSrc.indexOf('<AuthProvider>');
+  const socketAt = appSrc.indexOf('<SocketProvider>');
+  assert.ok(authAt !== -1 && socketAt !== -1 && authAt < socketAt,
+    'AuthProvider must wrap SocketProvider, or useAuth() inside it has nothing to read');
+});

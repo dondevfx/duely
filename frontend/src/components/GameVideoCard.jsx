@@ -78,7 +78,19 @@ export default function GameVideoCard({ slug, title, icon, route, liveCount = 0,
     // case; the timeout exists only for the rare browser/network combination
     // where the event never fires at all, so the card never gets stuck
     // showing the poster forever over a clip that was actually fine.
-    const t = setTimeout(() => setReady(true), 4000);
+    //
+    // This must also call play(), not just flip ready. It did not, and that
+    // was a real bug: on a slow connection — now more likely than before,
+    // with all seven clips competing for bandwidth at once — canplaythrough
+    // can genuinely take longer than 4s, or never fire at all. The old
+    // fallback made the video VISIBLE and stopped there, revealing a clip
+    // sitting in its default paused state that nothing had ever told to
+    // play. That is a frozen clip, not a playing one — the fallback path was
+    // producing the exact symptom it was meant to prevent.
+    const t = setTimeout(() => {
+      setReady(true);
+      videoRef.current?.play().catch(() => {});
+    }, 4000);
     return () => clearTimeout(t);
   }, []);
 

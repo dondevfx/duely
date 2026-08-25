@@ -374,6 +374,15 @@ export function AuthProvider({ children }) {
       mfaPending, mfaFactorId,
       showSaveLogin, setShowSaveLogin,
       signUp, signIn, signOut, refreshProfile, updateProfile, completeMfaLogin, verifyMfaStepUp,
+      // Exposed for SocketContext: the server can reject a stale access token
+      // (the socket authenticated with whatever it had, without knowing it had
+      // expired) well before this component's own scheduled refresh timer was
+      // due to fire — and that timer can itself run late, since a backgrounded
+      // tab throttles or fully suspends setTimeout. _doRefresh already guards
+      // against a duplicate concurrent refresh, so it is safe to call from
+      // both places without risking two refreshes racing on the same
+      // refresh_token.
+      forceReauth: _doRefresh,
     }}>
       {children}
     </AuthContext.Provider>
