@@ -423,11 +423,17 @@ module.exports = function adminRoutes(supabase, io) {
   // profile, their recent transactions, and their recent matches. Kept as
   // one route rather than three so the panel does not open blank and fill in
   // piece by piece.
+  // PROFILE_COLS splits the ban columns out for the same reason the socket
+  // handler does: one unknown column makes PostgREST reject the whole query,
+  // so before PENDING_SQL section 17 is run this route would 404 every
+  // player rather than just hiding the ban controls.
+  const PROFILE_BASE = 'id, username, elo, wins, losses, c_coins, diamonds, created_at, profile_color, kyc_status, email_confirmed_at';
+
   router.get('/users/:id', requireAuth, requireAdmin, async (req, res) => {
     const { id } = req.params;
     const [{ data: profile, error: pErr }, { data: transactions }, { data: matchesAsP1 }, { data: matchesAsP2 }] = await Promise.all([
       supabase.from('profiles')
-        .select('id, username, elo, wins, losses, c_coins, diamonds, created_at, profile_color, banned, ban_reason, banned_at, kyc_status, email_confirmed_at')
+        .select(`${PROFILE_BASE}, banned, ban_reason, banned_at`)
         .eq('id', id).single(),
       supabase.from('transactions')
         .select('id, type, amount_c, crypto_amount, crypto_symbol, status, tx_hash, notes, created_at')
@@ -440,14 +446,21 @@ module.exports = function adminRoutes(supabase, io) {
         .eq('player2_id', id).order('played_at', { ascending: false }).limit(20),
     ]);
 
-    if (pErr || !profile) return res.status(404).json({ error: 'Player not found' });
+    let resolvedProfile = profile;
+    if (pErr && /banned|ban_reason|banned_at/.test(pErr.message || '')) {
+      console.warn('[admin] profiles.banned is missing — run PENDING_SQL section 17. Showing the player without ban controls.');
+      ({ data: resolvedProfile } = await supabase.from('profiles').select(PROFILE_BASE).eq('id', id).single());
+    } else if (pErr) {
+      return res.status(404).json({ error: 'Player not found' });
+    }
+    if (!resolvedProfile) return res.status(404).json({ error: 'Player not found' });
 
     const matches = [
       ...(matchesAsP1 || []).map(m => ({ ...m, opponent: m.player2?.username ?? (m.player2_id ? 'Unknown' : 'Bot'), won: m.winner_id === id })),
       ...(matchesAsP2 || []).map(m => ({ ...m, opponent: m.player1?.username ?? (m.player1_id ? 'Unknown' : 'Bot'), won: m.winner_id === id })),
     ].sort((a, b) => new Date(b.played_at) - new Date(a.played_at)).slice(0, 20);
 
-    res.json({ profile, transactions: transactions || [], matches });
+    res.json({ profile: resolvedProfile, transactions: transactions || [], matches });
   });
 
   // ── Ban / unban ───────────────────────────────────────────────────────

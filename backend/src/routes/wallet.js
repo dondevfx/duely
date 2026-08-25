@@ -271,8 +271,18 @@ module.exports = function walletRoutes(supabase, io) {
     // route only needs a still-valid JWT, which can outlive the moment the
     // ban was applied. Withdrawal is the one place that gap cannot be left
     // open even briefly, so it gets its own direct check.
-    const { data: p } = await supabase.from('profiles').select('banned, ban_reason').eq('id', req.user.id).single();
-    if (p?.banned) {
+    //
+    // Degrades if PENDING_SQL section 17 has not been run yet — an unknown
+    // column makes PostgREST reject the whole query, and a withdrawal route
+    // that hard-fails on a missing migration is worse than one that cannot
+    // yet enforce a ban nobody can have been given. Logged loudly rather
+    // than passed over in silence, because this IS a money guard failing
+    // open and that should never be invisible.
+    const { data: p, error: banErr } = await supabase
+      .from('profiles').select('banned, ban_reason').eq('id', req.user.id).single();
+    if (banErr && /banned|ban_reason/.test(banErr.message || '')) {
+      console.warn('[withdraw] profiles.banned is missing — run PENDING_SQL section 17. Ban enforcement is NOT active on withdrawals.');
+    } else if (p?.banned) {
       return { status: 403, body: { error: p.ban_reason || 'This account has been banned.' } };
     }
 

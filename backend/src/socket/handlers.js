@@ -354,8 +354,24 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       try {
         const user = await verifyToken(token);
         if (!user) { socket.emit('error', { message: 'Authentication failed' }); return; }
-        const { data: profile } = await supabase
-          .from('profiles').select('id,username,elo,c_coins,profile_color,current_streak,banned,ban_reason').eq('id', user.id).single();
+
+        // banned/ban_reason are listed separately and the whole select falls
+        // back without them, because PostgREST rejects the ENTIRE query for
+        // one unknown column — so shipping this ahead of PENDING_SQL section
+        // 17 took the site down with "Profile not found" for every player,
+        // not just the ban feature. Same shape of failure the match-history
+        // route already guards against for ended_by_forfeit; it should have
+        // been applied here from the start.
+        const BASE_COLS = 'id,username,elo,c_coins,profile_color,current_streak';
+        let { data: profile, error: profErr } = await supabase
+          .from('profiles').select(`${BASE_COLS},banned,ban_reason`).eq('id', user.id).single();
+
+        if (profErr && /banned|ban_reason/.test(profErr.message || '')) {
+          console.warn('[socket] profiles.banned is missing — run PENDING_SQL section 17. Authenticating without ban enforcement.');
+          ({ data: profile } = await supabase
+            .from('profiles').select(BASE_COLS).eq('id', user.id).single());
+        }
+
         if (!profile) { socket.emit('error', { message: 'Profile not found' }); return; }
         // The real ban, added alongside the admin player panel. The only ban
         // that existed before this was chatBanned — in-memory, chat-only, and

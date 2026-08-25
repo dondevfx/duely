@@ -112,6 +112,6 @@ test('the player-detail route requires admin and returns one combined payload', 
   assert.notEqual(at, -1, 'the player-detail route is gone');
   assert.match(ADMIN.slice(at, at + 100), /requireAuth, requireAdmin/);
   const body = route(ADMIN, "router.get('/users/:id'");
-  assert.match(body, /res\.json\(\{ profile, transactions: transactions \|\| \[\], matches \}\)/,
+  assert.match(body, /res\.json\(\{ profile: resolvedProfile, transactions: transactions \|\| \[\], matches \}\)/,
     'the response must combine all three — profile, transactions, matches — in one payload');
 });
