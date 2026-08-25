@@ -131,6 +131,26 @@ test('a canplaythrough that never fires cannot hide a card forever', () => {
     'a fallback timer must force the clip visible even if canplaythrough never comes');
 });
 
+test('coming back from the background restarts a clip iOS paused', () => {
+  // canplaythrough only ever fires once, on mount. iOS Safari suspends a
+  // backgrounded tab's video decoder to save memory and can silently pause
+  // it, and nothing was watching for that afterwards — a card could sit
+  // frozen on its last frame indefinitely with no way back to motion. This
+  // is the same visibilitychange/pageshow pair SocketContext already uses
+  // for its own resume-from-background fix, applied here for the same
+  // reason: local state cannot tell you the tab was ever hidden, only
+  // watching for the transition back can.
+  const at = CARD.indexOf('Coming back from a long background spell');
+  assert.notEqual(at, -1, 'the background-resume effect is gone');
+  const block = strip(CARD.slice(at, at + 1000));
+  assert.match(block, /visibilitychange/);
+  assert.match(block, /pageshow/);
+  assert.match(block, /v\.paused && ready/,
+    'must only resume a clip that was actually ready and got paused out from under it');
+  assert.match(block, /removeEventListener\('visibilitychange'/,
+    'the listener must be cleaned up on unmount, not stack up across navigations');
+});
+
 test('every clip starts loading immediately, not on scroll-into-view', () => {
   // Used to be gated behind an IntersectionObserver — right for a long page,
   // wrong for Home and Games, which both show all seven cards in one compact

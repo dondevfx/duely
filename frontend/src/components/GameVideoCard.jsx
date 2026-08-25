@@ -82,6 +82,28 @@ export default function GameVideoCard({ slug, title, icon, route, liveCount = 0,
     return () => clearTimeout(t);
   }, []);
 
+  // Coming back from a long background spell — the reason clips sat frozen
+  // after switching back to the app. Nothing here was the bug on the way OUT:
+  // iOS Safari itself suspends a backgrounded tab's video decoder to save
+  // memory, and can silently pause it. play()/canplaythrough only ever fired
+  // once, on mount, so nothing was watching for that afterwards — a card
+  // could sit on its last frame indefinitely with no code path back to
+  // motion. This re-asserts playback once the page is visible again, same
+  // trigger set SocketContext uses for its own resume-from-background fix.
+  useEffect(() => {
+    const resume = () => {
+      if (document.visibilityState !== 'visible') return;
+      const v = videoRef.current;
+      if (v && v.paused && ready) v.play().catch(() => {});
+    };
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('pageshow', resume);
+    return () => {
+      document.removeEventListener('visibilitychange', resume);
+      window.removeEventListener('pageshow', resume);
+    };
+  }, [ready]);
+
   const clipSrc   = `/game-clips/${slug}.mp4`;
   const posterSrc = `/game-clips/${slug}.jpg`;
   const showVideo = !reducedMotion && !videoFailed;

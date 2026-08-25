@@ -97,7 +97,7 @@ test('returning to the tab probes with a deadline and reconnects on silence', ()
   const src = fe('context', 'SocketContext.jsx');
   assert.match(src, /visibilitychange/);
   assert.match(src, /pageshow/);
-  assert.match(src, /timeout\(2000\)\.emit\('ping_check'/,
+  assert.match(src, /timeout\(1200\)\.emit\('ping_check'/,
     'the probe must have a deadline — a frozen socket never answers at all');
   const cb = src.slice(src.indexOf("emit('ping_check'"));
   assert.match(cb.slice(0, 600), /s\.disconnect\(\);\s*s\.connect\(\)/,
@@ -106,7 +106,7 @@ test('returning to the tab probes with a deadline and reconnects on silence', ()
 
 test('a socket already known to be down reconnects immediately', () => {
   const src = fe('context', 'SocketContext.jsx');
-  assert.match(src, /if \(!s\.connected\) \{ s\.connect\(\); return; \}/,
+  assert.match(src, /if \(!s\.connected\) \{ .*s\.connect\(\); return; \}/,
     'skip the remaining backoff when we already know it is disconnected');
 });
 

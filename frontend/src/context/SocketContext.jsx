@@ -51,19 +51,33 @@ export function SocketProvider({ children }) {
       autoConnect: true,
       transports: ['websocket', 'polling'],
       timeout: 8000,
-      reconnectionDelay: 500,
+      // 250ms, not 500: the common case this delay actually governs is the
+      // very first retry right after coming back from the background, where
+      // shaving 250ms off a repeated report of "10-15 seconds" is worth
+      // having.
+      reconnectionDelay: 250,
       reconnectionDelayMax: 3000,
     });
     socketRef.current = socket;
     setSocket(socket);   // publish it to consumers on this commit, not on connect
 
+    // Timestamped, so a slow resume can be read off the console afterwards
+    // instead of guessed at again — which of these gaps is actually large is
+    // exactly what was missing last time this got reported.
+    let resumeStartedAt = null;
+
     socket.on('connect', () => {
       setConnected(true);
+      if (resumeStartedAt) console.log(`[socket] connect: ${Date.now() - resumeStartedAt}ms since resume`);
       doAuth(socket);
     });
 
     socket.on('authenticated', () => {
       setAuthenticated(true);
+      if (resumeStartedAt) {
+        console.log(`[socket] authenticated: ${Date.now() - resumeStartedAt}ms since resume`);
+        resumeStartedAt = null;
+      }
     });
 
     socket.on('disconnect', () => {
@@ -133,21 +147,27 @@ export function SocketProvider({ children }) {
       if (document.visibilityState !== 'visible') return;
       const s = socketRef.current;
       if (!s) return;
+      resumeStartedAt = Date.now();
 
       // Genuinely disconnected: reconnect now rather than sitting out the
       // remainder of the backoff, which can be seconds on a later attempt.
-      if (!s.connected) { s.connect(); return; }
+      if (!s.connected) { console.log('[socket] resume: was disconnected, reconnecting'); s.connect(); return; }
 
       if (probing) return;
       probing = true;
-      // Ask, with a deadline. A live socket answers in well under 2s; a frozen
-      // one never answers at all, and the ack timeout is what tells them apart.
-      s.timeout(2000).emit('ping_check', (err) => {
+      // Ask, with a deadline. A LOCAL websocket ack normally comes back in well
+      // under 300ms even on a mediocre mobile connection, so 1200ms is still a
+      // comfortable margin for "alive but slow" while cutting the worst case
+      // for "actually dead" by almost a second versus the previous 2000ms.
+      const probeStartedAt = Date.now();
+      s.timeout(1200).emit('ping_check', (err) => {
         probing = false;
+        console.log(`[socket] resume probe: ${Date.now() - probeStartedAt}ms, ${err ? 'no answer — dead' : 'alive'}`);
         if (!err) {
           // Alive. The session can still have lapsed while backgrounded, so
           // re-assert it — doAuth is a no-op without a token.
           doAuth(s);
+          resumeStartedAt = null; // nothing more to time — no reconnect needed
           return;
         }
         // No answer: the connection is dead but does not know it. Tear it down
