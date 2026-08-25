@@ -1477,18 +1477,33 @@ export default function Profile() {
           )}
           {resendMsg && <p className="text-success text-xs mb-3">{resendMsg}</p>}
 
-          {/* Stats grid */}
+          {/* Stats grid
+              Six cards, all the same size. The rank card used to be
+              col-span-2 on mobile — a full-width banner of its own above a
+              2-wide grid of five, which left it visibly larger than
+              everything else and the last row half empty. As a normal cell
+              it is one of six, so mobile lands on exactly 3 rows of 2 with
+              every card matching, and desktop keeps its 3-across layout. */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <div className="bg-bg rounded-xl p-3 text-center col-span-2 sm:col-span-1"
+            {/* Win Rate leads; the rank card sits second, where it reads as
+                one stat among six rather than a header above them. */}
+            <div className="bg-bg rounded-xl p-3 text-center overflow-hidden">
+              <div className="text-xl font-black text-success truncate">{winRate}%</div>
+              <div className="text-xs text-muted mt-0.5">Win Rate</div>
+            </div>
+
+            <div className="bg-bg rounded-xl p-3 text-center overflow-hidden"
               style={{ boxShadow: `inset 0 0 20px ${getRank(profile.elo).glow}` }}>
-              <div className="text-2xl font-black" style={{ color: getRank(profile.elo).color }}>
+              {/* Smaller than the other cards' text on purpose: this is the
+                  only value that is a WORD, and "Champion" at text-xl does
+                  not fit a half-width cell. truncate is the backstop. */}
+              <div className="text-base sm:text-xl font-black truncate" style={{ color: getRank(profile.elo).color }}>
                 {getRank(profile.elo).icon} {getRank(profile.elo).name}
               </div>
               <div className="text-xs text-muted mt-0.5">{profile.elo} ELO</div>
             </div>
 
             {[
-              { label: 'Win Rate', value: `${winRate}%`, color: 'text-success' },
               { label: 'Leaderboard', value: extraStats.rank ? `#${extraStats.rank}` : '-', color: 'text-accent' },
               { label: 'Wins', value: profile.wins, color: 'text-success' },
               { label: 'Losses', value: profile.losses, color: 'text-danger' },

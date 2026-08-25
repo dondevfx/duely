@@ -76,9 +76,11 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Daily spin — desktop only here; on mobile it's shown after the Blackjack
-                game card further down the page instead (see Game cards section) */}
-            <div className="hidden md:block w-full max-w-sm md:w-80 lg:w-96 shrink-0">
+            {/* Daily spin — desktop only here; below lg it is shown further
+                down the page instead (see Game cards section). Gated on lg,
+                not md, to match the copy below: at md they would both render
+                and the page would show two spin wheels. */}
+            <div className="hidden xl:block w-full max-w-sm xl:w-96 shrink-0">
               <DailySpinWidget profile={profile} />
             </div>
           </div>
@@ -122,15 +124,39 @@ export default function Home() {
 
       {/* Game cards + daily bonus */}
       <section className="max-w-7xl mx-auto px-4 pb-16 md:pb-24">
-        <div className="flex flex-col md:flex-row gap-8">
-          <div className="flex-1">
+        {/* The right-hand column moves beside the grid at xl, not md.
+            At md it stacked alongside on an iPad portrait, where this page
+            ALREADY loses 240px to the left nav — 834px viewport, 590px of
+            page, minus a 256px side column and its gap, left the seven game
+            cards sharing 270px. They rendered 79px wide. Below xl the column
+            now sits underneath, giving the grid the full 558px. */}
+        <div className="flex flex-col xl:flex-row gap-8">
+          <div className="flex-1 min-w-0">
             <h2 className="text-xl md:text-2xl font-bold text-white mb-4 md:mb-6">Choose a Game</h2>
-            {/* sm: 3 across — mobile stays 2, which already sizes well. The
-                jump happens at sm rather than md: below md there is no
-                sidebar yet, so the grid has the full column width to itself
-                and 3-up has room; at md+ the sidebar (256–288px) starts
-                eating into this column, so 3-up needs the smaller gap. */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4">
+            {/* Column counts are chosen from the width this grid ACTUALLY
+                gets — after the 240px left nav, and after the side column
+                from xl — not from the raw viewport:
+
+                NOTE: md is 720px in this project, not Tailwind's default
+                768 (see tailwind.config.js) — so every iPad, portrait
+                included, is already past it and always has the 240px left
+                nav. Measured card widths:
+
+                  phone     390px      2 cols -> 173px
+                  sm        640-719    3 cols  (no left nav yet)
+                  md/iPad   720-1279   2 cols -> 226-271px
+                  xl        1280-1535  3 cols
+                  2xl       1536+      4 cols  (side column returns at xl)
+
+                The whole iPad range — portrait AND landscape — stays at 2.
+                At 1194 landscape, 3 cols measured 189px, smaller than a
+                phone's 173px in a far bigger window, because the 240px nav
+                is the real constraint, not max-w-7xl.
+
+                md drops back to 2 deliberately: that is where the left nav
+                appears and takes 240px, so three cards there would be
+                smaller than they are on a phone. */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 md:gap-4">
               {GAMES.map(game => (
                 <GameVideoCard
                   key={game.slug}
@@ -143,17 +169,17 @@ export default function Home() {
             {/* Invite — mobile only, above the daily spin. The desktop copy lives
                 in the sidebar below How It Works; the two are complementary so
                 exactly one renders at any width. */}
-            <div className="md:hidden mt-5 max-w-sm mx-auto sm:mx-0 sm:max-w-none">
+            <div className="xl:hidden mt-5 max-w-sm mx-auto sm:mx-0 sm:max-w-none">
               <ReferralCard variant="compact" />
             </div>
 
             {/* Daily spin — mobile/tablet only; desktop shows it in the hero instead */}
-            <div className="md:hidden mt-5 max-w-sm mx-auto sm:mx-0 sm:max-w-none">
+            <div className="xl:hidden mt-5 max-w-sm mx-auto sm:mx-0 sm:max-w-none">
               <DailySpinWidget profile={profile} />
             </div>
           </div>
 
-          <div className="md:w-64 lg:w-72 flex flex-col gap-5 lg:pt-[3.5rem]">
+          <div className="xl:w-72 flex flex-col gap-5 xl:pt-[3.5rem]">
             {profile ? (
               <DailyBonus />
             ) : (
@@ -195,7 +221,7 @@ export default function Home() {
 
             {/* Fills the empty space below How It Works. Desktop only — on
                 mobile the copy above the daily spin is shown instead. */}
-            <div className="hidden md:block">
+            <div className="hidden xl:block">
               <ReferralCard variant="compact" />
             </div>
           </div>

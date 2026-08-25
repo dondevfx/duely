@@ -18,10 +18,22 @@ export default function Games() {
           <p className="text-muted">Pick a game, set your bet, and play.</p>
         </div>
 
-        {/* Same 2/3 columns as before — just a touch more breathing room
-            between cards, which is what actually shrinks each square a
-            little without changing how many fit per row. */}
-        <div className="grid grid-cols-2 gap-4 sm:gap-5 lg:grid-cols-3">
+        {/* 2 up to lg, 3 from lg, 4 from xl.
+            Sized against the width this grid ACTUALLY gets, not the
+            viewport: the left nav takes 240px from md — and md is 720px in
+            this project, not Tailwind's 768 (see tailwind.config.js), so it
+            applies to every iPad including portrait. An 834px iPad portrait
+            leaves only ~562px here. Measured card sizes:
+
+              iPad portrait  810-834    2 cols -> 259-271px  (3 would be ~170)
+              iPad landscape 1080-1194   2 cols               (3 measured 186px)
+              xl 1280-1535              3 cols
+              2xl 1536+                 4 cols
+
+            The whole iPad range stays at 2 — the 240px left nav, not
+            max-w-5xl, is what limits this grid, so 3 columns anywhere in
+            that range produces cards smaller than a phone's. */}
+        <div className="grid grid-cols-2 gap-4 sm:gap-5 xl:grid-cols-3 2xl:grid-cols-4">
           {GAMES.map(game => (
             <GameVideoCard
               key={game.slug}
