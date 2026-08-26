@@ -1408,7 +1408,7 @@ export default function Profile() {
             <div className="relative">
               <button
                 onClick={() => { setAvatarMenu(v => !v); setShowColors(false); setAvatarErr(''); }}
-                title="Change picture or colour"
+                title="Change picture or color"
                 className="w-20 h-20 rounded-full overflow-hidden flex items-center justify-center text-3xl font-black transition-transform hover:scale-105 active:scale-95"
                 style={{
                   backgroundColor: `${profile.profile_color || '#1250B4'}22`,
@@ -1451,7 +1451,7 @@ export default function Profile() {
                       onClick={() => { setShowColors(true); }}
                       className="w-full text-left px-3 py-2.5 rounded-xl text-sm font-semibold text-white hover:bg-surfaceLight transition-all"
                     >
-                      🎨 Change colour
+                      🎨 Change color
                     </button>
                     <button
                       onClick={() => fileInputRef.current?.click()}

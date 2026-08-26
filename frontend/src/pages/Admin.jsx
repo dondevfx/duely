@@ -1416,14 +1416,73 @@ export default function Admin() {
                     </div>
                   </div>
 
+                  {/* Deposits and withdrawals, side by side.
+                      Split out of the combined list below because these are
+                      the two that matter when you are looking at a player for
+                      a reason — real money in, real money out — and scanning
+                      for them among match wins and daily bonuses is exactly
+                      the work this panel should be doing for you.
+
+                      Both totals count CONFIRMED rows only. A failed or
+                      pending withdrawal has not left the platform, and
+                      including it would overstate what this player has
+                      actually taken out. */}
+                  {(() => {
+                    const deposits = playerDetail.transactions.filter(t => t.type === 'deposit');
+                    const withdrawals = playerDetail.transactions.filter(t => t.type === 'withdrawal');
+                    const sum = (rows) => rows
+                      .filter(t => t.status === 'confirmed')
+                      .reduce((a, t) => a + Math.abs(Number(t.amount_c) || 0), 0);
+
+                    const Column = ({ title, rows, total, tone }) => (
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline justify-between mb-1.5 gap-2">
+                          <h3 className="text-white font-bold text-sm">{title}</h3>
+                          <span className={`text-xs font-black ${tone}`}>
+                            {fmt(total)}
+                          </span>
+                        </div>
+                        <div className="max-h-40 overflow-y-auto border border-border rounded-xl divide-y divide-border">
+                          {rows.length === 0 ? (
+                            <p className="text-xs text-muted text-center py-3">None</p>
+                          ) : rows.map(t => (
+                            <div key={t.id} className="px-2.5 py-1.5 text-xs">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className={`font-bold shrink-0 ${tone}`}>{fmt(t.amount_c)}</span>
+                                <span className="text-muted shrink-0">{t.crypto_symbol || ''}</span>
+                                <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-full border ${
+                                  t.status === 'confirmed' ? 'text-success border-success/40'
+                                    : t.status === 'pending' || t.status === 'converting' || t.status === 'sending'
+                                      ? 'text-warning border-warning/40'
+                                      : 'text-danger border-danger/40'
+                                }`}>
+                                  {t.status}
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-muted mt-0.5">{fmtDate(t.created_at)}</div>
+                              {t.notes && <div className="text-[10px] text-danger/80 break-all mt-0.5">{t.notes}</div>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+
+                    return (
+                      <div className="flex flex-col sm:flex-row gap-4 mb-4">
+                        <Column title="Deposits"    rows={deposits}    total={sum(deposits)}    tone="text-success" />
+                        <Column title="Withdrawals" rows={withdrawals} total={sum(withdrawals)} tone="text-danger" />
+                      </div>
+                    );
+                  })()}
+
                   {/* Recent transactions */}
                   <div>
-                    <h3 className="text-white font-bold text-sm mb-2">Recent transactions</h3>
+                    <h3 className="text-white font-bold text-sm mb-2">Everything else</h3>
                     <div className="max-h-52 overflow-y-auto border border-border rounded-xl divide-y divide-border">
-                      {playerDetail.transactions.length === 0 && (
-                        <p className="text-xs text-muted text-center py-4">No transactions yet</p>
+                      {playerDetail.transactions.filter(t => t.type !== 'deposit' && t.type !== 'withdrawal').length === 0 && (
+                        <p className="text-xs text-muted text-center py-4">Nothing else</p>
                       )}
-                      {playerDetail.transactions.map(t => (
+                      {playerDetail.transactions.filter(t => t.type !== 'deposit' && t.type !== 'withdrawal').map(t => (
                         <div key={t.id} className="px-3 py-2 flex items-center justify-between text-xs gap-2">
                           <span className="text-white capitalize shrink-0">{t.type.replace(/_/g, ' ')}</span>
                           <span className="text-muted truncate">{t.notes}</span>
