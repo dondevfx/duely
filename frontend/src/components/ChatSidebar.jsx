@@ -347,7 +347,9 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
                       border: `3px solid ${data.profile_color || '#1250B4'}`,
                       color: data.profile_color || '#1250B4',
                     }}>
-                    {isBot ? '🤖' : data.username?.[0]?.toUpperCase()}
+                    {isBot ? '🤖' : (data.avatar_url
+                      ? <img src={data.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                      : data.username?.[0]?.toUpperCase())}
                   </div>
                   {(data.current_streak ?? 0) >= 1 && (
                     <span
@@ -756,7 +758,9 @@ export default function ChatSidebar({ open, onToggle }) {
                     <div
                       className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black"
                       style={{ backgroundColor: `${msgColor}33`, border: `1.5px solid ${msgColor}`, color: msgColor }}>
-                      {msg.isBot ? '🤖' : msg.username?.[0]?.toUpperCase()}
+                      {msg.isBot ? '🤖' : (msg.avatarUrl
+                        ? <img src={msg.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
+                        : msg.username?.[0]?.toUpperCase())}
                     </div>
                     {(msg.currentStreak ?? 0) >= 1 && (
                       <span
@@ -883,7 +887,9 @@ export default function ChatSidebar({ open, onToggle }) {
                     >
                       <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black"
                         style={{ backgroundColor: `${msgColor}33`, border: `1.5px solid ${msgColor}`, color: msgColor }}>
-                        {msg.isBot ? '🤖' : msg.username?.[0]?.toUpperCase()}
+                        {msg.isBot ? '🤖' : (msg.avatarUrl
+                          ? <img src={msg.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
+                          : msg.username?.[0]?.toUpperCase())}
                       </div>
                       {(msg.currentStreak ?? 0) >= 1 && (
                         <span className="absolute -top-1 -left-1 flex items-center justify-center min-w-[14px] h-[14px] rounded-full font-black leading-none px-0.5"

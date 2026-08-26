@@ -7,19 +7,40 @@ const stripDemos = (arr) => (arr || []).filter(p => !DEMO_IDS.includes(p.id));
 // Remove demo IDs from a plain ID→value map
 const stripDemoKeys = (map) => { for (const id of DEMO_IDS) delete map[id]; return map; };
 
+// avatar_url arrives with PENDING_SQL section 18, and PostgREST rejects an
+// entire query for one unknown column. A leaderboard that 500s because
+// pictures are not migrated yet is worse than one without pictures, so every
+// select here retries once without it.
+//
+// Written as a helper rather than repeated per route: this is the fourth
+// place in the codebase to need this pattern, and the times it was written
+// out by hand are the times it got forgotten (the socket handler, and the
+// admin panel's phantom email_confirmed_at).
+async function selectWithOptional(build, cols, optional) {
+  let r = await build(`${cols}, ${optional}`);
+  if (r.error && new RegExp(optional.split(',')[0].trim()).test(r.error.message || '')) {
+    console.warn(`[leaderboard] ${optional} missing — run PENDING_SQL section 18.`);
+    r = await build(cols);
+  }
+  return r;
+}
+
 module.exports = function leaderboardRoutes(supabase) {
   const router = Router();
 
   // Streak leaderboard — top 100 by current_streak
   router.get('/streak', async (req, res) => {
     const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, username, elo, current_streak, best_streak, profile_color, wins, losses')
-      .order('current_streak', { ascending: false })
-      .limit(100)
-      .neq('id', adminId)
-      .neq('is_private', true);
+    const { data, error } = await selectWithOptional(
+      (cols) => supabase
+        .from('profiles')
+        .select(cols)
+        .order('current_streak', { ascending: false })
+        .limit(100)
+        .neq('id', adminId)
+        .neq('is_private', true),
+      'id, username, elo, current_streak, best_streak, profile_color, wins, losses',
+      'avatar_url');
     if (error) return res.status(500).json({ error: error.message });
     const players = stripDemos(data).map((p, i) => ({ rank: i + 1, ...p }));
     let userRank = null;
@@ -34,14 +55,16 @@ module.exports = function leaderboardRoutes(supabase) {
   // ELO leaderboard — top 500 + optional user rank
   router.get('/', async (req, res) => {
     const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
-    let query = supabase
-      .from('profiles')
-      .select('id, username, elo, wins, losses, streak, current_streak, best_streak, profile_color')
-      .order('elo', { ascending: false })
-      .limit(500)
-      .neq('id', adminId)
-      .neq('is_private', true);
-    const { data, error } = await query;
+    const { data, error } = await selectWithOptional(
+      (cols) => supabase
+        .from('profiles')
+        .select(cols)
+        .order('elo', { ascending: false })
+        .limit(500)
+        .neq('id', adminId)
+        .neq('is_private', true),
+      'id, username, elo, wins, losses, streak, current_streak, best_streak, profile_color',
+      'avatar_url');
     if (error) return res.status(500).json({ error: error.message });
 
     const players = stripDemos(data).map((p, i) => ({ rank: i + 1, ...p }));
@@ -68,13 +91,16 @@ module.exports = function leaderboardRoutes(supabase) {
   // Diamond balance leaderboard — top 500 by current diamond balance
   router.get('/diamonds', async (req, res) => {
     const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, username, diamonds, wins, losses')
-      .order('diamonds', { ascending: false })
-      .limit(500)
-      .neq('id', adminId)
-      .neq('is_private', true);
+    const { data, error } = await selectWithOptional(
+      (cols) => supabase
+        .from('profiles')
+        .select(cols)
+        .order('diamonds', { ascending: false })
+        .limit(500)
+        .neq('id', adminId)
+        .neq('is_private', true),
+      'id, username, diamonds, wins, losses, profile_color',
+      'avatar_url');
     if (error) return res.status(500).json({ error: error.message });
 
     const players = stripDemos(data).map((p, i) => ({ rank: i + 1, ...p }));

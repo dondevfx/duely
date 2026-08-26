@@ -115,7 +115,7 @@ module.exports = function authRoutes(supabase) {
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, username, elo, wins, losses, created_at, profile_color')
+      .select('id, username, elo, wins, losses, created_at, profile_color, avatar_url')
       .eq('id', userId)
       .single();
 

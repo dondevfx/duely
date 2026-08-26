@@ -1090,7 +1090,9 @@ export default function Admin() {
                                     border: `1.5px solid ${tx.profiles?.profile_color || '#1250B4'}`,
                                     color: tx.profiles?.profile_color || '#1250B4',
                                   }}>
-                                  {tx.profiles?.username?.[0]?.toUpperCase() ?? '?'}
+                                  {tx.profiles?.avatar_url
+                                    ? <img src={tx.profiles.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                                    : (tx.profiles?.username?.[0]?.toUpperCase() ?? '?')}
                                 </div>
                                 <span className="text-white font-medium">{tx.profiles?.username ?? 'Unknown'}</span>
                               </div>
@@ -1161,7 +1163,9 @@ export default function Admin() {
                                   border: `1.5px solid ${u.profile_color || '#1250B4'}`,
                                   color: u.profile_color || '#1250B4',
                                 }}>
-                                {u.username?.[0]?.toUpperCase()}
+                                {u.avatar_url
+                                  ? <img src={u.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                                  : u.username?.[0]?.toUpperCase()}
                               </div>
                               <span className="text-white font-medium">{u.username}</span>
                               {u.banned && (

@@ -27,22 +27,31 @@ const ADMIN    = strip(read('src', 'routes', 'admin.js'));
 // run yet. Any select touching one of these needs a fallback.
 const PENDING_COLS = ['banned', 'ban_reason', 'banned_at'];
 
-test('socket authentication survives profiles.banned not existing yet', () => {
+test('socket authentication survives a pending migration', () => {
+  // Generalised from a single banned/ban_reason fallback to a list of
+  // optional column GROUPS, peeled off newest-first. Adding avatar_url as a
+  // second pending group to the old two-query shape would have meant a third
+  // hand-written retry — and the times this pattern was written by hand are
+  // the times it got forgotten.
   const at = HANDLERS.indexOf("socket.on('authenticate'");
   const body = HANDLERS.slice(at, HANDLERS.indexOf("socket.on('", at + 20));
 
-  assert.match(body, /BASE_COLS/,
-    'the base columns must be separable from the pending ones, or there is nothing to fall back to');
-  assert.match(body, /profErr && \/banned\|ban_reason\/\.test/,
-    'must detect the missing-column error specifically, not swallow every error');
-  assert.match(body, /\.select\(BASE_COLS\)/,
-    'the fallback must actually re-query without the pending columns');
+  assert.match(body, /CORE_COLS/,
+    'the columns this handler cannot work without must be separable from the optional ones');
+  assert.match(body, /OPTIONAL/,
+    'optional column groups must be declared, not hardcoded into one retry');
+  assert.match(body, /banned,ban_reason/, 'the ban columns must be an optional group');
+  assert.match(body, /avatar_url/,        'avatar_url must be an optional group');
 
-  // The retry has to come BEFORE the "Profile not found" bail, or the
+  // Peels one group at a time rather than giving up after a single retry.
+  assert.match(body, /for \(let drop = 0; drop <= OPTIONAL\.length; drop\+\+\)/,
+    'the fallback must handle EVERY pending group, not just the newest one');
+
+  // The retries have to finish BEFORE the "Profile not found" bail, or the
   // fallback is unreachable and the bug is unchanged.
-  const fallbackAt = body.indexOf('.select(BASE_COLS)');
+  const loopAt     = body.indexOf('for (let drop = 0');
   const notFoundAt = body.indexOf("'Profile not found'");
-  assert.ok(fallbackAt !== -1 && fallbackAt < notFoundAt,
+  assert.ok(loopAt !== -1 && loopAt < notFoundAt,
     'the fallback must run before the not-found bail, or players still get locked out');
 });
 

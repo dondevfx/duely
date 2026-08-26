@@ -362,14 +362,27 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         // not just the ban feature. Same shape of failure the match-history
         // route already guards against for ended_by_forfeit; it should have
         // been applied here from the start.
-        const BASE_COLS = 'id,username,elo,c_coins,profile_color,current_streak';
-        let { data: profile, error: profErr } = await supabase
-          .from('profiles').select(`${BASE_COLS},banned,ban_reason`).eq('id', user.id).single();
+        // CORE_COLS are the columns this handler cannot work without.
+        // Everything added later is layered on top and dropped if the
+        // migration behind it has not run, because PostgREST rejects the
+        // whole query for one unknown column — which is how a previous
+        // change here turned into "Profile not found" for every player.
+        const CORE_COLS = 'id,username,elo,c_coins,profile_color,current_streak';
+        const OPTIONAL = [
+          { cols: 'banned,ban_reason', why: 'PENDING_SQL section 17 (ban enforcement)' },
+          { cols: 'avatar_url',        why: 'PENDING_SQL section 18 (profile pictures)' },
+        ];
 
-        if (profErr && /banned|ban_reason/.test(profErr.message || '')) {
-          console.warn('[socket] profiles.banned is missing — run PENDING_SQL section 17. Authenticating without ban enforcement.');
-          ({ data: profile } = await supabase
-            .from('profiles').select(BASE_COLS).eq('id', user.id).single());
+        // Try everything, then peel optional groups off until it works.
+        let profile = null;
+        for (let drop = 0; drop <= OPTIONAL.length; drop++) {
+          const extra = OPTIONAL.slice(0, OPTIONAL.length - drop).map(o => o.cols).join(',');
+          const cols = extra ? `${CORE_COLS},${extra}` : CORE_COLS;
+          const { data, error } = await supabase
+            .from('profiles').select(cols).eq('id', user.id).single();
+          if (!error) { profile = data; break; }
+          const dropped = OPTIONAL[OPTIONAL.length - drop - 1];
+          if (dropped) console.warn(`[socket] missing columns — run ${dropped.why}. Continuing without them.`);
         }
 
         if (!profile) { socket.emit('error', { message: 'Profile not found' }); return; }
@@ -457,6 +470,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         userId:   authenticatedUser.userId,
         username: authenticatedUser.username,
         color:    authenticatedUser.profile_color || '#1E90FF',
+        avatarUrl: authenticatedUser.avatar_url || null,
         message:  trimmed,
         mentions,
         timestamp: Date.now(),

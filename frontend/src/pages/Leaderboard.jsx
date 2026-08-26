@@ -244,7 +244,9 @@ export default function Leaderboard() {
                           </span>
                           <span className={`${gameMeta?.showTime ? 'col-span-4' : 'col-span-6'} flex items-center gap-1.5 sm:gap-2 min-w-0`}>
                             <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                              {player.username?.[0]?.toUpperCase()}
+                              {player.avatar_url
+                                ? <img src={player.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                                : player.username?.[0]?.toUpperCase()}
                             </div>
                             <span className={`font-semibold truncate text-sm sm:text-base ${isMe ? 'text-primary' : 'text-white'}`}>
                               {player.username}
@@ -325,7 +327,9 @@ export default function Leaderboard() {
 
                       <span className="col-span-5 flex items-center gap-1.5 sm:gap-2 min-w-0">
                         <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                          {player.username?.[0]?.toUpperCase()}
+                          {player.avatar_url
+                            ? <img src={player.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                            : player.username?.[0]?.toUpperCase()}
                         </div>
                         <span className={`font-semibold truncate text-sm sm:text-base ${isMe ? 'text-primary' : 'text-white'}`}>
                           {player.username}

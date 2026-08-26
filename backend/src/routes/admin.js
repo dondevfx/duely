@@ -205,7 +205,7 @@ module.exports = function adminRoutes(supabase, io) {
 
     let q = supabase
       .from('transactions')
-      .select('*, profiles(username, profile_color)')
+      .select('*, profiles(username, profile_color, avatar_url)')
       .order('created_at', { ascending: false });
 
     if (req.query.needsAttention === '1') {
@@ -375,7 +375,7 @@ module.exports = function adminRoutes(supabase, io) {
     const status = req.query.status || 'open';
     let q = supabase
       .from('support_tickets')
-      .select('*, profiles(username, profile_color)')
+      .select('*, profiles(username, profile_color, avatar_url)')
       .order('updated_at', { ascending: false })
       .limit(100);
     if (status !== 'all') q = q.eq('status', status);
@@ -456,7 +456,13 @@ module.exports = function adminRoutes(supabase, io) {
       return q;
     };
 
-    let { data, error } = await run(`${BASE}, banned`);
+    // Optional columns peeled off in groups, newest migration first — one
+    // unknown column rejects the whole query.
+    let { data, error } = await run(`${BASE}, banned, avatar_url, avatar_banned`);
+    if (error && /avatar_url|avatar_banned/.test(error.message || '')) {
+      console.warn('[admin/users] avatar columns missing — run PENDING_SQL section 18.');
+      ({ data, error } = await run(`${BASE}, banned`));
+    }
     if (error && /banned/.test(error.message || '')) {
       console.warn('[admin/users] profiles.banned is missing — run PENDING_SQL section 17. Serving without ban state.');
       ({ data, error } = await run(BASE));
@@ -482,6 +488,10 @@ module.exports = function adminRoutes(supabase, io) {
   // panel 404'd on every click. Fetched separately from the auth admin API
   // instead, where it actually exists.
   const PROFILE_BASE = 'id, username, elo, wins, losses, c_coins, diamonds, created_at, profile_color, kyc_status';
+  // Kept OUT of PROFILE_BASE on purpose: that is the fallback list, the one
+  // used when a newer migration has not run. Putting migration-dependent
+  // columns in it would break the very query meant to survive without them.
+  const PROFILE_AVATAR = 'avatar_url, avatar_banned';
 
   router.get('/users/:id', requireAuth, requireAdmin, async (req, res) => {
     const { id } = req.params;
@@ -489,9 +499,15 @@ module.exports = function adminRoutes(supabase, io) {
     // needs it: without the fallback the panel 500s for every player, not
     // merely hides the ban controls.
     const loadProfile = async () => {
+      // Newest migration peeled off first.
       let r = await supabase.from('profiles')
-        .select(`${PROFILE_BASE}, banned, ban_reason, banned_at`)
+        .select(`${PROFILE_BASE}, banned, ban_reason, banned_at, ${PROFILE_AVATAR}`)
         .eq('id', id).single();
+      if (r.error && /avatar_url|avatar_banned/.test(r.error.message || '')) {
+        console.warn('[admin/users/:id] avatar columns missing — run PENDING_SQL section 18.');
+        r = await supabase.from('profiles')
+          .select(`${PROFILE_BASE}, banned, ban_reason, banned_at`).eq('id', id).single();
+      }
       if (r.error && /banned/.test(r.error.message || '')) {
         console.warn('[admin/users/:id] ban columns missing — run PENDING_SQL section 17.');
         r = await supabase.from('profiles').select(PROFILE_BASE).eq('id', id).single();

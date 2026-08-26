@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { getDisplayRank, isRanked } from '../utils/ranks';
+import Avatar from './Avatar';
 
 const GAMES = [
   { icon: '⚡', label: 'Quick Match',  route: '/game/quick-match', live: true },
@@ -103,14 +104,12 @@ export default function LeftSidebar() {
           <div className="mx-3 border-t border-border" />
           <div className="p-3 mt-auto">
             <div className="flex items-center gap-3 px-2 py-2">
-              <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
-                style={{
-                  backgroundColor: `${profile.profile_color || '#1250B4'}22`,
-                  border: `1.5px solid ${profile.profile_color || '#1250B4'}`,
-                  color: profile.profile_color || '#1250B4',
-                }}>
-                {profile.username?.[0]?.toUpperCase()}
-              </div>
+              <Avatar
+                username={profile.username}
+                avatarUrl={profile.avatar_url}
+                color={profile.profile_color}
+                className="w-9 h-9"
+              />
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
                   <div className="text-sm font-semibold text-white truncate">{profile.username}</div>

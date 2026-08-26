@@ -7,6 +7,7 @@ import { getRank, getDisplayRank, isRanked } from '../utils/ranks';
 import { api } from '../utils/api';
 import CoinIcon from './CoinIcon';
 import { fmtCoins, fmtDiamonds } from '../utils/format';
+import Avatar from './Avatar';
 
 const NAV_LINKS = [
   { icon: '🏠', label: 'Home',        to: '/' },
@@ -421,14 +422,13 @@ export default function Navbar() {
                 )}
                 <Link to="/profile" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 group">
                   <div className="relative">
-                    <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full flex items-center justify-center text-xs lg:text-sm font-bold transition-all"
-                      style={{
-                        backgroundColor: `${profile.profile_color || '#1250B4'}22`,
-                        border: `1.5px solid ${profile.profile_color || '#1250B4'}`,
-                        color: profile.profile_color || '#1250B4',
-                      }}>
-                      {profile.username?.[0]?.toUpperCase() ?? '?'}
-                    </div>
+                    <Avatar
+                      username={profile.username}
+                      avatarUrl={profile.avatar_url}
+                      color={profile.profile_color}
+                      className="w-8 h-8 lg:w-10 lg:h-10"
+                      textClassName="text-xs lg:text-sm"
+                    />
                     <span className="absolute -bottom-1 -right-1 text-sm leading-none" title={getDisplayRank(profile).name}>
                       {getDisplayRank(profile).icon}
                     </span>
@@ -527,14 +527,12 @@ export default function Navbar() {
                 <div>
                   <p className="text-xs text-muted uppercase tracking-widest font-semibold px-2 mb-2">Account</p>
                   <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-surfaceLight mb-2">
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold"
-                      style={{
-                        backgroundColor: `${profile.profile_color || '#1250B4'}22`,
-                        border: `1.5px solid ${profile.profile_color || '#1250B4'}`,
-                        color: profile.profile_color || '#1250B4',
-                      }}>
-                      {profile.username?.[0]?.toUpperCase()}
-                    </div>
+                    <Avatar
+                      username={profile.username}
+                      avatarUrl={profile.avatar_url}
+                      color={profile.profile_color}
+                      className="w-9 h-9"
+                    />
                     <div>
                       <div className="text-sm font-semibold text-white">{profile.username}</div>
                       <div className="text-xs text-muted">{isRanked(profile) ? `ELO ${profile.elo}` : 'Unranked'} · {balanceDisplay}</div>
