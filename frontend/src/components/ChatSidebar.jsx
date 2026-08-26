@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
+import { fmtCoins, fmtDiamonds, fmtExact } from '../utils/format';
 
 const MAX_MESSAGES = 100;
 const ADMIN_ID  = import.meta.env.VITE_ADMIN_ID || '';
@@ -390,13 +391,36 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
 
               {/* Wagered */}
               <div className="grid grid-cols-2 gap-3 mb-5">
-                <div className="bg-bg rounded-xl px-5 py-4">
+                {/* px-3 not px-5, and abbreviated values.
+                    On a phone these are ~173px half-width cells, and the bot's
+                    figures are seven and eight digits: "9,284,100.00" rendered
+                    155px wide inside 40px of horizontal padding and spilled
+                    out of the card. fmtCoins/fmtDiamonds already abbreviate
+                    past 1M ("9.28M"), which is the right level of detail for
+                    a lifetime total anyway — the exact number is on hover.
+
+                    whitespace-nowrap on the value: the diamond emoji was
+                    loose text after the number, so it wrapped onto its own
+                    line and made the cell 56px tall instead of 28px. */}
+                <div className="bg-bg rounded-xl px-3 py-4 overflow-hidden">
                   <div className="text-sm text-muted mb-1">Coins Wagered</div>
-                  <div className="text-xl font-black text-white inline-flex items-center gap-1">{fmt(data.total_wagered)} <CoinIcon size="0.85em" /></div>
+                  <div
+                    className="text-xl font-black text-white inline-flex items-center gap-1 whitespace-nowrap max-w-full"
+                    title={`${fmtExact(data.total_wagered)} coins wagered`}
+                  >
+                    <span className="truncate min-w-0">{fmtCoins(data.total_wagered)}</span>
+                    <CoinIcon size="0.85em" />
+                  </div>
                 </div>
-                <div className="bg-bg rounded-xl px-5 py-4">
+                <div className="bg-bg rounded-xl px-3 py-4 overflow-hidden">
                   <div className="text-sm text-muted mb-1">Diamonds Wagered</div>
-                  <div className="text-xl font-black text-white">{(data.total_wagered_diamonds ?? 0).toLocaleString()} 💎</div>
+                  <div
+                    className="text-xl font-black text-white inline-flex items-center gap-1 whitespace-nowrap max-w-full"
+                    title={`${Number(data.total_wagered_diamonds ?? 0).toLocaleString()} diamonds wagered`}
+                  >
+                    <span className="truncate min-w-0">{fmtDiamonds(data.total_wagered_diamonds)}</span>
+                    <span>💎</span>
+                  </div>
                 </div>
               </div>
 
