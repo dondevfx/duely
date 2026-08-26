@@ -65,6 +65,14 @@ app.use(cors({
 // Webhooks must be registered BEFORE express.json() — Stripe needs raw body for signature verification
 app.use('/api/webhooks', webhookRoutes(supabase));
 
+// Avatar uploads need a bigger body limit, and — like the webhooks above —
+// that only works if the parser is mounted BEFORE the global express.json().
+// Mounting it later did nothing: the global parser matched first, applied its
+// default 100kb cap and returned "request entity too large" before the 5mb
+// one was ever reached. An avatar is capped at 3MB decoded and base64 costs
+// ~33% on the wire, so 5mb is the real ceiling.
+app.use('/api/avatar', express.json({ limit: '5mb' }), avatarRoutes(supabase));
+
 app.use(express.json());
 app.use('/api', apiLimiter);
 
@@ -89,8 +97,7 @@ app.use('/api/support', supportRoutes(supabase, io));
 app.use('/api/affiliate', affiliateRoutes(supabase));
 app.use('/api/rakeback', rakebackRoutes(supabase));
 app.use('/api/kyc', kycRoutes(supabase));
-// 5mb: an avatar is capped at 3MB decoded, and base64 costs ~33% on the wire.
-app.use('/api/avatar', express.json({ limit: '5mb' }), avatarRoutes(supabase));
+// /api/avatar is mounted above, before express.json() — see the note there.
 app.use('/api/reports', reportRoutes(supabase));
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));

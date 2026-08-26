@@ -134,6 +134,25 @@ test('the size cap is enforced before the image is sent anywhere', () => {
   assert.ok(AVATAR.indexOf('MAX_BYTES') < AVATAR.indexOf('moderation.checkImage'));
 });
 
+// ── Body size limit ─────────────────────────────────────────────────────
+
+test('the avatar parser is mounted BEFORE the global express.json()', () => {
+  // Express runs middleware in registration order, so a later mount never
+  // sees the request: the global express.json() matched /api/avatar first,
+  // applied its default 100kb cap and returned "request entity too large"
+  // before the 5mb parser existed in the chain. Every upload failed,
+  // including small photos. Same ordering rule the webhook raw-body parser
+  // above it already depends on.
+  const idx = strip(read('src', 'index.js'));
+  const avatarAt = idx.indexOf("app.use('/api/avatar'");
+  const globalAt = idx.indexOf('app.use(express.json());');
+  assert.notEqual(avatarAt, -1, 'the avatar route is not mounted');
+  assert.notEqual(globalAt, -1, 'the global json parser is gone');
+  assert.ok(avatarAt < globalAt,
+    'the avatar parser must be registered before the global one, or its limit never applies');
+  assert.match(idx.slice(avatarAt, avatarAt + 120), /limit: '5mb'/);
+});
+
 // ── Reports ─────────────────────────────────────────────────────────────
 
 const REPORTS = strip(read('src', 'routes', 'reports.js'));
