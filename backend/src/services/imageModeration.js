@@ -41,14 +41,6 @@ const REJECT_AT = 0.5;
 
 /**
  * Pulls every leaf number out of a nested object, keyed by dotted path.
- *
- * Written this way ON PURPOSE rather than reading known field names.
- * Sightengine's response shape differs per model and per model VERSION
- * (nudity-2.1 nests differently from nudity-2.0), and a hardcoded path that
- * silently misses would mean an unchecked image passing as clean — a
- * moderation check that fails open is worse than none, because it is
- * trusted. Walking everything means a renamed or newly added class is still
- * seen.
  */
 function flattenScores(obj, prefix = '', out = {}) {
   for (const [k, v] of Object.entries(obj || {})) {
@@ -59,17 +51,52 @@ function flattenScores(obj, prefix = '', out = {}) {
   return out;
 }
 
-// Leaves that are NOT violations, so a high score on them means the image is
-// fine. 'none' is the big one: nudity.none = 0.99 means "definitely not
-// nudity", and treating it as a violation score would reject every clean
-// photo — the exact inversion this list exists to prevent.
+// The paths that actually mean "this image breaks the rules".
 //
-// 'prob' is deliberately NOT here, though it looks like it belongs. For the
-// gore and offensive models the response is { gore: { prob: 0.97 } } and that
-// number IS the violation score — listing it as safe let gore through
-// entirely. Caught by running a realistic response through this before
-// wiring anything to it.
-const SAFE_LEAF = /(^|\.)(none|safe)$/i;
+// This is an ALLOW-LIST of violations, and the earlier version was not — it
+// walked every number in the response and treated anything above the
+// threshold as a violation, with only 'none'/'safe' excluded. That rejected
+// a cartoon monkey avatar, because Sightengine returns descriptive metadata
+// alongside its actual scores:
+//
+//   gore.type.animated        0.97  "this is a drawing"      NOT a violation
+//   nudity.context.indoor_other 0.9  "looks like indoors"    NOT a violation
+//   nudity.suggestive_classes.*      which garment is visible
+//   weapon.classes.firearm_toy       a toy, explicitly not a real weapon
+//
+// The original reasoning was that walking everything cannot MISS a
+// violation. True, but it also cannot tell a violation from a description,
+// and on a real response the descriptive fields are the ones most likely to
+// be near 1.0 — so the check rejected almost everything. Being deliberate
+// about which paths are violations is the only version that works.
+//
+// New model classes therefore need adding here. That is the trade: a missed
+// new class is caught by the report button and a human, whereas the previous
+// behaviour made the whole feature unusable.
+const VIOLATION_PATHS = [
+  // nudity-2.1 — the graded classes, most severe first.
+  'nudity.sexual_activity',
+  'nudity.sexual_display',
+  'nudity.erotica',
+  'nudity.very_suggestive',
+  // gore-2.0 — prob is the overall score; the classes are the specifics.
+  // gore.type.{animated,fake,real} is deliberately absent: it describes the
+  // STYLE of the image, not whether there is gore in it.
+  'gore.prob',
+  'gore.classes.very_bloody',
+  'gore.classes.body_organ',
+  'gore.classes.serious_injury',
+  // offensive-2.0 — hate symbols and gestures.
+  'offensive.prob',
+  'offensive.nazi',
+  'offensive.supremacist',
+  'offensive.terrorist',
+  'offensive.middle_finger',
+  // weapon — real weapons only. firearm_toy and firearm_gesture are
+  // explicitly NOT weapons and must not reject a photo.
+  'weapon.classes.firearm',
+  'weapon.classes.knife',
+];
 
 /**
  * @returns {{ ok: boolean, reason?: string, worst?: {path,score}, scores?: object }}
@@ -102,9 +129,12 @@ async function checkImage(buffer, filename = 'avatar.jpg') {
   const { status, request, media, ...models } = body;
   const scores = flattenScores(models);
 
+  // Only the paths that genuinely mean a violation. Everything else in the
+  // response is descriptive — see VIOLATION_PATHS.
   let worst = null;
-  for (const [path, score] of Object.entries(scores)) {
-    if (SAFE_LEAF.test(path)) continue;
+  for (const path of VIOLATION_PATHS) {
+    const score = scores[path];
+    if (typeof score !== 'number') continue;   // model not requested, or renamed
     if (score >= REJECT_AT && (!worst || score > worst.score)) worst = { path, score };
   }
 
@@ -119,4 +149,4 @@ async function checkImage(buffer, filename = 'avatar.jpg') {
   return { ok: true, scores };
 }
 
-module.exports = { checkImage, isConfigured, flattenScores, REJECT_AT, MODELS, SAFE_LEAF };
+module.exports = { checkImage, isConfigured, flattenScores, REJECT_AT, MODELS, VIOLATION_PATHS };

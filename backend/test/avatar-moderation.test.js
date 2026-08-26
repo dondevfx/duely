@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { flattenScores, SAFE_LEAF, REJECT_AT } = require('../src/services/imageModeration');
+const { flattenScores, VIOLATION_PATHS, REJECT_AT } = require('../src/services/imageModeration');
 const { sniff, MAX_BYTES, ALLOWED } = require('../src/routes/avatar');
 
 const read  = (...p) => fs.readFileSync(path.join(__dirname, '..', ...p), 'utf8');
@@ -16,12 +16,31 @@ const strip = (s) => s.split(/\r?\n/).filter(l => !l.trim().startsWith('//')).jo
 function worstViolation(models) {
   const scores = flattenScores(models);
   let worst = null;
-  for (const [p, v] of Object.entries(scores)) {
-    if (SAFE_LEAF.test(p)) continue;
+  for (const p of VIOLATION_PATHS) {
+    const v = scores[p];
+    if (typeof v !== 'number') continue;
     if (v >= REJECT_AT && (!worst || v > worst.score)) worst = { path: p, score: v };
   }
   return worst;
 }
+
+// What Sightengine actually returns for an ordinary cartoon avatar: real
+// scores, plus a lot of DESCRIPTIVE metadata that is routinely near 1.0.
+const CARTOON_AVATAR = {
+  nudity: {
+    sexual_activity: 0.01, sexual_display: 0.01, erotica: 0.01,
+    very_suggestive: 0.01, none: 0.98,
+    suggestive_classes: { bikini: 0.01, cleavage: 0.01, male_chest: 0.02 },
+    context: { indoor_other: 0.90, outdoor_other: 0.02 },
+  },
+  gore: {
+    prob: 0.02,
+    classes: { very_bloody: 0.0, body_organ: 0.0 },
+    type: { animated: 0.97, fake: 0.02, real: 0.01 },
+  },
+  offensive: { prob: 0.01, nazi: 0.0, middle_finger: 0.02 },
+  weapon: { classes: { firearm: 0.0, firearm_toy: 0.85, knife: 0.01 } },
+};
 
 // ── Score interpretation ────────────────────────────────────────────────
 
@@ -36,18 +55,47 @@ test('a clean image passes', () => {
 
 test('a high "none" score is not treated as a violation', () => {
   // nudity.none = 0.99 means "definitely NOT nudity". Reading it as a
-  // violation score would reject every clean photo — the inversion SAFE_LEAF
-  // exists to prevent.
-  assert.ok(SAFE_LEAF.test('nudity.none'));
+  // violation would reject every clean photo.
+  assert.ok(!VIOLATION_PATHS.includes('nudity.none'));
   assert.equal(worstViolation({ nudity: { none: 0.99, sexual_activity: 0.01 } }), null);
 });
 
-test('"prob" is NOT treated as safe — it is the gore/offensive score', () => {
-  // A first version of SAFE_LEAF listed prob alongside none/safe/score. For
-  // the gore and offensive models the response is { gore: { prob: 0.97 } }
-  // and that number IS the violation, so gore passed straight through.
-  // Caught by running realistic responses through this before wiring it up.
-  assert.ok(!SAFE_LEAF.test('gore.prob'), 'prob must count as a violation score');
+test('an ordinary cartoon avatar is allowed', () => {
+  // The regression this exists for: a cartoon monkey avatar was rejected in
+  // production. The old scorer walked EVERY number in the response and
+  // treated anything past the threshold as a violation, so
+  // gore.type.animated = 0.97 ("this is a drawing") and
+  // nudity.context.indoor_other = 0.90 ("looks like indoors") both read as
+  // violations. Descriptive metadata is routinely near 1.0, which made the
+  // check reject almost everything.
+  assert.equal(worstViolation(CARTOON_AVATAR), null);
+});
+
+test('descriptive metadata is never a violation', () => {
+  // Each of these is Sightengine describing the image, not judging it.
+  for (const path of [
+    'gore.type.animated',           // it is a drawing
+    'gore.type.fake',
+    'nudity.context.indoor_other',  // it looks like indoors
+    'nudity.suggestive_classes.bikini',
+    'weapon.classes.firearm_toy',   // explicitly a toy
+    'weapon.classes.firearm_gesture',
+  ]) {
+    assert.ok(!VIOLATION_PATHS.includes(path),
+      `${path} describes the image and must not reject it`);
+  }
+});
+
+test('a toy weapon does not reject an image', () => {
+  assert.equal(worstViolation({ weapon: { classes: { firearm_toy: 0.92, firearm: 0.01 } } }), null);
+});
+
+test('"prob" IS a violation score for gore and offensive', () => {
+  // Easy to mistake for a generic field name. For these two models the
+  // response is { gore: { prob: 0.97 } } and that number is the verdict, so
+  // excluding it lets gore through entirely.
+  assert.ok(VIOLATION_PATHS.includes('gore.prob'));
+  assert.ok(VIOLATION_PATHS.includes('offensive.prob'));
   const hit = worstViolation({ gore: { prob: 0.93 }, nudity: { none: 0.98 } });
   assert.equal(hit?.path, 'gore.prob');
 });
@@ -64,13 +112,13 @@ test('each violation category is caught', () => {
   }
 });
 
-test('scores are read by walking the whole response, not fixed paths', () => {
-  // Sightengine nests differently per model AND per model version, so a
-  // hardcoded path that silently misses would let an unchecked image pass as
-  // clean. A moderation check that fails open is worse than none, because it
-  // is trusted.
-  const deep = { some: { future: { model: { badness: 0.99 } } } };
-  assert.equal(worstViolation(deep)?.path, 'some.future.model.badness');
+test('an unknown path is ignored rather than treated as a violation', () => {
+  // The deliberate trade-off. Violations are an allow-list, so a new model
+  // class Sightengine adds later is NOT caught until it is added here —
+  // whereas the previous walk-everything approach caught it and also
+  // rejected every ordinary image. A missed new class is covered by the
+  // report button and a human; an unusable upload feature is not.
+  assert.equal(worstViolation({ some: { future: { model: { badness: 0.99 } } } }), null);
 });
 
 // ── File validation ─────────────────────────────────────────────────────
