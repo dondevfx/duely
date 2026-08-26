@@ -68,10 +68,10 @@ export default function Home() {
                   ⚡ Play Now
                 </Link>
                 <Link
-                  to="/leaderboard"
+                  to="/wallet"
                   className="px-8 py-4 border border-surfaceLight hover:border-primary text-muted hover:text-white font-semibold rounded-xl transition-all text-lg"
                 >
-                  Leaderboard
+                  Wallet
                 </Link>
               </div>
             </div>

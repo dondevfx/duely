@@ -202,9 +202,13 @@ export default function Navbar() {
                       </button>
                     </div>
                     <div className="border-t border-border p-2">
+                      {/* Solid primary — the one action in this dropdown, so
+                          it reads as a button rather than another muted row
+                          among the two balances above it. bg-primary is the
+                          site blue used by every other primary button. */}
                       <Link to="/wallet" onClick={() => setDropdownOpen(false)}
-                        className="block w-full text-center text-xs font-semibold px-3 py-2 rounded-lg bg-surfaceLight hover:bg-primary/20 text-muted hover:text-white transition-all">
-                        Manage Wallet →
+                        className="block w-full text-center text-xs font-bold px-3 py-2 rounded-lg bg-primary hover:bg-blue-500 text-white transition-all">
+                        Wallet
                       </Link>
                     </div>
                   </div>
@@ -343,9 +347,11 @@ export default function Navbar() {
                       </button>
                     </div>
                     <div className="border-t border-border p-1.5">
+                      {/* Matches the desktop dropdown above — same solid
+                          primary button, no arrow. */}
                       <Link to="/wallet" onClick={() => setMobileCurrencyOpen(false)}
-                        className="block w-full text-center text-xs font-semibold px-3 py-2 rounded-lg bg-surfaceLight hover:bg-primary/20 text-muted hover:text-white transition-all">
-                        Wallet →
+                        className="block w-full text-center text-xs font-bold px-3 py-2 rounded-lg bg-primary hover:bg-blue-500 text-white transition-all">
+                        Wallet
                       </Link>
                     </div>
                   </div>
