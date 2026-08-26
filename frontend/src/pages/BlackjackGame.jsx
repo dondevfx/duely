@@ -20,6 +20,7 @@ import { useLeaveGuard } from '../hooks/useLeaveGuard';
 import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import { useResumeMatch } from '../hooks/useResumeMatch';
 import CoinIcon from '../components/CoinIcon';
+import { usePrivateRematch } from '../hooks/usePrivateRematch';
 
 function fmtFee(fee) {
   if (fee >= 1000) return `${(fee / 1000).toLocaleString()}k`;
@@ -196,6 +197,10 @@ function BlackjackGame() {
   const location = useLocation();
   const { profile, session, refreshProfile, updateProfile } = useAuth();
   const { socket, authenticated, playerCounts, betCounts } = useSocket();
+  // Rematch for invite/code matches — same two players, no new code.
+  // See usePrivateRematch: the server marks the match private, and both
+  // players must accept before anything is staked.
+  const privateRematch = usePrivateRematch(socket, 'bj_match_found');
   // Only a live match re-claims itself after a reconnect; a refresh forfeits.
   useResumeMatch(socket, () => phaseRef.current === 'playing' || phaseRef.current === 'reveal');
   const { displayCurrency: betCurrency, setDisplayCurrency: setBetCurrency } = useCurrency();
@@ -804,6 +809,9 @@ function BlackjackGame() {
             oppResult && { label: oppResult.splitHand ? 'Opp Hand 2 (Active)' : 'Opponent Hand', value: oppResult.score > 21 ? `Bust (${oppResult.score})` : oppResult.score },
             oppResult?.splitHand && { label: 'Opp Hand 1', value: oppResult.splitScore > 21 ? `Bust (${oppResult.splitScore})` : oppResult.splitScore },
           ].filter(Boolean)}
+          isPrivate={privateRematch.isPrivate}
+          rematchState={privateRematch.rematchState}
+          onPrivateRematch={privateRematch.requestRematch}
           onPlayAgain={playAgain}
           onBackToLobby={() => { _resetGame(); setPhase('lobby'); }}
         />

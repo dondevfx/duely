@@ -15,6 +15,7 @@ import { useLeaveGuard } from '../hooks/useLeaveGuard';
 import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import { useResumeMatch } from '../hooks/useResumeMatch';
 import CoinIcon from '../components/CoinIcon';
+import { usePrivateRematch } from '../hooks/usePrivateRematch';
 
 const COIN_FEES    = [1, 5, 10, 25, 50, 100];
 const DIAMOND_FEES = [50, 100, 250, 500, 1000, 50000];
@@ -153,6 +154,10 @@ export default function BlockBlastGame() {
   const ready = usePageReady();
   const { profile, refreshProfile, updateProfile } = useAuth();
   const { socket, authenticated, doAuth, playerCounts } = useSocket();
+  // Rematch for invite/code matches — same two players, no new code.
+  // See usePrivateRematch: the server marks the match private, and both
+  // players must accept before anything is staked.
+  const privateRematch = usePrivateRematch(socket, 'block_blast_match_found');
   // Only a live match re-claims itself after a reconnect; a refresh forfeits.
   useResumeMatch(socket, () => phaseRef.current === 'playing');
   const location = useLocation();
@@ -788,6 +793,9 @@ export default function BlockBlastGame() {
               label: 'Score',
               value: `${(isWinner ? (result.winnerScore ?? 0) : (result.loserScore ?? 0)).toLocaleString()} — ${(isWinner ? (result.loserScore ?? 0) : (result.winnerScore ?? 0)).toLocaleString()}`,
             }]}
+            isPrivate={privateRematch.isPrivate}
+            rematchState={privateRematch.rematchState}
+            onPrivateRematch={privateRematch.requestRematch}
             onPlayAgain={() => playAgain(joinQueue)}
             onBackToLobby={backToLobby}
           />
@@ -818,6 +826,9 @@ export default function BlockBlastGame() {
               { label: 'Your Score', value: (result.playerScore ?? 0).toLocaleString() },
               { label: 'Bot Score', value: (result.botScore ?? 0).toLocaleString() },
             ]}
+            isPrivate={privateRematch.isPrivate}
+            rematchState={privateRematch.rematchState}
+            onPrivateRematch={privateRematch.requestRematch}
             onPlayAgain={() => playAgain(playVsBot)}
             onBackToLobby={backToLobby}
           />
@@ -834,6 +845,9 @@ export default function BlockBlastGame() {
             extraRows={[
               { label: 'Final Score', value: (result.playerScore ?? 0).toLocaleString() },
             ]}
+            isPrivate={privateRematch.isPrivate}
+            rematchState={privateRematch.rematchState}
+            onPrivateRematch={privateRematch.requestRematch}
             onPlayAgain={() => playAgain(playVsBotFree)}
             onBackToLobby={backToLobby}
           />

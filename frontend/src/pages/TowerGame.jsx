@@ -15,6 +15,7 @@ import { useLeaveGuard } from '../hooks/useLeaveGuard';
 import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import { useResumeMatch } from '../hooks/useResumeMatch';
 import { playMatchFound, playCountdown, playGo, playTowerPlace, playTowerPerfect } from '../utils/sound';
+import { usePrivateRematch } from '../hooks/usePrivateRematch';
 
 // Tower — same page shape as every other game: lobby, countdown, play, result.
 // Only the middle bit is game-specific.
@@ -46,6 +47,10 @@ export default function TowerGame() {
   const location = useLocation();
   const { profile, refreshProfile } = useAuth();
   const { socket, authenticated, doAuth, playerCounts } = useSocket();
+  // Rematch for invite/code matches — same two players, no new code.
+  // See usePrivateRematch: the server marks the match private, and both
+  // players must accept before anything is staked.
+  const privateRematch = usePrivateRematch(socket, 'tower_match_found');
   const { displayCurrency: betCurrency, setDisplayCurrency: setBetCurrency } = useCurrency();
 
   const [phase, _setPhase] = useState(location.state?.autoQueue ? 'queue' : 'lobby');
@@ -331,6 +336,9 @@ export default function TowerGame() {
                 label: 'Blocks',
                 value: `${(isWinner ? result.winnerScore : result.loserScore) ?? 0} — ${(isWinner ? result.loserScore : result.winnerScore) ?? 0}`,
               }]}
+          isPrivate={privateRematch.isPrivate}
+          rematchState={privateRematch.rematchState}
+          onPrivateRematch={privateRematch.requestRematch}
           onPlayAgain={playAgain}
           onBackToLobby={backToLobby}
         />

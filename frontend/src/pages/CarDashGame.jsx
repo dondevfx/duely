@@ -14,6 +14,7 @@ import HighwayCanvas from '../components/HighwayCanvas';
 import GameHelp from '../components/GameHelp';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
 import PrivateWaiting from '../components/PrivateWaiting';
+import { usePrivateRematch } from '../hooks/usePrivateRematch';
 
 function fmtTime(ms) {
   const s = (ms ?? 0) / 1000;
@@ -46,6 +47,10 @@ export default function CarDashGame() {
   const location = useLocation();
   const { profile, refreshProfile, updateProfile } = useAuth();
   const { socket, authenticated, doAuth, playerCounts } = useSocket();
+  // Rematch for invite/code matches — same two players, no new code.
+  // See usePrivateRematch: the server marks the match private, and both
+  // players must accept before anything is staked.
+  const privateRematch = usePrivateRematch(socket, 'car_dash_match_found');
   const { displayCurrency: betCurrency, setDisplayCurrency: setBetCurrency } = useCurrency();
 
   const [phase, _setPhase] = useState('lobby'); // lobby | queue | playing | result
@@ -397,6 +402,9 @@ export default function CarDashGame() {
             { label: 'Survived', value: fmtTime(result.ms) },
             { label: 'Score',    value: (result.score ?? 0).toLocaleString() },
           ]}
+          isPrivate={privateRematch.isPrivate}
+          rematchState={privateRematch.rematchState}
+          onPrivateRematch={privateRematch.requestRematch}
           onPlayAgain={playAgain}
           onBackToLobby={reset}
         />
@@ -435,6 +443,9 @@ export default function CarDashGame() {
             { label: 'Opponent Time',  value: fmtTime(isWinner ? result.loserMs : result.winnerMs) },
             { label: 'Opponent Score', value: (isWinner ? result.loserScore : result.winnerScore)?.toLocaleString() },
           ].filter(r => r.value !== undefined && r.value !== null)}
+          isPrivate={privateRematch.isPrivate}
+          rematchState={privateRematch.rematchState}
+          onPrivateRematch={privateRematch.requestRematch}
           onPlayAgain={playAgain}
           onBackToLobby={reset}
         />

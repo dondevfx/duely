@@ -13,6 +13,7 @@ import PrivateWaiting from '../components/PrivateWaiting';
 import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import { useResumeMatch } from '../hooks/useResumeMatch';
 import { useLeaveGuard } from '../hooks/useLeaveGuard';
+import { usePrivateRematch } from '../hooks/usePrivateRematch';
 
 const MAX_GUESSES = 6;
 const WORD_LENGTH = 5;
@@ -170,6 +171,10 @@ export default function WordleGame() {
   const navigate   = useNavigate();
   const location   = useLocation();
   const { socket, authenticated, doAuth, playerCounts } = useSocket();
+  // Rematch for invite/code matches — same two players, no new code.
+  // See usePrivateRematch: the server marks the match private, and both
+  // players must accept before anything is staked.
+  const privateRematch = usePrivateRematch(socket, 'scrabble_match_found');
   // Only a live match re-claims itself after a reconnect; a refresh forfeits.
   useResumeMatch(socket, () => phase === 'playing');
   const { profile, refreshProfile } = useAuth();
@@ -649,6 +654,9 @@ export default function WordleGame() {
             { label: 'The Word', value: soloWord },
             { label: 'Guesses', value: `${guesses.length} / ${MAX_GUESSES}` },
           ]}
+          isPrivate={privateRematch.isPrivate}
+          rematchState={privateRematch.rematchState}
+          onPrivateRematch={privateRematch.requestRematch}
           onPlayAgain={playAgain}
           onBackToLobby={backToLobby}
         />
@@ -687,6 +695,9 @@ export default function WordleGame() {
                 { label: 'Your guesses', value: `${(result.myGuesses || []).length} / ${MAX_GUESSES}` },
                 { label: 'Their guesses', value: `${(result.opponentGuesses || []).length} / ${MAX_GUESSES}` },
               ]}
+          isPrivate={privateRematch.isPrivate}
+          rematchState={privateRematch.rematchState}
+          onPrivateRematch={privateRematch.requestRematch}
           onPlayAgain={playAgain}
           onBackToLobby={backToLobby}
         />

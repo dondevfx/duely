@@ -80,6 +80,52 @@ const { verifyToken } = require('../middleware/auth');
 module.exports = function registerSocketHandlers(io, supabase) {
   // ── Shared private-room registry (all game types) ─────────────
   const pendingPrivateRooms = new Map(); // code → { gameType, p1, createdAt }
+
+  // ── Private rematches ────────────────────────────────────────────────
+  //
+  // A match started from an invite or a code is between two specific people
+  // who chose each other. When it ends they should be able to go again
+  // without one of them minting a new code and the other typing it in.
+  //
+  // Keyed by roomId, because that is the one identifier both clients already
+  // hold when the result card is on screen. The record outlives the room
+  // itself (rooms are swept a few seconds after settling), which is exactly
+  // when the button is being clicked.
+  //
+  // Deliberately NOT for queue or bot matches: there is no "same two players"
+  // to return to — a queue opponent is whoever the matchmaker found, and a
+  // bot is not waiting for anything. Those keep Play Again and the normal
+  // queue, which is what the request asked for.
+  const rematchOffers = new Map(); // roomId → { gameType, players:[p1,p2], accepted:Set<userId>, entryFee, currency, createdAt }
+
+  // Long enough to read the result card and decide; short enough that a
+  // forgotten offer does not hold a lock or a stale socket id forever.
+  const REMATCH_TTL_MS = 60_000;
+
+  function _sweepRematchOffers() {
+    const now = Date.now();
+    for (const [roomId, o] of rematchOffers) {
+      if (now - o.createdAt > REMATCH_TTL_MS) rematchOffers.delete(roomId);
+    }
+  }
+  setInterval(_sweepRematchOffers, 30_000).unref?.();
+
+  // Records that a finished match CAME from an invite/code, so the result
+  // card can offer a rematch. Called from _pairPrivatePlayers — the single
+  // point every private match for every game already flows through, which is
+  // why this needs no per-game wiring.
+  function _offerRematch(roomId, gameType, p1, p2, entryFee, currency) {
+    rematchOffers.set(roomId, {
+      gameType,
+      players: [
+        { userId: p1.userId, username: p1.username, elo: p1.elo, side: p1.side },
+        { userId: p2.userId, username: p2.username, elo: p2.elo, side: p2.side },
+      ],
+      accepted: new Set(),
+      entryFee, currency,
+      createdAt: Date.now(),
+    });
+  }
   const wordleSoloSessions = new Map(); // sessionId → { userId, word, fee, currency }
 const userQueues = new Set(); // userId → currently in a queue (prevents dual-tab double-join)
   // Returns true if user is in a queue OR in an active match (lock held until settlement)
@@ -1017,8 +1063,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           const s2 = io.sockets.sockets.get(p2.socketId);
           const n1 = p1.isDemo ? randomFunnyName() : p1.username;
           const n2 = p2.isDemo ? randomFunnyName() : p2.username;
-          if (s1) { s1.join(roomId); s1.emit('car_dash_match_found', { roomId, opponent: { userId: p2.userId, username: n2, elo: p2.elo }, entryFee, currency }); }
-          if (s2) { s2.join(roomId); s2.emit('car_dash_match_found', { roomId, opponent: { userId: p1.userId, username: n1, elo: p1.elo }, entryFee, currency }); }
+          if (s1) { s1.join(roomId); s1.emit('car_dash_match_found', { roomId, isPrivate: true, opponent: { userId: p2.userId, username: n2, elo: p2.elo }, entryFee, currency }); }
+          if (s2) { s2.join(roomId); s2.emit('car_dash_match_found', { roomId, isPrivate: true, opponent: { userId: p1.userId, username: n1, elo: p1.elo }, entryFee, currency }); }
           io.emit('queue_entry_removed', { id: p1.socketId });
           io.emit('queue_entry_removed', { id: p2.socketId });
           startCarDashCountdown(io, supabase, roomId);
@@ -1153,6 +1199,102 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           if (entryFee > 0) unlockUser(authenticatedUser.userId);
         }
       }, 600000);
+    });
+
+    // ── Rematch: same two players, no new code ───────────────────────────
+    //
+    // Both sides must accept before anything is deducted or started. The
+    // first click parks an acceptance and tells the opponent; the second
+    // starts the match. That ordering matters because these are staked
+    // matches — clicking Rematch must not put the OTHER player's coins into
+    // a game they have not agreed to.
+    socket.on('request_rematch', async ({ roomId }) => {
+      if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      const offer = rematchOffers.get(roomId);
+      if (!offer) return socket.emit('rematch_unavailable', { reason: 'expired' });
+
+      const me = offer.players.find(pl => pl.userId === authenticatedUser.userId);
+      const them = offer.players.find(pl => pl.userId !== authenticatedUser.userId);
+      if (!me || !them) return socket.emit('rematch_unavailable', { reason: 'not_yours' });
+
+      // A player already in another match cannot be pulled into this one.
+      if (inMatchOrQueue(authenticatedUser.userId)) {
+        return socket.emit('error', { message: 'Finish your current game first.' });
+      }
+
+      offer.accepted.add(authenticatedUser.userId);
+
+      const theirSockets = _socketsForUser(them.userId);
+      if (theirSockets.length === 0) {
+        // Opponent has gone. Say so rather than leaving the first player
+        // waiting on someone who is not there.
+        rematchOffers.delete(roomId);
+        return socket.emit('rematch_unavailable', { reason: 'opponent_left' });
+      }
+
+      if (!offer.accepted.has(them.userId)) {
+        socket.emit('rematch_waiting');
+        for (const ts of theirSockets) ts.emit('rematch_requested', { roomId, from: me.username });
+        return;
+      }
+
+      // Both in. Re-check balances now, not at the first click — the earlier
+      // acceptance may be a minute old and a balance can move in between.
+      const { entryFee, currency, gameType } = offer;
+      rematchOffers.delete(roomId);
+
+      const opponentSocket = theirSockets[0];
+      const mySocket = socket;
+
+      if (entryFee > 0) {
+        const ids = [authenticatedUser.userId, them.userId];
+        const { data: rows } = await supabase
+          .from('profiles').select('id,c_coins,diamonds').in('id', ids);
+        const short = (rows || []).find(r =>
+          currency === 'diamonds' ? (r.diamonds || 0) < entryFee : (r.c_coins || 0) < entryFee);
+        if (short || (rows || []).length < 2) {
+          const msg = 'Not enough balance for a rematch at this stake.';
+          mySocket.emit('rematch_unavailable', { reason: 'balance', message: msg });
+          opponentSocket.emit('rematch_unavailable', { reason: 'balance', message: msg });
+          return;
+        }
+        lockUser(authenticatedUser.userId);
+        lockUser(them.userId);
+      }
+
+      // Rebuild the two player records against their CURRENT sockets — the
+      // ids stored on the offer are from the previous match and may be stale
+      // if either client reconnected while the result card was up.
+      const meNow = {
+        socketId: mySocket.id, userId: authenticatedUser.userId,
+        username: me.username, elo: authenticatedUser.elo,
+        entryFee, currency, side: me.side,
+      };
+      const themNow = {
+        socketId: opponentSocket.id, userId: them.userId,
+        username: them.username, elo: them.elo,
+        entryFee, currency, side: them.side,
+      };
+
+      // Straight back through the same pairing path the invite used, so the
+      // rematch is identical to the original in every respect — including
+      // being offered a rematch again when it ends.
+      _pairPrivatePlayers(gameType, themNow, meNow, io, supabase);
+    });
+
+    // Declining, or leaving the result screen, withdraws the offer so the
+    // other player is told rather than left waiting out the full minute.
+    socket.on('decline_rematch', ({ roomId }) => {
+      if (!authenticatedUser) return;
+      const offer = rematchOffers.get(roomId);
+      if (!offer) return;
+      const them = offer.players.find(pl => pl.userId !== authenticatedUser.userId);
+      rematchOffers.delete(roomId);
+      if (them) {
+        for (const ts of _socketsForUser(them.userId)) {
+          ts.emit('rematch_unavailable', { reason: 'declined' });
+        }
+      }
     });
 
     socket.on('cancel_private_room', () => {
@@ -1382,8 +1524,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           const s2 = io.sockets.sockets.get(p2.socketId);
           const wvP1Name = p1.isDemo ? randomFunnyName() : p1.username;
           const wvP2Name = p2.isDemo ? randomFunnyName() : p2.username;
-          if (s1) { s1.join(roomId); s1.emit('scrabble_match_found', { roomId, opponent: { userId: p2.userId, username: wvP2Name, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency }); }
-          if (s2) { s2.join(roomId); s2.emit('scrabble_match_found', { roomId, opponent: { userId: p1.userId, username: wvP1Name, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency }); }
+          if (s1) { s1.join(roomId); s1.emit('scrabble_match_found', { roomId, isPrivate: true, opponent: { userId: p2.userId, username: wvP2Name, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency }); }
+          if (s2) { s2.join(roomId); s2.emit('scrabble_match_found', { roomId, isPrivate: true, opponent: { userId: p1.userId, username: wvP1Name, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency }); }
           io.emit('queue_entry_removed', { id: p1.socketId });
           io.emit('queue_entry_removed', { id: p2.socketId });
           io.to(roomId).emit('scrabble_countdown', { count: 3 });
@@ -1949,6 +2091,23 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       // Close every room this socket was hosting (not just the first) and pull
       // back the invites tied to them.
       _cancelHostedRooms(socket.id, authenticatedUser?.userId);
+
+      // Withdraw any rematch offer this player was part of, but only once
+      // they have no sockets left — a second tab, or a reconnect mid-result,
+      // must not cancel a rematch the player is still deciding on.
+      if (authenticatedUser && _socketsForUser(authenticatedUser.userId).length === 0) {
+        for (const [rid, offer] of rematchOffers) {
+          if (!offer.players.some(pl => pl.userId === authenticatedUser.userId)) continue;
+          rematchOffers.delete(rid);
+          const them = offer.players.find(pl => pl.userId !== authenticatedUser.userId);
+          if (them) {
+            for (const ts of _socketsForUser(them.userId)) {
+              ts.emit('rematch_unavailable', { reason: 'opponent_left' });
+            }
+          }
+        }
+      }
+
       // Inviter disconnected — cancel their outstanding invites and pull the popup.
       if (authenticatedUser) {
         for (const [iid, inv] of pendingInvites) {
@@ -2238,8 +2397,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
     function emit2(event, extra1 = {}, extra2 = {}) {
       s1.join(roomId); s2.join(roomId);
-      s1.emit(event, { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee, ...extra1 });
-      s2.emit(event, { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee, ...extra2 });
+      s1.emit(event, { roomId, isPrivate: true, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee, ...extra1 });
+      s2.emit(event, { roomId, isPrivate: true, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee, ...extra2 });
     }
 
     let roomId;
@@ -2258,8 +2417,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         ({ roomId } = createDirectWordleRoom(p1, p2));
         if (entryFee > 0) { const r = getWordleRoom(roomId); if (r) r.feesDeducted = true; }
         s1.join(roomId); s2.join(roomId);
-        s1.emit('scrabble_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency });
-        s2.emit('scrabble_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency });
+        s1.emit('scrabble_match_found', { roomId, isPrivate: true, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency });
+        s2.emit('scrabble_match_found', { roomId, isPrivate: true, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency });
         io.to(roomId).emit('scrabble_countdown', { count: 3 });
         setTimeout(() => io.to(roomId).emit('scrabble_countdown', { count: 2 }), 1000);
         setTimeout(() => io.to(roomId).emit('scrabble_countdown', { count: 1 }), 2000);
@@ -2272,8 +2431,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         const p2cf = result.p2;
         if (entryFee > 0) { const r = getCoinFlipRoom(roomId); if (r) r.feesDeducted = true; }
         s1.join(roomId); s2.join(roomId);
-        s1.emit('coin_flip_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, side: p1.side, entryFee: p1.entryFee, currency: p1.currency });
-        s2.emit('coin_flip_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, side: p2cf.side, entryFee: p2.entryFee, currency: p2.currency });
+        s1.emit('coin_flip_match_found', { roomId, isPrivate: true, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, side: p1.side, entryFee: p1.entryFee, currency: p1.currency });
+        s2.emit('coin_flip_match_found', { roomId, isPrivate: true, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, side: p2cf.side, entryFee: p2.entryFee, currency: p2.currency });
         setTimeout(() => resolveCoinFlip(io, supabase, roomId), 6000);
         break;
       }
@@ -2284,8 +2443,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         ({ roomId } = createDirectCarDashRoom(p1, p2));
         if (entryFee > 0) { const r = getCarDashRoom(roomId); if (r) r.feesDeducted = true; }
         s1.join(roomId); s2.join(roomId);
-        s1.emit('car_dash_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency });
-        s2.emit('car_dash_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency });
+        s1.emit('car_dash_match_found', { roomId, isPrivate: true, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency });
+        s2.emit('car_dash_match_found', { roomId, isPrivate: true, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency });
         startCarDashCountdown(io, supabase, roomId);
         break;
       }
@@ -2293,13 +2452,18 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         ({ roomId } = createDirectBlackjackRoom(p1, p2));
         if (entryFee > 0) { const r = getBlackjackRoom(roomId); if (r) r.feesDeducted = true; }
         s1.join(roomId); s2.join(roomId);
-        s1.emit('bj_match_found', { roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency });
-        s2.emit('bj_match_found', { roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency });
+        s1.emit('bj_match_found', { roomId, isPrivate: true, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency });
+        s2.emit('bj_match_found', { roomId, isPrivate: true, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency });
         startBlackjackGame(io, supabase, roomId);
         break;
       }
       default: break;
     }
+
+    // Every private match, every game — one place, because they all pass
+    // through here. A queue or bot match never reaches this function, which
+    // is precisely why those keep Play Again.
+    if (roomId) _offerRematch(roomId, gameType, p1, p2, entryFee, currency);
   }
 
   // ── Spectator mode ────────────────────────────────────────────────────────

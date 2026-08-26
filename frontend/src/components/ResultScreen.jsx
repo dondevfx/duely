@@ -83,6 +83,20 @@ export default function ResultScreen({
   onPlayAgain,
   onBackToLobby,
   rematchLabel = 'Rematch',
+  // Private match (invite or code): the SAME button becomes Rematch and goes
+  // back to the same opponent instead of the open queue. Deliberately a
+  // relabel of the existing button rather than a second one — the card is
+  // meant to look identical, only the word changes.
+  //
+  // isPrivate comes from the server with the match, not from the page
+  // remembering how it started: a reload or a rejoin loses page state, and a
+  // button that silently re-queues you into the public pool when you thought
+  // you were rematching a friend is worse than no button at all.
+  isPrivate = false,
+  // 'idle' | 'waiting' | 'requested' — drives the label while the two
+  // players agree. Both must accept before anything is staked.
+  rematchState = 'idle',
+  onPrivateRematch,
   gameLabel = '',
   // Solo: a run with no opponent.
   //
@@ -323,15 +337,22 @@ export default function ResultScreen({
               </button>
             )}
             <button
-              onClick={onPlayAgain}
+              onClick={isPrivate ? onPrivateRematch : onPlayAgain}
+              disabled={isPrivate && rematchState === 'waiting'}
               className={`py-3 rounded-xl font-black text-base transition-all ${
                 onRematch
                   ? 'flex-1 bg-surface border border-surfaceLight text-white hover:border-primary'
                   : 'w-full bg-primary text-white hover:bg-blue-500'
-              }`}
+              } ${isPrivate && rematchState === 'waiting' ? 'opacity-60 cursor-default' : ''}`}
               style={!onRematch ? { boxShadow: '0 0 18px rgba(18,80,180,0.35)' } : {}}
             >
-              Play Again
+              {!isPrivate
+                ? 'Play Again'
+                : rematchState === 'waiting'
+                  ? 'Waiting…'
+                  : rematchState === 'requested'
+                    ? 'Accept Rematch'
+                    : 'Rematch'}
             </button>
           </div>
 

@@ -19,6 +19,7 @@ import { usePageReady } from '../hooks/usePageReady';
 import { useLeaveGuard } from '../hooks/useLeaveGuard';
 import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import CoinIcon from '../components/CoinIcon';
+import { usePrivateRematch } from '../hooks/usePrivateRematch';
 
 function fmtFee(fee) {
   if (fee >= 1000) return `${(fee / 1000).toLocaleString()}k`;
@@ -164,6 +165,10 @@ export default function CoinFlipGame() {
   const location = useLocation();
   const { profile, session, refreshProfile, updateProfile } = useAuth();
   const { socket, authenticated, playerCounts, betCounts } = useSocket();
+  // Rematch for invite/code matches — same two players, no new code.
+  // See usePrivateRematch: the server marks the match private, and both
+  // players must accept before anything is staked.
+  const privateRematch = usePrivateRematch(socket, 'coin_flip_match_found');
   const { displayCurrency: betCurrency, setDisplayCurrency: setBetCurrency } = useCurrency();
   const eloBeforeRef    = useRef(profile?.elo ?? 1000);
   const lastModeRef     = useRef(null); // 'pvp' | 'bot_free' | 'bot_paid'
@@ -644,6 +649,9 @@ export default function CoinFlipGame() {
                 { label: 'Your Pick', value: side === 'heads' ? '🔵 Heads' : '⚪ Tails' },
                 { label: 'Landed On', value: resultData.result === 'heads' ? '🔵 Heads' : '⚪ Tails' },
               ]}
+              isPrivate={privateRematch.isPrivate}
+              rematchState={privateRematch.rematchState}
+              onPrivateRematch={privateRematch.requestRematch}
               onPlayAgain={playAgain}
               onBackToLobby={() => { _resetCoin(); setPhase('lobby'); }}
             />
