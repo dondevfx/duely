@@ -1216,7 +1216,7 @@ function FriendsPanel({ myId, myUsername, myReferralCode, activeGames }) {
 
 export default function Profile() {
   const ready = usePageReady();
-  const { profile, session, refreshProfile } = useAuth();
+  const { profile, session, refreshProfile, updateProfile } = useAuth();
   const { socket, activeGames } = useSocket();
   const [matches, setMatches] = useState([]);
   const [editing, setEditing] = useState(false);
@@ -1227,6 +1227,12 @@ export default function Profile() {
   const [resetMsg, setResetMsg] = useState('');
   const [resendMsg, setResendMsg] = useState('');
   const [showColors, setShowColors] = useState(false);
+  // The avatar button now opens a CHOICE (colour or photo) rather than going
+  // straight to colours, so both options are discoverable from the same place.
+  const [avatarMenu, setAvatarMenu]   = useState(false);
+  const [avatarBusy, setAvatarBusy]   = useState(false);
+  const [avatarErr, setAvatarErr]     = useState('');
+  const fileInputRef = useRef(null);
   const [savingColor, setSavingColor] = useState(false);
   const [showHighscores, setShowHighscores] = useState(false);
   const [gameStats, setGameStats] = useState([]);
@@ -1246,6 +1252,51 @@ export default function Profile() {
     if (saved === 'light') document.documentElement.classList.add('light');
     else document.documentElement.classList.remove('light');
   }, []);
+
+  async function pickPhoto(e) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // so re-picking the same file fires change again
+    if (!file) return;
+
+    setAvatarErr('');
+    // Checked here too, not only server-side: reading a 20MB file into base64
+    // just to be told no is a slow way to learn it.
+    if (file.size > 3 * 1024 * 1024) {
+      setAvatarErr('That image is too large. Maximum size is 3MB.');
+      return;
+    }
+
+    setAvatarBusy(true);
+    try {
+      const dataUrl = await new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res(fr.result);
+        fr.onerror = () => rej(new Error('Could not read that file.'));
+        fr.readAsDataURL(file);
+      });
+      const { avatar_url } = await api.post('/avatar', { image: dataUrl });
+      updateProfile({ avatar_url });
+      setAvatarMenu(false);
+    } catch (err) {
+      setAvatarErr(err.message || 'Upload failed.');
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  async function removePhoto() {
+    setAvatarBusy(true);
+    setAvatarErr('');
+    try {
+      await api.delete('/avatar');
+      updateProfile({ avatar_url: null });
+      setAvatarMenu(false);
+    } catch (err) {
+      setAvatarErr(err.message || 'Could not remove that picture.');
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
 
   async function saveColor(color) {
     setSavingColor(true);
@@ -1356,17 +1407,28 @@ export default function Profile() {
           <div className="flex items-center gap-5 mb-6">
             <div className="relative">
               <button
-                onClick={() => setShowColors(v => !v)}
-                title="Change color"
-                className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-black transition-transform hover:scale-105 active:scale-95"
+                onClick={() => { setAvatarMenu(v => !v); setShowColors(false); setAvatarErr(''); }}
+                title="Change picture or colour"
+                className="w-20 h-20 rounded-full overflow-hidden flex items-center justify-center text-3xl font-black transition-transform hover:scale-105 active:scale-95"
                 style={{
                   backgroundColor: `${profile.profile_color || '#1250B4'}22`,
                   border: `2px solid ${profile.profile_color || '#1250B4'}`,
                   color: profile.profile_color || '#1250B4',
                   boxShadow: `0 0 18px ${profile.profile_color || '#1250B4'}66`,
                 }}>
-                {profile.username?.[0]?.toUpperCase()}
+                {/* The uploaded picture when there is one; the coloured
+                    initial stays the default rather than a fallback state. */}
+                {profile.avatar_url
+                  ? <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                  : profile.username?.[0]?.toUpperCase()}
               </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={pickPhoto}
+                className="hidden"
+              />
               <span className="absolute -bottom-1 -right-1 text-2xl leading-none drop-shadow-lg pointer-events-none"
                 title={getRank(profile.elo).name}>
                 {getRank(profile.elo).icon}
@@ -1380,10 +1442,42 @@ export default function Profile() {
                 </span>
               )}
 
+              {/* Choice menu: colour, or a photo. */}
+              {avatarMenu && !showColors && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setAvatarMenu(false)} />
+                  <div className="absolute left-0 top-24 z-20 bg-surface border border-border rounded-2xl p-2 shadow-2xl w-52">
+                    <button
+                      onClick={() => { setShowColors(true); }}
+                      className="w-full text-left px-3 py-2.5 rounded-xl text-sm font-semibold text-white hover:bg-surfaceLight transition-all"
+                    >
+                      🎨 Change colour
+                    </button>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={avatarBusy}
+                      className="w-full text-left px-3 py-2.5 rounded-xl text-sm font-semibold text-white hover:bg-surfaceLight transition-all disabled:opacity-50"
+                    >
+                      {avatarBusy ? '⏳ Uploading…' : '🖼️ Upload photo'}
+                    </button>
+                    {profile.avatar_url && (
+                      <button
+                        onClick={removePhoto}
+                        disabled={avatarBusy}
+                        className="w-full text-left px-3 py-2.5 rounded-xl text-sm font-semibold text-danger hover:bg-danger/10 transition-all disabled:opacity-50"
+                      >
+                        ✕ Remove photo
+                      </button>
+                    )}
+                    {avatarErr && <p className="text-[11px] text-danger px-3 py-2">{avatarErr}</p>}
+                  </div>
+                </>
+              )}
+
               {/* Color picker popup */}
               {showColors && (
                 <>
-                  <div className="fixed inset-0 z-10" onClick={() => setShowColors(false)} />
+                  <div className="fixed inset-0 z-10" onClick={() => { setShowColors(false); setAvatarMenu(false); }} />
                   <div className="absolute left-0 top-24 z-20 bg-surface border border-border rounded-2xl p-4 shadow-2xl w-52">
                     <p className="text-xs text-muted font-semibold mb-3">Choose a color</p>
                     <div className="grid grid-cols-6 gap-2">

@@ -241,6 +241,12 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
   const [tipSending, setTipSending]   = useState(false);
   const [tipResult, setTipResult]     = useState(null);
   const [friendStatus, setFriendStatus] = useState(null); // null | 'sent' | 'friends' | 'error'
+  const [reportOpen, setReportOpen]     = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [reportDetails, setReportDetails] = useState('');
+  const [reportBusy, setReportBusy]     = useState(false);
+  const [reportDone, setReportDone]     = useState(false);
+  const [reportErr, setReportErr]       = useState('');
   const isOwn = userId === myProfile?.id;
 
   const liveGame = !isBot && !isOwn
@@ -278,6 +284,23 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
       }
     }).catch(() => {}).finally(() => setLoading(false));
   }, [userId, isBot, myProfile?.id]);
+
+  async function submitReport() {
+    if (!reportReason) { setReportErr('Choose a reason.'); return; }
+    setReportBusy(true);
+    setReportErr('');
+    try {
+      await api.post('/reports', { userId, reason: reportReason, details: reportDetails.trim() || undefined });
+      // A duplicate comes back as ok:true on purpose (see routes/reports.js),
+      // so this says the same thing either way — which is also the honest
+      // answer: the report is on file.
+      setReportDone(true);
+    } catch (e) {
+      setReportErr(e.message || 'Could not send that report.');
+    } finally {
+      setReportBusy(false);
+    }
+  }
 
   async function handleTip() {
     const amt = tipCurrency === 'diamonds' ? Math.floor(parseFloat(tipAmount)) : parseFloat(tipAmount);
@@ -390,6 +413,69 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
                   <div className="bg-bg rounded-xl px-2 pt-2 pb-1 overflow-hidden">
                     <LineChart data={history} />
                   </div>
+                </div>
+              )}
+
+              {/* Report — any player, not just admins. Automated checks catch
+                  explicit imagery at upload; impersonation and cheating only
+                  surface because somebody says so. */}
+              {!isOwn && !isBot && (
+                <div className="border-t border-border pt-5 mb-5">
+                  {reportDone ? (
+                    <p className="text-sm text-success font-semibold">
+                      ✓ Report sent. Thanks — we'll take a look.
+                    </p>
+                  ) : !reportOpen ? (
+                    <button
+                      onClick={() => setReportOpen(true)}
+                      className="w-full py-2.5 rounded-xl text-sm font-bold text-muted border border-border hover:text-danger hover:border-danger/50 transition-all"
+                    >
+                      ⚑ Report player
+                    </button>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-xs text-muted font-semibold">What's the problem?</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[['pfp', 'Profile picture'], ['cheating', 'Cheating']].map(([val, label]) => (
+                          <button
+                            key={val}
+                            onClick={() => { setReportReason(val); setReportErr(''); }}
+                            className={`py-2 rounded-lg text-xs font-bold border transition-all ${
+                              reportReason === val
+                                ? 'bg-danger/15 text-danger border-danger/50'
+                                : 'text-muted border-border hover:text-white'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        value={reportDetails}
+                        onChange={e => setReportDetails(e.target.value)}
+                        maxLength={500}
+                        rows={2}
+                        placeholder="Anything else we should know? (optional)"
+                        className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm text-white placeholder-muted focus:outline-none focus:border-primary resize-none"
+                      />
+                      {reportErr && <p className="text-xs text-danger">{reportErr}</p>}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => { setReportOpen(false); setReportReason(''); setReportErr(''); }}
+                          className="flex-1 py-2 rounded-lg text-xs font-bold text-muted border border-border hover:text-white"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={submitReport}
+                          disabled={reportBusy}
+                          className="flex-1 py-2 rounded-lg text-xs font-bold bg-danger/15 text-danger border border-danger/40 hover:bg-danger/25 disabled:opacity-50"
+                        >
+                          {reportBusy ? 'Sending…' : 'Send report'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

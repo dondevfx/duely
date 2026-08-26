@@ -19,6 +19,8 @@ const webhookRoutes = require('./routes/webhooks');
 const affiliateRoutes = require('./routes/affiliate');
 const rakebackRoutes = require('./routes/rakeback');
 const kycRoutes      = require('./routes/kyc');
+const avatarRoutes   = require('./routes/avatar');
+const reportRoutes   = require('./routes/reports');
 const supportRoutes = require('./routes/support');
 const { apiLimiter, authLimiter } = require('./middleware/rateLimit');
 const registerSocketHandlers = require('./socket/handlers');
@@ -87,6 +89,9 @@ app.use('/api/support', supportRoutes(supabase, io));
 app.use('/api/affiliate', affiliateRoutes(supabase));
 app.use('/api/rakeback', rakebackRoutes(supabase));
 app.use('/api/kyc', kycRoutes(supabase));
+// 5mb: an avatar is capped at 3MB decoded, and base64 costs ~33% on the wire.
+app.use('/api/avatar', express.json({ limit: '5mb' }), avatarRoutes(supabase));
+app.use('/api/reports', reportRoutes(supabase));
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.get('/ping',   (_req, res) => res.send('pong'));

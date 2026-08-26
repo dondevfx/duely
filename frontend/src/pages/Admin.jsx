@@ -276,6 +276,8 @@ export default function Admin() {
   const [playerDetail, setPlayerDetail]     = useState(null);
   const [playerLoading, setPlayerLoading]   = useState(false);
   const [banReason, setBanReason]           = useState('');
+  const [playerReports, setPlayerReports]   = useState([]);
+  const [avatarBusy, setAvatarBusy]         = useState(false);
   const [banBusy, setBanBusy]               = useState(false);
   const [adjustAmount, setAdjustAmount]     = useState('');
   const [adjustNote, setAdjustNote]         = useState('');
@@ -290,8 +292,15 @@ export default function Admin() {
     setBanReason('');
     setAdjustAmount('');
     setAdjustNote('');
+    setPlayerReports([]);
     try {
       setPlayerDetail(await api.get(`/admin/users/${id}`));
+      // Fetched separately and deliberately NOT awaited with the profile: a
+      // missing player_reports table must not stop the panel opening. That is
+      // the same mistake that made this panel unreachable in the first place.
+      api.get(`/admin/users/${id}/reports`)
+        .then(r => setPlayerReports(r.reports || []))
+        .catch(() => setPlayerReports([]));
     } catch (e) {
       setPanelMsg(`Could not load player: ${e.message}`);
     } finally {
@@ -307,6 +316,43 @@ export default function Admin() {
   async function refreshPlayer() {
     if (!selectedUserId) return;
     try { setPlayerDetail(await api.get(`/admin/users/${selectedUserId}`)); } catch {}
+  }
+
+  async function removeAvatar(banFuture) {
+    setAvatarBusy(true);
+    setPanelMsg('');
+    try {
+      await api.post(`/admin/users/${selectedUserId}/remove-avatar`, { banFuture });
+      await refreshPlayer();
+      setPanelMsg(banFuture ? 'Picture removed and uploads blocked.' : 'Picture removed.');
+    } catch (e) {
+      setPanelMsg(`Could not remove the picture: ${e.message}`);
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  async function restoreAvatar() {
+    setAvatarBusy(true);
+    setPanelMsg('');
+    try {
+      await api.post(`/admin/users/${selectedUserId}/restore-avatar`);
+      await refreshPlayer();
+      setPanelMsg('Upload privileges restored.');
+    } catch (e) {
+      setPanelMsg(`Could not restore: ${e.message}`);
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  async function decideReport(id, decision) {
+    try {
+      await api.post(`/admin/reports/${id}/decide`, { decision });
+      setPlayerReports(rs => rs.map(r => (r.id === id ? { ...r, status: decision } : r)));
+    } catch (e) {
+      setPanelMsg(`Could not update that report: ${e.message}`);
+    }
   }
 
   async function banPlayer() {
@@ -1166,13 +1212,15 @@ export default function Admin() {
                 <>
                   <div className="flex items-start justify-between gap-3 mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-full flex items-center justify-center text-lg font-black shrink-0"
+                      <div className="w-11 h-11 rounded-full overflow-hidden flex items-center justify-center text-lg font-black shrink-0"
                         style={{
                           backgroundColor: `${p.profile_color || '#1250B4'}22`,
                           border: `2px solid ${p.profile_color || '#1250B4'}`,
                           color: p.profile_color || '#1250B4',
                         }}>
-                        {p.username?.[0]?.toUpperCase()}
+                        {p.avatar_url
+                          ? <img src={p.avatar_url} alt="" className="w-full h-full object-cover" />
+                          : p.username?.[0]?.toUpperCase()}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
@@ -1234,6 +1282,91 @@ export default function Admin() {
                           className="px-4 py-2 text-sm font-bold rounded-xl border border-danger text-danger hover:bg-danger hover:text-white transition-all disabled:opacity-50 whitespace-nowrap">
                           {banBusy ? 'Working…' : 'Ban player'}
                         </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Profile picture moderation */}
+                  <div className="bg-bg border border-border rounded-xl p-4 mb-4">
+                    <p className="text-xs text-muted mb-2">Profile picture</p>
+                    {p.avatar_banned && (
+                      <p className="text-xs text-warning mb-2">
+                        Upload privileges revoked - this player cannot set a new picture.
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => removeAvatar(true)}
+                        disabled={avatarBusy || (!p.avatar_url && p.avatar_banned)}
+                        className="px-3 py-2 text-xs font-bold rounded-lg bg-danger/15 text-danger border border-danger/40 hover:bg-danger/25 disabled:opacity-40"
+                      >
+                        Remove picture + block uploads
+                      </button>
+                      <button
+                        onClick={() => removeAvatar(false)}
+                        disabled={avatarBusy || !p.avatar_url}
+                        className="px-3 py-2 text-xs font-bold rounded-lg text-muted border border-border hover:text-white disabled:opacity-40"
+                      >
+                        Remove only
+                      </button>
+                      {p.avatar_banned && (
+                        <button
+                          onClick={restoreAvatar}
+                          disabled={avatarBusy}
+                          className="px-3 py-2 text-xs font-bold rounded-lg bg-success/15 text-success border border-success/40 hover:bg-success/25 disabled:opacity-40"
+                        >
+                          Allow uploads again
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Reports against this player */}
+                  <div className="bg-bg border border-border rounded-xl p-4 mb-4">
+                    <p className="text-xs text-muted mb-2">
+                      Reports ({playerReports.length})
+                      {playerReports.some(r => r.status === 'open') && (
+                        <span className="ml-2 text-danger font-bold">
+                          {playerReports.filter(r => r.status === 'open').length} open
+                        </span>
+                      )}
+                    </p>
+                    {playerReports.length === 0 ? (
+                      <p className="text-xs text-muted/70">No reports.</p>
+                    ) : (
+                      <div className="space-y-2 max-h-56 overflow-y-auto">
+                        {playerReports.map(r => (
+                          <div key={r.id} className="border border-border rounded-lg px-3 py-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                                r.status === 'open' ? 'text-danger border-danger/50 bg-danger/10'
+                                  : r.status === 'actioned' ? 'text-success border-success/40 bg-success/10'
+                                  : 'text-muted border-border'
+                              }`}>
+                                {r.status}
+                              </span>
+                              <span className="text-xs font-bold text-white">
+                                {r.reason === 'pfp' ? 'Profile picture' : r.reason === 'cheating' ? 'Cheating' : 'Other'}
+                              </span>
+                              <span className="text-[11px] text-muted">
+                                by {r.reporter?.username ?? 'unknown'} · {fmtDate(r.created_at)}
+                              </span>
+                              {r.status === 'open' && (
+                                <span className="ml-auto flex gap-1">
+                                  <button onClick={() => decideReport(r.id, 'actioned')}
+                                    className="text-[11px] px-2 py-1 rounded border border-success/40 text-success hover:bg-success/10">
+                                    Actioned
+                                  </button>
+                                  <button onClick={() => decideReport(r.id, 'dismissed')}
+                                    className="text-[11px] px-2 py-1 rounded border border-border text-muted hover:text-white">
+                                    Dismiss
+                                  </button>
+                                </span>
+                              )}
+                            </div>
+                            {r.details && <p className="text-[11px] text-muted mt-1 break-words">{r.details}</p>}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>

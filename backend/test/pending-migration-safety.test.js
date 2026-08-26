@@ -57,7 +57,7 @@ test('the withdrawal ban check does not hard-fail on the missing column', () => 
 
 test('the admin player panel survives the missing column', () => {
   const at = ADMIN.indexOf("router.get('/users/:id'");
-  const body = ADMIN.slice(at, ADMIN.indexOf('res.json({ profile', at) + 80);
+  const body = ADMIN.slice(at, ADMIN.indexOf('res.json({', at) + 200);
   assert.match(body, /PROFILE_BASE/, 'base columns must be separable');
   assert.match(body, /pErr && \/banned\|ban_reason\|banned_at\/\.test/,
     'must detect the missing-column error specifically');

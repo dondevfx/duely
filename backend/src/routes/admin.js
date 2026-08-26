@@ -475,7 +475,13 @@ module.exports = function adminRoutes(supabase, io) {
   // handler does: one unknown column makes PostgREST reject the whole query,
   // so before PENDING_SQL section 17 is run this route would 404 every
   // player rather than just hiding the ban controls.
-  const PROFILE_BASE = 'id, username, elo, wins, losses, c_coins, diamonds, created_at, profile_color, kyc_status, email_confirmed_at';
+  // email_confirmed_at is NOT on profiles — it lives on auth.users, and is
+  // read from the JWT (req.user) everywhere else in this codebase. Selecting
+  // it here made PostgREST reject the query for every player, and since the
+  // fallback below reused the same column list, BOTH attempts failed and the
+  // panel 404'd on every click. Fetched separately from the auth admin API
+  // instead, where it actually exists.
+  const PROFILE_BASE = 'id, username, elo, wins, losses, c_coins, diamonds, created_at, profile_color, kyc_status';
 
   router.get('/users/:id', requireAuth, requireAdmin, async (req, res) => {
     const { id } = req.params;
@@ -520,7 +526,131 @@ module.exports = function adminRoutes(supabase, io) {
       ...(matchesAsP2 || []).map(m => ({ ...m, opponent: m.player1?.username ?? (m.player1_id ? 'Unknown' : 'Bot'), won: m.winner_id === id })),
     ].sort((a, b) => new Date(b.played_at) - new Date(a.played_at)).slice(0, 20);
 
-    res.json({ profile: resolvedProfile, transactions: transactions || [], matches });
+    // Verified-email state, from the one place that has it. Best-effort: the
+    // panel is still useful without it, so a failure here must not 404 a
+    // player the way selecting a non-existent column did.
+    let emailConfirmedAt = null;
+    let email = null;
+    try {
+      const { data: u } = await supabase.auth.admin.getUserById(id);
+      emailConfirmedAt = u?.user?.email_confirmed_at ?? null;
+      email = u?.user?.email ?? null;
+    } catch (e) {
+      console.warn('[admin] could not read auth user:', e.message);
+    }
+
+    res.json({
+      profile: { ...resolvedProfile, email, email_confirmed_at: emailConfirmedAt },
+      transactions: transactions || [],
+      matches,
+    });
+  });
+
+  // ── Reports against one player ────────────────────────────────────────
+  //
+  // Requested separately from /users/:id rather than joined into it: the
+  // player_reports table arrives with PENDING_SQL section 18, and folding it
+  // into the main query would make the whole panel 404 before that runs —
+  // the exact failure mode that made this panel unreachable in the first
+  // place (a phantom email_confirmed_at column).
+  router.get('/users/:id/reports', requireAuth, requireAdmin, async (req, res) => {
+    const { data, error } = await supabase
+      .from('player_reports')
+      .select('id, reason, details, status, created_at, reviewed_at, reporter:profiles!reporter_id(username)')
+      .eq('reported_id', req.params.id)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (error) {
+      if (/player_reports/.test(error.message || '')) {
+        console.warn('[admin] player_reports missing — run PENDING_SQL section 18.');
+        return res.json({ reports: [], migrated: false });
+      }
+      return res.status(500).json({ error: error.message });
+    }
+    res.json({ reports: data || [], migrated: true });
+  });
+
+  // Every open report, newest first — the queue view.
+  router.get('/reports', requireAuth, requireAdmin, async (req, res) => {
+    const status = ['open', 'actioned', 'dismissed'].includes(req.query.status)
+      ? req.query.status : 'open';
+    const { data, error } = await supabase
+      .from('player_reports')
+      .select('id, reason, details, status, created_at, reported_id, reporter:profiles!reporter_id(username), reported:profiles!reported_id(username, avatar_url)')
+      .eq('status', status)
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    if (error) {
+      if (/player_reports/.test(error.message || '')) return res.json({ reports: [], migrated: false });
+      return res.status(500).json({ error: error.message });
+    }
+    res.json({ reports: data || [], migrated: true });
+  });
+
+  router.post('/reports/:id/decide', requireAuth, requireAdmin, async (req, res) => {
+    const decision = String(req.body?.decision || '');
+    if (decision !== 'actioned' && decision !== 'dismissed') {
+      return res.status(400).json({ error: 'decision must be "actioned" or "dismissed"' });
+    }
+    // Claimed the same way KYC decisions are: scoping to status='open' means
+    // two admins clicking at once cannot both resolve the same report.
+    const { data, error } = await supabase
+      .from('player_reports')
+      .update({ status: decision, reviewed_at: new Date().toISOString(), reviewed_by: req.user.id })
+      .eq('id', req.params.id).eq('status', 'open')
+      .select('id').single();
+
+    if (error || !data) return res.status(409).json({ error: 'That report was already reviewed.' });
+    res.json({ ok: true, decision });
+  });
+
+  // ── Remove a profile picture ──────────────────────────────────────────
+  //
+  // Two separate things, deliberately one action: clear the image AND revoke
+  // the right to upload another. Clearing alone is an invitation to re-upload
+  // the same picture, which makes the button feel useless the first time
+  // somebody does it. `banned` here is the avatar privilege only — it does
+  // not touch the account ban.
+  router.post('/users/:id/remove-avatar', requireAuth, requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    // Default TRUE: this endpoint exists because a picture broke the rules,
+    // so revoking is the expected outcome and allowing again is the exception
+    // an admin has to ask for explicitly.
+    const ban = req.body?.banFuture !== false;
+
+    const { data: profile } = await supabase
+      .from('profiles').select('avatar_url').eq('id', id).single();
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ avatar_url: null, avatar_banned: ban })
+      .eq('id', id);
+
+    if (error) {
+      if (/avatar_url|avatar_banned/.test(error.message || '')) {
+        return res.status(503).json({ error: 'Run PENDING_SQL section 18 first.' });
+      }
+      return res.status(500).json({ error: error.message });
+    }
+
+    // Delete the object too, not just the link. A public URL that still
+    // resolves is still reachable by anyone who saw it once.
+    if (profile?.avatar_url) {
+      const key = profile.avatar_url.split('/avatars/')[1];
+      if (key) supabase.storage.from('avatars').remove([key]).then(() => {}, () => {});
+    }
+
+    res.json({ ok: true, avatar_banned: ban });
+  });
+
+  // Give the privilege back.
+  router.post('/users/:id/restore-avatar', requireAuth, requireAdmin, async (req, res) => {
+    const { error } = await supabase
+      .from('profiles').update({ avatar_banned: false }).eq('id', req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ ok: true });
   });
 
   // ── Ban / unban ───────────────────────────────────────────────────────

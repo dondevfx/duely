@@ -784,3 +784,67 @@ ALTER TABLE transactions ADD CONSTRAINT transactions_type_check CHECK (type IN (
 -- Check:
 --   SELECT username, banned, ban_reason FROM profiles WHERE banned = true;
 --   SELECT type, count(*) FROM transactions WHERE type = 'admin_adjustment' GROUP BY 1;
+
+
+-- ============================================================================
+-- 18. Profile pictures and player reports
+-- ============================================================================
+-- Avatars are the platform's first user-generated content, which is why the
+-- moderation columns land in the same migration rather than being bolted on
+-- afterwards.
+--
+-- avatar_url    the uploaded image (Supabase Storage public URL), or NULL for
+--               the existing coloured-initial avatar. NULL is the default and
+--               stays a first-class state, not an error case.
+-- avatar_banned an admin removed a picture and revoked the right to upload
+--               another. Without this, "remove picture" is an invitation to
+--               immediately re-upload the same thing. Enforced server-side at
+--               upload time, never only in the UI.
+ALTER TABLE profiles
+  ADD COLUMN IF NOT EXISTS avatar_url    text,
+  ADD COLUMN IF NOT EXISTS avatar_banned boolean NOT NULL DEFAULT false;
+
+-- One row per report. Kept even after the reported player is dealt with —
+-- a dismissed report is evidence too, and a repeat reporter is a pattern
+-- worth being able to see.
+CREATE TABLE IF NOT EXISTS player_reports (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  reporter_id  uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  reported_id  uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  reason       text NOT NULL,
+  details      text,
+  status       text NOT NULL DEFAULT 'open',
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  reviewed_at  timestamptz,
+  reviewed_by  uuid,
+  CONSTRAINT player_reports_reason_check CHECK (reason IN ('pfp', 'cheating', 'other')),
+  CONSTRAINT player_reports_status_check CHECK (status IN ('open', 'actioned', 'dismissed')),
+  -- Reporting yourself is always a mistake or an abuse of the feature.
+  CONSTRAINT player_reports_not_self CHECK (reporter_id <> reported_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_player_reports_reported
+  ON player_reports (reported_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_player_reports_open
+  ON player_reports (status, created_at DESC);
+
+-- One OPEN report per person, per target, per reason. A player spamming the
+-- button cannot inflate a count and make someone look worse than they are;
+-- once a report is actioned or dismissed they can raise a fresh one if the
+-- behaviour continues.
+--
+-- Partial, like uniq_kyc_pending_per_user and for the same reason: the
+-- uniq_tx_extra_id incident was an unconditional unique index on a column
+-- holding a literal, which allowed exactly one row to exist platform-wide.
+-- This one only constrains rows that are actually open.
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_open_report_per_reporter
+  ON player_reports (reporter_id, reported_id, reason) WHERE status = 'open';
+
+-- Backend-only, same as kyc_submissions: service role bypasses RLS, and
+-- enabling it with no policies means the anon and authenticated keys cannot
+-- read or write reports directly.
+ALTER TABLE player_reports ENABLE ROW LEVEL SECURITY;
+
+-- Check:
+--   SELECT reason, status, count(*) FROM player_reports GROUP BY 1,2;
+--   SELECT count(*) FROM profiles WHERE avatar_url IS NOT NULL;
