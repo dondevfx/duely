@@ -435,16 +435,32 @@ module.exports = function adminRoutes(supabase, io) {
     const { search } = req.query;
     const limit  = Math.min(parseInt(req.query.limit) || 50, 200);
 
-    let query = supabase
-      .from('profiles')
-      .select('id, username, elo, wins, losses, c_coins, diamonds, created_at, profile_color, banned')
-      .neq('id', process.env.ADMIN_USER_ID)
-      .order('c_coins', { ascending: false })
-      .limit(limit);
+    // The ban columns are requested SEPARATELY, then dropped on failure.
+    //
+    // PostgREST rejects the entire query for one unknown column, so listing
+    // `banned` inline made this route 500 outright until PENDING_SQL section
+    // 17 was run — and because the client swallowed the failure, the whole
+    // dashboard rendered empty rather than just the ban badges going missing.
+    // That is the bug this comment's neighbour above already claimed to have
+    // fixed for /users/:id but never actually implemented.
+    const BASE = 'id, username, elo, wins, losses, c_coins, diamonds, created_at, profile_color';
 
-    if (search) query = query.ilike('username', `%${search}%`);
+    const run = (cols) => {
+      let q = supabase
+        .from('profiles')
+        .select(cols)
+        .neq('id', process.env.ADMIN_USER_ID)
+        .order('c_coins', { ascending: false })
+        .limit(limit);
+      if (search) q = q.ilike('username', `%${search}%`);
+      return q;
+    };
 
-    const { data, error } = await query;
+    let { data, error } = await run(`${BASE}, banned`);
+    if (error && /banned/.test(error.message || '')) {
+      console.warn('[admin/users] profiles.banned is missing — run PENDING_SQL section 17. Serving without ban state.');
+      ({ data, error } = await run(BASE));
+    }
     if (error) return res.status(500).json({ error: error.message });
     res.json(data || []);
   });
@@ -463,10 +479,22 @@ module.exports = function adminRoutes(supabase, io) {
 
   router.get('/users/:id', requireAuth, requireAdmin, async (req, res) => {
     const { id } = req.params;
-    const [{ data: profile, error: pErr }, { data: transactions }, { data: matchesAsP1 }, { data: matchesAsP2 }] = await Promise.all([
-      supabase.from('profiles')
+    // Same split as /users above — and the same reason. This one genuinely
+    // needs it: without the fallback the panel 500s for every player, not
+    // merely hides the ban controls.
+    const loadProfile = async () => {
+      let r = await supabase.from('profiles')
         .select(`${PROFILE_BASE}, banned, ban_reason, banned_at`)
-        .eq('id', id).single(),
+        .eq('id', id).single();
+      if (r.error && /banned/.test(r.error.message || '')) {
+        console.warn('[admin/users/:id] ban columns missing — run PENDING_SQL section 17.');
+        r = await supabase.from('profiles').select(PROFILE_BASE).eq('id', id).single();
+      }
+      return r;
+    };
+
+    const [{ data: profile, error: pErr }, { data: transactions }, { data: matchesAsP1 }, { data: matchesAsP2 }] = await Promise.all([
+      loadProfile(),
       supabase.from('transactions')
         .select('id, type, amount_c, crypto_amount, crypto_symbol, status, tx_hash, notes, created_at')
         .eq('user_id', id).order('created_at', { ascending: false }).limit(50),
