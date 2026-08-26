@@ -144,12 +144,62 @@ async function applyEloUpdate(supabase, userId, newElo, force = false) {
       const { data } = await supabase
         .from('profiles').select('wins, losses').eq('id', userId).single();
       const total = (data?.wins ?? 0) + (data?.losses ?? 0);
-      if (total < 3) return; // still in placement — no ELO change
+      // Still in placement — no ELO change. Reported so the caller can tell
+      // the player nothing moved, instead of showing a swing that was
+      // computed and then silently discarded.
+      if (total < 3) return { applied: false, placement: true };
     }
     await supabase.from('profiles').update({ elo: newElo }).eq('id', userId);
+    return { applied: true };
   } catch (e) {
     console.error('[applyEloUpdate] error:', e.message);
+    return { applied: false, error: e.message };
   }
+}
+
+/**
+ * Write a rating and report the delta that ACTUALLY landed.
+ *
+ * The result card used to be handed two numbers — the new rating and the
+ * rating it was computed from — and asked to subtract them. That is one
+ * subtraction too many: it is only correct if the write happened, happened
+ * exactly once, and nothing moved the rating in between. When any of those
+ * failed the card reported a swing nobody received, most visibly as +44 on a
+ * win worth +22.
+ *
+ * This does the arithmetic on the side that knows the answer. It re-reads the
+ * row after writing, so the delta returned is the difference between what is
+ * now stored and what was stored a moment ago — not a prediction. A skipped
+ * placement write therefore reports 0, which is the truth.
+ */
+async function applyEloAndMeasure(supabase, userId, newElo, force = false) {
+  if (!supabase || !userId) return { before: null, after: null, delta: null };
+
+  const readElo = async () => {
+    try {
+      const { data } = await supabase.from('profiles').select('elo').eq('id', userId).single();
+      return Number.isFinite(Number(data?.elo)) ? Number(data.elo) : null;
+    } catch { return null; }
+  };
+
+  const before = await readElo();
+  const res = await applyEloUpdate(supabase, userId, newElo, force);
+  if (!res?.applied) return { before, after: before, delta: 0, placement: !!res?.placement };
+
+  const after = await readElo();
+  const delta = (before != null && after != null) ? after - before : null;
+
+  // A delta outside the possible range means something wrote twice, or wrote
+  // a value computed from a stale baseline. Worth shouting about rather than
+  // rendering: it is money-adjacent trust, and it is exactly the shape of the
+  // bug this function exists to stop.
+  if (delta != null && Math.abs(delta) > ELO_GAIN_MAX) {
+    console.error(
+      `[elo] IMPOSSIBLE SWING for ${userId}: ${before} -> ${after} (${delta > 0 ? '+' : ''}${delta}). ` +
+      `Max possible is +${ELO_GAIN_MAX}/-${ELO_LOSS_MAX}. Something wrote this rating twice.`);
+  }
+
+  return { before, after, delta, placement: false };
 }
 
 
@@ -191,6 +241,23 @@ async function freshRatings(supabase, winner, loser) {
   const winnerBefore = await read(winner);
   const loserBefore  = await read(loser);
   const { newWinnerElo, newLoserElo } = calculateNewRatings(winnerBefore, loserBefore);
+
+  // A swing outside the possible range is reported here, with both ratings,
+  // because +44 was seen in production and could not be reproduced by
+  // reasoning about the code. calculateNewRatings can only ever produce
+  // +20..+23 / -17..-20 from the numbers it is given, so if the CARD shows
+  // something else, either these before-values are not what the card
+  // subtracts from, or the rating moved again between here and the write.
+  // This line says which, the next time it happens.
+  const wSwing = newWinnerElo - winnerBefore;
+  const lSwing = loserBefore - newLoserElo;
+  if (wSwing > ELO_GAIN_MAX || lSwing > ELO_LOSS_MAX) {
+    console.error(
+      `[elo] IMPOSSIBLE SWING computed — winner ${winner?.userId}: ${winnerBefore} -> ${newWinnerElo} (+${wSwing}), ` +
+      `loser ${loser?.userId}: ${loserBefore} -> ${newLoserElo} (-${lSwing}). ` +
+      `Max is +${ELO_GAIN_MAX}/-${ELO_LOSS_MAX}.`);
+  }
+
   return { winnerBefore, loserBefore, newWinnerElo, newLoserElo };
 }
-module.exports = { eloGain, eloLoss, applyMatchStreaks, calculateNewRatings, freshRatings, updateElo, updateStreaks, applyEloUpdate };
+module.exports = { eloGain, eloLoss, applyMatchStreaks, calculateNewRatings, freshRatings, updateElo, updateStreaks, applyEloUpdate, applyEloAndMeasure, ELO_GAIN_MAX, ELO_LOSS_MAX };

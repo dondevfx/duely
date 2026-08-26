@@ -61,15 +61,24 @@ export default function Home() {
                 and prove you're the best.
               </p>
               <div className="flex flex-wrap md:flex-nowrap items-center justify-center md:justify-start gap-4">
+                {/* min-w-[175px] on both so they match.
+                    The padding, text size and height were already identical —
+                    the only difference was the word: "Wallet" is shorter than
+                    "⚡ Play Now", so it rendered 120px against 175px and read
+                    as the smaller button. A shared minimum makes them equal
+                    without stretching either past its natural size.
+
+                    font-bold matches too; the outlined one was semibold, which
+                    made the label look lighter as well as narrower. */}
                 <Link
                   to="/games"
-                  className="px-8 py-4 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl shadow-glow hover:shadow-glow-lg transition-all text-lg"
+                  className="min-w-[175px] text-center px-8 py-4 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl shadow-glow hover:shadow-glow-lg transition-all text-lg"
                 >
                   ⚡ Play Now
                 </Link>
                 <Link
                   to="/wallet"
-                  className="px-8 py-4 border border-surfaceLight hover:border-primary text-muted hover:text-white font-semibold rounded-xl transition-all text-lg"
+                  className="min-w-[175px] text-center px-8 py-4 border border-surfaceLight hover:border-primary text-muted hover:text-white font-bold rounded-xl transition-all text-lg"
                 >
                   Wallet
                 </Link>

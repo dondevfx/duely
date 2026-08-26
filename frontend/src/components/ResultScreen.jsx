@@ -122,7 +122,27 @@ export default function ResultScreen({
   // capturing its baseline at the wrong moment.
   const serverBefore = isWinner ? winnerBefore : loserBefore;
   const eloBefore = serverBefore ?? eloBeforeRef?.current ?? null;
-  const eloDelta  = (elo != null && eloBefore != null) ? elo - eloBefore : null;
+  const rawDelta  = (elo != null && eloBefore != null) ? elo - eloBefore : null;
+
+  // A rating cannot move more than this in one match — the server's own
+  // range is +20..+23 on a win and -17..-20 on a loss, so anything larger is
+  // arithmetic about a stale number, not a swing anyone received.
+  //
+  // This is a DISPLAY clamp and deliberately not a silent one: +44 was
+  // reported twice from production and could not be reproduced by reading
+  // the settlement path, so rather than guess again at the cause, the number
+  // shown is bounded to what is actually possible and the real values are
+  // logged for whoever looks next. The stored rating is untouched either way
+  // — this only decides what the card says.
+  const ELO_MAX_SWING = 25;
+  let eloDelta = rawDelta;
+  if (rawDelta != null && Math.abs(rawDelta) > ELO_MAX_SWING) {
+    console.error(
+      `[elo] impossible delta on the result card: before=${eloBefore} after=${elo} ` +
+      `delta=${rawDelta} (serverBefore=${serverBefore}, refBefore=${eloBeforeRef?.current}). ` +
+      `Clamping the display; the stored rating is unchanged.`);
+    eloDelta = Math.sign(rawDelta) * ELO_MAX_SWING;
+  }
 
   const totalMatches = (profile?.wins ?? 0) + (profile?.losses ?? 0);
   const ranked = isRanked(profile);

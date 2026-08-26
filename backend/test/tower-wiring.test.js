@@ -334,7 +334,9 @@ test('a PvP win streak reaches the result card', () => {
   const emit = fn.indexOf("emit('tower_result'");
   assert.ok(applied > 0, 'streaks are never applied in the PvP resolve');
   assert.ok(applied < emit, 'streaks must be resolved before the result is emitted');
-  assert.match(engine, /winnerStreak,\n\s+isFirstWin,/,
+  // \r?\n, not \n: git checks these files out with CRLF on Windows, so a
+  // bare \n silently fails to match code that is perfectly correct.
+  assert.match(engine, /winnerStreak,\r?\n\s+isFirstWin,/,
     'the real values must be sent, not zeroes');
 });
 
