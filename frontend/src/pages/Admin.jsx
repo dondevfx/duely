@@ -266,6 +266,9 @@ export default function Admin() {
   const [userSearch, setUserSearch] = useState('');
   const [tab, setTab]               = useState('overview');
   const [kycQueue, setKycQueue]     = useState([]);
+  // Which sections failed to load, so a partial dashboard says so instead of
+  // rendering empty panels that look like real zeroes.
+  const [loadErrors, setLoadErrors] = useState([]);
   const [kycBusy, setKycBusy]       = useState(null);
 
   // ── Player detail panel ──────────────────────────────────────────────
@@ -384,32 +387,44 @@ export default function Admin() {
 
   async function load() {
     setLoading(true);
-    try {
-      const [s, t, u, a, tk, kq] = await Promise.all([
-        api.get('/admin/stats'),
-        api.get('/admin/transactions?limit=100'),
-        api.get('/admin/users?limit=100'),
-        // Separate call rather than filtering the list above: the queue is
-        // sorted by severity server-side, and a stuck row from last week would
-        // never appear in the most recent 100 transactions.
-        api.get('/admin/transactions?needsAttention=1').catch(() => []),
-        // Tickets waiting on staff. A list of every ticket ever raised is not a
-        // work queue, so this defaults to the open ones.
-        api.get('/admin/support/tickets').catch(() => []),
-        // Pending only — an approved submission is a record, not a task.
-        api.get('/admin/kyc?status=pending').catch(() => []),
-      ]);
-      setStats(s);
-      setTxs(t);
-      setUsers(u);
-      setAttention(a);
-      setTickets(tk);
-      setKycQueue(kq);
-    } catch (e) {
-      console.error('Admin load error:', e.message);
-    } finally {
-      setLoading(false);
-    }
+    setLoadErrors([]);
+
+    // allSettled, not all. The first three calls had no .catch(), so ONE of
+    // them failing rejected the whole Promise.all and none of the six setters
+    // ran — every panel rendered empty at once, with the only trace a
+    // console.error nobody was watching. That is the "admin page shows
+    // nothing tracked" report: almost certainly /admin/stats, which runs 16
+    // queries in a single un-caught Promise.all of its own server-side.
+    //
+    // Each section now stands or falls on its own, and whatever did fail is
+    // named on screen instead of being swallowed.
+    const calls = [
+      ['stats',       '/admin/stats',                        setStats],
+      ['transactions','/admin/transactions?limit=100',       setTxs],
+      ['users',       '/admin/users?limit=100',              setUsers],
+      // Separate call rather than filtering the list above: the queue is
+      // sorted by severity server-side, and a stuck row from last week would
+      // never appear in the most recent 100 transactions.
+      ['attention',   '/admin/transactions?needsAttention=1', setAttention],
+      // Tickets waiting on staff. A list of every ticket ever raised is not a
+      // work queue, so this defaults to the open ones.
+      ['support',     '/admin/support/tickets',              setTickets],
+      // Pending only — an approved submission is a record, not a task.
+      ['kyc',         '/admin/kyc?status=pending',           setKycQueue],
+    ];
+
+    const results = await Promise.allSettled(calls.map(([, url]) => api.get(url)));
+    const failed = [];
+    results.forEach((r, i) => {
+      const [name, , setter] = calls[i];
+      if (r.status === 'fulfilled') setter(r.value);
+      else {
+        failed.push(`${name}: ${r.reason?.message || 'failed'}`);
+        console.error(`[admin] ${name} failed:`, r.reason?.message);
+      }
+    });
+    setLoadErrors(failed);
+    setLoading(false);
   }
 
   // Resolve one stuck row. creditAmount is optional — several of these states
@@ -600,6 +615,38 @@ export default function Admin() {
             ↻ Refresh
           </button>
         </div>
+
+        {/* A section that failed to load says so. Without this an empty
+            dashboard is indistinguishable from a real platform with no
+            activity — which is exactly how "shows nothing tracked" looked. */}
+        {/* Individual queries inside /admin/stats can fail while the request
+            itself succeeds — supabase-js resolves with { error } rather than
+            rejecting, so those tiles read 0 and look like a genuinely empty
+            platform. The route now reports which ones. */}
+        {stats?.query_errors?.length > 0 && (
+          <div className="mb-6 rounded-xl border border-warning/40 bg-warning/10 px-4 py-3">
+            <p className="text-sm font-bold text-warning mb-1">
+              {stats.query_errors.length} stat{stats.query_errors.length > 1 ? 's' : ''} could not be read — those tiles show 0 but are not really 0
+            </p>
+            <ul className="text-xs text-warning/80 font-mono space-y-0.5">
+              {stats.query_errors.map(e => <li key={e}>{e}</li>)}
+            </ul>
+          </div>
+        )}
+
+        {loadErrors.length > 0 && (
+          <div className="mb-6 rounded-xl border border-danger/40 bg-danger/10 px-4 py-3">
+            <p className="text-sm font-bold text-danger mb-1">
+              {loadErrors.length} section{loadErrors.length > 1 ? 's' : ''} failed to load
+            </p>
+            <ul className="text-xs text-danger/80 font-mono space-y-0.5">
+              {loadErrors.map(e => <li key={e}>{e}</li>)}
+            </ul>
+            <p className="text-[11px] text-muted mt-2">
+              Everything else below still loaded and is accurate.
+            </p>
+          </div>
+        )}
 
         {loading ? (
           <div className="flex justify-center py-20">

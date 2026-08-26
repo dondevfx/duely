@@ -14,29 +14,18 @@ module.exports = function adminRoutes(supabase, io) {
 
   // ── Stats overview ────────────────────────────────────────────────────
   router.get('/stats', requireAuth, requireAdmin, async (req, res) => {
+   try {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const sevenDaysAgo  = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000);
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-    const [
-      { count: totalUsers },
-      { count: totalMatches },
-      { count: matchesToday },
-      { count: newUsersToday },
-      { count: newUsers7d },
-      { count: newUsers30d },
-      { count: matches7d },
-      { count: matches30d },
-      { data: adminProfile },
-      { data: matchData },
-      { count: pendingWithdrawals },
-      { data: feeClaimData },
-      { data: gameTypeRows },
-      { data: activeRows24h },
-      { data: activeRows7d },
-      { data: diamondRows },
-    ] = await Promise.all([
+    // NAMED, so a failure can be reported as "which query" rather than as a
+    // silent 0. supabase-js RESOLVES with { error } instead of rejecting, so
+    // the previous destructuring — which kept only count/data and dropped
+    // every error — turned a renamed column or an un-migrated table into a
+    // dashboard full of zeroes that looked like a real, empty platform.
+    const QUERIES = [
       supabase.from('profiles').select('id', { count: 'exact', head: true }),
       supabase.from('matches').select('id', { count: 'exact', head: true }),
       supabase.from('matches').select('id', { count: 'exact', head: true }).gte('played_at', todayStart.toISOString()),
@@ -57,7 +46,38 @@ module.exports = function adminRoutes(supabase, io) {
       supabase.from('matches').select('player1_id, player2_id').gte('played_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
       supabase.from('matches').select('player1_id, player2_id').gte('played_at', sevenDaysAgo.toISOString()),
       supabase.from('profiles').select('diamonds'),
-    ]);
+    ];
+    const NAMES = [
+      'totalUsers', 'totalMatches', 'matchesToday', 'newUsersToday',
+      'newUsers7d', 'newUsers30d', 'matches7d', 'matches30d',
+      'adminProfile', 'matchData', 'pendingWithdrawals', 'feeClaimData',
+      'gameTypeRows', 'activeRows24h', 'activeRows7d', 'diamondRows',
+    ];
+    const settled = await Promise.all(QUERIES);
+    const queryErrors = [];
+    settled.forEach((r, i) => {
+      if (r && r.error) queryErrors.push(`${NAMES[i]}: ${r.error.message}`);
+    });
+    if (queryErrors.length) console.error('[admin/stats] query errors:', queryErrors.join(' | '));
+
+    const [
+      { count: totalUsers },
+      { count: totalMatches },
+      { count: matchesToday },
+      { count: newUsersToday },
+      { count: newUsers7d },
+      { count: newUsers30d },
+      { count: matches7d },
+      { count: matches30d },
+      { data: adminProfile },
+      { data: matchData },
+      { count: pendingWithdrawals },
+      { data: feeClaimData },
+      { data: gameTypeRows },
+      { data: activeRows24h },
+      { data: activeRows7d },
+      { data: diamondRows },
+    ] = settled;
 
     // Referral rewards earned but not yet collected. These are held back from
     // fee collection (see collect_admin_fees), so the number is shown alongside
@@ -127,7 +147,19 @@ module.exports = function adminRoutes(supabase, io) {
       // never written.
       pending_withdrawals: pendingWithdrawals ?? 0,
       needs_attention:     pendingWithdrawals ?? 0,
+      // Non-empty means some tiles above are 0 because their query failed,
+      // not because the platform is idle. The dashboard shows this.
+      query_errors:        queryErrors,
     });
+   } catch (e) {
+     // This route runs 16 queries in one Promise.all. Any single rejection —
+     // a column renamed, a table not yet migrated — threw out of the handler
+     // with no catch, so Express returned a 500 and the dashboard rendered
+     // completely empty. The client now degrades per-section, but the real
+     // error still needs to reach somewhere a person will see it.
+     console.error('[admin/stats] failed:', e.message);
+     res.status(500).json({ error: `stats query failed: ${e.message}` });
+   }
   });
 
   // ── Recent transactions ───────────────────────────────────────────────

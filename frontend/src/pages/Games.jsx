@@ -18,22 +18,13 @@ export default function Games() {
           <p className="text-muted">Pick a game, set your bet, and play.</p>
         </div>
 
-        {/* 2 up to lg, 3 from lg, 4 from xl.
-            Sized against the width this grid ACTUALLY gets, not the
-            viewport: the left nav takes 240px from md — and md is 720px in
-            this project, not Tailwind's 768 (see tailwind.config.js), so it
-            applies to every iPad including portrait. An 834px iPad portrait
-            leaves only ~562px here. Measured card sizes:
-
-              iPad portrait  810-834    2 cols -> 259-271px  (3 would be ~170)
-              iPad landscape 1080-1194   2 cols               (3 measured 186px)
-              xl 1280-1535              3 cols
-              2xl 1536+                 4 cols
-
-            The whole iPad range stays at 2 — the 240px left nav, not
-            max-w-5xl, is what limits this grid, so 3 columns anywhere in
-            that range produces cards smaller than a phone's. */}
-        <div className="grid grid-cols-2 gap-4 sm:gap-5 xl:grid-cols-3 2xl:grid-cols-4">
+        {/* 2 columns up to lg, 3 from lg — the desktop layout this page has
+            always had. The iPad range (720-1023, since md is 720px here, not
+            Tailwind's 768 — see tailwind.config.js) sits in the 2-column
+            band, which is what it needs: the 240px left nav, not max-w-5xl,
+            is the real constraint, and 3 columns at an 834px iPad measured
+            ~170px per card against 259-271px at 2. */}
+        <div className="grid grid-cols-2 gap-4 sm:gap-5 lg:grid-cols-3">
           {GAMES.map(game => (
             <GameVideoCard
               key={game.slug}

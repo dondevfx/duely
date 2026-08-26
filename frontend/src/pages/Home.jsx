@@ -80,7 +80,7 @@ export default function Home() {
                 down the page instead (see Game cards section). Gated on lg,
                 not md, to match the copy below: at md they would both render
                 and the page would show two spin wheels. */}
-            <div className="hidden xl:block w-full max-w-sm xl:w-96 shrink-0">
+            <div className="hidden lg:block w-full max-w-sm lg:w-96 shrink-0">
               <DailySpinWidget profile={profile} />
             </div>
           </div>
@@ -124,13 +124,13 @@ export default function Home() {
 
       {/* Game cards + daily bonus */}
       <section className="max-w-7xl mx-auto px-4 pb-16 md:pb-24">
-        {/* The right-hand column moves beside the grid at xl, not md.
+        {/* The right-hand column moves beside the grid at lg, not md.
             At md it stacked alongside on an iPad portrait, where this page
-            ALREADY loses 240px to the left nav — 834px viewport, 590px of
-            page, minus a 256px side column and its gap, left the seven game
-            cards sharing 270px. They rendered 79px wide. Below xl the column
-            now sits underneath, giving the grid the full 558px. */}
-        <div className="flex flex-col xl:flex-row gap-8">
+            ALREADY loses 240px to the left nav — an 834px viewport gave
+            590px of page, and minus a 256px side column and its gap the
+            seven cards shared 270px. They rendered 79px wide. Below lg the
+            column now sits underneath, giving the grid the full width. */}
+        <div className="flex flex-col lg:flex-row gap-8">
           <div className="flex-1 min-w-0">
             <h2 className="text-xl md:text-2xl font-bold text-white mb-4 md:mb-6">Choose a Game</h2>
             {/* Column counts are chosen from the width this grid ACTUALLY
@@ -156,7 +156,7 @@ export default function Home() {
                 md drops back to 2 deliberately: that is where the left nav
                 appears and takes 240px, so three cards there would be
                 smaller than they are on a phone. */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 md:gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
               {GAMES.map(game => (
                 <GameVideoCard
                   key={game.slug}
@@ -169,17 +169,17 @@ export default function Home() {
             {/* Invite — mobile only, above the daily spin. The desktop copy lives
                 in the sidebar below How It Works; the two are complementary so
                 exactly one renders at any width. */}
-            <div className="xl:hidden mt-5 max-w-sm mx-auto sm:mx-0 sm:max-w-none">
+            <div className="lg:hidden mt-5 max-w-sm mx-auto sm:mx-0 sm:max-w-none">
               <ReferralCard variant="compact" />
             </div>
 
             {/* Daily spin — mobile/tablet only; desktop shows it in the hero instead */}
-            <div className="xl:hidden mt-5 max-w-sm mx-auto sm:mx-0 sm:max-w-none">
+            <div className="lg:hidden mt-5 max-w-sm mx-auto sm:mx-0 sm:max-w-none">
               <DailySpinWidget profile={profile} />
             </div>
           </div>
 
-          <div className="xl:w-72 flex flex-col gap-5 xl:pt-[3.5rem]">
+          <div className="lg:w-72 flex flex-col gap-5 lg:pt-[3.5rem]">
             {profile ? (
               <DailyBonus />
             ) : (
@@ -221,7 +221,7 @@ export default function Home() {
 
             {/* Fills the empty space below How It Works. Desktop only — on
                 mobile the copy above the daily spin is shown instead. */}
-            <div className="hidden xl:block">
+            <div className="hidden lg:block">
               <ReferralCard variant="compact" />
             </div>
           </div>
