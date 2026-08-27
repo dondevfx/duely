@@ -304,8 +304,14 @@ export default function SpinWheel({ locked = false }) {
         {won !== null && wonTheme && (
           <div className="rounded-xl py-3 px-4 text-center"
             style={{ background: `${THEMES[wonTheme].fade}22`, border: `1px solid ${THEMES[wonTheme].border}`, boxShadow: `0 0 20px ${THEMES[wonTheme].glow}33` }}>
-            <div className="font-black text-2xl" style={{ color: THEMES[wonTheme].glow }}>
-              +{won.toLocaleString()} 💎
+            {/* Kept on one line for the same reason as the ranked wheels. This
+                card is full width so it has never actually wrapped, but the
+                number and the diamond are one value and should not be able to
+                come apart. No size clamp here — there is room for 24px. */}
+            <div className="font-black text-2xl inline-flex items-center justify-center gap-1.5 whitespace-nowrap max-w-full"
+              style={{ color: THEMES[wonTheme].glow }}>
+              <span>+{won.toLocaleString()}</span>
+              <span className="inline-flex items-center leading-none">💎</span>
             </div>
             <div className="text-xs mt-0.5" style={{ color: '#64748b' }}>
               {won === 50000 ? '🏆 JACKPOT! Maximum prize!' : won === 20000 ? 'Massive win!' : 'Added to your balance!'}

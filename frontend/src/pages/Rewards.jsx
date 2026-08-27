@@ -493,11 +493,26 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
             animation:   'fadeIn 0.4s ease',
           }}
         >
+          {/* One inline-flex line, not text with a trailing icon.
+              These cards are grid-cols-2 on a phone, which leaves about 120px
+              of usable width inside this box. At a fixed 24px, "+100,000 💎"
+              measured 108px of text in a 96px line and wrapped — the number on
+              one line, the diamond alone underneath. nowrap keeps them
+              together and the size shrinks with the viewport instead.
+              Measured at 320px: 97px of text in 120px available. */}
           <div
-            className="font-black text-2xl"
-            style={{ color: tier.color, textShadow: `0 0 16px ${tier.color}` }}
+            className="font-black inline-flex items-center justify-center gap-1.5 whitespace-nowrap max-w-full"
+            style={{
+              color: tier.color,
+              textShadow: `0 0 16px ${tier.color}`,
+              fontSize: 'clamp(1rem, 4.5vw, 1.5rem)',
+              lineHeight: 1.25,
+            }}
           >
-            +{won.amount.toLocaleString()} {won.currency === 'coins' ? <CoinIcon size="0.85em" /> : '💎'}
+            <span>+{won.amount.toLocaleString()}</span>
+            <span className="inline-flex items-center leading-none">
+              {won.currency === 'coins' ? <CoinIcon size="0.85em" /> : '💎'}
+            </span>
           </div>
           <div className="text-xs mt-0.5" style={{ color: '#64748b' }}>Added to your balance!</div>
         </div>
