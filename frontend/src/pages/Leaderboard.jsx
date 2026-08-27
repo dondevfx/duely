@@ -24,7 +24,7 @@ const TABS = [
 const GAME_LEADERBOARDS = [
   { id: 'blockBlast',    label: 'Block Burst',  icon: '🟦', scoreLabel: 'Score' },
   { id: 'carDash',       label: 'Rush Hour',    icon: '🚗', scoreLabel: 'Score', showTime: true },
-  { id: 'colorRush',     label: 'Color Rush',   icon: '🎨', scoreLabel: 'Diamonds', showTime: true },
+  { id: 'colorRush',     label: 'Color Rush',   icon: '🌀', scoreLabel: 'Diamonds', showTime: true },
   { id: 'tower',         label: 'Tower',        icon: '🗼', scoreLabel: 'Blocks' },
   { id: 'scrabble',      label: 'Word VS',      icon: '🔤', scoreLabel: 'Wins'  },
   { id: 'coinFlip',      label: 'Coin Flip',    icon: '🟡', scoreLabel: 'Wins'  },

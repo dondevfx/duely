@@ -23,6 +23,10 @@ function fmtTime(ms) {
 
 // Shown when the opponent has died ahead: the score to beat and the time
 // left to beat it. Without this the player has no idea they are on a clock.
+//
+// Top CENTRE: the score moved to the top left and the timer owns the top
+// right, so this is the only corner-free spot left — and it is the most
+// urgent thing on screen when it appears, so the middle suits it.
 function CatchupBanner({ endsAt, target }) {
   const [left, setLeft] = useState(Math.max(0, endsAt - Date.now()));
   useEffect(() => {
@@ -31,7 +35,7 @@ function CatchupBanner({ endsAt, target }) {
   }, [endsAt]);
   const secs = (left / 1000).toFixed(1);
   return (
-    <div className="pointer-events-none absolute left-3 top-3 z-20">
+    <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-3 z-20">
       <div className="px-3 py-1.5 rounded-lg bg-black/70 border border-danger/60">
         <div className="text-danger font-black text-xl tabular-nums leading-none">{secs}s</div>
         <div className="text-[10px] text-white/80 font-bold mt-0.5 whitespace-nowrap">
@@ -445,8 +449,8 @@ export default function ColorRushGame() {
   if (phase === 'playing') {
     return (
       <div className="relative">
-        {/* bottom-left: the canvas draws the score top-centre and the timer
-            top-right, and the catch-up banner takes top-left. */}
+        {/* bottom-left: the canvas draws the score top-left and the timer
+            top-right, and the catch-up banner takes the top centre. */}
         <GameHelp gameType="colorRush" placement="bottom-left" />
         <ColorRushCanvas
           seed={seed}
@@ -504,8 +508,8 @@ export default function ColorRushGame() {
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}
     >
       <GameLobby
-        title="🎨 Color Rush"
-        description="Tap to climb through the spinning rings — you can only pass through your own colour. Both players get the exact same course, so it comes down to who reads it better."
+        title="🌀 Color Rush"
+        description="Tap to climb through the spinning rings — you can only pass through your own color. Both players get the exact same course, so it comes down to who reads it better."
         controls="Tap anywhere or press space to fly · collect the white diamonds"
         betCurrency={betCurrency} setBetCurrency={setBetCurrency}
         entryFee={entryFee} setEntryFee={setEntryFee}

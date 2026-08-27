@@ -1182,7 +1182,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     });
 
     // ════════════════════════════════════════════════════════════════
-    //  COLOR RUSH (tap to climb — match the colour or die)
+    //  COLOR RUSH (tap to climb — match the color or die)
     // ════════════════════════════════════════════════════════════════
     socket.on('join_color_rush_queue', async ({ entryFee = 0, currency = 'coins' }) => {
       if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });

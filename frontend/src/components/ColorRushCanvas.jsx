@@ -4,16 +4,16 @@ import { useEffect, useRef } from 'react';
  * ColorRushCanvas — "Color Rush"
  *
  * Tap to fly the ball upward through spinning obstacles. You may only pass
- * through the part of an obstacle that matches your current colour; touching
- * any other colour ends the run. Colour switchers between obstacles change
- * which colour you are. White diamonds are worth a point each.
+ * through the part of an obstacle that matches your current color; touching
+ * any other color ends the run. Color switchers between obstacles change which
+ * color you are. White diamonds are worth a point each.
  *
  * Integration matches HighwayCanvas: props { seed, onProgress(score, ms),
  * onDeath(score, ms) }.
  *
- * ── Two properties this file exists to guarantee ─────────────────────────────
+ * ── Three properties this file exists to guarantee ───────────────────────────
  *
- * 1. BOTH PLAYERS GET THE IDENTICAL COURSE. Every obstacle's shape, colour
+ * 1. BOTH PLAYERS GET THE IDENTICAL COURSE. Every obstacle's shape, color
  *    order, spin direction and speed is derived by hashing (seed, index) —
  *    NOT by pulling from a sequential PRNG stream. A stream would make the
  *    course depend on how many numbers each client happened to draw and in
@@ -24,57 +24,67 @@ import { useEffect, useRef } from 'react';
  * 2. THE VIEW IS THE SAME SIZE EVERYWHERE. The scale comes from the canvas
  *    HEIGHT against a fixed VIEW_H world units, so every device shows exactly
  *    the same vertical slice of the course and therefore the same amount of
- *    warning about what is coming. Scaling to width instead would give a
- *    tablet more reaction time than a phone.
+ *    warning about what is coming.
+ *
+ * 3. EVERY OBSTACLE IS PASSABLE. See the note on colorAtAngle below — this was
+ *    not true in the first version and produced obstacles that could not be
+ *    entered at all.
  */
 
 // ── World constants (world units; the ball always sits at x = LANE_X) ────────
 const WORLD_W  = 400;
 const LANE_X   = WORLD_W / 2;
 // Enough of the course visible that the NEXT obstacle is on screen while you
-// are still timing the current one. At 720 the next ring appeared only as you
-// cleared the last, which left nothing to read ahead of.
-const VIEW_H   = 900;    // world units visible top-to-bottom, on every device
-const BALL_R   = 15;
-const THICK    = 12;     // obstacle stroke thickness
+// are still timing the current one.
+const VIEW_H   = 1150;   // world units visible top-to-bottom, on every device
+const BALL_R   = 19;
+const THICK    = 18;     // obstacle stroke thickness
+// How close the ball's edge has to get to a band to touch it.
+const REACH    = BALL_R + THICK / 2;
 
-const GRAV     = -1900;  // u/s^2
-const JUMP_V   = 600;    // u/s, set (not added) on tap — as the original does
-const FALL_MAX = -1500;
+const GRAV     = -2000;  // u/s^2
+const JUMP_V   = 700;    // u/s, set (not added) on tap — as the original does
+const FALL_MAX = -1600;
+// How far one tap lifts you. Everything else is sized against this: it is the
+// unit of "room to manoeuvre" in this game.
+const TAP_ARC  = (JUMP_V * JUMP_V) / (2 * -GRAV);   // 122.5u
 
-// Obstacles are ~250 units tall, and holding position between them costs a
-// full tap arc (~95 units) of bob. At a 320 gap the clear space between one
-// obstacle and the next was about 75 units — less than a single arc — so there
-// was nowhere to wait and read the spin, and the game became "arrive and hope".
-// 480 leaves ~235 units of room to hold station in.
-const OBSTACLE_GAP = 480;
-const FIRST_Y      = 520;
-// Where the colour switcher sits above its obstacle. It belongs just past the
-// obstacle you have cleared, NOT halfway to the next one: at the halfway point
-// it sat under 40 units below the next entry band, so your colour changed and
-// the band arrived before you could do anything about it.
-const SWITCHER_OFFSET = 170;
+// The furthest any shape reaches from its own centre. Used to size the gap
+// between obstacles and to decide what is in range for a hit test.
+const SHAPE_REACH = 250;
+
+// Obstacles are up to 500 units tall, and holding position costs a full tap
+// arc of bob. The clear space between one obstacle and the next is
+// GAP - 2*SHAPE_REACH, and it needs to be comfortably more than one arc or
+// there is nowhere to wait and read the spin.
+const OBSTACLE_GAP = 850;      // leaves 350u of clear air, ~2.9 tap arcs
+const FIRST_Y      = 620;
+// The color switcher sits halfway between one obstacle and the next.
+const SWITCHER_OFFSET = OBSTACLE_GAP / 2;
 
 // Where the ball sits on screen, as a fraction up from the bottom.
 const BALL_SCREEN_FRAC = 0.38;
 
 // Physics runs at a fixed step so a slow frame cannot move the ball further
-// than the collision band is wide. At FALL_MAX the ball covers 6.3 units per
-// step against a band of BALL_R + THICK/2 = 21, so it can never tunnel through
-// an obstacle. A variable step tied to the frame rate would let exactly that
-// happen on a stuttering phone — and it would look like a phantom death.
+// than the collision band is wide. At FALL_MAX the ball covers 6.7 units per
+// step against a REACH of 28, so it can never tunnel through an obstacle. A
+// variable step tied to the frame rate would let exactly that happen on a
+// stuttering phone — and it would look like a phantom death.
 const FIXED_DT = 1 / 240;
 const MAX_FRAME = 0.25;  // never simulate more than this per frame
+
+// How long the start screen waits before letting go of the ball.
+const START_GRACE = 10;  // seconds
 
 // ── Palette ─────────────────────────────────────────────────────────────────
 // White, blue, grey and black, to match the site. The blue is a brighter
 // sibling of the site primary (#1250B4): the real primary is legible as a
 // button on a dark surface but too dark to read reliably as a fast-moving
-// 12px arc on pure black, and misreading a colour here costs the match.
+// band on pure black, and misreading a color here costs the match.
 //
-// Black is a playable colour on a black background, so it is never drawn as
-// bare fill — it always carries a light rim. Without that rim a black segment
-// is invisible and the run ends on something the player could not see.
+// Black is a playable color on a black background, so it is never drawn as
+// bare fill — it always carries a light rim. Without that rim a black band is
+// invisible and the run ends on something the player could not see.
 const COLORS = [
   { key: 'white', fill: '#FFFFFF', rim: null },
   { key: 'blue',  fill: '#2E6FE0', rim: null },
@@ -94,26 +104,54 @@ function hash32(a, b) {
 // choices made about one obstacle so they don't correlate.
 const rnd01 = (seed, i, salt) => hash32(hash32(seed, i), salt) / 4294967296;
 
+const TAU = Math.PI * 2;
+const norm = (a) => ((a % TAU) + TAU) % TAU;
+
+/**
+ * Which of the four colors sits at local angle `a` on a loop.
+ *
+ * COLOR IS BY ANGLE, NOT BY DISTANCE ALONG THE PERIMETER. That distinction is
+ * the whole of bug #3 in the header, and it is worth spelling out.
+ *
+ * Colouring by arc length seems natural — walk the outline, change color every
+ * quarter of the way round. But a square's bottom edge is a different fraction
+ * of its perimeter than a circle's bottom is of its circumference. So on a
+ * "square with a circle inside", the two loops presented DIFFERENT colors at
+ * the point where the ball enters, and since the ball has one color it could
+ * not satisfy both. Those obstacles were literally impossible.
+ *
+ * By angle, every loop of an obstacle presents the same color at the same
+ * bearing from the centre, whatever its shape. The ball enters from straight
+ * below, so every loop shows it the same color and one correct read clears the
+ * whole obstacle.
+ *
+ * `mirror` handles the counter-rotating inner rings. Reflecting the angle
+ * about the vertical axis (a -> 3π - a) makes the inner ring's pattern travel
+ * the opposite way round while still agreeing with the outer ring at the top
+ * and bottom of the lane — which is exactly "spins the other way, but still
+ * lines up so you can pass through".
+ */
+function colorAtAngle(a, offset, mirror) {
+  const t = mirror ? norm(3 * Math.PI - a) : norm(a);
+  return (Math.floor(t / (Math.PI / 2)) + offset) & 3;
+}
+
 // ── Shapes ──────────────────────────────────────────────────────────────────
-// Every obstacle is one or more closed loops. A loop is a list of points in
-// the obstacle's own space; collision and colouring both work off arc length
-// along that loop, which means a circle, a square and a triangle are all
-// handled by the same code rather than three special cases.
-function circleLoop(r, steps = 72) {
+// Every obstacle is one or more closed loops, given as points in the shape's
+// own space. Nested loops carry spin:-1 and mirror:true so they turn against
+// the outer loop while still lining up with it on the lane.
+function circleLoop(r, steps = 96) {
   const pts = [];
   for (let i = 0; i < steps; i++) {
-    const a = (i / steps) * Math.PI * 2 - Math.PI / 2;
+    const a = (i / steps) * TAU;
     pts.push([Math.cos(a) * r, Math.sin(a) * r]);
   }
   return pts;
 }
-function polyLoop(n, r, rot = -Math.PI / 2, perSide = 16) {
-  // Corners are subdivided so arc length runs evenly around the shape — the
-  // colour boundaries are placed by arc length, and without subdivision a
-  // square's boundaries would all land on its corners.
+function polyLoop(n, r, rot = Math.PI / 2, perSide = 24) {
   const corners = [];
   for (let i = 0; i < n; i++) {
-    const a = rot + (i / n) * Math.PI * 2;
+    const a = rot + (i / n) * TAU;
     corners.push([Math.cos(a) * r, Math.sin(a) * r]);
   }
   const pts = [];
@@ -128,40 +166,28 @@ function polyLoop(n, r, rot = -Math.PI / 2, perSide = 16) {
   return pts;
 }
 
-// The six obstacle families, each one or more closed loops.
-//
-// Every loop of an obstacle turns TOGETHER, at one speed and one colour
-// offset. Counter-rotating the inner ring looks better and is unfair: the ball
-// crosses the outer and inner bands a tenth of a second apart, so two
-// independent rotations present two unrelated colours and clearing a nested
-// shape becomes a coin toss rather than a read. Turning as one means a player
-// who times the outer band correctly finds the same colour waiting inside.
-const SHAPES = [
-  { name: 'circle',         loops: [{ pts: circleLoop(122) }] },
-  { name: 'square',         loops: [{ pts: polyLoop(4, 150, Math.PI / 4) }] },
-  { name: 'triangle',       loops: [{ pts: polyLoop(3, 148) }] },
-  { name: 'doubleCircle',   loops: [{ pts: circleLoop(132) }, { pts: circleLoop(74) }] },
-  { name: 'squareCircle',   loops: [{ pts: polyLoop(4, 150, Math.PI / 4) }, { pts: circleLoop(72) }] },
-  { name: 'triangleCircle', loops: [{ pts: polyLoop(3, 148) }, { pts: circleLoop(72) }] },
-];
+const inner = (pts) => ({ pts, spin: -1, mirror: true });
+const outer = (pts) => ({ pts, spin: 1, mirror: false });
 
-// Arc-length tables, precomputed once per loop so the per-frame collision test
-// is a lookup rather than a re-measure.
-const LOOP_META = new Map();
-function meta(pts) {
-  let m = LOOP_META.get(pts);
-  if (m) return m;
-  const cum = [0];
-  let total = 0;
-  for (let i = 0; i < pts.length; i++) {
-    const a = pts[i], b = pts[(i + 1) % pts.length];
-    total += Math.hypot(b[0] - a[0], b[1] - a[1]);
-    cum.push(total);
-  }
-  m = { cum, total };
-  LOOP_META.set(pts, m);
-  return m;
-}
+// The six obstacle families. Sizes leave a visible gap between nested loops
+// (overlapping outlines read as a rendering fault) and leave more than one tap
+// arc of clear space inside the innermost loop, so there is somewhere to hold
+// station rather than being funnelled straight through.
+//
+// The square's corners sit ON the color boundaries (rot 0, so corners at
+// 0/90/180/270) rather than between them. Boundaries fall every 90 degrees of
+// bearing, so this is what makes each side exactly one color instead of each
+// side being split down the middle — the same reason the triangle, whose three
+// corners cannot all land on four boundaries, always has one side that
+// changes color partway along.
+const SHAPES = [
+  { name: 'circle',         loops: [outer(circleLoop(175))] },
+  { name: 'square',         loops: [outer(polyLoop(4, 205, 0))] },
+  { name: 'triangle',       loops: [outer(polyLoop(3, 250))] },
+  { name: 'doubleCircle',   loops: [outer(circleLoop(190)), inner(circleLoop(108))] },
+  { name: 'squareCircle',   loops: [outer(polyLoop(4, 205, 0)), inner(circleLoop(100))] },
+  { name: 'triangleCircle', loops: [outer(polyLoop(3, 250)), inner(circleLoop(100))] },
+];
 
 export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
   const canvasRef = useRef(null);
@@ -181,18 +207,15 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
       canvas.width  = Math.floor(W * dpr);
       canvas.height = Math.floor(H * dpr);
       // Height-driven, so the visible slice of course is identical everywhere.
-      scale = (H) / VIEW_H;
+      scale = H / VIEW_H;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
     layout();
-    // A ResizeObserver on the canvas ITSELF, not a window resize listener.
-    //
-    // The page's <main> animates its left and right edges over 300ms whenever
-    // the chat sidebar opens or closes, and the sidebars mount after the first
+    // A ResizeObserver on the canvas ITSELF, not a window resize listener. The
+    // page's <main> animates its left and right edges over 300ms whenever the
+    // chat sidebar opens or closes, and the sidebars mount after the first
     // paint. None of that fires a window resize event, so a listener-only
-    // canvas measures once at mount and then keeps a stale width for the whole
-    // match. That is exactly what happened here: the game laid itself out for a
-    // 280px box inside a 420px one and drew the entire course off-centre.
+    // canvas keeps a stale width for the whole match.
     const ro = new ResizeObserver(() => layout());
     ro.observe(canvas);
     const onResize = () => layout();
@@ -208,17 +231,18 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
       const dir    = rnd01(seed, i, 3) < 0.5 ? -1 : 1;
       // Spin speed ramps with height, capped so the game stays readable rather
       // than becoming a coin toss at obstacle forty.
-      const speed  = Math.min(1.05 + i * 0.022, 2.15) * (0.9 + rnd01(seed, i, 4) * 0.25);
+      const speed  = Math.min(1.0 + i * 0.02, 2.0) * (0.9 + rnd01(seed, i, 4) * 0.25);
       const offset = Math.floor(rnd01(seed, i, 5) * 4);
       o = {
         i, y: FIRST_Y + i * OBSTACLE_GAP,
         shape, dotted, omega: dir * speed, offset,
-        phase: rnd01(seed, i, 6) * Math.PI * 2,
+        phase: rnd01(seed, i, 6) * TAU,
         diamond: true,
-        // Switcher sits between this obstacle and the next.
+        // Switcher sits halfway between this obstacle and the next.
         switcher: true,
         switcherY: FIRST_Y + i * OBSTACLE_GAP + SWITCHER_OFFSET,
         switcherTo: Math.floor(rnd01(seed, i, 7) * 3), // index into "the other three"
+        cleared: null,
       };
       obstacles.set(i, o);
       return o;
@@ -227,13 +251,13 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
 
     // ── State ───────────────────────────────────────────────────────────────
     const S = {
-      y: 0, vy: JUMP_V * 0.5,
+      y: 0, vy: 0,
       color: 0,             // index into COLORS — starts white
       camBottom: -VIEW_H * BALL_SCREEN_FRAC,
       simT: 0, score: 0, dead: false,
       started: false,       // the run holds still until the first tap
-      pulse: 0,             // brief flash after collecting
-      deathFx: 0,
+      waitT: 0,             // how long the start screen has been up
+      pulse: 0,
     };
 
     // ── Input ───────────────────────────────────────────────────────────────
@@ -252,13 +276,12 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
     canvas.addEventListener('selectstart', noSel);
     window.addEventListener('keydown', onKey);
 
-    // ── Collision ───────────────────────────────────────────────────────────
-    // Nearest point on a loop to the ball, in the obstacle's own space. Returns
-    // the distance and the arc length at that point, which is what decides the
-    // colour. One routine for every shape.
+    // ── Geometry helpers ────────────────────────────────────────────────────
+    // Nearest point on a loop to a point, in the loop's own space. Returns the
+    // distance and the ANGLE of the closest point, which is what decides the
+    // color. One routine for every shape.
     function nearestOnLoop(pts, px, py) {
-      const m = meta(pts);
-      let bestD = Infinity, bestS = 0;
+      let bestD = Infinity, bx = 0, by = 0;
       for (let i = 0; i < pts.length; i++) {
         const a = pts[i], b = pts[(i + 1) % pts.length];
         const ax = a[0], ay = a[1];
@@ -268,54 +291,73 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
         t = t < 0 ? 0 : t > 1 ? 1 : t;
         const cx = ax + dx * t, cy = ay + dy * t;
         const d = Math.hypot(px - cx, py - cy);
-        if (d < bestD) { bestD = d; bestS = m.cum[i] + Math.hypot(dx, dy) * t; }
+        if (d < bestD) { bestD = d; bx = cx; by = cy; }
       }
-      return { d: bestD, s: bestS, total: m.total };
+      return { d: bestD, a: Math.atan2(by, bx) };
     }
-    // Colour of a loop at arc length s: four equal quarters, offset per
-    // obstacle so consecutive obstacles don't all present the same colour first.
-    const colorAtArc = (s, total, offset) =>
-      (Math.floor((s / total) * 4) + offset) % 4;
 
-    // A band kills on the FIRST contact of a pass, and only if the colours
+    // The point on p1→p2 where the color stops being `col`, to within a
+    // millionth of the segment. Used to end each color band exactly on its
+    // boundary, so consecutive bands share an endpoint instead of overlapping
+    // or leaving a notch.
+    function bisectBoundary(p1, p2, col, colAt) {
+      let lo = 0, hi = 1;
+      const at = (t) => [p1[0] + (p2[0] - p1[0]) * t, p1[1] + (p2[1] - p1[1]) * t];
+      for (let k = 0; k < 20; k++) {
+        const mid = (lo + hi) / 2;
+        if (colAt(at(mid)) === col) lo = mid; else hi = mid;
+      }
+      return at((lo + hi) / 2);
+    }
+
+    // ── Collision ───────────────────────────────────────────────────────────
+    // A band kills on the FIRST contact of a pass, and only if the colors
     // differ. Match it and that band is cleared for the rest of the pass.
     //
     // This rule is the whole game, so it is worth saying why it is not "every
     // contact is checked". A ring crossed through its middle is touched twice —
     // once entering at the bottom, once leaving at the top — and those two
-    // points sit opposite each other on the loop, which with four quarters means
-    // they are NEVER the same colour at the same instant. Checking both would
-    // make every ring impossible except when the spin happened to carry your
-    // colour half a turn during the crossing, which is not something a player
-    // can read or control: it would be luck wearing the costume of skill.
-    //
-    // Timing the entry IS readable and controllable, so that is what the game
-    // asks for. Get in cleanly and you are through.
+    // points sit opposite each other on the loop, which with four quarters
+    // means they are NEVER the same color at the same instant. Checking both
+    // would make every ring impossible except when the spin happened to carry
+    // your color half a turn during the crossing, which is not something a
+    // player can read or control: it would be luck wearing the costume of
+    // skill. Timing the entry IS readable, so that is what the game asks for.
     function hitTest() {
-      // Only obstacles that could possibly be in range — the ball is a point on
-      // the lane, so anything more than a shape's reach away in y cannot touch.
-      const first = Math.max(0, Math.floor((S.y - FIRST_Y - 260) / OBSTACLE_GAP));
-      const last  = Math.floor((S.y - FIRST_Y + 260) / OBSTACLE_GAP);
+      const span = SHAPE_REACH + REACH + 10;
+      const first = Math.max(0, Math.floor((S.y - FIRST_Y - span) / OBSTACLE_GAP));
+      const last  = Math.floor((S.y - FIRST_Y + span) / OBSTACLE_GAP);
       for (let i = first; i <= last; i++) {
         if (i < 0) continue;
         const o = obstacleAt(i);
         const dy = S.y - o.y;
         // Out of reach: forget any clearing, so an obstacle approached again
         // (after a fall) has to be entered honestly a second time.
-        if (Math.abs(dy) > 230) { o.cleared = null; continue; }
+        if (Math.abs(dy) > span) { o.cleared = null; continue; }
         if (!o.cleared) o.cleared = o.shape.loops.map(() => false);
         const th = angleOf(o, S.simT);
         for (let li = 0; li < o.shape.loops.length; li++) {
           if (o.cleared[li]) continue;
           const loop = o.shape.loops[li];
-          // Ball position in the obstacle's rotating frame.
-          const cos = Math.cos(-th), sin = Math.sin(-th);
-          const rx = 0 * cos - dy * sin;
-          const ry = 0 * sin + dy * cos;
-          const { d, s, total } = nearestOnLoop(loop.pts, rx, ry);
-          if (d < BALL_R + THICK / 2) {
-            const c = colorAtArc(s, total, o.offset);
-            if (c !== S.color) return true;
+          const a = th * loop.spin;
+          // Ball position in this loop's rotating frame.
+          const cos = Math.cos(-a), sin = Math.sin(-a);
+          const rx = -dy * sin;
+          const ry =  dy * cos;
+          const near = nearestOnLoop(loop.pts, rx, ry);
+          if (near.d < REACH) {
+            // The color that counts is the one on the LANE — the bearing of
+            // the ball from this obstacle's centre — not the bearing of
+            // whichever bit of outline happens to be nearest.
+            //
+            // They differ on polygons: a corner swinging sideways can be the
+            // closest point while the ball is still crossing the lane, and
+            // that corner may be a different quarter. Judging by the nearest
+            // point therefore let the outer and inner loops disagree, which is
+            // an obstacle nobody can enter. Judging by the lane bearing makes
+            // every loop of an obstacle agree exactly — see colorAtAngle.
+            const laneBearing = (dy >= 0 ? Math.PI / 2 : -Math.PI / 2) - a;
+            if (colorAtAngle(laneBearing, o.offset, loop.mirror) !== S.color) return true;
             o.cleared[li] = true;
           }
         }
@@ -328,14 +370,14 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
       for (const j of [i - 1, i, i + 1]) {
         if (j < 0) continue;
         const o = obstacleAt(j);
-        if (o.diamond && Math.abs(S.y - o.y) < BALL_R + 14) {
+        if (o.diamond && Math.abs(S.y - o.y) < BALL_R + 20) {
           o.diamond = false; S.score += 1; S.pulse = 1;
         }
-        if (o.switcher && Math.abs(S.y - o.switcherY) < BALL_R + 15) {
+        if (o.switcher && Math.abs(S.y - o.switcherY) < BALL_R + 18) {
           o.switcher = false;
-          // Always a DIFFERENT colour — a switcher that can hand back the
-          // colour you already have is a switcher that sometimes does nothing,
-          // which reads as a bug rather than as luck.
+          // Always a DIFFERENT color — a switcher that can hand back the color
+          // you already have is a switcher that sometimes does nothing, which
+          // reads as a bug rather than as luck.
           const others = [0, 1, 2, 3].filter(c => c !== S.color);
           S.color = others[o.switcherTo % others.length];
           S.pulse = 1;
@@ -346,7 +388,12 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
     // ── Simulation ──────────────────────────────────────────────────────────
     function step(dt) {
       if (S.dead) return;
-      if (!S.started) return;      // held at the start line until the first tap
+      if (!S.started) {
+        // The start screen is a grace period, not a pause: it runs out.
+        S.waitT += dt;
+        if (S.waitT >= START_GRACE) S.started = true;
+        return;
+      }
       S.simT += dt;
       S.vy += GRAV * dt;
       if (S.vy < FALL_MAX) S.vy = FALL_MAX;
@@ -356,8 +403,8 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
       if (target > S.camBottom) S.camBottom = target;   // camera never drops
 
       pickups();
-      // Falling out of the bottom of the frame ends the run, same as the
-      // original — otherwise a player who misses everything simply floats.
+      // Falling out of the bottom of the frame ends the run — otherwise a
+      // player who misses everything simply floats.
       if (S.y < S.camBottom - BALL_R * 2) return die();
       if (hitTest()) return die();
     }
@@ -365,120 +412,128 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
     function die() {
       if (S.dead) return;
       S.dead = true;
-      S.deathFx = 1;
       cbRef.current.onDeath?.(Math.floor(S.score), Math.floor(S.simT * 1000));
     }
 
     // ── Drawing ─────────────────────────────────────────────────────────────
-    // World -> screen. y is flipped: the world climbs, the screen does not.
     const sx = (wx) => W / 2 + (wx - LANE_X) * scale;
     const sy = (wy) => H - (wy - S.camBottom) * scale;
 
-    function strokeLoopSegments(loop, cx, cy, ang, offset, dotted) {
+    // Draws one loop as four color bands.
+    //
+    // The bands are built by walking the outline and cutting it exactly where
+    // the color changes, so neighbouring bands share an endpoint. Cutting only
+    // at whichever vertex happened to be nearest — which is what the first
+    // version did — leaves each join a little short or a little long, and the
+    // result is the ragged, overlapping outline in the bug report.
+    function drawLoop(loop, cx, cy, ang, offset, dotted) {
       const pts = loop.pts;
-      const m = meta(pts);
+      const n = pts.length;
       const cos = Math.cos(ang), sin = Math.sin(ang);
-      const px = (p) => cx + (p[0] * cos - p[1] * sin) * scale;
-      const py = (p) => cy - (p[0] * sin + p[1] * cos) * scale;
+      const toX = (p) => cx + (p[0] * cos - p[1] * sin) * scale;
+      const toY = (p) => cy - (p[0] * sin + p[1] * cos) * scale;
+      const colAt = (p) => colorAtAngle(Math.atan2(p[1], p[0]), offset, loop.mirror);
 
       if (dotted) {
         // Dotted is a LOOK, not a gap: collision is unchanged, so a dotted
-        // obstacle is exactly as solid as it appears to be in the original.
-        // Making the gaps real would kill players on something invisible.
-        const r = (THICK * 0.52) * scale;
-        const stepLen = THICK * 1.85;
-        const n = Math.max(12, Math.round(m.total / stepLen));
-        for (let k = 0; k < n; k++) {
-          const s = (k / n) * m.total;
-          const idx = binarySearchArc(m.cum, s);
-          const a = pts[idx], b = pts[(idx + 1) % pts.length];
-          const segLen = m.cum[idx + 1] - m.cum[idx] || 1;
-          const t = (s - m.cum[idx]) / segLen;
-          const p = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-          const col = COLORS[colorAtArc(s, m.total, offset)];
-          const X = px(p), Y = py(p);
-          // Rim first, underneath — a black dot on a black background is
-          // otherwise nothing at all.
+        // obstacle is exactly as solid as it appears to be. Making the gaps
+        // real would kill players on something that looked like empty space.
+        const r = THICK * 0.5 * scale;
+        const stepN = Math.max(16, Math.round(n / 3));
+        for (let k = 0; k < stepN; k++) {
+          const p = pts[Math.round((k / stepN) * n) % n];
+          const col = COLORS[colAt(p)];
+          const X = toX(p), Y = toY(p);
           if (col.rim) {
-            ctx.beginPath(); ctx.arc(X, Y, r + 2, 0, Math.PI * 2);
+            ctx.beginPath(); ctx.arc(X, Y, r + 2.5, 0, TAU);
             ctx.fillStyle = col.rim; ctx.fill();
           }
-          ctx.beginPath(); ctx.arc(X, Y, r, 0, Math.PI * 2);
+          ctx.beginPath(); ctx.arc(X, Y, r, 0, TAU);
           ctx.fillStyle = col.fill; ctx.fill();
         }
         return;
       }
 
+      // Build the four bands as exact point runs.
+      const bands = [];
+      let run = [pts[0]];
+      let runCol = colAt(pts[0]);
+      for (let k = 1; k <= n; k++) {
+        const p = pts[k % n];
+        const c = colAt(p);
+        if (c !== runCol) {
+          // Cut exactly where the color changes, found by bisecting the
+          // segment. Solving for the boundary bearing algebraically means
+          // handling the mirror and the 2π wrap, and getting either subtly
+          // wrong puts the seam in the wrong place — which is the class of bug
+          // this whole routine exists to fix. Twenty halvings on four segments
+          // per loop is free, and it cannot be wrong.
+          const prev = pts[(k - 1) % n];
+          const cut = bisectBoundary(prev, p, runCol, colAt);
+          run.push(cut);
+          bands.push({ col: runCol, run });
+          run = [cut, p];
+          runCol = c;
+        } else {
+          run.push(p);
+        }
+      }
+      bands.push({ col: runCol, run });
+      // The walk starts mid-band, so the first and last runs are two halves of
+      // the same band — joining them keeps that band unbroken.
+      if (bands.length > 1 && bands[0].col === bands[bands.length - 1].col) {
+        const tail = bands.pop();
+        bands[0].run = tail.run.concat(bands[0].run);
+      }
+
       ctx.lineCap = 'butt';
-      for (let q = 0; q < 4; q++) {
-        const from = (q / 4) * m.total, to = ((q + 1) / 4) * m.total;
-        const col = COLORS[(q + offset) % 4];
+      ctx.lineJoin = 'round';
+      for (const { col, run: r } of bands) {
+        if (r.length < 2) continue;
+        const c = COLORS[col];
         ctx.beginPath();
-        let started = false;
-        for (let i = 0; i < pts.length; i++) {
-          const s = m.cum[i];
-          if (s < from - 1e-6 || s > to + 1e-6) continue;
-          const X = px(pts[i]), Y = py(pts[i]);
-          if (!started) { ctx.moveTo(X, Y); started = true; } else ctx.lineTo(X, Y);
-        }
-        // Close the quarter onto the FIRST POINT OF THE NEXT quarter, wrapping
-        // at the seam, so the four arcs meet with no hairline of background
-        // between them. Clamping to the last index instead leaves the final
-        // quarter open and draws a visible notch at the top of every shape.
-        if (started) {
-          const nextIdx = Math.round((to / m.total) * pts.length) % pts.length;
-          ctx.lineTo(px(pts[nextIdx]), py(pts[nextIdx]));
-        }
-        // Black is a playable colour on a black background, so it is drawn as
-        // a light rim with black laid over it — an outlined band rather than a
+        ctx.moveTo(toX(r[0]), toY(r[0]));
+        for (let k = 1; k < r.length; k++) ctx.lineTo(toX(r[k]), toY(r[k]));
+        // Black is a playable color on a black background, so it is drawn as a
+        // light rim with black laid over it — an outlined band rather than a
         // hole in the screen.
-        if (col.rim) {
-          ctx.lineWidth = THICK * scale + 4;
-          ctx.strokeStyle = col.rim;
+        if (c.rim) {
+          ctx.lineWidth = THICK * scale + 5;
+          ctx.strokeStyle = c.rim;
           ctx.stroke();
         }
         ctx.lineWidth = THICK * scale;
-        ctx.strokeStyle = col.fill;
+        ctx.strokeStyle = c.fill;
         ctx.stroke();
       }
-    }
-
-    function binarySearchArc(cum, s) {
-      let lo = 0, hi = cum.length - 2;
-      while (lo < hi) {
-        const mid = (lo + hi + 1) >> 1;
-        if (cum[mid] <= s) lo = mid; else hi = mid - 1;
-      }
-      return lo;
     }
 
     function drawDiamond(x, y, r) {
       ctx.beginPath();
       ctx.moveTo(x, y - r);
-      ctx.lineTo(x + r * 0.68, y);
+      ctx.lineTo(x + r * 0.7, y);
       ctx.lineTo(x, y + r);
-      ctx.lineTo(x - r * 0.68, y);
+      ctx.lineTo(x - r * 0.7, y);
       ctx.closePath();
       ctx.fillStyle = '#FFFFFF';
-      ctx.shadowColor = 'rgba(255,255,255,0.55)';
-      ctx.shadowBlur = 12;
+      ctx.shadowColor = 'rgba(255,255,255,0.6)';
+      ctx.shadowBlur = 14;
       ctx.fill();
       ctx.shadowBlur = 0;
     }
 
     function drawSwitcher(x, y, r, t) {
-      // Four quadrants, slowly turning, so it reads as "this changes colour".
       for (let q = 0; q < 4; q++) {
         ctx.beginPath();
         ctx.moveTo(x, y);
-        ctx.arc(x, y, r, t + (q / 4) * Math.PI * 2, t + ((q + 1) / 4) * Math.PI * 2);
+        ctx.arc(x, y, r, t + (q / 4) * TAU, t + ((q + 1) / 4) * TAU);
         ctx.closePath();
         ctx.fillStyle = COLORS[q].fill;
         ctx.fill();
       }
       ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.arc(x, y, r, 0, TAU);
+      ctx.strokeStyle = 'rgba(255,255,255,0.45)';
       ctx.lineWidth = 1.5;
       ctx.stroke();
     }
@@ -487,14 +542,14 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
       const x = sx(LANE_X), y = sy(S.y), r = BALL_R * scale;
       const col = COLORS[S.color];
       ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.arc(x, y, r, 0, TAU);
       ctx.fillStyle = col.fill;
-      ctx.shadowColor = col.rim ? 'rgba(200,210,230,0.5)' : col.fill;
-      ctx.shadowBlur = 16 + S.pulse * 22;   // brief flare when something is collected
+      ctx.shadowColor = col.rim ? 'rgba(200,210,230,0.55)' : col.fill;
+      ctx.shadowBlur = 16 + S.pulse * 22;
       ctx.fill();
       ctx.shadowBlur = 0;
-      // The black ball always carries a rim. Without it the thing the player
-      // is steering disappears against the background.
+      // The black ball always carries a rim. Without it the thing the player is
+      // steering disappears against the background.
       ctx.lineWidth = col.rim ? 3 : 1.5;
       ctx.strokeStyle = col.rim || 'rgba(0,0,0,0.35)';
       ctx.stroke();
@@ -505,45 +560,50 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
       ctx.fillRect(0, 0, W, H);
 
       const topY = S.camBottom + VIEW_H;
-      const first = Math.max(0, Math.floor((S.camBottom - FIRST_Y - 260) / OBSTACLE_GAP));
-      const last  = Math.floor((topY - FIRST_Y + 260) / OBSTACLE_GAP);
+      const span = SHAPE_REACH + 40;
+      const first = Math.max(0, Math.floor((S.camBottom - FIRST_Y - span) / OBSTACLE_GAP));
+      const last  = Math.floor((topY - FIRST_Y + span) / OBSTACLE_GAP);
       for (let i = first; i <= last; i++) {
         if (i < 0) continue;
         const o = obstacleAt(i);
         const cx = sx(LANE_X), cy = sy(o.y);
         const th = angleOf(o, S.simT);
         for (const loop of o.shape.loops) {
-          strokeLoopSegments(loop, cx, cy, th, o.offset, o.dotted);
+          drawLoop(loop, cx, cy, th * loop.spin, o.offset, o.dotted);
         }
-        if (o.diamond)  drawDiamond(cx, cy, 13 * scale);
-        if (o.switcher) drawSwitcher(sx(LANE_X), sy(o.switcherY), 15 * scale, S.simT * 0.9);
+        if (o.diamond)  drawDiamond(cx, cy, 20 * scale);
+        if (o.switcher) drawSwitcher(sx(LANE_X), sy(o.switcherY), 18 * scale, S.simT * 0.9);
       }
 
       if (!S.dead) drawBall();
-
       drawHUD();
 
       if (!S.started) {
-        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillStyle = 'rgba(0,0,0,0.58)';
         ctx.fillRect(0, 0, W, H);
-        ctx.fillStyle = '#FFFFFF';
+        const left = Math.max(0, Math.ceil(START_GRACE - S.waitT));
         ctx.textAlign = 'center';
+        ctx.fillStyle = left <= 3 ? '#FF4D4D' : '#FFFFFF';
+        ctx.font = `900 ${Math.round(Math.min(W, H) * 0.13)}px system-ui, sans-serif`;
+        ctx.fillText(String(left), W / 2, H * 0.40);
+        ctx.fillStyle = '#FFFFFF';
         ctx.font = `900 ${Math.round(Math.min(W, H) * 0.075)}px system-ui, sans-serif`;
-        ctx.fillText('TAP TO START', W / 2, H * 0.46);
+        ctx.fillText('TAP TO START', W / 2, H * 0.49);
         ctx.font = `600 ${Math.round(Math.min(W, H) * 0.036)}px system-ui, sans-serif`;
         ctx.fillStyle = 'rgba(255,255,255,0.72)';
-        ctx.fillText('Pass through your own colour', W / 2, H * 0.52);
+        ctx.fillText('Pass through your own color', W / 2, H * 0.545);
+        ctx.textAlign = 'left';
       }
     }
 
     function drawHUD() {
-      // Score top-centre and time top-right, matching Rush Hour — the catch-up
-      // banner and the help button own the two left corners.
-      ctx.textAlign = 'center';
+      ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 8;
+      // Score top-LEFT, timer top-right. The catch-up banner takes the top
+      // centre and the help button the bottom left, so nothing collides.
+      ctx.textAlign = 'left';
       ctx.fillStyle = '#FFFFFF';
       ctx.font = `900 ${Math.round(H * 0.055)}px system-ui, sans-serif`;
-      ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 8;
-      ctx.fillText(String(S.score), W / 2, H * 0.085);
+      ctx.fillText(String(S.score), 16, H * 0.085);
       ctx.textAlign = 'right';
       ctx.font = `700 ${Math.round(H * 0.030)}px system-ui, sans-serif`;
       ctx.fillStyle = 'rgba(255,255,255,0.85)';
@@ -563,8 +623,7 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
 
       // Ping even before the first tap. The server's stall watchdog finalises a
       // player who goes quiet for 15 seconds, and someone reading the help
-      // panel on the start screen is not a stalled client — without this they
-      // are cut off mid-read with a run of zero.
+      // panel on the start screen is not a stalled client.
       pingT += frame;
       if (!S.dead && pingT > 0.35) {
         pingT = 0;

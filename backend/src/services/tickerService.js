@@ -13,7 +13,7 @@ const GAME_META = {
   coin_flip:  { icon: '🟡', name: 'Coin Flip'   },
   blackjack:  { icon: '🃏', name: 'Blackjack'   },
   carDash:    { icon: '🚗', name: 'Rush Hour'   },
-  colorRush:  { icon: '🎨', name: 'Color Rush'  },
+  colorRush:  { icon: '🌀', name: 'Color Rush'  },
   tower:      { icon: '🗼', name: 'Tower'       },
 };
 const GAME_LIST = Object.values(GAME_META);

@@ -9,7 +9,7 @@ const GAME_NAMES = {
   scrabble:    '🔤 Word VS',
   blockBlast:  '🟦 Block Burst',
   carDash:     '🚗 Rush Hour',
-  colorRush:   '🎨 Color Rush',
+  colorRush:   '🌀 Color Rush',
   tower:       '🗼 Tower',
 };
 

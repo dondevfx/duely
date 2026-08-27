@@ -56,6 +56,36 @@ test('the game is registered everywhere a game has to be registered', () => {
   assert.deepEqual(missing, [], `not registered in: ${missing.join(', ')}`);
 });
 
+test('the same icon is used everywhere the game is listed', () => {
+  // The icon is hand-copied into a dozen lists. Changing it means changing all
+  // of them, and the one that gets missed shows a different game's face in the
+  // sidebar or the invite toast.
+  // Each site says exactly where ITS icon lives. A heuristic search finds the
+  // NEIGHBOURING game's icon instead — these lists run one line per game.
+  const sites = [
+    ['games list',  fe('data', 'games.js'),                /slug:\s*'color-rush',[\s\S]{0,80}?icon:\s*'(.+?)'/],
+    ['navbar',      fe('components', 'Navbar.jsx'),        /\{ icon: '(.+?)', label: 'Color Rush'/],
+    ['sidebar',     fe('components', 'LeftSidebar.jsx'),   /\{ icon: '(.+?)', label: 'Color Rush'/],
+    ['quick match', fe('pages', 'QuickMatch.jsx'),         /name: 'Color Rush',\s*icon: '(.+?)'/],
+    ['help panel',  fe('components', 'GameHelp.jsx'),      /colorRush: \{[\s\S]{0,40}?title: '(.+?) Color Rush'/],
+    ['join modal',  fe('components', 'JoinRoomModal.jsx'), /colorRush:\s*'(.+?) Color Rush'/],
+    ['challenge',   fe('pages', 'ChallengeJoin.jsx'),      /colorRush:\s*'(.+?) Color Rush'/],
+    ['leaderboard', fe('pages', 'Leaderboard.jsx'),        /id: 'colorRush'[\s\S]{0,90}?icon: '(.+?)'/],
+    ['profile',     fe('pages', 'Profile.jsx'),            /colorRush:\s*\{ emoji: '(.+?)'/],
+    ['ticker',      be('services', 'tickerService.js'),    /colorRush:\s*\{ icon: '(.+?)'/],
+    ['lobby title', fe('pages', 'ColorRushGame.jsx'),      /title="(.+?) Color Rush"/],
+  ];
+  const icons = new Set();
+  const missing = [];
+  for (const [name, src, re] of sites) {
+    const m = src.match(re);
+    if (!m) { missing.push(name); continue; }
+    icons.add(m[1]);
+  }
+  assert.deepEqual(missing, [], `no icon found for: ${missing.join(', ')}`);
+  assert.equal(icons.size, 1, `the icon has drifted — found ${[...icons].join(' ')}`);
+});
+
 test('the room lookup tables all know about it', () => {
   // Three separate copies of this table drive forfeits, disconnects and the
   // leave path. A game missing from one of them leaves matches that never
@@ -181,7 +211,7 @@ test('nothing about the course depends on the device', () => {
   // The visible slice of the course is fixed in world units, so a tablet gets
   // no more warning about an approaching obstacle than a phone does.
   assert.match(CANVAS, /const VIEW_H\s*=\s*\d+/);
-  assert.match(CANVAS, /scale = \(H\) \/ VIEW_H/,
+  assert.match(CANVAS, /scale = H \/ VIEW_H/,
     'the scale must come from the height against a fixed world view');
 });
 
@@ -211,7 +241,31 @@ test('the ball travels less per step than the collision band is wide', () => {
 test('a band only kills on a colour mismatch', () => {
   const at = CANVAS.indexOf('function hitTest');
   const body = CANVAS.slice(at, CANVAS.indexOf('\n    }\n', at));
-  assert.match(body, /if \(c !== S\.color\) return true;/);
+  assert.match(body, /colorAtAngle\([^)]*\) !== S\.color\) return true;/);
+});
+
+test('colour is decided by angle, never by distance round the outline', () => {
+  // This is what makes a nested obstacle possible at all. A square's bottom
+  // edge is a different fraction of its perimeter than a circle's bottom is of
+  // its circumference, so colouring by arc length made the two loops of a
+  // "square with a circle inside" present DIFFERENT colours at the entry — and
+  // the ball only has one colour, so those obstacles could not be entered.
+  assert.match(CANVAS, /function colorAtAngle\(a, offset, mirror\)/);
+  assert.doesNotMatch(CANVAS, /colorAtArc/, 'the arc-length colouring must be gone');
+  assert.doesNotMatch(CANVAS, /cum\b/,      'and its arc-length tables with it');
+});
+
+test('the colour that kills you is the one on the lane', () => {
+  // Not the colour of whichever bit of outline is merely nearest. On a polygon
+  // a corner can swing sideways and be the closest point while the ball is
+  // still crossing the lane, and that corner may be a different quarter —
+  // which lets the outer and inner loops disagree again.
+  const at = CANVAS.indexOf('function hitTest');
+  const body = CANVAS.slice(at, CANVAS.indexOf('\n    }\n', at));
+  assert.match(body, /laneBearing/, 'the colour must be read at the lane bearing');
+  assert.match(body, /\(dy >= 0 \? Math\.PI \/ 2 : -Math\.PI \/ 2\) - a/);
+  assert.doesNotMatch(body, /colorAtAngle\(near\.a/,
+    'judging by the nearest point is what let nested loops disagree');
 });
 
 test('matching a band clears it for the rest of the pass', () => {
@@ -226,11 +280,41 @@ test('matching a band clears it for the rest of the pass', () => {
   assert.match(body, /o\.cleared = null/, 'clearing must reset once the obstacle is out of reach');
 });
 
-test('every loop of one obstacle turns together', () => {
-  // Counter-rotating an inner ring means the ball meets two unrelated colours
-  // a tenth of a second apart, which is a coin toss rather than a read.
-  assert.doesNotMatch(CANVAS, /spin:\s*-/, 'no loop may counter-rotate');
-  assert.doesNotMatch(CANVAS, /loop\.spin/, 'all loops of an obstacle share one angle');
+test('a nested ring counter-rotates, and still lines up on the lane', () => {
+  // Both halves of one request: the inner ring must visibly spin the other way,
+  // AND it must still be enterable. Mirroring the colour lookup about the
+  // vertical axis is what buys both — the pattern travels the opposite way
+  // round while still agreeing with the outer ring where the ball crosses.
+  assert.match(CANVAS, /const inner = \(pts\) => \(\{ pts, spin: -1, mirror: true \}\)/);
+  assert.match(CANVAS, /const outer = \(pts\) => \(\{ pts, spin: 1, mirror: false \}\)/);
+  assert.match(CANVAS, /th \* loop\.spin/, 'each loop must be drawn at its own signed angle');
+
+  // Every nested family must actually use inner() for its second loop.
+  for (const name of ['doubleCircle', 'squareCircle', 'triangleCircle']) {
+    const at = CANVAS.indexOf(`name: '${name}'`);
+    const line = CANVAS.slice(at, CANVAS.indexOf('\n', at));
+    assert.match(line, /inner\(/, `${name}'s inner loop must counter-rotate`);
+  }
+});
+
+test('the mirror makes outer and inner agree at both lane crossings', () => {
+  // The property proven by hand, so it cannot quietly stop being true.
+  // colorAtAngle(a, off, mirror) = floor(norm(mirror ? 3π-a : a) / (π/2)) + off
+  const norm = (a) => ((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  const colorAtAngle = (a, off, mirror) =>
+    (Math.floor(norm(mirror ? 3 * Math.PI - a : a) / (Math.PI / 2)) + off) & 3;
+
+  for (let off = 0; off < 4; off++) {
+    for (let k = 0; k < 720; k++) {
+      const th = (k / 720) * Math.PI * 2;
+      for (const dy of [-1, 1]) {
+        const bearing = dy >= 0 ? Math.PI / 2 : -Math.PI / 2;
+        const o = colorAtAngle(bearing - th * 1, off, false);   // outer: spin +1
+        const i = colorAtAngle(bearing - th * -1, off, true);   // inner: spin -1, mirrored
+        assert.equal(i, o, `outer ${o} vs inner ${i} at offset ${off}, angle ${k}, dy ${dy}`);
+      }
+    }
+  }
 });
 
 test('there is room between obstacles to hold station', () => {
@@ -241,23 +325,41 @@ test('there is room between obstacles to hold station', () => {
   const gap    = num(/const OBSTACLE_GAP = (\d+)/);
   const jump   = num(/const JUMP_V\s*=\s*(\d+)/);
   const grav   = Math.abs(num(/const GRAV\s*=\s*(-?\d+)/));
+  const reach  = num(/const SHAPE_REACH = (\d+)/);
   const arc    = (jump * jump) / (2 * grav);        // how far one tap lifts you
-  const reach  = 155;                               // widest shape's half-height
   const clear  = gap - 2 * reach;
-  assert.ok(clear > arc * 1.5,
+  assert.ok(clear > arc * 2,
     `only ${clear.toFixed(0)}u of clear space between obstacles against a ${arc.toFixed(0)}u tap arc`);
 });
 
-test('the colour switcher is not parked on top of the next obstacle', () => {
-  // At the halfway point it sat under 40 units below the next entry band: your
-  // colour changed and the band arrived before you could act on it.
+test('the colour switcher sits midway between two obstacles', () => {
+  // It used to sit just past the obstacle it belonged to, which put it under
+  // 40 units below the next entry band: your colour changed and the ring
+  // arrived before you could act on it.
+  assert.match(CANVAS, /const SWITCHER_OFFSET = OBSTACLE_GAP \/ 2;/,
+    'the switcher must be at the midpoint, not an arbitrary offset');
+  assert.match(CANVAS, /switcherY: FIRST_Y \+ i \* OBSTACLE_GAP \+ SWITCHER_OFFSET/);
+});
+
+test('the obstacles are big enough to hold station inside', () => {
+  // The innermost loop of a nested shape has to leave more than one tap arc of
+  // clear air, or a player who ends up inside cannot stop and is funnelled
+  // straight out through whatever colour happens to be there.
   const num = (re) => Number(CANVAS.match(re)[1]);
-  const gap    = num(/const OBSTACLE_GAP = (\d+)/);
-  const off    = num(/const SWITCHER_OFFSET = (\d+)/);
-  const reach  = 155;
-  const roomAfter = (gap - reach) - off;   // distance from switcher to the next band
-  assert.ok(roomAfter > 100,
-    `only ${roomAfter}u between the colour switcher and the next entry band`);
+  const jump  = num(/const JUMP_V\s*=\s*(\d+)/);
+  const grav  = Math.abs(num(/const GRAV\s*=\s*(-?\d+)/));
+  const ballR = num(/const BALL_R\s*=\s*(\d+)/);
+  const thick = num(/const THICK\s*=\s*(\d+)/);
+  const arc   = (jump * jump) / (2 * grav);
+  const reach = ballR + thick / 2;
+  // Every circleLoop radius used as an inner loop.
+  const inners = [...CANVAS.matchAll(/inner\(circleLoop\((\d+)\)\)/g)].map(m => Number(m[1]));
+  assert.ok(inners.length >= 3, `expected the nested shapes, found ${inners.length}`);
+  for (const r of inners) {
+    const window = 2 * (r - reach);
+    assert.ok(window > arc,
+      `an inner ring of ${r} leaves ${window}u to hover in against a ${arc}u tap arc`);
+  }
 });
 
 test('black stays visible on a black background', () => {
@@ -274,11 +376,53 @@ test('black stays visible on a black background', () => {
 test('a dotted obstacle is exactly as solid as a plain one', () => {
   // Dotted is a look. If the gaps were real, a player would die on something
   // that looked like empty space.
-  const at = CANVAS.indexOf('function strokeLoopSegments');
-  const body = CANVAS.slice(at, CANVAS.indexOf('function binarySearchArc'));
+  const at = CANVAS.indexOf('function drawLoop');
+  const body = CANVAS.slice(at, CANVAS.indexOf('function drawDiamond'));
   assert.match(body, /if \(dotted\)/, 'dotted must be a drawing branch');
   const hit = CANVAS.slice(CANVAS.indexOf('function hitTest'), CANVAS.indexOf('function pickups'));
   assert.doesNotMatch(hit, /dotted/, 'collision must not know about dotted at all');
+});
+
+test('colour bands are cut exactly where the colour changes', () => {
+  // Ending each band at whichever vertex happened to be nearest leaves every
+  // join a little short or a little long — the ragged, overlapping outline in
+  // the bug report. Neighbouring bands must share an exact endpoint.
+  const at = CANVAS.indexOf('function drawLoop');
+  const body = CANVAS.slice(at, CANVAS.indexOf('function drawDiamond'));
+  assert.match(body, /bisectBoundary\(prev, p, runCol, colAt\)/);
+  assert.match(body, /run = \[cut, p\]/, 'the next band must start on the same point');
+  assert.match(body, /bands\[0\]\.col === bands\[bands\.length - 1\]\.col/,
+    'the walk starts mid-band, so the two halves must be rejoined');
+});
+
+test('the start screen runs out instead of waiting forever', () => {
+  assert.match(CANVAS, /const START_GRACE = 10;/);
+  const at = CANVAS.indexOf('function step');
+  const body = CANVAS.slice(at, CANVAS.indexOf('function die'));
+  assert.match(body, /S\.waitT \+= dt;[\s\S]{0,120}?if \(S\.waitT >= START_GRACE\) S\.started = true;/,
+    'the grace period must expire and let the ball go');
+});
+
+test('the HUD puts the score top-left and the timer top-right', () => {
+  const at = CANVAS.indexOf('function drawHUD');
+  const body = CANVAS.slice(at, CANVAS.indexOf('// ── Loop'));
+  const score = body.indexOf('String(S.score)');
+  const timer = body.indexOf("'s'");
+  assert.ok(score !== -1 && timer !== -1);
+  assert.match(body.slice(0, score), /textAlign = 'left'/, 'the score is left-aligned');
+  assert.match(body.slice(score, timer), /textAlign = 'right'/, 'the timer is right-aligned');
+  // And the catch-up banner must move out of the corner the score now owns.
+  assert.match(PAGE, /absolute left-1\/2 -translate-x-1\/2 top-3/,
+    'the catch-up banner belongs in the top centre now');
+});
+
+test('nothing user-facing spells it "colour"', () => {
+  // The site says color everywhere else.
+  for (const [name, src] of [['canvas', CANVAS], ['page', PAGE], ['help', fe('components', 'GameHelp.jsx')]]) {
+    const strings = [...src.matchAll(/'([^'\n]{4,})'|"([^"\n]{4,})"/g)].map(m => m[1] || m[2]);
+    const bad = strings.filter(s => /colour/i.test(s));
+    assert.deepEqual(bad, [], `${name} has British spelling in user-facing text: ${bad.join(' | ')}`);
+  }
 });
 
 test('the six requested obstacle families all exist', () => {

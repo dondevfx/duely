@@ -8,8 +8,8 @@ const { findRoomBySocket } = require('./roomLookup');
  * colorRushEngine.js — "Color Rush"
  *
  * Tap to fly a ball up through spinning obstacles. You may only pass through
- * the part of an obstacle matching your current colour; touching any other
- * colour ends the run. White diamonds inside the obstacles are worth a point
+ * the part of an obstacle matching your current color; touching any other
+ * color ends the run. White diamonds inside the obstacles are worth a point
  * each, and the highest score wins.
  *
  * Both players climb the SAME seeded course, so the only variable is
@@ -54,7 +54,7 @@ const WATCH_MS   = 2_000;
 //   obstacle spacing        480 world units (client OBSTACLE_GAP)
 //   fastest possible climb  ~300 u/s (tapping again the instant the arc peaks)
 //   => 0.63 obstacles/second, and only if the player never once has to wait
-//      for their colour to come round — which the game is built to make them do
+//      for their color to come round — which the game is built to make them do
 //
 // The cap is 6/s, an order of magnitude above that, because clipping an honest
 // player is far worse than a loose bound on a cheater: a clipped score loses a
