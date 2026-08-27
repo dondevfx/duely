@@ -25,6 +25,7 @@ const GAME_INFO = {
   // the survival time of the same run that set the score (see
   // highscoreService.updateHighscorePair), so the two always describe one run.
   carDash:       { emoji: '🚗', name: 'Rush Hour', timeKey: 'carDashMs' },
+  colorRush:     { emoji: '🎨', name: 'Color Rush', timeKey: 'colorRushMs' },
   tower:         { emoji: '🗼', name: 'Tower' },
   blackjack:     { emoji: '🃏', name: 'Blackjack' },
   coin_flip:     { emoji: '🟡', name: 'Coin Flip' },
@@ -36,6 +37,7 @@ const HIGHSCORE_LABELS = {
   blockBlast: 'Score',
   scrabble:   'Score',
   carDash:    'Score',
+  colorRush:  'Diamonds',
   tower:      'Blocks',
 };
 

@@ -26,7 +26,7 @@ const handlers = be('socket', 'handlers.js');
 const lobby    = fe('components', 'GameLobby.jsx');
 
 // Room ids the server will actually build a room for.
-const VALID = ['blackjack', 'coin-flip', 'scrabble', 'blockBlast', 'carDash', 'tower'];
+const VALID = ['blackjack', 'coin-flip', 'scrabble', 'blockBlast', 'carDash', 'colorRush', 'tower'];
 
 test('every accepted game id has a room to build', () => {
   // An id in the allowlist with no case in the switch accepts the invite and

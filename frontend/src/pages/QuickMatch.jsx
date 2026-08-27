@@ -20,6 +20,7 @@ const POOL = [
   { route: '/game/blackjack',   name: 'Blackjack',    icon: '🃏', queueKey: 'blackjack' },
   { route: '/game/word-vs',     name: 'Word VS',       icon: '🔤', queueKey: 'scrabble' },
   { route: '/game/car-dash',    name: 'Rush Hour',    icon: '🚗', queueKey: 'car-dash' },
+  { route: '/game/color-rush',  name: 'Color Rush',   icon: '🎨', queueKey: 'color-rush' },
   { route: '/game/tower',       name: 'Tower',        icon: '🗼', queueKey: 'tower' },
 ];
 

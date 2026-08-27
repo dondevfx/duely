@@ -25,6 +25,7 @@ const GAME_LABELS = [
   { key: 'blackjack',  label: 'Blackjack' },
   { key: 'tower',      label: 'Tower' },
   { key: 'carDash',    label: 'Rush Hour' },
+  { key: 'colorRush',  label: 'Color Rush' },
 ];
 
 const TYPE_LABELS = {

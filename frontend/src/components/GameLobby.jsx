@@ -49,6 +49,7 @@ function fmtFee(fee) {
 const INVITE_GAME_TYPE = {
   'block-blast': 'blockBlast',
   'car-dash':    'carDash',
+  'color-rush':  'colorRush',
   'word-vs':     'scrabble',
 };
 const inviteTypeFor = (queueKey) => INVITE_GAME_TYPE[queueKey] || queueKey;

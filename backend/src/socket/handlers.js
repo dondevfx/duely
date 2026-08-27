@@ -22,6 +22,13 @@ const {
   forceResolveCarDash, checkOvertake,
 } = require('../services/carDashEngine');
 const {
+  addToColorRushQueue, removeFromColorRushQueue,
+  createDirectColorRushRoom,
+  getColorRushRoom, deleteColorRushRoom, getColorRushRoomBySocket,
+  startColorRushCountdown, trackColorRushProgress, handleColorRushDeath,
+  forceResolveColorRush, checkColorRushOvertake,
+} = require('../services/colorRushEngine');
+const {
   addToWordleQueue, removeFromWordleQueue,
   createDirectWordleRoom,
   getWordleRoom, deleteWordleRoom, getWordleRoomBySocket,
@@ -58,11 +65,13 @@ const { createBotPlayer } = require('../services/botService');
 const GAME_ALIASES = {
   'block-blast': 'blockBlast',
   'car-dash':    'carDash',
+  'color-rush':  'colorRush',
+  'colorrush':   'colorRush',
   'word-vs':     'scrabble',
   'wordle':      'scrabble',
   'coinflip':    'coin-flip',
 };
-const VALID_GAME_TYPES = ['blackjack', 'coin-flip', 'scrabble', 'blockBlast', 'carDash', 'tower'];
+const VALID_GAME_TYPES = ['blackjack', 'coin-flip', 'scrabble', 'blockBlast', 'carDash', 'tower', 'colorRush'];
 const canonicalGameType = (g) => GAME_ALIASES[g] || g;
 
 const { isDemo: isDemoAccount, randomFunnyName } = require('../services/demoAccounts');
@@ -140,6 +149,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     [getCoinFlipRoomBySocket,   deleteCoinFlipRoom,   'coin_flip'],
     [getBlackjackRoomBySocket,  deleteBlackjackRoom,  'blackjack'],
     [getCarDashRoomBySocket,    deleteCarDashRoom,    'carDash'],
+    [getColorRushRoomBySocket,  deleteColorRushRoom,  'colorRush'],
     [getTowerRoomBySocket,      deleteTowerRoom,      'tower'],
   ]);
 
@@ -1063,8 +1073,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           const s2 = io.sockets.sockets.get(p2.socketId);
           const n1 = p1.isDemo ? randomFunnyName() : p1.username;
           const n2 = p2.isDemo ? randomFunnyName() : p2.username;
-          if (s1) { s1.join(roomId); s1.emit('car_dash_match_found', { roomId, isPrivate: true, opponent: { userId: p2.userId, username: n2, elo: p2.elo }, entryFee, currency }); }
-          if (s2) { s2.join(roomId); s2.emit('car_dash_match_found', { roomId, isPrivate: true, opponent: { userId: p1.userId, username: n1, elo: p1.elo }, entryFee, currency }); }
+          if (s1) { s1.join(roomId); s1.emit('car_dash_match_found', { roomId, opponent: { userId: p2.userId, username: n2, elo: p2.elo }, entryFee, currency }); }
+          if (s2) { s2.join(roomId); s2.emit('car_dash_match_found', { roomId, opponent: { userId: p1.userId, username: n1, elo: p1.elo }, entryFee, currency }); }
           io.emit('queue_entry_removed', { id: p1.socketId });
           io.emit('queue_entry_removed', { id: p2.socketId });
           startCarDashCountdown(io, supabase, roomId);
@@ -1169,6 +1179,174 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     socket.on('car_dash_crash', ({ roomId, score }) => {
       if (!authenticatedUser) return;
       handleCarDashCrash(io, supabase, roomId, socket.id, score);
+    });
+
+    // ════════════════════════════════════════════════════════════════
+    //  COLOR RUSH (tap to climb — match the colour or die)
+    // ════════════════════════════════════════════════════════════════
+    socket.on('join_color_rush_queue', async ({ entryFee = 0, currency = 'coins' }) => {
+      if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      if (_inLiveRoom(socket.id))
+        return socket.emit('error', { message: 'Finish your current game first.' });
+      resumeCounts.delete(authenticatedUser.userId);   // fresh match, fresh grace
+      if (!isValidFee(entryFee, currency)) return socket.emit('error', { message: 'Invalid entry fee' });
+      if (inMatchOrQueue(authenticatedUser.userId))
+        return socket.emit('error', { message: 'Already in a match or queue — finish or leave your current game first.' });
+      socket._startingGame = 'color_rush';
+      try {
+        const { data: profile } = await supabase
+          .from('profiles').select('c_coins,diamonds,elo,username').eq('id', authenticatedUser.userId).single();
+        if (socket._pendingForfeitGame === 'color_rush') {
+          socket._pendingForfeitGame = null;
+          if (socket._pendingForfeitGameTimer) { clearTimeout(socket._pendingForfeitGameTimer); socket._pendingForfeitGameTimer = null; }
+          return;
+        }
+        if (entryFee > 0) {
+          if (currency === 'diamonds' && (profile.diamonds || 0) < entryFee)
+            return socket.emit('error', { message: 'Insufficient diamonds' });
+          if (currency === 'coins' && profile.c_coins < entryFee)
+            return socket.emit('error', { message: 'Insufficient C Coins' });
+          lockUser(authenticatedUser.userId);
+        }
+        const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
+        userQueues.add(authenticatedUser.userId);
+        incrementCount('color-rush', socket.id, entryFee, currency);
+        const match = addToColorRushQueue(player);
+        if (match) {
+          const { roomId, p1, p2 } = match;
+          userQueues.delete(p1.userId); userQueues.delete(p2.userId);
+          if (entryFee > 0) {
+            try {
+              await deductMatchFees(supabase, p1.userId, p2.userId, entryFee, currency);
+              const room = getColorRushRoom(roomId);
+              if (room) room.feesDeducted = true;
+            } catch (e) {
+              console.error('[color-rush] fee deduction failed:', e.message);
+              deleteColorRushRoom(roomId);
+              unlockUser(p1.userId); unlockUser(p2.userId);
+              decrementCount('color-rush', p1.socketId);
+              decrementCount('color-rush', p2.socketId);
+              io.emit('queue_entry_removed', { id: p1.socketId });
+              io.emit('queue_entry_removed', { id: p2.socketId });
+              const s1e = io.sockets.sockets.get(p1.socketId);
+              const s2e = io.sockets.sockets.get(p2.socketId);
+              if (s1e) s1e.emit('match_cancelled', { message: 'Your balance changed. Please rejoin the queue.' });
+              if (s2e) s2e.emit('match_cancelled', { message: 'Your balance changed. Please rejoin the queue.' });
+              return;
+            }
+          } else {
+            const room = getColorRushRoom(roomId);
+            if (room) room.feesDeducted = true;
+          }
+          const s1 = io.sockets.sockets.get(p1.socketId);
+          const s2 = io.sockets.sockets.get(p2.socketId);
+          const n1 = p1.isDemo ? randomFunnyName() : p1.username;
+          const n2 = p2.isDemo ? randomFunnyName() : p2.username;
+          if (s1) { s1.join(roomId); s1.emit('color_rush_match_found', { roomId, opponent: { userId: p2.userId, username: n2, elo: p2.elo }, entryFee, currency }); }
+          if (s2) { s2.join(roomId); s2.emit('color_rush_match_found', { roomId, opponent: { userId: p1.userId, username: n1, elo: p1.elo }, entryFee, currency }); }
+          io.emit('queue_entry_removed', { id: p1.socketId });
+          io.emit('queue_entry_removed', { id: p2.socketId });
+          startColorRushCountdown(io, supabase, roomId);
+        } else {
+          socket.emit('color_rush_queue_joined');
+          io.emit('queue_entry_added', {
+            id: socket.id, gameType: 'color-rush', entryFee, currency,
+            username: authenticatedUser.username || 'Player',
+            elo: authenticatedUser.elo || 1000,
+            profileColor: authenticatedUser.profile_color || '#1250B4',
+            currentStreak: authenticatedUser.current_streak || 0,
+          });
+          // Demo accounts: no other demo within 3s → rigged bot match.
+          if (authenticatedUser.isDemo) {
+            setTimeout(async () => {
+              if (!removeFromColorRushQueue(socket.id)) return;
+              userQueues.delete(authenticatedUser.userId);
+              unlockUser(authenticatedUser.userId);
+              io.emit('queue_entry_removed', { id: socket.id });
+              try {
+                if (entryFee > 0) {
+                  if (currency === 'diamonds') await deductDiamonds(supabase, authenticatedUser.userId, Math.floor(entryFee));
+                  else await deductCoins(supabase, authenticatedUser.userId, parseFloat(entryFee));
+                }
+              } catch (e) { return socket.emit('error', { message: e.message || 'Insufficient balance' }); }
+              const bot = createBotPlayer(entryFee, 'color_rush');
+              bot.entryFee = entryFee; bot.currency = currency;
+              bot.username = randomFunnyName();
+              const { roomId } = createDirectColorRushRoom(player, bot);
+              const r = getColorRushRoom(roomId); if (r) r.feesDeducted = true;
+              socket.join(roomId);
+              socket.emit('color_rush_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo }, entryFee, currency, vsBot: true });
+              startColorRushCountdown(io, supabase, roomId);
+            }, 3000);
+          }
+        }
+      } finally {
+        socket._startingGame = null;
+      }
+    });
+
+    socket.on('leave_color_rush_queue', () => {
+      removeFromColorRushQueue(socket.id);
+      if (authenticatedUser) { unlockUser(authenticatedUser.userId); userQueues.delete(authenticatedUser.userId); }
+      decrementCount('color-rush', socket.id);
+      io.emit('queue_entry_removed', { id: socket.id });
+      socket.emit('color_rush_queue_left');
+    });
+
+    socket.on('play_color_rush_vs_bot', async ({ entryFee = 0, currency = 'coins' } = {}) => {
+      if (!authenticatedUser) return socket.emit('error', { message: 'Not authenticated' });
+      if (_inLiveRoom(socket.id))
+        return socket.emit('error', { message: 'Finish your current game first.' });
+      resumeCounts.delete(authenticatedUser.userId);   // fresh match, fresh grace
+      socket._startingGame = 'color_rush';
+      try {
+        if (currency !== 'diamonds') entryFee = 0; // bot games are free for coins
+        if (rejectBadFee(entryFee, currency)) return;
+        const { data: profile } = await supabase.from('profiles').select('elo,username,c_coins,diamonds').eq('id', authenticatedUser.userId).single();
+        if (entryFee > 0) {
+          try {
+            if (currency === 'diamonds') await deductDiamonds(supabase, authenticatedUser.userId, Math.floor(entryFee));
+            else await deductCoins(supabase, authenticatedUser.userId, parseFloat(entryFee));
+          } catch (e) { return socket.emit('error', { message: e.message || 'Insufficient balance' }); }
+        }
+        const player = { socketId: socket.id, userId: authenticatedUser.userId, username: profile.username, elo: profile.elo, entryFee, currency, isDemo: authenticatedUser.isDemo || false };
+        const bot = createBotPlayer(entryFee, 'color_rush');
+        bot.entryFee = entryFee; bot.currency = currency;
+        const { roomId } = createDirectColorRushRoom(player, bot);
+        const r = getColorRushRoom(roomId); if (r) r.feesDeducted = true;
+        socket.join(roomId);
+        if (socket._pendingForfeitGame === 'color_rush') {
+          socket._pendingForfeitGame = null;
+          if (socket._pendingForfeitGameTimer) { clearTimeout(socket._pendingForfeitGameTimer); socket._pendingForfeitGameTimer = null; }
+          await _handleForfeit(io, supabase, { roomId, room: getColorRushRoom(roomId) }, socket.id, deleteColorRushRoom, 'colorRush');
+          return;
+        }
+        incrementCount('color-rush', socket.id, entryFee, currency);
+        socket.emit('color_rush_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo }, entryFee, currency, vsBot: true });
+        startColorRushCountdown(io, supabase, roomId);
+      } finally {
+        socket._startingGame = null;
+      }
+    });
+
+    // Live progress for the opponent bar — server clamps to real elapsed time.
+    socket.on('color_rush_progress', ({ roomId, ms, score }) => {
+      if (!authenticatedUser) return;
+      const room = getColorRushRoom(roomId);
+      if (!room || room.state !== 'active') return;
+      const verified = trackColorRushProgress(roomId, socket.id, ms, score);
+      if (verified === null) return;
+      const opp = room.players.find(p => p.socketId !== socket.id);
+      if (opp && !opp.isBot) io.to(opp.socketId).emit('color_rush_opponent_progress', { ms: verified });
+      // If the opponent is already out and this player has just passed their
+      // score, the match is decided — end it rather than making them climb on.
+      checkColorRushOvertake(io, supabase, roomId);
+    });
+
+    // Client reports a death; the SERVER decides how long they survived.
+    socket.on('color_rush_death', ({ roomId, score }) => {
+      if (!authenticatedUser) return;
+      handleColorRushDeath(io, supabase, roomId, socket.id, score);
     });
 
     // ════════════════════════════════════════════════════════════════
@@ -1524,8 +1702,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           const s2 = io.sockets.sockets.get(p2.socketId);
           const wvP1Name = p1.isDemo ? randomFunnyName() : p1.username;
           const wvP2Name = p2.isDemo ? randomFunnyName() : p2.username;
-          if (s1) { s1.join(roomId); s1.emit('scrabble_match_found', { roomId, isPrivate: true, opponent: { userId: p2.userId, username: wvP2Name, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency }); }
-          if (s2) { s2.join(roomId); s2.emit('scrabble_match_found', { roomId, isPrivate: true, opponent: { userId: p1.userId, username: wvP1Name, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency }); }
+          if (s1) { s1.join(roomId); s1.emit('scrabble_match_found', { roomId, opponent: { userId: p2.userId, username: wvP2Name, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency }); }
+          if (s2) { s2.join(roomId); s2.emit('scrabble_match_found', { roomId, opponent: { userId: p1.userId, username: wvP1Name, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency }); }
           io.emit('queue_entry_removed', { id: p1.socketId });
           io.emit('queue_entry_removed', { id: p2.socketId });
           io.to(roomId).emit('scrabble_countdown', { count: 3 });
@@ -1991,6 +2169,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         [getCoinFlipRoomBySocket,   deleteCoinFlipRoom,   'coin_flip'],
         [getBlackjackRoomBySocket,  deleteBlackjackRoom,  'blackjack'],
         [getCarDashRoomBySocket,    deleteCarDashRoom,    'carDash'],
+    [getColorRushRoomBySocket,  deleteColorRushRoom,  'colorRush'],
     [getTowerRoomBySocket,      deleteTowerRoom,      'tower'],
       ];
       let forfeited = false;
@@ -2141,6 +2320,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         [getCoinFlipRoomBySocket,   deleteCoinFlipRoom,   'coin_flip'],
         [getBlackjackRoomBySocket,  deleteBlackjackRoom,  'blackjack'],
         [getCarDashRoomBySocket,    deleteCarDashRoom,    'carDash'],
+    [getColorRushRoomBySocket,  deleteColorRushRoom,  'colorRush'],
     [getTowerRoomBySocket,      deleteTowerRoom,      'tower'],
       ];
 
@@ -2446,6 +2626,15 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         s1.emit('car_dash_match_found', { roomId, isPrivate: true, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency });
         s2.emit('car_dash_match_found', { roomId, isPrivate: true, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency });
         startCarDashCountdown(io, supabase, roomId);
+        break;
+      }
+      case 'colorRush': {
+        ({ roomId } = createDirectColorRushRoom(p1, p2));
+        if (entryFee > 0) { const r = getColorRushRoom(roomId); if (r) r.feesDeducted = true; }
+        s1.join(roomId); s2.join(roomId);
+        s1.emit('color_rush_match_found', { roomId, isPrivate: true, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo }, entryFee: p1.entryFee, currency: p1.currency });
+        s2.emit('color_rush_match_found', { roomId, isPrivate: true, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo }, entryFee: p2.entryFee, currency: p2.currency });
+        startColorRushCountdown(io, supabase, roomId);
         break;
       }
       case 'blackjack': {

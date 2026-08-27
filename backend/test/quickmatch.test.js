@@ -142,6 +142,7 @@ test('every pooled game acts on autoQueue', () => {
     '/game/blackjack':   'BlackjackGame.jsx',
     '/game/word-vs':     'WordleGame.jsx',
     '/game/car-dash':    'CarDashGame.jsx',
+    '/game/color-rush':  'ColorRushGame.jsx',
     '/game/tower':       'TowerGame.jsx',
   };
   const pool = fs.readFileSync(path.join(dir, 'QuickMatch.jsx'), 'utf8');

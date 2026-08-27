@@ -41,11 +41,16 @@ import WordleGame from './pages/WordleGame';
 import CoinFlipGame from './pages/CoinFlipGame';
 import BlackjackGame from './pages/BlackjackGame';
 import CarDashGame from './pages/CarDashGame';
+import ColorRushGame from './pages/ColorRushGame';
+import ColorRushCanvas from './components/ColorRushCanvas';
 import TowerGame from './pages/TowerGame';
 import TowerCanvas from './components/TowerCanvas';
 // Dev-only: lets the game be looked at before the lobby and engine exist.
 // Stripped from production builds by the import.meta.env.DEV guard below.
 function TowerPreview() { return <div style={{position:'fixed',inset:0}}><TowerCanvas running /></div>; }
+function ColorRushPreview() {
+  return <div style={{position:'fixed',inset:0}}><ColorRushCanvas seed={12345} onProgress={() => {}} onDeath={() => {}} /></div>;
+}
 import Transactions from './pages/Transactions';
 import Rewards from './pages/Rewards';
 import Login from './pages/Login';
@@ -93,7 +98,12 @@ function Shell() {
   // Interactive game pages must NOT be inside the TV zoom wrapper — CSS `zoom`
   // on an ancestor breaks position:fixed drag math (e.g. Block Burst's drag
   // ghost jumps away from the cursor when the browser is zoomed out).
-  const isGamePage = location.pathname.startsWith('/game/');
+  // The dev canvas previews count too. CSS `zoom` on an ancestor rescales
+  // pointer coordinates and canvas layout, so a preview rendered inside the
+  // wrapper does not show what the real game page shows — which makes it
+  // useless for the one thing it exists for.
+  const isGamePage = location.pathname.startsWith('/game/')
+    || location.pathname.startsWith('/__');
 
   // When MFA is pending and there's no session (saved-login MFA flow),
   // redirect to /login so the MFA form is shown
@@ -158,8 +168,10 @@ function Shell() {
           <Route path="/game/coin-flip"     element={<CoinFlipGame />} />
           <Route path="/game/blackjack"     element={<BlackjackGame />} />
           <Route path="/game/car-dash"      element={<CarDashGame />} />
+          <Route path="/game/color-rush"    element={<ColorRushGame />} />
           <Route path="/game/tower"         element={<TowerGame />} />
           {import.meta.env.DEV && <Route path="/__tower-preview" element={<TowerPreview />} />}
+          {import.meta.env.DEV && <Route path="/__color-rush-preview" element={<ColorRushPreview />} />}
           <Route path="/game/word-vs"       element={<WordleGame />} />
           <Route path="/spectate/:gameId"   element={<SpectateView />} />
           {/* Friend invite link. Deliberately NOT wrapped in ProtectedRoute —

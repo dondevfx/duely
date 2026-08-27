@@ -31,6 +31,16 @@ const HELP = {
     ],
     win: 'Highest score wins, with time survived breaking a tie. If your opponent crashes first you get 15 seconds to beat their score.',
   },
+  colorRush: {
+    title: '🎨 Color Rush',
+    how: [
+      'Tap anywhere (or press space) to fly upward.',
+      'You can only pass through the part of a ring that matches your colour.',
+      'The small four-colour circles between rings change what colour you are.',
+      'Grab the white diamonds — each one is a point.',
+    ],
+    win: 'Most diamonds wins, with time survived breaking a tie. If your opponent dies first you get 15 seconds to beat their score.',
+  },
   blockBlast: {
     title: '🟦 Block Burst',
     how: [

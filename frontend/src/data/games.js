@@ -55,6 +55,13 @@ export const GAMES = [
     countKey: 'car-dash',
   },
   {
+    slug:     'color-rush',
+    title:    'Color Rush',
+    icon:     '🎨',
+    route:    '/game/color-rush',
+    countKey: 'color-rush',
+  },
+  {
     slug:     'tower',
     title:    'Tower',
     icon:     '🗼',

@@ -11,6 +11,7 @@ const GAMES = [
   { icon: '🔤', label: 'Word VS',       route: '/game/scrabble',    live: true },
   { icon: '🃏', label: 'Blackjack',    route: '/game/blackjack',   live: true },
   { icon: '🚗', label: 'Rush Hour', route: '/game/car-dash',    live: true },
+  { icon: '🎨', label: 'Color Rush', route: '/game/color-rush',  live: true },
   { icon: '🗼', label: 'Tower',     route: '/game/tower',       live: true },
 ];
 
@@ -38,6 +39,7 @@ const routeToKey = {
   '/game/scrabble':     'scrabble',
   '/game/blackjack':    'blackjack',
   '/game/car-dash':     'car-dash',
+  '/game/color-rush':   'color-rush',
   '/game/tower':        'tower',
   '/game/quick-match':  null,
 };

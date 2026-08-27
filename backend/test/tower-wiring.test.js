@@ -170,8 +170,14 @@ test('challenge links and invites resolve tower to a route and a name', () => {
 });
 
 test('scores show up in the leaderboard, ticker and profile', () => {
-  assert.match(be('routes', 'leaderboard.js'), /'carDash', 'tower'/,
-    'tower must be a scored game or its leaderboard is always empty');
+  // Matched independently rather than as one adjacent pair — the pair broke
+  // the moment a new scored game was inserted between them, which is a test
+  // failing on where a name sits in a list rather than on anything real.
+  const lb = be('routes', 'leaderboard.js');
+  const scored = lb.slice(lb.indexOf('const SCORE_GAMES'), lb.indexOf('\n', lb.indexOf('const SCORE_GAMES')));
+  for (const g of ['carDash', 'tower']) {
+    assert.ok(scored.includes(`'${g}'`), `${g} must be a scored game or its leaderboard is always empty`);
+  }
   assert.match(be('services', 'tickerService.js'), /tower:\s+\{ icon/);
   assert.match(fe('pages', 'Profile.jsx'), /tower:\s+\{ emoji/);
   assert.match(fe('pages', 'Leaderboard.jsx'), /id: 'tower'/);

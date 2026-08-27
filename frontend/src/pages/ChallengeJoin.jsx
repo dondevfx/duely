@@ -21,6 +21,7 @@ const GAME_ROUTES = {
   scrabble:    '/game/word-vs',
   blockBlast:  '/game/block-blast',
   carDash:     '/game/car-dash',
+  colorRush:   '/game/color-rush',
   tower:       '/game/tower',
 };
 
@@ -30,6 +31,7 @@ const GAME_NAMES = {
   scrabble:    '🔤 Word VS',
   blockBlast:  '🟦 Block Burst',
   carDash:     '🚗 Rush Hour',
+  colorRush:   '🎨 Color Rush',
   tower:       '🗼 Tower',
 };
 

@@ -22,7 +22,7 @@ const GAMES_PAGE = read('pages', 'Games.jsx');
 
 test('every listed game has a slug, a route and a title', () => {
   const entries = [...GAMES_DATA.matchAll(/slug:\s*'([a-z-]+)'/g)].map(m => m[1]);
-  assert.equal(entries.length, 7, 'all seven games must be listed');
+  assert.equal(entries.length, 8, 'every game must be listed');
   for (const slug of entries) {
     assert.match(GAMES_DATA, new RegExp(`slug:\\s*'${slug}'[\\s\\S]{0,150}?route:\\s*'/game/`),
       `${slug} has no route near its slug`);
