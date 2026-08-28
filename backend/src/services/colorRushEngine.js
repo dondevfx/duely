@@ -32,7 +32,7 @@ const { findRoomBySocket } = require('./roomLookup');
 const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings } = require('./eloService');
-const { updateHighscorePair } = require('./highscoreService');
+const { updateHighscore } = require('./highscoreService');
 const gameEvents = require('./gameEvents');
 const { v4: uuidv4 } = require('uuid');
 
@@ -51,17 +51,19 @@ const WATCH_MS   = 2_000;
 // obstacle, so the ceiling is "how fast could a perfect player possibly clear
 // obstacles?"
 //
-//   obstacle spacing        480 world units (client OBSTACLE_GAP)
-//   fastest possible climb  ~300 u/s (tapping again the instant the arc peaks)
-//   => 0.63 obstacles/second, and only if the player never once has to wait
-//      for their color to come round — which the game is built to make them do
+//   obstacle spacing        950 world units (client OBSTACLE_GAP)
+//   fastest possible climb  ~350 u/s (tapping again the instant the arc peaks)
+//   => 0.37 obstacles/second, and only if the player never once waits inside
+//      an obstacle for their color to come round — which they now always must,
+//      because the way out has to be matched as well as the way in
 //
-// The cap is 6/s, an order of magnitude above that, because clipping an honest
-// player is far worse than a loose bound on a cheater: a clipped score loses a
-// match that was actually won. The clamp still holds a fabricated score to
-// something proportional to time played, which is the property that matters —
-// you cannot claim 900 diamonds from a four-second run.
-const SCORE_RATE_CAP = 6;      // diamonds per second, see derivation above
+// The cap is 1.5/s — four times the theoretical maximum,
+// because clipping an honest player is far worse than a loose bound on a
+// cheater: a clipped score loses a match that was actually won. It was 6/s
+// when obstacles were 480 apart and only the entry had to be matched; the
+// course has since slowed down a lot, and a bound that no longer bears any
+// relation to the game is not really a bound.
+const SCORE_RATE_CAP = 1.5;    // diamonds per second, see derivation above
 const maxScoreFor = (ms) => Math.floor((ms / 1000) * SCORE_RATE_CAP + 5);
 const GAME_NAME  = 'Color Rush';
 
@@ -217,6 +219,9 @@ function trackColorRushProgress(roomId, socketId, claimedMs, claimedScore) {
   const room = getColorRushRoom(roomId);
   if (!room || room.state !== 'active' || !room.startedAt) return null;
   if (!_isPlayer(room, socketId)) return null;
+  // Already finalised — by a stall, a death or a dropped connection. Their run
+  // is over, so late pings must not revive it or move their score.
+  if (room.times[socketId] != null) return null;
   const elapsed = Date.now() - room.startedAt;
   const ms = Math.max(0, Math.min(Number(claimedMs) || 0, elapsed, MAX_RUN_MS));
   room.progress[socketId] = ms;
@@ -382,7 +387,11 @@ async function _resolveFromTimes(io, supabase, roomId) {
       const ms    = room.times[human.socketId] ?? room.progress[human.socketId] ?? 0;
       const score = room.scores[human.socketId] ?? 0;
       (room.botTimers || []).forEach(t => clearInterval(t));
-      try { await updateHighscorePair(supabase, human.userId, 'colorRush', score, 'colorRushMs', ms); } catch {}
+      // Score only — Color Rush does not keep a time stat. Elapsed time is
+      // still measured server-side for the anti-cheat clamp, the catch-up
+      // window and to break an exact tie, but it is not something the player
+      // is playing for and it is not recorded.
+      try { await updateHighscore(supabase, human.userId, 'colorRush', score); } catch {}
       unlockUser(human.userId);
       io.emit('active_game_ended', { id: roomId });
       gameEvents.emit('game_ended', { socketIds: [human.socketId] });
@@ -401,6 +410,46 @@ async function _resolveFromTimes(io, supabase, roomId) {
   await _resolve(io, supabase, roomId, winner, loser,
     p1Wins ? t1 : t2, p1Wins ? t2 : t1,
     p1Wins ? s1 : s2, p1Wins ? s2 : s1);
+}
+
+/**
+ * A player's connection dropped mid-run.
+ *
+ * This ends their RUN at the score the server has already verified — it does
+ * NOT forfeit the match. The distinction matters because of what actually
+ * happens on a phone: switching apps suspends the page, and the socket goes
+ * with it. Treating that as "you lose" makes a staked match hinge on a phone
+ * call, while treating it as "you stopped scoring there" costs the player
+ * exactly the time they were away and nothing more.
+ *
+ * It is only fair because the opponent is never blocked. Both players climb
+ * their own copy of the same course at the same time, so there is nobody
+ * waiting on a turn: the survivor plays on and gets the usual catch-up window
+ * against a score that can no longer move.
+ *
+ * Returns true when it has taken responsibility for the room, so the caller
+ * knows not to run the generic forfeit.
+ */
+function endRunOnDisconnect(io, supabase, roomId, socketId) {
+  const room = getColorRushRoom(roomId);
+  if (!room || room.state !== 'active' || !room.startedAt) return false;
+  if (!_isPlayer(room, socketId)) return false;
+  if (room.times[socketId] != null) return false;   // already out
+  // A bot room has no second human to carry on, so let the generic forfeit
+  // handle it rather than resolving a match against an opponent that is not
+  // really there.
+  if (room.isSolo) return false;
+
+  const verified = Math.min(room.progress[socketId] ?? 0, Date.now() - room.startedAt, MAX_RUN_MS);
+  room.times[socketId] = verified;
+
+  const opp = room.players.find(p => p.socketId !== socketId);
+  if (opp && !opp.isBot) io.to(opp.socketId).emit('color_rush_opponent_died', { ms: verified });
+
+  _maybeResolve(io, supabase, roomId).catch(() => {});
+  _armCatchup(io, supabase, roomId);
+  checkColorRushOvertake(io, supabase, roomId).catch(() => {});
+  return true;
 }
 
 // Opponent left / timed out — whoever has the better score takes it.
@@ -474,8 +523,8 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
       if (ranked) { try { await applyEloUpdate(supabase, loser.userId, newLoserElo, true); } catch {} }
       try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch {}
     }
-    if (!winner.isBot) await updateHighscorePair(supabase, winner.userId, 'colorRush', winnerScore, 'colorRushMs', winnerMs).catch(() => {});
-    if (!loser.isBot)  await updateHighscorePair(supabase, loser.userId,  'colorRush', loserScore, 'colorRushMs', loserMs).catch(() => {});
+    if (!winner.isBot) await updateHighscore(supabase, winner.userId, 'colorRush', winnerScore).catch(() => {});
+    if (!loser.isBot)  await updateHighscore(supabase, loser.userId,  'colorRush', loserScore).catch(() => {});
     try {
       const cur = room.currency || 'coins';
       await supabase.from('matches').insert({
@@ -499,6 +548,7 @@ module.exports = {
   startColorRushCountdown, trackColorRushProgress, handleColorRushDeath,
   forceResolveColorRush,
   checkColorRushOvertake,
+  endRunOnDisconnect,
   // Exported so tests assert against the real ceiling instead of a copy of the
   // number, which goes stale the moment the spacing or climb rate changes.
   SCORE_RATE_CAP,

@@ -48,7 +48,6 @@ test('the game is registered everywhere a game has to be registered', () => {
     ['profile stats',    fe('pages', 'Profile.jsx'),             /colorRush:\s*\{/],
     ['ticker',           be('services', 'tickerService.js'),     /colorRush:/],
     ['leaderboard score games', be('routes', 'leaderboard.js'),  /'colorRush'/],
-    ['leaderboard companion',   be('routes', 'leaderboard.js'),  /colorRush: 'colorRushMs'/],
     ['server alias',     be('socket', 'handlers.js'),            /'color-rush':\s*'colorRush'/],
     ['server valid type',be('socket', 'handlers.js'),            /VALID_GAME_TYPES[^\n]*colorRush/],
   ];
@@ -268,16 +267,16 @@ test('the colour that kills you is the one on the lane', () => {
     'judging by the nearest point is what let nested loops disagree');
 });
 
-test('matching a band clears it for the rest of the pass', () => {
-  // A ring is touched twice — entering at the bottom, leaving at the top — and
-  // those points are opposite each other, so with four quarters they are never
-  // the same colour at once. Checking both would make every ring impossible
-  // except by luck of the spin.
+test('the way OUT has to be matched too', () => {
+  // The first version cleared a band once you had matched it, so you could
+  // leave through any color. That made the middle of an obstacle a corridor.
+  // Now every contact is checked, which is only fair because the shapes are
+  // sized to let you hold station inside and wait for your color to come
+  // round to the top.
   const at = CANVAS.indexOf('function hitTest');
   const body = CANVAS.slice(at, CANVAS.indexOf('\n    }\n', at));
-  assert.match(body, /o\.cleared\[li\] = true;/, 'a matched band must be marked cleared');
-  assert.match(body, /if \(o\.cleared\[li\]\) continue;/, 'a cleared band must be skipped');
-  assert.match(body, /o\.cleared = null/, 'clearing must reset once the obstacle is out of reach');
+  assert.doesNotMatch(body, /cleared/, 'no band may be exempted from the check');
+  assert.match(body, /colorAtAngle\([^)]*\) !== S\.color\) return true;/);
 });
 
 test('a nested ring counter-rotates, and still lines up on the lane', () => {
@@ -362,15 +361,17 @@ test('the obstacles are big enough to hold station inside', () => {
   }
 });
 
-test('black stays visible on a black background', () => {
-  // Black is a playable colour and the background is black, so every black
-  // thing needs a rim. Dying on something you could not see is the worst bug
-  // this game could have.
-  assert.match(CANVAS, /\{ key: 'black'[^\n]*rim: '#/, 'the black colour must define a rim');
-  const others = CANVAS.match(/\{ key: '(?:white|blue|grey)'[^\n]*\}/g) || [];
-  assert.equal(others.length, 3);
-  const ball = CANVAS.slice(CANVAS.indexOf('function drawBall'), CANVAS.indexOf('function render'));
-  assert.match(ball, /col\.rim/, 'the ball must use the rim when it is black');
+test('the palette is four colors that stay apart on black', () => {
+  // Black was one of them, on a black background, which needed a light rim to
+  // be visible at all — and that rim was drawn wider than the band, so it
+  // showed past its neighbours. Four bright colors remove both problems.
+  for (const key of ['white', 'blue', 'green', 'purple']) {
+    assert.match(CANVAS, new RegExp(`key: '${key}'`), `missing color: ${key}`);
+  }
+  assert.doesNotMatch(CANVAS, /key: 'black'/, 'black on black is gone');
+  assert.doesNotMatch(CANVAS, /rim/, 'and the rim it needed with it');
+  const n = (CANVAS.match(/\{ key: '/g) || []).length;
+  assert.equal(n, 4, `expected exactly four colors, found ${n}`);
 });
 
 test('a dotted obstacle is exactly as solid as a plain one', () => {
@@ -383,16 +384,19 @@ test('a dotted obstacle is exactly as solid as a plain one', () => {
   assert.doesNotMatch(hit, /dotted/, 'collision must not know about dotted at all');
 });
 
-test('colour bands are cut exactly where the colour changes', () => {
-  // Ending each band at whichever vertex happened to be nearest leaves every
-  // join a little short or a little long — the ragged, overlapping outline in
-  // the bug report. Neighbouring bands must share an exact endpoint.
+test('bands are drawn by clipping one continuous outline, not by cutting it', () => {
+  // Cutting the outline into four paths gives every cut its own end cap, so at
+  // a corner the two bands meet at an angle and leave a notch or sit on top of
+  // each other — the sloppy joins in the bug report. Stroking the whole
+  // outline four times, each clipped to a quarter, keeps the corners mitred
+  // and cuts along an exact radius instead.
   const at = CANVAS.indexOf('function drawLoop');
   const body = CANVAS.slice(at, CANVAS.indexOf('function drawDiamond'));
-  assert.match(body, /bisectBoundary\(prev, p, runCol, colAt\)/);
-  assert.match(body, /run = \[cut, p\]/, 'the next band must start on the same point');
-  assert.match(body, /bands\[0\]\.col === bands\[bands\.length - 1\]\.col/,
-    'the walk starts mid-band, so the two halves must be rejoined');
+  assert.match(body, /ctx\.clip\(\)/, 'each band must be a clipped wedge');
+  assert.match(body, /ctx\.lineJoin = 'miter'/, 'corners must be mitred');
+  assert.doesNotMatch(body, /bisectBoundary/, 'the outline must not be cut up any more');
+  assert.match(body, /ctx\.closePath\(\);\s*\n\s*ctx\.strokeStyle/,
+    'the stroked path must be the whole closed outline');
 });
 
 test('the start screen runs out instead of waiting forever', () => {
@@ -403,17 +407,72 @@ test('the start screen runs out instead of waiting forever', () => {
     'the grace period must expire and let the ball go');
 });
 
-test('the HUD puts the score top-left and the timer top-right', () => {
+test('the HUD shows the score, top-left, and nothing else', () => {
   const at = CANVAS.indexOf('function drawHUD');
-  const body = CANVAS.slice(at, CANVAS.indexOf('// ── Loop'));
-  const score = body.indexOf('String(S.score)');
-  const timer = body.indexOf("'s'");
-  assert.ok(score !== -1 && timer !== -1);
-  assert.match(body.slice(0, score), /textAlign = 'left'/, 'the score is left-aligned');
-  assert.match(body.slice(score, timer), /textAlign = 'right'/, 'the timer is right-aligned');
-  // And the catch-up banner must move out of the corner the score now owns.
+  assert.notEqual(at, -1, 'drawHUD is gone');
+  // Bounded by the function's own closing brace. Anchoring on a comment does
+  // not work here: CANVAS has its comments stripped, so a missing marker makes
+  // indexOf return -1 and the slice swallows the rest of the file.
+  const body = CANVAS.slice(at, CANVAS.indexOf('\n    }', at));
+  assert.match(body, /String\(S\.score\)/, 'the score must be drawn');
+  assert.match(body, /textAlign = 'left'/, 'the score is left-aligned');
+  // The clock is gone: the match is decided on diamonds, so a running timer
+  // was reporting a number that does not count for anything.
+  assert.doesNotMatch(body, /simT/, 'no clock on the HUD');
+  // And the catch-up banner sits in the centre, out of the corner the score owns.
   assert.match(PAGE, /absolute left-1\/2 -translate-x-1\/2 top-3/,
-    'the catch-up banner belongs in the top centre now');
+    'the catch-up banner belongs in the top centre');
+});
+
+test('time is not a tracked stat anywhere', () => {
+  // Elapsed time is still measured server-side — the anti-cheat clamp, the
+  // catch-up window and an exact-tie break all need it — but the player is
+  // playing for diamonds and nothing else is recorded or shown.
+  assert.doesNotMatch(ENGINE, /colorRushMs/, 'no companion time stat');
+  assert.match(ENGINE, /updateHighscore\(supabase, [^,]+, 'colorRush', \w+\)/,
+    'score only, not a score/time pair');
+  assert.doesNotMatch(be('routes', 'leaderboard.js'), /colorRush: 'colorRushMs'/);
+  assert.doesNotMatch(fe('pages', 'Profile.jsx'), /colorRush[^\n]*timeKey/);
+  assert.doesNotMatch(fe('pages', 'Leaderboard.jsx'), /id: 'colorRush'[^\n]*showTime/);
+  // And no time on either result card.
+  assert.doesNotMatch(PAGE, /fmtTime/, 'the result card must not show a time');
+});
+
+test('a dropped connection ends the run, not the match', () => {
+  // Switching apps on a phone suspends the page and takes the socket with it.
+  // Treating that as a forfeit makes a staked match hinge on a phone call.
+  // Both players climb their own copy of the same course at the same time, so
+  // nobody is waiting on a turn and there is no reason it has to cost the
+  // stake — the player keeps the score the server had already verified.
+  assert.match(ENGINE, /function endRunOnDisconnect\(io, supabase, roomId, socketId\)/);
+  const at = ENGINE.indexOf('function endRunOnDisconnect');
+  const body = ENGINE.slice(at, ENGINE.indexOf('\n}', at));
+  assert.match(body, /room\.times\[socketId\] = verified/, 'the run ends at verified progress');
+  assert.match(body, /if \(room\.isSolo\) return false;/,
+    'a bot room has no second human to carry on — leave that to the forfeit');
+  assert.match(body, /_armCatchup/, 'the survivor still gets their catch-up window');
+  // And the disconnect path must actually prefer it over the generic forfeit.
+  assert.match(HANDLERS, /gameType === 'colorRush'\s*\n?\s*&& endRunOnDisconnect\([^)]*\)\) return;/);
+});
+
+test('a finalised player cannot keep scoring', () => {
+  // Once a run has ended — by death, a stall or a dropped connection — late
+  // pings must not revive it or move the score it finished on.
+  const at = ENGINE.indexOf('function trackColorRushProgress');
+  const body = ENGINE.slice(at, ENGINE.indexOf('\n}', at));
+  assert.match(body, /if \(room\.times\[socketId\] != null\) return null;/);
+});
+
+test('leaving in any way still forfeits', () => {
+  // Three separate paths, and a game missing from any one of them leaves a
+  // match that never settles.
+  for (const h of ['player_forfeit', 'leave_game', 'disconnect']) {
+    const at = HANDLERS.indexOf(`socket.on('${h}'`);
+    assert.notEqual(at, -1, `${h} handler is gone`);
+    assert.ok(HANDLERS.slice(at, at + 9000).includes('getColorRushRoomBySocket'),
+      `${h} does not know about Color Rush`);
+  }
+  assert.match(PAGE, /useLeaveGuard\(socket\)/, 'the page must forfeit on the way out');
 });
 
 test('nothing user-facing spells it "colour"', () => {

@@ -32,7 +32,7 @@ const HELP = {
     win: 'Highest score wins, with time survived breaking a tie. If your opponent crashes first you get 15 seconds to beat their score.',
   },
   colorRush: {
-    title: '🌀 Color Rush',
+    title: '🎨 Color Rush',
     how: [
       'Tap anywhere (or press space) to fly upward.',
       'You can only pass through the part of a ring that matches your color.',

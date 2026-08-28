@@ -26,7 +26,7 @@ const {
   createDirectColorRushRoom,
   getColorRushRoom, deleteColorRushRoom, getColorRushRoomBySocket,
   startColorRushCountdown, trackColorRushProgress, handleColorRushDeath,
-  forceResolveColorRush, checkColorRushOvertake,
+  forceResolveColorRush, checkColorRushOvertake, endRunOnDisconnect,
 } = require('../services/colorRushEngine');
 const {
   addToWordleQueue, removeFromWordleQueue,
@@ -2343,6 +2343,13 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         const forfeitFn = async () => {
           const stillFound = getFn(leaverSocketId) || { room, roomId };
           if (!stillFound.room || stillFound.room.state === 'finished') { delFn(roomId); return; }
+          // Color Rush ends the RUN rather than the match: both players climb
+          // their own copy of the same course at once, so nobody is waiting on
+          // a turn and there is no reason a dropped connection has to cost the
+          // whole stake. The player keeps the score they had verified and the
+          // match resolves on diamonds. See endRunOnDisconnect.
+          if (gameType === 'colorRush'
+              && endRunOnDisconnect(io, supabase, stillFound.roomId, leaverSocketId)) return;
           await _handleForfeit(io, supabase, stillFound, leaverSocketId, delFn, gameType);
         };
         const updateSocketFn = (newSocket) => {

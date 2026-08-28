@@ -16,10 +16,9 @@ import ChallengeLinkBox from '../components/ChallengeLinkBox';
 import PrivateWaiting from '../components/PrivateWaiting';
 import { usePrivateRematch } from '../hooks/usePrivateRematch';
 
-function fmtTime(ms) {
-  const s = (ms ?? 0) / 1000;
-  return s.toFixed(1) + 's';
-}
+// Matches DEATH_FX in ColorRushCanvas — how long the ball's burst plays.
+const DEATH_FX_MS = 1000;
+
 
 // Shown when the opponent has died ahead: the score to beat and the time
 // left to beat it. Without this the player has no idea they are on a clock.
@@ -78,6 +77,11 @@ export default function ColorRushGame() {
 
   const roomIdRef = useRef(null);
   const diedRef = useRef(false);
+  // When the ball burst, so the result card can wait for the animation rather
+  // than cutting it off. The server is told immediately either way — this only
+  // delays what the player sees.
+  const diedAtRef = useRef(0);
+  const resultTimerRef = useRef(null);
   const lastModeRef = useRef(null); // 'pvp' | 'bot_paid' | 'bot_free'
   const lastSettingsRef = useRef({ entryFee: 0, currency: 'coins' });
   const socketRef = useRef(socket);
@@ -139,7 +143,11 @@ export default function ColorRushGame() {
   // scrollers, and re-pins across the next few frames and on resize, which is
   // when a mobile browser reflows as its address bar shows or hides.
   useEffect(() => {
-    if (phase !== 'queue' && phase !== 'playing') return;
+    // Locked while PLAYING only. The countdown is deliberately left scrollable:
+    // on a phone, scrolling down is the only thing that collapses the browser's
+    // own address bar, and that has to happen before the run starts because it
+    // cannot happen during it.
+    if (phase !== 'playing') return;
     const main = document.querySelector('main');
     const body = document.body;
     const html = document.documentElement;
@@ -262,6 +270,16 @@ export default function ColorRushGame() {
     socket.on('color_rush_result', (data) => {
       if (!roomIdRef.current) return;
       roomIdRef.current = null;
+      // Let the death burst finish. It runs for a second, and the result can
+      // arrive sooner than that when the opponent was already out.
+      const since = diedAtRef.current ? Date.now() - diedAtRef.current : DEATH_FX_MS;
+      const wait  = Math.max(0, DEATH_FX_MS - since);
+      if (wait > 0) {
+        resultTimerRef.current = setTimeout(() => {
+          setResult(data); setPhase('result'); refreshProfile();
+        }, wait);
+        return;
+      }
       // Pre-match ELO comes from the profile snapshot taken when the match
       // started, not from the result. ELO changes are a random 20-23 on a win
       // and 17-20 on a loss, so subtracting a fixed 25 here would report a
@@ -282,6 +300,7 @@ export default function ColorRushGame() {
     socket.on('error', ({ message }) => { setStatusMsg(message); setPhase('lobby'); });
 
     return () => {
+      if (resultTimerRef.current) clearTimeout(resultTimerRef.current);
       socket.emit('leave_game');
       socket.emit('leave_all_queues');
       [
@@ -333,6 +352,7 @@ export default function ColorRushGame() {
   const onDeath = (score, ms) => {
     if (diedRef.current) return;
     diedRef.current = true;
+    diedAtRef.current = Date.now();
     setDied(true);
     if (roomIdRef.current) socket?.emit('color_rush_death', { roomId: roomIdRef.current, score, ms });
   };
@@ -391,7 +411,6 @@ export default function ColorRushGame() {
           profile={profile}
           gameLabel="🎮 Solo Endless"
           extraRows={[
-            { label: 'Survived', value: fmtTime(result.ms) },
             { label: 'Diamonds', value: (result.score ?? 0).toLocaleString() },
           ]}
           isPrivate={privateRematch.isPrivate}
@@ -431,9 +450,7 @@ export default function ColorRushGame() {
           // then the opponent's below, so each side reads as one result.
           extraRows={[
             { label: 'Your Diamonds',     value: (isWinner ? result.winnerScore : result.loserScore)?.toLocaleString() },
-            { label: 'Your Time',         value: fmtTime(isWinner ? result.winnerMs : result.loserMs) },
             { label: 'Opponent Diamonds', value: (isWinner ? result.loserScore : result.winnerScore)?.toLocaleString() },
-            { label: 'Opponent Time',     value: fmtTime(isWinner ? result.loserMs : result.winnerMs) },
           ].filter(r => r.value !== undefined && r.value !== null)}
           isPrivate={privateRematch.isPrivate}
           rematchState={privateRematch.rematchState}
@@ -448,7 +465,11 @@ export default function ColorRushGame() {
   // ── Playing ──
   if (phase === 'playing') {
     return (
-      <div className="relative">
+      // Fixed and full-bleed: the run covers the site header rather than
+      // sitting under it, so the whole screen is play area. Scrolling the
+      // header away would depend on the page being taller than the viewport,
+      // which it is not once the game is up.
+      <div className="fixed inset-0 z-[60] bg-bg">
         {/* bottom-left: the canvas draws the score top-left and the timer
             top-right, and the catch-up banner takes the top centre. */}
         <GameHelp gameType="colorRush" placement="bottom-left" />
@@ -508,8 +529,8 @@ export default function ColorRushGame() {
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}
     >
       <GameLobby
-        title="🌀 Color Rush"
-        description="Tap to climb through the spinning rings — you can only pass through your own color. Both players get the exact same course, so it comes down to who reads it better."
+        title="🎨 Color Rush"
+        description="Tap to climb through the spinning rings — you can only pass through your own color. Both players get the exact same course."
         controls="Tap anywhere or press space to fly · collect the white diamonds"
         betCurrency={betCurrency} setBetCurrency={setBetCurrency}
         entryFee={entryFee} setEntryFee={setEntryFee}

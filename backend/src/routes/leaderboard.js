@@ -332,7 +332,7 @@ module.exports = function leaderboardRoutes(supabase) {
   // Score-based games use game_highscores; all others use wins from matches table
   const SCORE_GAMES = new Set(['blockBlast', 'carDash', 'colorRush', 'tower', 'tetris', 'snake', 'galaga', 'asteroids', 'piano', 'twoFortyEight', 'clickRace']);
   // Games that also surface a companion stat (stored as its own game_type row)
-  const COMPANION_STAT = { carDash: 'carDashMs', colorRush: 'colorRushMs' };
+  const COMPANION_STAT = { carDash: 'carDashMs' };
 
   // Frontend game-type IDs → DB game_type values (highscores table uses different keys than matches)
   const GAME_TYPE_MAP = {

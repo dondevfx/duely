@@ -57,7 +57,7 @@ export const GAMES = [
   {
     slug:     'color-rush',
     title:    'Color Rush',
-    icon:     '🌀',
+    icon:     '🎨',
     route:    '/game/color-rush',
     countKey: 'color-rush',
   },
