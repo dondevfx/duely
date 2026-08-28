@@ -51,13 +51,13 @@ const WATCH_MS   = 2_000;
 // obstacle, so the ceiling is "how fast could a perfect player possibly clear
 // obstacles?"
 //
-//   obstacle spacing        950 world units (client OBSTACLE_GAP)
-//   fastest possible climb  ~350 u/s (tapping again the instant the arc peaks)
-//   => 0.37 obstacles/second, and only if the player never once waits inside
+//   obstacle spacing        1050 world units (client OBSTACLE_GAP)
+//   fastest possible climb  ~285 u/s (tapping again the instant the arc peaks)
+//   => 0.27 obstacles/second, and only if the player never once waits inside
 //      an obstacle for their color to come round — which they now always must,
 //      because the way out has to be matched as well as the way in
 //
-// The cap is 1.5/s — four times the theoretical maximum,
+// The cap is 1.5/s — over five times the theoretical maximum,
 // because clipping an honest player is far worse than a loose bound on a
 // cheater: a clipped score loses a match that was actually won. It was 6/s
 // when obstacles were 480 apart and only the entry had to be matched; the

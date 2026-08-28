@@ -365,7 +365,7 @@ test('the palette is four colors that stay apart on black', () => {
   // Black was one of them, on a black background, which needed a light rim to
   // be visible at all — and that rim was drawn wider than the band, so it
   // showed past its neighbours. Four bright colors remove both problems.
-  for (const key of ['white', 'blue', 'green', 'purple']) {
+  for (const key of ['white', 'blue', 'green', 'red']) {
     assert.match(CANVAS, new RegExp(`key: '${key}'`), `missing color: ${key}`);
   }
   assert.doesNotMatch(CANVAS, /key: 'black'/, 'black on black is gone');

@@ -40,13 +40,17 @@ const LANE_X   = WORLD_W / 2;
 // are still working out how to leave this one.
 const VIEW_H   = 1200;   // world units visible top-to-bottom, on every device
 const BALL_R   = 19;
-const THICK    = 18;     // obstacle stroke thickness
+const THICK    = 21;     // obstacle stroke thickness
 // How close the ball's edge has to get to a band to touch it.
 const REACH    = BALL_R + THICK / 2;
 
-const GRAV     = -2000;  // u/s^2
-const JUMP_V   = 600;    // u/s, set (not added) on tap — as the original does
-const FALL_MAX = -1600;
+// Gravity sets the fall speed AND the hop height, so these two move together.
+// Lowering gravity on its own to soften the fall would have made the ball hop
+// higher again, undoing the shorter hop — JUMP_V comes down with it to keep
+// the arc at the same 90 units.
+const GRAV     = -1800;  // u/s^2
+const JUMP_V   = 570;    // u/s, set (not added) on tap — as the original does
+const FALL_MAX = -1400;
 // How far one tap lifts you. Everything else is sized against this: it is the
 // unit of "room to manoeuvre" in this game.
 const TAP_ARC  = (JUMP_V * JUMP_V) / (2 * -GRAV);   // 90u
@@ -59,7 +63,7 @@ const SHAPE_REACH = 285;
 // GAP - 2*SHAPE_REACH, and it needs to be comfortably more than one arc or
 // there is nowhere to wait and read the spin. A shorter hop only ever buys
 // more room here, never less.
-const OBSTACLE_GAP = 950;      // leaves 380u of clear air, ~4.2 tap arcs
+const OBSTACLE_GAP = 1050;     // leaves 480u of clear air, ~5.3 tap arcs
 const FIRST_Y      = 700;
 // The color switcher sits halfway between one obstacle and the next.
 const SWITCHER_OFFSET = OBSTACLE_GAP / 2;
@@ -69,8 +73,8 @@ const SWITCHER_R      = 22;
 const BALL_SCREEN_FRAC = 0.38;
 
 // Physics runs at a fixed step so a slow frame cannot move the ball further
-// than the collision band is wide. At FALL_MAX the ball covers 6.7 units per
-// step against a REACH of 28, so it can never tunnel through an obstacle. A
+// than the collision band is wide. At FALL_MAX the ball covers 5.8 units per
+// step against a REACH of 29.5, so it can never tunnel through an obstacle. A
 // variable step tied to the frame rate would let exactly that happen on a
 // stuttering phone — and it would look like a phantom death.
 const FIXED_DT = 1 / 240;
@@ -85,14 +89,14 @@ const START_GRACE = 10;  // seconds
 const DEATH_FX = 1.0;    // seconds
 
 // ── Palette ─────────────────────────────────────────────────────────────────
-// Blue, white, green and purple. All four are bright enough on black to be
-// read at a glance while moving, and far enough apart in hue that no two are
+// Blue, white, green and red. All four are bright enough on black to be read
+// at a glance while moving, and far enough apart in hue that no two are
 // confusable at speed — misreading a color here costs the match.
 const COLORS = [
-  { key: 'white',  fill: '#FFFFFF' },
-  { key: 'blue',   fill: '#2E7BF6' },
-  { key: 'green',  fill: '#2FD46B' },
-  { key: 'purple', fill: '#A855F7' },
+  { key: 'white', fill: '#FFFFFF' },
+  { key: 'blue',  fill: '#2E7BF6' },
+  { key: 'green', fill: '#2FD46B' },
+  { key: 'red',   fill: '#FF4D5E' },
 ];
 const BG = '#000000';
 
