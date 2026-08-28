@@ -407,15 +407,20 @@ test('the start screen runs out instead of waiting forever', () => {
     'the grace period must expire and let the ball go');
 });
 
-test('the HUD shows the score, top-left, and nothing else', () => {
+test('the HUD shows the score, top-right, and nothing else', () => {
   const at = CANVAS.indexOf('function drawHUD');
   assert.notEqual(at, -1, 'drawHUD is gone');
   // Bounded by the function's own closing brace. Anchoring on a comment does
   // not work here: CANVAS has its comments stripped, so a missing marker makes
   // indexOf return -1 and the slice swallows the rest of the file.
   const body = CANVAS.slice(at, CANVAS.indexOf('\n    }', at));
-  assert.match(body, /String\(S\.score\)/, 'the score must be drawn');
-  assert.match(body, /textAlign = 'left'/, 'the score is left-aligned');
+  const drawn = body.indexOf('String(S.score)');
+  assert.notEqual(drawn, -1, 'the score must be drawn');
+  // Checked on the alignment in force WHEN THE SCORE IS DRAWN, not anywhere in
+  // the function: drawHUD resets alignment on its way out, so a looser match
+  // is satisfied by that reset and stops checking placement at all.
+  assert.match(body.slice(0, drawn), /textAlign = 'right'/, 'the score is right-aligned');
+  assert.match(body, /fillText\(String\(S\.score\), W - \d+/, 'and anchored to the right edge');
   // The clock is gone: the match is decided on diamonds, so a running timer
   // was reporting a number that does not count for anything.
   assert.doesNotMatch(body, /simT/, 'no clock on the HUD');

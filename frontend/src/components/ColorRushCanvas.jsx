@@ -45,11 +45,11 @@ const THICK    = 18;     // obstacle stroke thickness
 const REACH    = BALL_R + THICK / 2;
 
 const GRAV     = -2000;  // u/s^2
-const JUMP_V   = 700;    // u/s, set (not added) on tap — as the original does
+const JUMP_V   = 600;    // u/s, set (not added) on tap — as the original does
 const FALL_MAX = -1600;
 // How far one tap lifts you. Everything else is sized against this: it is the
 // unit of "room to manoeuvre" in this game.
-const TAP_ARC  = (JUMP_V * JUMP_V) / (2 * -GRAV);   // 122.5u
+const TAP_ARC  = (JUMP_V * JUMP_V) / (2 * -GRAV);   // 90u
 
 // The furthest any shape reaches from its own centre.
 const SHAPE_REACH = 285;
@@ -57,8 +57,9 @@ const SHAPE_REACH = 285;
 // Obstacles are up to 570 units tall, and holding position costs a full tap
 // arc of bob. The clear space between one obstacle and the next is
 // GAP - 2*SHAPE_REACH, and it needs to be comfortably more than one arc or
-// there is nowhere to wait and read the spin.
-const OBSTACLE_GAP = 950;      // leaves 380u of clear air, ~3.1 tap arcs
+// there is nowhere to wait and read the spin. A shorter hop only ever buys
+// more room here, never less.
+const OBSTACLE_GAP = 950;      // leaves 380u of clear air, ~4.2 tap arcs
 const FIRST_Y      = 700;
 // The color switcher sits halfway between one obstacle and the next.
 const SWITCHER_OFFSET = OBSTACLE_GAP / 2;
@@ -559,15 +560,17 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
     }
 
     function drawHUD() {
-      // Score only, top left. There is no clock: the match is decided on
+      // Score only, top right. There is no clock: the match is decided on
       // diamonds, so a running timer was reporting a number that does not
-      // count for anything.
+      // count for anything. The catch-up banner owns the top centre and the
+      // help button the bottom left, so nothing collides.
       ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 8;
-      ctx.textAlign = 'left';
+      ctx.textAlign = 'right';
       ctx.fillStyle = '#FFFFFF';
       ctx.font = `900 ${Math.round(H * 0.055)}px system-ui, sans-serif`;
-      ctx.fillText(String(S.score), 16, H * 0.085);
+      ctx.fillText(String(S.score), W - 16, H * 0.085);
       ctx.shadowBlur = 0;
+      ctx.textAlign = 'left';
     }
 
     // ── Loop ────────────────────────────────────────────────────────────────
