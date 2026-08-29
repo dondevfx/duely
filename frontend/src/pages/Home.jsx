@@ -80,7 +80,10 @@ export default function Home() {
                 </Link>
                 <Link
                   to="/wallet"
-                  className="min-w-[175px] text-center px-8 py-4 border border-surfaceLight hover:border-primary text-muted hover:text-white font-bold rounded-xl transition-all text-lg"
+                  // White letters and a white outline, so it reads as the
+                  // second half of a pair rather than as a disabled control —
+                  // muted-on-muted made it look unavailable next to Play Now.
+                  className="min-w-[175px] text-center px-8 py-4 border border-white/70 hover:border-white text-white hover:bg-white/10 font-bold rounded-xl transition-all text-lg"
                 >
                   Wallet
                 </Link>

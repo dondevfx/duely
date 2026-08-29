@@ -175,12 +175,25 @@ export function StatIcon({ kind, size = 18, className = '' }) {
           strokeLinecap="round" />
       </g>
     ),
-    // Score: a rising bar chart.
+    // Score: a podium. The bar chart was three ascending bars, which reads as
+    // analytics — this tab is a ranking, and a podium says that immediately.
     score: (
       <g>
-        <rect x="3.6" y="13.4" width="4.4" height="7.2" rx="1.2" fill="#2FD46B" />
-        <rect x="9.8" y="9" width="4.4" height="11.6" rx="1.2" fill="#4BE08A" />
-        <rect x="16" y="4.2" width="4.4" height="16.4" rx="1.2" fill="#7BEBAB" />
+        {/* 2nd, left */}
+        <rect x="2.6" y="11.8" width="5.9" height="9" rx="1" fill="#C8D0DC" stroke="#8A93A3" strokeWidth="0.8" />
+        <text x="5.55" y="18.1" fontSize="4.6" fontWeight="900" textAnchor="middle"
+          fontFamily="system-ui, sans-serif" fill="#5C6470">2</text>
+        {/* 1st, centre and tallest */}
+        <rect x="9" y="7.6" width="6" height="13.2" rx="1" fill="#FFD24A" stroke="#B8860B" strokeWidth="0.8" />
+        <text x="12" y="15.6" fontSize="5.2" fontWeight="900" textAnchor="middle"
+          fontFamily="system-ui, sans-serif" fill="#7A5A06">1</text>
+        {/* 3rd, right */}
+        <rect x="15.5" y="14.2" width="5.9" height="6.6" rx="1" fill="#E0A268" stroke="#96602C" strokeWidth="0.8" />
+        <text x="18.45" y="19.2" fontSize="4.4" fontWeight="900" textAnchor="middle"
+          fontFamily="system-ui, sans-serif" fill="#6B4420">3</text>
+        {/* a star over the winner, so the tallest block reads as first */}
+        <path d="M12 2.2l1.05 2.2 2.35.33-1.7 1.68.4 2.36L12 7.63 9.9 8.77l.4-2.36-1.7-1.68 2.35-.33z"
+          fill="#FFD24A" stroke="#B8860B" strokeWidth="0.5" strokeLinejoin="round" />
       </g>
     ),
   }[kind];

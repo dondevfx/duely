@@ -13,55 +13,87 @@
  * and the rank text can never disagree.
  */
 
-// The shield outline every rank shares.
-const SHIELD = 'M12 2.4l7.6 2.7v6.2c0 4.6-3.1 8.3-7.6 10.3-4.5-2-7.6-5.7-7.6-10.3V5.1z';
+// A shield with a raised inner face, so every badge has depth rather than
+// being a flat outline. Two paths: the plate, and the bevel inside it.
+const SHIELD  = 'M12 2.2l8 2.9v6.3c0 4.8-3.3 8.7-8 10.7-4.7-2-8-5.9-8-10.7V5.1z';
+const BEVEL   = 'M12 4.4l6 2.2v4.8c0 3.6-2.5 6.6-6 8.2-3.5-1.6-6-4.6-6-8.2V6.6z';
 
-function Pips({ n, color }) {
-  // Bronze/Silver/Gold are told apart by how many pips they carry, so the
-  // three lowest ranks are distinguishable without relying on metal colour —
-  // which is the pair most often confused at a glance, and the pair most
-  // players actually sit in.
-  const xs = n === 1 ? [12] : n === 2 ? [9.4, 14.6] : [7.2, 12, 16.8];
+// A gem, used by the top ranks. Drawn as a crown, a girdle and a pavilion so
+// it reads as cut stone rather than a diamond outline.
+function Gem({ c, cx = 12, cy = 12.6, s = 1 }) {
+  const w = 4.3 * s, top = 2.5 * s, bot = 4.4 * s;
   return (
     <g>
-      {xs.map((x, i) => (
-        <circle key={i} cx={x} cy="12.4" r="1.5" fill={color} />
-      ))}
+      <path d={`M${cx - w} ${cy - top * 0.15} L${cx} ${cy + bot} L${cx + w} ${cy - top * 0.15} Z`} fill={c} />
+      <path d={`M${cx - w * 0.6} ${cy - top} L${cx + w * 0.6} ${cy - top} L${cx + w} ${cy - top * 0.15} L${cx - w} ${cy - top * 0.15} Z`}
+        fill="#FFFFFF" opacity="0.55" />
+      <path d={`M${cx - w} ${cy - top * 0.15} H${cx + w}`} stroke="#FFFFFF" strokeWidth={0.5 * s} opacity="0.85" />
+      <path d={`M${cx - w * 0.6} ${cy - top} L${cx - w * 0.2} ${cy + bot}`} stroke="#FFFFFF" strokeWidth={0.35 * s} opacity="0.45" />
+      <path d={`M${cx + w * 0.6} ${cy - top} L${cx + w * 0.2} ${cy + bot}`} stroke="#FFFFFF" strokeWidth={0.35 * s} opacity="0.45" />
     </g>
   );
 }
 
+// Chevrons — how the lower three ranks count up. Stacked rather than dotted:
+// a chevron reads as a rank insignia and survives being 14px wide, where three
+// small dots turn into one smudge.
+function Chevrons({ n, c }) {
+  const ys = n === 1 ? [13.6] : n === 2 ? [11.9, 15.1] : [10.4, 13.5, 16.6];
+  return (
+    <g fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {ys.map((y, i) => <path key={i} d={`M8.2 ${y + 1.9} L12 ${y} L15.8 ${y + 1.9}`} />)}
+    </g>
+  );
+}
+
+const plate = (c) => (
+  <>
+    <path d={SHIELD} fill={`${c}26`} stroke={c} strokeWidth="1.7" strokeLinejoin="round" />
+    <path d={BEVEL}  fill="none"     stroke={c} strokeWidth="0.8" opacity="0.5" strokeLinejoin="round" />
+    {/* a highlight down the left face, which is what stops it reading flat */}
+    <path d="M12 4.4 L6 6.6v4.8c0 3.6 2.5 6.6 6 8.2z" fill="#FFFFFF" opacity="0.06" />
+  </>
+);
+
 const ART = {
-  Bronze:   (c) => <><path d={SHIELD} fill={`${c}22`} stroke={c} strokeWidth="1.6" strokeLinejoin="round" /><Pips n={1} color={c} /></>,
-  Silver:   (c) => <><path d={SHIELD} fill={`${c}2E`} stroke={c} strokeWidth="1.6" strokeLinejoin="round" /><Pips n={2} color={c} /></>,
-  Gold:     (c) => <><path d={SHIELD} fill={`${c}33`} stroke={c} strokeWidth="1.6" strokeLinejoin="round" /><Pips n={3} color={c} /></>,
-  // Platinum onward stop counting pips and gain a mark instead, so the top
-  // half of the ladder is obviously a different tier and not just "four pips".
+  Bronze:   (c) => <>{plate(c)}<Chevrons n={1} c={c} /></>,
+  Silver:   (c) => <>{plate(c)}<Chevrons n={2} c={c} /></>,
+  Gold:     (c) => <>{plate(c)}<Chevrons n={3} c={c} /></>,
+  // Platinum onward stop counting and carry a mark instead, so the top half of
+  // the ladder is obviously a different tier and not just "four chevrons".
   Platinum: (c) => (
     <>
-      <path d={SHIELD} fill={`${c}33`} stroke={c} strokeWidth="1.6" strokeLinejoin="round" />
-      <path d="M12 7.6l3.1 4.4L12 16.4 8.9 12z" fill={c} opacity="0.9" />
+      {plate(c)}
+      <Gem c={c} s={0.78} cy={12.2} />
+      <path d="M7.6 8.4l1.1 1.1M16.4 8.4l-1.1 1.1" stroke={c} strokeWidth="1.2"
+        strokeLinecap="round" opacity="0.8" />
     </>
   ),
   Diamond:  (c) => (
     <>
-      <path d={SHIELD} fill={`${c}38`} stroke={c} strokeWidth="1.6" strokeLinejoin="round" />
-      <path d="M8.4 10.4h7.2L12 17.2z" fill={c} />
-      <path d="M9.6 7.2h4.8l1.2 3.2H8.4z" fill={c} opacity="0.75" />
+      {plate(c)}
+      <Gem c={c} s={1} cy={12.4} />
+      {/* sparkles, so Diamond outranks Platinum at a glance */}
+      <path d="M6.6 7.6l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5z" fill={c} opacity="0.9" />
+      <path d="M17.6 9.2l.4 1 1 .4-1 .4-.4 1-.4-1-1-.4 1-.4z" fill={c} opacity="0.75" />
     </>
   ),
   Champion: (c) => (
     <>
-      <path d={SHIELD} fill={`${c}3D`} stroke={c} strokeWidth="1.6" strokeLinejoin="round" />
-      <path d="M7.4 15.4l-1-6 3.4 2.4L12 7.6l2.2 4.2 3.4-2.4-1 6z" fill={c} />
-      <rect x="7.4" y="16.2" width="9.2" height="1.7" rx="0.6" fill={c} />
+      {plate(c)}
+      <path d="M7 16.2l-1.2-7 3.7 2.6L12 7.4l2.5 4.4 3.7-2.6-1.2 7z" fill={c} />
+      <rect x="7" y="17" width="10" height="2" rx="0.8" fill={c} />
+      <circle cx="5.8" cy="8.6" r="1" fill={c} />
+      <circle cx="18.2" cy="8.6" r="1" fill={c} />
+      <circle cx="12" cy="6.6" r="1.1" fill={c} />
     </>
   ),
   Unranked: (c) => (
     <>
-      <path d={SHIELD} fill="none" stroke={c} strokeWidth="1.5" strokeDasharray="2.6 2" strokeLinejoin="round" />
-      <text x="12" y="15.6" fontSize="7.5" fontWeight="900" textAnchor="middle"
-        fontFamily="system-ui, sans-serif" fill={c}>?</text>
+      <path d={SHIELD} fill="none" stroke={c} strokeWidth="1.5"
+        strokeDasharray="2.8 2.2" strokeLinejoin="round" opacity="0.8" />
+      <text x="12" y="15.8" fontSize="8" fontWeight="900" textAnchor="middle"
+        fontFamily="system-ui, sans-serif" fill={c} opacity="0.8">?</text>
     </>
   ),
 };

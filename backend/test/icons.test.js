@@ -22,15 +22,23 @@ const walk = (dir, out = []) => {
 
 // ── Every component used is imported ────────────────────────────────────────
 
-test('nothing uses an icon component it has not imported', () => {
+test('nothing uses a component it has not imported or defined', () => {
   // This is the one that matters most: an undefined component passes the
-  // build and throws at render, which is how a missing GameIcon import in the
-  // sidebar shipped as a blank page rather than a build failure.
+  // build and throws at render. It shipped Blackjack as "Can't find variable:
+  // PlayerName" — the page used <Avatar> and <PlayerName> and imported
+  // neither, and the build was perfectly happy.
+  //
+  // Every capitalised tag in the file, not a fixed list of icon names: the
+  // fixed list is what let Avatar and PlayerName through, since neither was
+  // on it.
   const bad = [];
   for (const file of walk(FE())) {
     const src = fs.readFileSync(file, 'utf8');
-    for (const c of ['GameIcon', 'UiIcon', 'RankIcon', 'DiamondIcon']) {
-      if (!new RegExp(`<${c}[\\s/>]`).test(src)) continue;
+    const used = new Set([...src.matchAll(/<([A-Z]\w+)[\s/>]/g)].map(m => m[1]));
+    for (const c of used) {
+      // Defined in this file counts too — plenty of pages declare small
+      // components locally.
+      if (new RegExp(`(?:function|const|class)\\s+${c}\\b`).test(src)) continue;
       // Accepts every import form the codebase actually uses, including
       // `import UiIcon, { RakebackTierIcon } from './UiIcon'` — matching only
       // `import X from` reported that one as missing.

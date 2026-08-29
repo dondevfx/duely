@@ -770,8 +770,13 @@ export default function WordleGame() {
             {countdown ?? '…'}
           </div>
           <p className="text-muted">Get ready…</p>
+          {/* Solo has NO opponent — paid or free. The paid mode is a bet that
+              you can solve the word (wordle_solo_start opens a session with no
+              second player), so "vs Duely Bot" was naming an opponent that does
+              not exist. It also keyed off entryFee, which is whatever the bet
+              slider happens to say, so free Solo claimed a bot too. */}
           {lastModeRef.current === 'solo'
-            ? (entryFee > 0 ? <p className="text-xs text-muted mt-2">vs Duely Bot</p> : null)
+            ? <p className="text-xs text-muted mt-2">Solve it to win</p>
             : opponent && <p className="text-xs text-muted mt-2 flex items-center justify-center gap-1.5">
                   vs <PlayerName username={opponent.username} avatarUrl={opponent.avatarUrl}
                        color={opponent.profileColor} isBot={!!opponent.isBot} size="w-5 h-5" />
@@ -835,18 +840,20 @@ export default function WordleGame() {
             )}
           </div>
 
-          {/* Opponent guess count */}
-          <div className="text-center min-w-[72px]">
-            <div className={`text-xl font-black font-mono ${oppCount > guessNum ? 'text-danger' : oppCount < guessNum ? 'text-success' : 'text-accent'}`}>
-              {isSoloMode ? '—' : oppCount}
-            </div>
-            <div className="text-[10px] text-muted flex items-center justify-center">
-              {isSoloMode ? 'Solo' : (
+          {/* Opponent guess count — only when there IS one. In solo the column
+              was a permanent "Solo / —": a scoreboard for a player who is not
+              in the game. */}
+          {!isSoloMode && (
+            <div className="text-center min-w-[72px]">
+              <div className={`text-xl font-black font-mono ${oppCount > guessNum ? 'text-danger' : oppCount < guessNum ? 'text-success' : 'text-accent'}`}>
+                {oppCount}
+              </div>
+              <div className="text-[10px] text-muted flex items-center justify-center">
                 <PlayerName username={opponent?.username ?? 'Opponent'} avatarUrl={opponent?.avatarUrl}
                   color={opponent?.profileColor} isBot={!!opponent?.isBot} size="w-4 h-4" />
-              )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {gridRows.map((row, rIdx) => {

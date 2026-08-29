@@ -949,7 +949,10 @@ export default function BlockBlastGame() {
             {/* My score */}
             <div className="text-center min-w-[72px]">
               <div className="text-xl font-black font-mono text-success">{score.toLocaleString()}</div>
-              <div className="text-[10px] text-muted">{profile?.username ?? 'You'}</div>
+              <div className="text-[10px] text-muted flex items-center justify-center">
+                <PlayerName username={profile?.username ?? 'You'} avatarUrl={profile?.avatar_url}
+                  color={profile?.profile_color} size="w-4 h-4" />
+              </div>
             </div>
 
             {/* Center: mode label */}
@@ -969,7 +972,17 @@ export default function BlockBlastGame() {
               <div className={`text-xl font-black font-mono ${oppScore > score ? 'text-danger' : oppScore < score ? 'text-success' : 'text-accent'}`}>
                 {oppScore.toLocaleString()}
               </div>
-              <div className="text-[10px] text-muted">{isSolo ? 'Duely Bot' : (opponent?.username ?? 'Opponent')}</div>
+              <div className="text-[10px] text-muted flex items-center justify-center">
+                {/* isSolo here means "against the bot" — the bot is a real
+                    opponent in this game and has a score, so it gets a face
+                    like anyone else. */}
+                <PlayerName
+                  username={isSolo ? 'Duely Bot' : (opponent?.username ?? 'Opponent')}
+                  avatarUrl={isSolo ? null : opponent?.avatarUrl}
+                  color={isSolo ? null : opponent?.profileColor}
+                  isBot={isSolo || !!opponent?.isBot}
+                  size="w-4 h-4" />
+              </div>
             </div>
           </div>
 

@@ -10,6 +10,8 @@ import BetSlider from '../components/BetSlider';
 import ResultScreen from '../components/ResultScreen';
 import GameHelp from '../components/GameHelp';
 import GameIcon from '../components/GameIcon';
+import Avatar from '../components/Avatar';
+import PlayerName from '../components/PlayerName';
 import GameErrorBoundary from '../components/GameErrorBoundary';
 import GlowButton from '../components/GlowButton';
 import { topUpRoute, topUpLabel } from '../utils/topUpRoute';
