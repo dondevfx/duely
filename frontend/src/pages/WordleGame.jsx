@@ -649,7 +649,7 @@ export default function WordleGame() {
           balanceChange={paidFee > 0 && solved ? { winnerPayout: paidPayout } : null}
           currency={soloResult?.currency ?? betCurrency}
           profile={profile}
-          gameLabel="🔤 Word VS"
+          gameLabel="Word VS"
           extraRows={[
             { label: 'The Word', value: soloWord },
             { label: 'Guesses', value: `${guesses.length} / ${MAX_GUESSES}` },
@@ -687,7 +687,7 @@ export default function WordleGame() {
           isFirstWin={result.isFirstWin ?? false}
           disconnected={result.disconnected}
           profile={profile}
-          gameLabel="🔤 Word VS"
+          gameLabel="Word VS"
           extraRows={result.disconnected
             ? [{ label: 'Result', value: 'Opponent forfeited' }]
             : [
@@ -711,7 +711,7 @@ export default function WordleGame() {
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4 py-8">
         <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
         <GameLobby
-          title="🔤 Word VS"
+          title="Word VS"
           description="Guess the same 5-letter word as your opponent. Solve it first and win instantly — 6 tries each."
           betCurrency={betCurrency} setBetCurrency={setBetCurrency}
           entryFee={entryFee} setEntryFee={setEntryFee}

@@ -8,13 +8,15 @@
 // filtered out of the real pool, which is 70% of the feed — so the ticker was
 // mostly just Coin Flip and Blackjack.
 const GAME_META = {
-  blockBlast: { icon: '🟦', name: 'Block Burst' },
-  scrabble:   { icon: '🔤', name: 'Word VS'     },
-  coin_flip:  { icon: '🟡', name: 'Coin Flip'   },
-  blackjack:  { icon: '🃏', name: 'Blackjack'   },
-  carDash:    { icon: '🚗', name: 'Rush Hour'   },
-  colorRush:  { icon: '🎨', name: 'Color Rush'  },
-  tower:      { icon: '🗼', name: 'Tower'       },
+  // `key` is what the client draws the icon from — the map key itself is a
+  // database game_type and does not always match (coin_flip vs coin-flip).
+  blockBlast: { key: 'blockBlast', name: 'Block Burst' },
+  scrabble:   { key: 'scrabble',   name: 'Word VS'     },
+  coin_flip:  { key: 'coin-flip',  name: 'Coin Flip'   },
+  blackjack:  { key: 'blackjack',  name: 'Blackjack'   },
+  carDash:    { key: 'carDash',    name: 'Rush Hour'   },
+  colorRush:  { key: 'colorRush',  name: 'Color Rush'  },
+  tower:      { key: 'tower',      name: 'Tower'       },
 };
 const GAME_LIST = Object.values(GAME_META);
 

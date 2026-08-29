@@ -83,6 +83,11 @@ const FIXED_DT = 1 / 240;
 // through everything it missed.
 const MAX_FRAME = 0.25;
 
+// How much faster each obstacle spins than the one below it, and the ceiling
+// that keeps the game readable. See the note where they are used.
+const SPIN_RAMP = 1.16;
+const SPIN_MAX  = 4.5;   // rad/s — a quarter turn every 0.35s
+
 // How long the start screen waits before letting go of the ball.
 const START_GRACE = 10;  // seconds
 // How long the ball's burst plays before the result card is allowed up.
@@ -217,7 +222,20 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
       const shape = SHAPES[Math.floor(rnd01(seed, i, 1) * SHAPES.length) % SHAPES.length];
       const dotted = rnd01(seed, i, 2) < 0.34;
       const dir    = rnd01(seed, i, 3) < 0.5 ? -1 : 1;
-      const speed  = Math.min(0.85 + i * 0.018, 1.75) * (0.9 + rnd01(seed, i, 4) * 0.25);
+      // Each obstacle spins SPIN_RAMP times faster than the one below it, so the
+      // climb gets harder the further you get.
+      //
+      // The cap is not decoration. A quarter turn is what a color is present
+      // for, so the window to enter or leave is (pi/2)/omega seconds: at the
+      // cap that is 0.35s, which is about the floor for seeing a color arrive
+      // and acting on it. Compounding reaches the cap around obstacle 11 and
+      // would be at 0.1s by obstacle 20 — past that the game stops rewarding
+      // reading the spin and starts paying out on luck, which is not something
+      // to put money on. The jitter is applied BEFORE the clamp so it cannot
+      // push a single obstacle past the floor.
+      const speed  = Math.min(
+        0.85 * Math.pow(SPIN_RAMP, i) * (0.9 + rnd01(seed, i, 4) * 0.25),
+        SPIN_MAX);
       const offset = Math.floor(rnd01(seed, i, 5) * 4);
       o = {
         i, y: FIRST_Y + i * OBSTACLE_GAP,

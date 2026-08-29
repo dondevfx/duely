@@ -788,7 +788,7 @@ export default function BlockBlastGame() {
             winnerStreak={result.winnerStreak}
             isFirstWin={result.isFirstWin}
             profile={profile}
-            gameLabel="🟦 Block Burst"
+            gameLabel="Block Burst"
             extraRows={[{
               label: 'Score',
               value: `${(isWinner ? (result.winnerScore ?? 0) : (result.loserScore ?? 0)).toLocaleString()} — ${(isWinner ? (result.loserScore ?? 0) : (result.winnerScore ?? 0)).toLocaleString()}`,
@@ -821,7 +821,7 @@ export default function BlockBlastGame() {
             currency={result.currency || betCurrency}
             entryFee={result.entryFee ?? entryFee}
             profile={profile}
-            gameLabel="🟦 Block Burst"
+            gameLabel="Block Burst"
             extraRows={[
               { label: 'Your Score', value: (result.playerScore ?? 0).toLocaleString() },
               { label: 'Bot Score', value: (result.botScore ?? 0).toLocaleString() },
@@ -841,7 +841,7 @@ export default function BlockBlastGame() {
             isWinner
             winnerUsername={profile?.username ?? 'You'}
             profile={profile}
-            gameLabel="🟦 Block Burst"
+            gameLabel="Block Burst"
             extraRows={[
               { label: 'Final Score', value: (result.playerScore ?? 0).toLocaleString() },
             ]}
@@ -857,7 +857,7 @@ export default function BlockBlastGame() {
       {/* ── LOBBY ── */}
       {phase === 'lobby' && (
         <GameLobby
-          title="🟦 Block Burst"
+          title="Block Burst"
           description="Drag blocks onto the grid to fill rows and columns and clear them for points. Fill the energy bar to unlock Blast Mode — tap any row to clear it instantly."
           controls="Drag blocks from tray onto the grid · Fill full rows/columns to clear them"
           betCurrency={betCurrency} setBetCurrency={setBetCurrency}

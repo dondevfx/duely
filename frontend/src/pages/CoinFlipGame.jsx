@@ -9,6 +9,7 @@ import { COIN_FEES, DIAMOND_FEES, SMALL_BTN } from '../components/GameLobby';
 import BetSlider from '../components/BetSlider';
 import ResultScreen from '../components/ResultScreen';
 import GameHelp from '../components/GameHelp';
+import GameIcon from '../components/GameIcon';
 import GlowButton from '../components/GlowButton';
 import { topUpRoute, topUpLabel } from '../utils/topUpRoute';
 import CreateRoomModal from '../components/CreateRoomModal';
@@ -644,7 +645,7 @@ export default function CoinFlipGame() {
               winnerStreak={resultData.winnerStreak ?? 0}
               isFirstWin={resultData.isFirstWin ?? false}
               profile={profile}
-              gameLabel="🟡 Coin Flip"
+              gameLabel="Coin Flip"
               extraRows={[
                 { label: 'Your Pick', value: side === 'heads' ? '🔵 Heads' : '⚪ Tails' },
                 { label: 'Landed On', value: resultData.result === 'heads' ? '🔵 Heads' : '⚪ Tails' },
@@ -663,7 +664,7 @@ export default function CoinFlipGame() {
 
         {phase === 'lobby' && (
           <div className="text-center mb-1 sm:mb-6">
-            <h1 className="text-4xl sm:text-6xl font-black text-white mb-0.5 sm:mb-2 leading-tight">🟡 Coin Flip</h1>
+            <h1 className="text-4xl sm:text-6xl font-black text-white mb-0.5 sm:mb-2 leading-tight flex items-center justify-center gap-3"><GameIcon game="coin-flip" size={48} className="w-9 h-9 sm:w-14 sm:h-14" />Coin Flip</h1>
             <p className="text-center text-muted text-sm sm:text-base leading-snug sm:leading-relaxed px-2">Pick heads or tails — you get matched with someone on the opposite side. One flip decides it.</p>
           </div>
         )}

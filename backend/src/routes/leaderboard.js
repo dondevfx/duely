@@ -151,11 +151,10 @@ module.exports = function leaderboardRoutes(supabase) {
 
     const ids = sorted.map(([id]) => id);
     const { data: profileData } = ids.length
-      ? await supabase
-          .from('profiles')
-          .select('id, username, elo, profile_color')
-          .in('id', ids)
-          .neq('is_private', true)
+      ? await selectWithOptional(
+          (cols) => supabase.from('profiles').select(cols).in('id', ids).neq('is_private', true),
+          'id, username, elo, profile_color',
+          'avatar_url')
       : { data: [] };
 
     const profileMap = Object.fromEntries(stripDemos(profileData || []).map(p => [p.id, p]));
@@ -168,6 +167,7 @@ module.exports = function leaderboardRoutes(supabase) {
         username: profileMap[id]?.username ?? 'Unknown',
         elo: profileMap[id]?.elo ?? 0,
         profile_color: profileMap[id]?.profile_color ?? null,
+        avatar_url: profileMap[id]?.avatar_url ?? null,
         weekly_wins,
       }));
 
@@ -177,13 +177,16 @@ module.exports = function leaderboardRoutes(supabase) {
   // Coin balance leaderboard — top 500 by current coin balance
   router.get('/coins', async (req, res) => {
     const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, username, c_coins, wins, losses')
-      .order('c_coins', { ascending: false })
-      .limit(500)
-      .neq('id', adminId)
-      .neq('is_private', true);
+    const { data, error } = await selectWithOptional(
+      (cols) => supabase
+        .from('profiles')
+        .select(cols)
+        .order('c_coins', { ascending: false })
+        .limit(500)
+        .neq('id', adminId)
+        .neq('is_private', true),
+      'id, username, c_coins, wins, losses, profile_color',
+      'avatar_url');
     if (error) return res.status(500).json({ error: error.message });
 
     const players = stripDemos(data).map((p, i) => ({ rank: i + 1, ...p }));
@@ -240,7 +243,10 @@ module.exports = function leaderboardRoutes(supabase) {
       .sort((a, b) => b[1] - a[1]).slice(0, 500);
     const ids = sorted.map(([id]) => id);
     const { data: profileData } = ids.length
-      ? await supabase.from('profiles').select('id, username, wins, losses').in('id', ids).not('is_private', 'is', true)
+      ? await selectWithOptional(
+          (cols) => supabase.from('profiles').select(cols).in('id', ids).not('is_private', 'is', true),
+          'id, username, wins, losses, profile_color',
+          'avatar_url')
       : { data: [] };
     const profileMap = Object.fromEntries((profileData || []).map(p => [p.id, p]));
 
@@ -252,6 +258,8 @@ module.exports = function leaderboardRoutes(supabase) {
         total_wagered: parseFloat(wagered.toFixed(4)),
         wins: profileMap[id]?.wins ?? 0,
         losses: profileMap[id]?.losses ?? 0,
+        profile_color: profileMap[id]?.profile_color ?? null,
+        avatar_url: profileMap[id]?.avatar_url ?? null,
       }));
 
     let userRank = null;
@@ -296,7 +304,10 @@ module.exports = function leaderboardRoutes(supabase) {
       .sort((a, b) => b[1] - a[1]).slice(0, 500);
     const ids = sorted.map(([id]) => id);
     const { data: profileData } = ids.length
-      ? await supabase.from('profiles').select('id, username, wins, losses').in('id', ids).not('is_private', 'is', true)
+      ? await selectWithOptional(
+          (cols) => supabase.from('profiles').select(cols).in('id', ids).not('is_private', 'is', true),
+          'id, username, wins, losses, profile_color',
+          'avatar_url')
       : { data: [] };
     const profileMap = Object.fromEntries((profileData || []).map(p => [p.id, p]));
 
@@ -308,6 +319,8 @@ module.exports = function leaderboardRoutes(supabase) {
         total_wagered: Math.round(wagered),
         wins: profileMap[id]?.wins ?? 0,
         losses: profileMap[id]?.losses ?? 0,
+        profile_color: profileMap[id]?.profile_color ?? null,
+        avatar_url: profileMap[id]?.avatar_url ?? null,
       }));
 
     let userRank = null;
@@ -362,9 +375,12 @@ module.exports = function leaderboardRoutes(supabase) {
       // Fetch usernames in bulk
       const scoreIds = filtered.map(r => r.user_id);
       const { data: scoreProfiles } = scoreIds.length
-        ? await supabase.from('profiles').select('id, username').in('id', scoreIds)
+        ? await selectWithOptional(
+            (cols) => supabase.from('profiles').select(cols).in('id', scoreIds),
+            'id, username, profile_color',
+            'avatar_url')
         : { data: [] };
-      const scoreProfileMap = Object.fromEntries((scoreProfiles || []).map(p => [p.id, p.username]));
+      const scoreProfileMap = Object.fromEntries((scoreProfiles || []).map(p => [p.id, p]));
 
       // Pull the companion stat (e.g. Rush Hour survival time) for these users
       let companionMap = {};
@@ -381,7 +397,9 @@ module.exports = function leaderboardRoutes(supabase) {
       const players = filtered.map((r, i) => ({
           rank: i + 1,
           id: r.user_id,
-          username: scoreProfileMap[r.user_id] ?? 'Unknown',
+          username: scoreProfileMap[r.user_id]?.username ?? 'Unknown',
+          profile_color: scoreProfileMap[r.user_id]?.profile_color ?? null,
+          avatar_url: scoreProfileMap[r.user_id]?.avatar_url ?? null,
           score: r.score,
           ...(companionType ? { ms: companionMap[r.user_id] ?? null } : {}),
         }));
@@ -438,14 +456,19 @@ module.exports = function leaderboardRoutes(supabase) {
     // Fetch usernames in bulk
     const ids = sorted.map(([id]) => id);
     const { data: profileData } = ids.length
-      ? await supabase.from('profiles').select('id, username').in('id', ids)
+      ? await selectWithOptional(
+          (cols) => supabase.from('profiles').select(cols).in('id', ids),
+          'id, username, profile_color',
+          'avatar_url')
       : { data: [] };
-    const profileMap = Object.fromEntries((profileData || []).map(p => [p.id, p.username]));
+    const profileMap = Object.fromEntries((profileData || []).map(p => [p.id, p]));
 
     const players = sorted.map(([id, wins], i) => ({
       rank: i + 1,
       id,
-      username: profileMap[id] ?? 'Unknown',
+      username: profileMap[id]?.username ?? 'Unknown',
+      profile_color: profileMap[id]?.profile_color ?? null,
+      avatar_url: profileMap[id]?.avatar_url ?? null,
       score: wins,
     }));
 

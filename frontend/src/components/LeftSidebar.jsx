@@ -3,16 +3,17 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { getDisplayRank, isRanked } from '../utils/ranks';
 import Avatar from './Avatar';
+import GameIcon from './GameIcon';
 
 const GAMES = [
-  { icon: '⚡', label: 'Quick Match',  route: '/game/quick-match', live: true },
-  { icon: '🟦', label: 'Block Burst',  route: '/game/block-blast', live: true },
-  { icon: '🟡', label: 'Coin Flip',    route: '/game/coin-flip',   live: true },
-  { icon: '🔤', label: 'Word VS',       route: '/game/scrabble',    live: true },
-  { icon: '🃏', label: 'Blackjack',    route: '/game/blackjack',   live: true },
-  { icon: '🚗', label: 'Rush Hour', route: '/game/car-dash',    live: true },
-  { icon: '🎨', label: 'Color Rush', route: '/game/color-rush',  live: true },
-  { icon: '🗼', label: 'Tower',     route: '/game/tower',       live: true },
+  { game: 'quickMatch', label: 'Quick Match',  route: '/game/quick-match', live: true },
+  { game: 'blockBlast', label: 'Block Burst',  route: '/game/block-blast', live: true },
+  { game: 'coin-flip',  label: 'Coin Flip',    route: '/game/coin-flip',   live: true },
+  { game: 'scrabble',   label: 'Word VS',      route: '/game/scrabble',    live: true },
+  { game: 'blackjack',  label: 'Blackjack',    route: '/game/blackjack',   live: true },
+  { game: 'carDash',    label: 'Rush Hour',    route: '/game/car-dash',    live: true },
+  { game: 'colorRush',  label: 'Color Rush',   route: '/game/color-rush',  live: true },
+  { game: 'tower',      label: 'Tower',        route: '/game/tower',       live: true },
 ];
 
 const NAV = [
@@ -79,7 +80,7 @@ export default function LeftSidebar() {
             to={game.route}
             className={({ isActive }) => linkCls(isActive)}
           >
-            <span className="text-lg leading-none">{game.icon}</span>
+            <GameIcon game={game.game} size={20} />
             <span className="flex-1">{game.label}</span>
             {(() => {
               const key = routeToKey[game.route];

@@ -1,5 +1,6 @@
 ﻿import { useState, useRef, useEffect, useCallback } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
+import GameIcon from './GameIcon';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { useSocket } from '../context/SocketContext';
@@ -20,14 +21,14 @@ const NAV_LINKS = [
 ];
 
 const GAME_LINKS = [
-  { icon: '⚡', label: 'Quick Match', to: '/game/quick-match' },
-  { icon: '🟦', label: 'Block Burst', to: '/game/block-blast', countKey: 'block-blast' },
-  { icon: '🟡', label: 'Coin Flip',   to: '/game/coin-flip',   countKey: 'coin-flip' },
-  { icon: '🔤', label: 'Word VS',     to: '/game/scrabble',    countKey: 'scrabble' },
-  { icon: '🃏', label: 'Blackjack',   to: '/game/blackjack',   countKey: 'blackjack' },
-  { icon: '🚗', label: 'Rush Hour', to: '/game/car-dash',  countKey: 'car-dash' },
-  { icon: '🎨', label: 'Color Rush', to: '/game/color-rush', countKey: 'color-rush' },
-  { icon: '🗼', label: 'Tower',     to: '/game/tower',     countKey: 'tower' },
+  { game: 'quickMatch', label: 'Quick Match', to: '/game/quick-match' },
+  { game: 'blockBlast', label: 'Block Burst', to: '/game/block-blast', countKey: 'block-blast' },
+  { game: 'coin-flip',  label: 'Coin Flip',   to: '/game/coin-flip',   countKey: 'coin-flip' },
+  { game: 'scrabble',   label: 'Word VS',     to: '/game/scrabble',    countKey: 'scrabble' },
+  { game: 'blackjack',  label: 'Blackjack',   to: '/game/blackjack',   countKey: 'blackjack' },
+  { game: 'carDash',    label: 'Rush Hour',   to: '/game/car-dash',    countKey: 'car-dash' },
+  { game: 'colorRush',  label: 'Color Rush',  to: '/game/color-rush',  countKey: 'color-rush' },
+  { game: 'tower',      label: 'Tower',       to: '/game/tower',       countKey: 'tower' },
 ];
 
 
@@ -493,7 +494,7 @@ export default function Navbar() {
                       isActive ? 'bg-primary/15 text-primary border border-primary/20' : 'text-muted hover:text-white hover:bg-surfaceLight'
                     }`
                   }>
-                  <span className="text-xl">{item.icon}</span>
+                  <span className="text-xl">{item.game ? <GameIcon game={item.game} size={22} /> : item.icon}</span>
                   {item.label}
                 </NavLink>
               ))}
@@ -514,7 +515,7 @@ export default function Navbar() {
                         isActive ? 'bg-primary/15 text-primary border border-primary/20' : 'text-muted hover:text-white hover:bg-surfaceLight'
                       }`
                     }>
-                    <span className="text-xl">{item.icon}</span>
+                    <span className="text-xl">{item.game ? <GameIcon game={item.game} size={22} /> : item.icon}</span>
                     <span className="flex-1">{item.label}</span>
                     {count > 0 && (
                       <span className="text-[10px] bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1">

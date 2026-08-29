@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react';
 import GlowButton from './GlowButton';
 import CoinIcon from './CoinIcon';
+import GameIcon from './GameIcon';
 import { useSocket } from '../context/SocketContext';
 
 const GAME_NAMES = {
-  blackjack:   '🃏 Blackjack',
-  'coin-flip': '🟡 Coin Flip',
-  scrabble:    '🔤 Word VS',
-  blockBlast:  '🟦 Block Burst',
-  carDash:     '🚗 Rush Hour',
-  colorRush:   '🎨 Color Rush',
-  tower:       '🗼 Tower',
+  blackjack:   'Blackjack',
+  'coin-flip': 'Coin Flip',
+  scrabble:    'Word VS',
+  blockBlast:  'Block Burst',
+  carDash:     'Rush Hour',
+  colorRush:   'Color Rush',
+  tower:       'Tower',
 };
 
 // Centered "Join a Room" modal shared by all game pages — enter the code a
@@ -87,7 +88,9 @@ export default function JoinRoomModal({ open, onClose, onJoin, authenticated = t
           <div className="text-center">
             <div className="text-5xl mb-3">🎮</div>
             <p className="text-muted text-sm mb-1">{info.hostUsername} is waiting in</p>
-            <div className="text-xl font-black text-white mb-4">{GAME_NAMES[info.gameType] || 'a match'}</div>
+            <div className="text-xl font-black text-white mb-4 flex items-center justify-center gap-2">
+              <GameIcon game={info.gameType} size={24} />{GAME_NAMES[info.gameType] || 'a match'}
+            </div>
 
             <div className="bg-bg border border-border rounded-xl p-4 mb-5 space-y-2 text-left">
               <div className="flex items-center justify-between text-sm">

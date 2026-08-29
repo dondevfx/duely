@@ -326,7 +326,7 @@ export default function SpinWheel({ locked = false }) {
           <button
             onClick={handleSpin}
             disabled={spinning}
-            className="w-full py-3 rounded-xl font-black text-sm tracking-widest uppercase transition-all"
+            className="w-full py-2.5 rounded-xl font-black text-xs tracking-widest uppercase transition-all"
             style={spinning ? {
               background: '#0f172a', color: '#334155', cursor: 'not-allowed', border: '1px solid #1e293b',
             } : {

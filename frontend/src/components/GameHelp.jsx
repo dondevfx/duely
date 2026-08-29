@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import GameIcon from './GameIcon';
 
 // A small "?" in the corner of a live game, and the rules behind it.
 //
@@ -13,7 +14,7 @@ import { useState, useEffect } from 'react';
 // which is also why the panel is deliberately small and to one side.
 const HELP = {
   tower: {
-    title: '🗼 Tower',
+    title: 'Tower',
     how: [
       'A block slides in from one side. Tap, click or press space to drop it.',
       'Anything hanging over the edge is sliced off, and the block gets narrower.',
@@ -23,7 +24,7 @@ const HELP = {
     win: 'The taller tower wins. If your opponent finishes first you get 15 seconds to beat their height.',
   },
   carDash: {
-    title: '🚗 Rush Hour',
+    title: 'Rush Hour',
     how: [
       'Steer left and right to weave through traffic.',
       'Both players drive the exact same road, so it is a fair race.',
@@ -32,7 +33,7 @@ const HELP = {
     win: 'Highest score wins, with time survived breaking a tie. If your opponent crashes first you get 15 seconds to beat their score.',
   },
   colorRush: {
-    title: '🎨 Color Rush',
+    title: 'Color Rush',
     how: [
       'Tap anywhere (or press space) to fly upward.',
       'You can only pass through the part of a ring that matches your color.',
@@ -42,7 +43,7 @@ const HELP = {
     win: 'Most diamonds wins, with time survived breaking a tie. If your opponent dies first you get 15 seconds to beat their score.',
   },
   blockBlast: {
-    title: '🟦 Block Burst',
+    title: 'Block Burst',
     how: [
       'Drag blocks from the tray onto the grid.',
       'Fill a full row or column to clear it and score.',
@@ -52,7 +53,7 @@ const HELP = {
     win: 'Highest score when both players are finished.',
   },
   scrabble: {
-    title: '🔤 Word VS',
+    title: 'Word VS',
     how: [
       'Guess the five-letter word in six tries.',
       'Green means the letter is right and in the right place.',
@@ -62,7 +63,7 @@ const HELP = {
     win: 'First to solve it wins. If neither solves it, fewest guesses used takes it.',
   },
   blackjack: {
-    title: '🃏 Blackjack',
+    title: 'Blackjack',
     how: [
       'Get closer to 21 than your opponent without going over.',
       'HIT takes another card, STAND ends your turn.',
@@ -72,7 +73,7 @@ const HELP = {
     win: 'Closest to 21 without busting. Bust and you lose the hand.',
   },
   'coin-flip': {
-    title: '🟡 Coin Flip',
+    title: 'Coin Flip',
     how: [
       'Pick heads or tails before the match.',
       'You are matched with someone who picked the other side.',
@@ -159,7 +160,9 @@ export default function GameHelp({ gameType, onPauseChange, canPause = false, pl
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3 mb-3">
-              <div className="text-lg font-black text-white">{info.title}</div>
+              <div className="text-lg font-black text-white flex items-center gap-2">
+                <GameIcon game={gameType} size={22} />{info.title}
+              </div>
               <button
                 onClick={() => setOpen(false)}
                 aria-label="Close"

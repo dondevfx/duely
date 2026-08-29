@@ -539,7 +539,7 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
                 border: `1px solid ${tier.color}60`,
               }}
             >
-              {spinning ? 'Spinning…' : '🎡 Spin Daily'}
+              {spinning ? 'Spinning…' : 'Spin'}
             </button>
           ) : (
             <div
@@ -653,12 +653,12 @@ export default function Rewards() {
           )}
         </div>
 
-        {/* 5-min diamond bonus */}
+        {/* 1-min diamond bonus */}
         {session ? <DailyBonus /> : (
           <div className="bg-surface border border-surfaceLight rounded-2xl p-5 text-center">
             <div className="text-2xl mb-2">💎</div>
-            <div className="font-bold text-white mb-1">5-Minute Diamond Bonus</div>
-            <div className="text-sm text-muted mb-3">Claim 250 free diamonds every 5 minutes</div>
+            <div className="font-bold text-white mb-1">Diamond Bonus</div>
+            <div className="text-sm text-muted mb-3">Claim 500 free diamonds every minute</div>
             <Link to="/login" className="inline-block px-6 py-2.5 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl transition-all text-sm">
               Login to Claim
             </Link>

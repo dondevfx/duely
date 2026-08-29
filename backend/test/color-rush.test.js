@@ -55,35 +55,50 @@ test('the game is registered everywhere a game has to be registered', () => {
   assert.deepEqual(missing, [], `not registered in: ${missing.join(', ')}`);
 });
 
-test('the same icon is used everywhere the game is listed', () => {
-  // The icon is hand-copied into a dozen lists. Changing it means changing all
-  // of them, and the one that gets missed shows a different game's face in the
-  // sidebar or the invite toast.
-  // Each site says exactly where ITS icon lives. A heuristic search finds the
-  // NEIGHBOURING game's icon instead — these lists run one line per game.
+test('the icon is drawn once and reused, not respelled per list', () => {
+  // The icon used to be an emoji literal copied into a dozen lists, and the
+  // one that got missed showed a different game's face in the sidebar. There
+  // is now a single drawing per game, so the thing to check is that nothing
+  // has quietly gone back to spelling its own.
+  const icons = fe('components', 'GameIcon.jsx');
+  assert.match(icons, /function ColorRush\(\)/, 'Color Rush needs an icon');
+  assert.match(icons, /colorRush:\s+ColorRush,/, 'wired to the colorRush key');
+
+  // Every place that lists games must ASK for the icon rather than carry one.
   const sites = [
-    ['games list',  fe('data', 'games.js'),                /slug:\s*'color-rush',[\s\S]{0,80}?icon:\s*'(.+?)'/],
-    ['navbar',      fe('components', 'Navbar.jsx'),        /\{ icon: '(.+?)', label: 'Color Rush'/],
-    ['sidebar',     fe('components', 'LeftSidebar.jsx'),   /\{ icon: '(.+?)', label: 'Color Rush'/],
-    ['quick match', fe('pages', 'QuickMatch.jsx'),         /name: 'Color Rush',\s*icon: '(.+?)'/],
-    ['help panel',  fe('components', 'GameHelp.jsx'),      /colorRush: \{[\s\S]{0,40}?title: '(.+?) Color Rush'/],
-    ['join modal',  fe('components', 'JoinRoomModal.jsx'), /colorRush:\s*'(.+?) Color Rush'/],
-    ['challenge',   fe('pages', 'ChallengeJoin.jsx'),      /colorRush:\s*'(.+?) Color Rush'/],
-    ['leaderboard', fe('pages', 'Leaderboard.jsx'),        /id: 'colorRush'[\s\S]{0,90}?icon: '(.+?)'/],
-    ['profile',     fe('pages', 'Profile.jsx'),            /colorRush:\s*\{ emoji: '(.+?)'/],
-    ['ticker',      be('services', 'tickerService.js'),    /colorRush:\s*\{ icon: '(.+?)'/],
-    ['lobby title', fe('pages', 'ColorRushGame.jsx'),      /title="(.+?) Color Rush"/],
+    ['games list',   fe('data', 'games.js')],
+    ['navbar',       fe('components', 'Navbar.jsx')],
+    ['sidebar',      fe('components', 'LeftSidebar.jsx')],
+    ['quick match',  fe('pages', 'QuickMatch.jsx')],
+    ['leaderboard',  fe('pages', 'Leaderboard.jsx')],
+    ['profile',      fe('pages', 'Profile.jsx')],
+    ['help panel',   fe('components', 'GameHelp.jsx')],
+    ['join modal',   fe('components', 'JoinRoomModal.jsx')],
+    ['challenge',    fe('pages', 'ChallengeJoin.jsx')],
+    ['lobby',        fe('components', 'GameLobby.jsx')],
+    ['ticker',       fe('components', 'MatchTicker.jsx')],
   ];
-  const icons = new Set();
-  const missing = [];
-  for (const [name, src, re] of sites) {
-    const m = src.match(re);
-    if (!m) { missing.push(name); continue; }
-    icons.add(m[1]);
-  }
-  assert.deepEqual(missing, [], `no icon found for: ${missing.join(', ')}`);
-  assert.equal(icons.size, 1, `the icon has drifted — found ${[...icons].join(' ')}`);
+  const missing = sites.filter(([, src]) => !/GameIcon/.test(src)).map(([n]) => n);
+  assert.deepEqual(missing, [], `still spelling their own icon: ${missing.join(', ')}`);
 });
+
+test('no game list carries a leftover emoji of its own', () => {
+  // The failure this catches: half the lists converted, half still printing an
+  // emoji, so the same game wears two different faces on two screens.
+  const GAME_EMOJI = /[\u{1F0CF}\u{1F7E6}\u{1F7E1}\u{1F697}\u{1F5FC}\u{1F524}\u{1F3A8}\u{1F300}]/u;
+  const sites = [
+    ['games list',  fe('data', 'games.js')],
+    ['navbar',      fe('components', 'Navbar.jsx')],
+    ['quick match', fe('pages', 'QuickMatch.jsx')],
+    ['help panel',  fe('components', 'GameHelp.jsx')],
+    ['join modal',  fe('components', 'JoinRoomModal.jsx')],
+    ['challenge',   fe('pages', 'ChallengeJoin.jsx')],
+    ['ticker data', be('services', 'tickerService.js')],
+  ];
+  const bad = sites.filter(([, src]) => GAME_EMOJI.test(src)).map(([n]) => n);
+  assert.deepEqual(bad, [], `game emoji left behind in: ${bad.join(', ')}`);
+});
+
 
 test('the room lookup tables all know about it', () => {
   // Three separate copies of this table drive forfeits, disconnects and the
@@ -201,9 +216,38 @@ test('obstacles are derived from the index, not from a random stream', () => {
   const body = CANVAS.slice(at, CANVAS.indexOf('\n    }', at));
   assert.doesNotMatch(body, /Math\.random/, 'the course must not use Math.random');
   for (const field of ['shape', 'dotted', 'dir', 'speed', 'offset']) {
-    assert.match(body, new RegExp(`${field}\\s*=[^\\n]*rnd01\\(seed, i,`),
-      `${field} must be derived from (seed, index)`);
+    // Sliced to the end of the assignment rather than the end of the LINE —
+    // these expressions wrap, and a line-bounded match silently stops checking
+    // the moment one of them grows a second line, which is exactly what
+    // happened when the spin ramp was added.
+    const at2 = body.indexOf(`const ${field}`);
+    assert.notEqual(at2, -1, `${field} is gone`);
+    const expr = body.slice(at2, body.indexOf(';', at2));
+    assert.match(expr, /rnd01\(seed, i,/, `${field} must be derived from (seed, index)`);
   }
+});
+
+test('each obstacle spins faster than the one below it, up to a readable limit', () => {
+  assert.match(CANVAS, /const SPIN_RAMP = 1\.16;/);
+  const at = CANVAS.indexOf('function obstacleAt');
+  const body = CANVAS.slice(at, CANVAS.indexOf('\n    }', at));
+  const start = body.indexOf('const speed');
+  const expr = body.slice(start, body.indexOf(';', start));
+  assert.match(expr, /Math\.pow\(SPIN_RAMP, i\)/, 'the ramp must compound per obstacle');
+  assert.match(expr, /Math\.min\(/, 'and it must be capped');
+
+  // The cap is what keeps this a game of reading the spin. A color is present
+  // for a quarter turn, so the window to enter or leave is (pi/2)/omega — at
+  // the cap that has to stay above what a person can actually react to.
+  const spinMax = Number(CANVAS.match(/const SPIN_MAX\s+=\s+([\d.]+)/)[1]);
+  const window = (Math.PI / 2) / spinMax;
+  assert.ok(window >= 0.3,
+    `at the cap a color is only present for ${window.toFixed(2)}s — too fast to act on`);
+
+  // And the jitter has to be inside the clamp, or a single obstacle can beat
+  // the cap on its own.
+  assert.ok(expr.indexOf('rnd01') < expr.lastIndexOf('SPIN_MAX'),
+    'the jitter must be applied before the clamp, not after it');
 });
 
 test('nothing about the course depends on the device', () => {

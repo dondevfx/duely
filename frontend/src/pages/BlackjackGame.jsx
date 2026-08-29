@@ -8,6 +8,7 @@ import { COIN_FEES, DIAMOND_FEES, SMALL_BTN } from '../components/GameLobby';
 import BetSlider from '../components/BetSlider';
 import ResultScreen from '../components/ResultScreen';
 import GameHelp from '../components/GameHelp';
+import GameIcon from '../components/GameIcon';
 import GameErrorBoundary from '../components/GameErrorBoundary';
 import GlowButton from '../components/GlowButton';
 import { topUpRoute, topUpLabel } from '../utils/topUpRoute';
@@ -802,7 +803,7 @@ function BlackjackGame() {
           winnerStreak={resultData.winnerStreak ?? 0}
           isFirstWin={resultData.isFirstWin ?? false}
           profile={profile}
-          gameLabel="🃏 Blackjack"
+          gameLabel="Blackjack"
           extraRows={[
             myResult && { label: myResult.splitHand ? 'Your Hand 2 (Active)' : 'Your Hand', value: myResult.score > 21 ? `Bust (${myResult.score})` : myResult.score },
             myResult?.splitHand && { label: 'Your Hand 1', value: myResult.splitScore > 21 ? `Bust (${myResult.splitScore})` : myResult.splitScore },
@@ -1142,7 +1143,7 @@ function BlackjackGame() {
       <div className="w-full max-w-md animate-slide-up">
 
         <div className="text-center mb-1.5 sm:mb-6">
-          <h1 className="text-4xl sm:text-6xl font-black text-white mb-0.5 sm:mb-2 leading-tight">🃏 Blackjack</h1>
+          <h1 className="text-4xl sm:text-6xl font-black text-white mb-0.5 sm:mb-2 leading-tight flex items-center justify-center gap-3"><GameIcon game="blackjack" size={48} className="w-9 h-9 sm:w-14 sm:h-14" />Blackjack</h1>
           <p className="text-center text-muted text-sm sm:text-base leading-snug sm:leading-relaxed px-2">Get closer to 21 than your opponent. Both players act at the same time — no waiting.</p>
         </div>
 

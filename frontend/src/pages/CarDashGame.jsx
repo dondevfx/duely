@@ -518,7 +518,7 @@ export default function CarDashGame() {
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}
     >
       <GameLobby
-        title="🚗 Rush Hour"
+        title="Rush Hour"
         description="Weave through traffic at full speed. Both players get the exact same road — whoever survives the longest wins."
         controls="← → or A/D to change lanes · swipe or tap the sides on mobile"
         betCurrency={betCurrency} setBetCurrency={setBetCurrency}

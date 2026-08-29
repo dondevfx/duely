@@ -324,7 +324,7 @@ export default function TowerGame() {
           entryFee={result.entryFee ?? entryFee}
           disconnected={result.disconnected}
           profile={profile}
-          gameLabel={freeSolo ? '🎮 Solo Endless' : '🗼 Tower'}
+          gameLabel={freeSolo ? '🎮 Solo Endless' : 'Tower'}
           extraRows={result.isSolo
             ? (freeSolo
                 ? [{ label: 'Blocks', value: (result.playerScore ?? 0).toLocaleString() }]
@@ -444,7 +444,7 @@ export default function TowerGame() {
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}
     >
       <GameLobby
-        title="🗼 Tower"
+        title="Tower"
         description={
           'Stack the blocks as high as you can. Each block slides in on its own — tap to drop it, ' +
           'and anything hanging over the edge is sliced off. Land it dead center and you keep the full width.' +

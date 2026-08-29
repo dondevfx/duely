@@ -5,6 +5,7 @@ import { useSocket } from '../context/SocketContext';
 import BetSlider from './BetSlider';
 import { useAuth } from '../context/AuthContext';
 import CoinIcon from './CoinIcon';
+import GameIcon from './GameIcon';
 import { topUpRoute, topUpLabel } from '../utils/topUpRoute';
 import CreateRoomModal from './CreateRoomModal';
 import JoinRoomModal from './JoinRoomModal';
@@ -150,7 +151,9 @@ export default function GameLobby({
 
   return (
     <div className="w-full max-w-md animate-slide-up">
-      <h1 className="text-4xl sm:text-6xl font-black text-white text-center mb-0.5 sm:mb-3 leading-tight">{title}</h1>
+      <h1 className="text-4xl sm:text-6xl font-black text-white text-center mb-0.5 sm:mb-3 leading-tight flex items-center justify-center gap-3">
+        <GameIcon game={gameType} size={48} className="w-9 h-9 sm:w-14 sm:h-14" />{title}
+      </h1>
       {/* No line clamp. This was line-clamp-2 on mobile, which cut the longer
           descriptions off mid-sentence with an ellipsis — and the rules are the
           one thing a new player actually needs to read. */}

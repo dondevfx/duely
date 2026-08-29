@@ -76,7 +76,7 @@ export default function DailyBonus() {
       <div className="text-center">
         <div className="font-bold text-white">Diamond Bonus</div>
         <div className="text-sm text-muted">
-          {amount && period ? `Claim ${amount.toLocaleString()} Diamonds every ${period}` : 'Free diamonds, regularly'}
+          {amount && period ? `Claim ${amount.toLocaleString()} Diamonds every ${period}` : 'Free diamonds'}
         </div>
       </div>
 

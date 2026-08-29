@@ -10,6 +10,7 @@ import GlowButton from '../components/GlowButton';
 import { getRank } from '../utils/ranks';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
+import GameIcon from '../components/GameIcon';
 import { ProfilePopup } from '../components/ChatSidebar';
 import FriendInviteBox from '../components/FriendInviteBox';
 import { isMuted, setMuted, playMatchFound } from '../utils/sound';
@@ -19,16 +20,16 @@ import { isMuted, setMuted, playMatchFound } from '../utils/sound';
 // scores as 'wordVS' — so `bestKey` bridges the two where they differ. Rush Hour
 // was simply absent from this map, which is why it never appeared at all.
 const GAME_INFO = {
-  scrabble:      { emoji: '🔤', name: 'Word VS',     bestKey: 'wordVS' },
-  blockBlast:    { emoji: '🟦', name: 'Block Burst' },
+  scrabble:      { name: 'Word VS',     bestKey: 'wordVS' },
+  blockBlast:    { name: 'Block Burst' },
   // timeKey: a companion best stored as its own game_type row. Rush Hour records
   // the survival time of the same run that set the score (see
   // highscoreService.updateHighscorePair), so the two always describe one run.
-  carDash:       { emoji: '🚗', name: 'Rush Hour', timeKey: 'carDashMs' },
-  colorRush:     { emoji: '🎨', name: 'Color Rush' },
-  tower:         { emoji: '🗼', name: 'Tower' },
-  blackjack:     { emoji: '🃏', name: 'Blackjack' },
-  coin_flip:     { emoji: '🟡', name: 'Coin Flip' },
+  carDash:       { name: 'Rush Hour', timeKey: 'carDashMs' },
+  colorRush:     { name: 'Color Rush' },
+  tower:         { name: 'Tower' },
+  blackjack:     { name: 'Blackjack' },
+  coin_flip:     { name: 'Coin Flip' },
 };
 
 // Games with a meaningful personal best. Without a label the best is not shown,
@@ -231,7 +232,11 @@ function MatchRow({ match, myId }) {
         </span>
         <div>
           <div className="text-sm text-white font-medium">
-            {gameInfo && <span className="text-xs text-muted mr-1.5">{gameInfo.emoji} {gameInfo.name} ·</span>}
+            {gameInfo && (
+              <span className="text-xs text-muted mr-1.5 inline-flex items-center gap-1 align-middle">
+                <GameIcon game={match.game_type} size={14} />{gameInfo.name} ·
+              </span>
+            )}
             vs <span className="text-accent">{opponentName}</span>
           </div>
           {isForfeit && <div className="text-xs text-warning">Opponent disconnected</div>}
@@ -1667,7 +1672,7 @@ export default function Profile() {
                         const scoreLabel = HIGHSCORE_LABELS[key];
                         return (
                           <div key={key} className="bg-bg rounded-xl p-3 text-center">
-                            <div className="text-2xl mb-1">{info.emoji}</div>
+                            <div className="mb-1 flex justify-center"><GameIcon game={key} size={26} /></div>
                             <div className="text-xs text-muted font-medium truncate mb-2">{info.name}</div>
                             <div className="text-sm font-black text-white">
                               {stats.wins}W / {stats.played - stats.wins}L

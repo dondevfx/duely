@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import GameIcon from './GameIcon';
 
 // A square card: a looping gameplay clip fills the whole thing, and the title
 // and Play button sit directly on top of it, over a gradient scrim so they
@@ -43,7 +44,7 @@ function useCropDebug(slug) {
 let mountOrder = 0;
 const STAGGER_MS = 150;
 
-export default function GameVideoCard({ slug, title, icon, route, liveCount = 0, available = true, clipPosition }) {
+export default function GameVideoCard({ slug, title, route, liveCount = 0, available = true, clipPosition }) {
   const navigate = useNavigate();
   const containerRef = useRef(null);
   const videoRef = useRef(null);
@@ -183,8 +184,8 @@ export default function GameVideoCard({ slug, title, icon, route, liveCount = 0,
           load an <img> just renders nothing, so waiting for an onError to
           show a fallback would leave the card blank for anyone whose poster
           hasn't loaded yet, not only for games with no footage at all. */}
-      <div className="absolute inset-0 flex items-center justify-center text-6xl bg-surface">
-        {icon}
+      <div className="absolute inset-0 flex items-center justify-center bg-surface">
+        <GameIcon game={slug} size={64} />
       </div>
 
       {/* Poster layers over the icon once it loads; the video, once it loads,

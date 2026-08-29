@@ -261,7 +261,7 @@ test('a missing clip or poster degrades to the icon, not a blank square', () => 
   const imgTagAt = CARD.search(/<img\s*\n/);
   assert.notEqual(imgTagAt, -1, 'the poster <img> element is gone');
   const base = CARD.slice(0, imgTagAt);
-  assert.match(base, /\{icon\}/, 'the icon layer must render unconditionally, ahead of the poster and video');
+  assert.match(base, /<GameIcon game=\{slug\}/, 'the icon layer must render unconditionally, ahead of the poster and video');
 });
 
 test('the old duplicated GameCard component is gone', () => {

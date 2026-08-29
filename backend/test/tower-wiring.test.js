@@ -178,8 +178,8 @@ test('scores show up in the leaderboard, ticker and profile', () => {
   for (const g of ['carDash', 'tower']) {
     assert.ok(scored.includes(`'${g}'`), `${g} must be a scored game or its leaderboard is always empty`);
   }
-  assert.match(be('services', 'tickerService.js'), /tower:\s+\{ icon/);
-  assert.match(fe('pages', 'Profile.jsx'), /tower:\s+\{ emoji/);
+  assert.match(be('services', 'tickerService.js'), /tower:\s+\{ key: 'tower'/);
+  assert.match(fe('pages', 'Profile.jsx'), /tower:\s+\{ name: 'Tower'/);
   assert.match(fe('pages', 'Leaderboard.jsx'), /id: 'tower'/);
 });
 
@@ -411,11 +411,18 @@ test('the burst outline is thicker', () => {
   assert.match(fe('components', 'TowerCanvas.jsx'), /ctx\.lineWidth = 5/);
 });
 
-test('Tower uses the tower emoji, and nobody else uses it', () => {
-  assert.match(fe('pages', 'QuickMatch.jsx'), /icon: '🗼', queueKey: 'tower'/);
-  // Still has to be unique, or two games light up together in the reel.
-  const icons = [...fe('pages', 'QuickMatch.jsx').matchAll(/icon: '([^']+)'/g)].map(m => m[1]);
-  assert.equal(new Set(icons).size, icons.length, `duplicate icon: ${icons}`);
+test('Tower has its own drawn icon, and no other game shares it', () => {
+  // The emoji became a drawn icon, so the thing to check moved from the lists
+  // to the one component that now holds every icon.
+  const icons = fe('components', 'GameIcon.jsx');
+  assert.match(icons, /function Tower\(\)/, 'Tower needs an icon');
+  assert.match(icons, /tower:\s+Tower,/, 'and it has to be wired to the tower key');
+  // Every game maps to a DIFFERENT drawing, or two games share a face.
+  const map = icons.slice(icons.indexOf('const ICONS = {'), icons.indexOf('};', icons.indexOf('const ICONS = {')));
+  const arts = [...map.matchAll(/:\s*(\w+),/g)].map(m => m[1]);
+  assert.ok(arts.length >= 7, `expected every game in the icon map, found ${arts.length}`);
+  assert.equal(new Set(arts).size, arts.length, `two games share an icon: ${arts}`);
+  assert.match(fe('pages', 'QuickMatch.jsx'), /queueKey: 'tower'/);
 });
 
 test('the plinth is drawn bottom-up, like the tower', () => {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import GameIcon from '../components/GameIcon';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../utils/supabase';
 import { useSocket } from '../context/SocketContext';
@@ -15,13 +16,13 @@ import { chooseGame } from '../utils/quickMatchPool';
 // `queueKey` matches the game id the server uses in its bet_counts map
 // (handlers.js incrementCount), so we can tell who is waiting where.
 const POOL = [
-  { route: '/game/block-blast', name: 'Block Burst',  icon: '🟦', queueKey: 'block-blast' },
-  { route: '/game/coin-flip',   name: 'Coin Flip',    icon: '🟡', coinsOnly: true, queueKey: 'coin-flip' },
-  { route: '/game/blackjack',   name: 'Blackjack',    icon: '🃏', queueKey: 'blackjack' },
-  { route: '/game/word-vs',     name: 'Word VS',       icon: '🔤', queueKey: 'scrabble' },
-  { route: '/game/car-dash',    name: 'Rush Hour',    icon: '🚗', queueKey: 'car-dash' },
-  { route: '/game/color-rush',  name: 'Color Rush',   icon: '🎨', queueKey: 'color-rush' },
-  { route: '/game/tower',       name: 'Tower',        icon: '🗼', queueKey: 'tower' },
+  { route: '/game/block-blast', name: 'Block Burst', queueKey: 'block-blast' },
+  { route: '/game/coin-flip',   name: 'Coin Flip', coinsOnly: true, queueKey: 'coin-flip' },
+  { route: '/game/blackjack',   name: 'Blackjack', queueKey: 'blackjack' },
+  { route: '/game/word-vs',     name: 'Word VS', queueKey: 'scrabble' },
+  { route: '/game/car-dash',    name: 'Rush Hour', queueKey: 'car-dash' },
+  { route: '/game/color-rush',  name: 'Color Rush', queueKey: 'color-rush' },
+  { route: '/game/tower',       name: 'Tower', queueKey: 'tower' },
 ];
 
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -128,7 +129,7 @@ export default function QuickMatch() {
               className={`text-2xl transition-all duration-75 ${picked?.route === g.route ? 'scale-125' : 'opacity-40 scale-100'}`}
               title={g.name}
             >
-              {g.icon}
+              <GameIcon game={g.queueKey} size={30} />
             </div>
           ))}
         </div>
@@ -162,7 +163,7 @@ export default function QuickMatch() {
             rolling ? 'border-border' : 'border-primary/50 bg-primary/5'
           }`}>
             <div className={`text-4xl mb-2 transition-all ${rolling ? 'scale-90 opacity-70' : 'scale-110'}`}>
-              {picked.icon}
+              <GameIcon game={picked.queueKey} size={44} />
             </div>
             <div className={`text-xl font-black text-white ${rolling ? 'blur-[1px] opacity-60' : ''}`}>
               {picked.name}

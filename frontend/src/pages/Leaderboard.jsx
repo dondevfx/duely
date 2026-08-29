@@ -4,7 +4,41 @@ import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { getRank } from '../utils/ranks';
 import CoinIcon from '../components/CoinIcon';
+import GameIcon from '../components/GameIcon';
+import { ProfilePopup } from '../components/ChatSidebar';
 import { usePageReady } from '../hooks/usePageReady';
+
+
+// Avatar + name, clickable, used by both leaderboard tables.
+//
+// One component rather than the two copies that were here, because the two
+// copies had already drifted: they render identically but only one of them
+// would have got the click if this were bolted on per table.
+function PlayerTag({ player, isMe, onOpen }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(player)}
+      className="flex items-center gap-1.5 sm:gap-2 min-w-0 text-left rounded-lg -mx-1 px-1 py-0.5 hover:bg-white/5 transition-colors"
+      title={`View ${player.username}'s profile`}
+    >
+      <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-xs font-bold text-primary shrink-0 overflow-hidden">
+        {player.avatar_url
+          ? <img src={player.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+          : player.username?.[0]?.toUpperCase()}
+      </div>
+      <span className={`font-semibold truncate text-sm sm:text-base ${isMe ? 'text-primary' : 'text-white'}`}>
+        {player.username}
+        {isMe && <span className="ml-1 text-xs text-muted hidden sm:inline">(you)</span>}
+      </span>
+      {(player.current_streak ?? 0) >= 2 && (
+        <span className="text-xs font-bold shrink-0" style={{ color: '#fb923c', textShadow: '0 0 5px rgba(251,146,60,0.5)' }}>
+          🔥{player.current_streak}
+        </span>
+      )}
+    </button>
+  );
+}
 
 function RankBadge({ rank }) {
   if (rank === 1) return <span className="text-yellow-400 font-black">🥇</span>;
@@ -21,14 +55,17 @@ const TABS = [
   { id: 'streak',          label: '🔥 Streaks',       icon: '',   endpoint: '/leaderboard/streak',          valueKey: 'current_streak',isDiamond: false, label2: 'Streak' },
 ];
 
+// The boards whose data is scoped to the current week.
+const RESETTING_TABS = new Set(['wagered', 'wagered-diamonds']);
+
 const GAME_LEADERBOARDS = [
-  { id: 'blockBlast',    label: 'Block Burst',  icon: '🟦', scoreLabel: 'Score' },
-  { id: 'carDash',       label: 'Rush Hour',    icon: '🚗', scoreLabel: 'Score', showTime: true },
-  { id: 'colorRush',     label: 'Color Rush',   icon: '🎨', scoreLabel: 'Diamonds' },
-  { id: 'tower',         label: 'Tower',        icon: '🗼', scoreLabel: 'Blocks' },
-  { id: 'scrabble',      label: 'Word VS',      icon: '🔤', scoreLabel: 'Wins'  },
-  { id: 'coinFlip',      label: 'Coin Flip',    icon: '🟡', scoreLabel: 'Wins'  },
-  { id: 'blackjack',     label: 'Blackjack',    icon: '🃏', scoreLabel: 'Wins'  },
+  { id: 'blockBlast',    label: 'Block Burst', scoreLabel: 'Score' },
+  { id: 'carDash',       label: 'Rush Hour', scoreLabel: 'Score', showTime: true },
+  { id: 'colorRush',     label: 'Color Rush', scoreLabel: 'Diamonds' },
+  { id: 'tower',         label: 'Tower', scoreLabel: 'Blocks' },
+  { id: 'scrabble',      label: 'Word VS', scoreLabel: 'Wins'  },
+  { id: 'coinFlip',      label: 'Coin Flip', scoreLabel: 'Wins'  },
+  { id: 'blackjack',     label: 'Blackjack', scoreLabel: 'Wins'  },
 ];
 
 function getNextMonday() {
@@ -59,6 +96,9 @@ export default function Leaderboard() {
   const [selectedGame, setSelectedGame] = useState(null);
   const [gameData, setGameData] = useState({});
   const [gameLoading, setGameLoading] = useState(false);
+  // The player whose profile card is open. Read-only here: the leaderboard is
+  // for browsing rankings, so the card comes up without Report or Add Friend.
+  const [viewing, setViewing] = useState(null);
   const [resetMs, setResetMs] = useState(() => getNextMonday() - Date.now());
 
   const tab = TABS.find(t => t.id === activeTab);
@@ -145,9 +185,15 @@ export default function Leaderboard() {
         <div className="mb-6 text-center">
           <h1 className="text-4xl font-black text-white mb-2">Leaderboard</h1>
           <p className="text-muted">Top 500 players</p>
-          <p className="text-xs text-muted mt-1">
-            Resets Monday · {formatMs(resetMs)} remaining
-          </p>
+          {/* Only the two wagered boards actually reset: they count the
+              current week's matches from Monday (see weekStart in the
+              leaderboard route). ELO, streaks, coins and the per-game high
+              scores are all-time, so telling those they reset was wrong. */}
+          {RESETTING_TABS.has(activeTab) && (
+            <p className="text-xs text-muted mt-1">
+              Resets Monday · {formatMs(resetMs)} remaining
+            </p>
+          )}
         </div>
 
         {/* Tabs */}
@@ -180,7 +226,7 @@ export default function Leaderboard() {
                     onClick={() => setSelectedGame(g.id)}
                     className="bg-surface border border-surfaceLight hover:border-primary rounded-2xl p-5 text-center transition-all hover:bg-surfaceLight/30 group"
                   >
-                    <div className="text-3xl mb-2">{g.icon}</div>
+                    <div className="mb-2 flex justify-center"><GameIcon game={g.id} size={34} /></div>
                     <div className="text-sm font-bold text-white group-hover:text-primary transition-colors">{g.label}</div>
                     <div className="text-xs text-muted mt-0.5">{g.scoreLabel}</div>
                   </button>
@@ -243,21 +289,8 @@ export default function Leaderboard() {
                           <span className="col-span-1 flex items-center">
                             <RankBadge rank={player.rank} />
                           </span>
-                          <span className={`${gameMeta?.showTime ? 'col-span-4' : 'col-span-6'} flex items-center gap-1.5 sm:gap-2 min-w-0`}>
-                            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                              {player.avatar_url
-                                ? <img src={player.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
-                                : player.username?.[0]?.toUpperCase()}
-                            </div>
-                            <span className={`font-semibold truncate text-sm sm:text-base ${isMe ? 'text-primary' : 'text-white'}`}>
-                              {player.username}
-                              {isMe && <span className="ml-1 text-xs text-muted hidden sm:inline">(you)</span>}
-                            </span>
-                            {(player.current_streak ?? 0) >= 2 && (
-                              <span className="text-xs font-bold shrink-0" style={{ color: '#fb923c', textShadow: '0 0 5px rgba(251,146,60,0.5)' }}>
-                                🔥{player.current_streak}
-                              </span>
-                            )}
+                          <span className={`${gameMeta?.showTime ? 'col-span-4' : 'col-span-6'} flex items-center min-w-0`}>
+                            <PlayerTag player={player} isMe={isMe} onOpen={setViewing} />
                           </span>
                           {gameMeta?.showTime && (
                             <span className="col-span-2 text-right font-mono text-xs sm:text-sm text-muted">
@@ -326,21 +359,8 @@ export default function Leaderboard() {
                         <RankBadge rank={player.rank} />
                       </span>
 
-                      <span className="col-span-5 flex items-center gap-1.5 sm:gap-2 min-w-0">
-                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                          {player.avatar_url
-                            ? <img src={player.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
-                            : player.username?.[0]?.toUpperCase()}
-                        </div>
-                        <span className={`font-semibold truncate text-sm sm:text-base ${isMe ? 'text-primary' : 'text-white'}`}>
-                          {player.username}
-                          {isMe && <span className="ml-1 text-xs text-muted hidden sm:inline">(you)</span>}
-                        </span>
-                        {(player.current_streak ?? 0) >= 2 && (
-                          <span className="text-xs font-bold shrink-0" style={{ color: '#fb923c', textShadow: '0 0 5px rgba(251,146,60,0.5)' }}>
-                            🔥{player.current_streak}
-                          </span>
-                        )}
+                      <span className="col-span-5 flex items-center min-w-0">
+                        <PlayerTag player={player} isMe={isMe} onOpen={setViewing} />
                       </span>
 
                       <span className={`col-span-3 text-right font-mono font-bold text-sm ${
@@ -362,7 +382,20 @@ export default function Leaderboard() {
           </>
         )}
       </div>
+
+      {viewing && (
+        <ProfilePopup
+          viewOnly
+          userId={viewing.id}
+          username={viewing.username}
+          isAdmin={false}
+          isBanned={false}
+          isBot={false}
+          onBan={() => {}}
+          onUnban={() => {}}
+          onClose={() => setViewing(null)}
+        />
+      )}
     </div>
   );
 }
-

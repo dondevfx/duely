@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import GameIcon from './GameIcon';
 import CoinIcon from './CoinIcon';
 import { useSocket } from '../context/SocketContext';
 
@@ -59,7 +60,7 @@ export default function MatchTicker() {
         i === 0 && item.id === latestIdRef.current ? ' animate-pop-in' : ''
       }`}
     >
-      <span className="text-2xl sm:text-xl lg:text-3xl leading-none shrink-0">{item.game.icon}</span>
+      <GameIcon game={item.game.key} size={26} className="shrink-0" />
       <span className="text-[8px] sm:text-[8px] lg:text-[9px] text-muted font-medium leading-none w-full text-center truncate px-0.5">
         {item.game.name}
       </span>

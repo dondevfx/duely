@@ -529,7 +529,7 @@ export default function ColorRushGame() {
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}
     >
       <GameLobby
-        title="🎨 Color Rush"
+        title="Color Rush"
         description="Tap to climb through the spinning rings — you can only pass through your own color. Both players get the exact same course."
         controls="Tap anywhere or press space to fly · collect the white diamonds"
         betCurrency={betCurrency} setBetCurrency={setBetCurrency}

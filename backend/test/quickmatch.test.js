@@ -130,7 +130,7 @@ test('Rush Hour is in the pool', () => {
   const page = fs.readFileSync(
     path.join(__dirname, '..', '..', 'frontend', 'src', 'pages', 'QuickMatch.jsx'), 'utf8');
   assert.match(page, /route: '\/game\/car-dash'/, 'Rush Hour is missing from Quick Match');
-  assert.match(page, /icon: '🚗', queueKey: 'car-dash'/);
+  assert.match(page, /queueKey: 'car-dash'/);
 });
 
 test('every pooled game acts on autoQueue', () => {

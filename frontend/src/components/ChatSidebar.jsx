@@ -230,7 +230,12 @@ function LineChart({ data }) {
 }
 
 // ── Profile Popup ─────────────────────────────────────────────────────────────
-function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBanned, isBot }) {
+// `viewOnly` opens the card as a read-only look at a player: same stats, same
+// chart, but no Report and no Add Friend. That is what the leaderboard wants —
+// you are browsing rankings, not moderating or befriending from a table of 500
+// names — and it is one prop rather than a second copy of this card that would
+// drift out of step with this one.
+function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBanned, isBot, viewOnly = false }) {
   const { profile: myProfile, refreshProfile } = useAuth();
   const { activeGames } = useSocket();
   const navigate = useNavigate();
@@ -445,7 +450,7 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
               {/* Report — any player, not just admins. Automated checks catch
                   explicit imagery at upload; impersonation and cheating only
                   surface because somebody says so. */}
-              {!isOwn && !isBot && (
+              {!isOwn && !isBot && !viewOnly && (
                 <div className="border-t border-border pt-5 mb-5">
                   {reportDone ? (
                     <p className="text-sm text-success font-semibold">
@@ -522,8 +527,10 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
                 </div>
               )}
 
-              {/* Friend request + Watch Live */}
-              {!isOwn && !isBot && (
+              {/* Friend request + Watch Live. In viewOnly the friend button is
+                  gone, so the row only earns its space when there is a live
+                  game to watch. */}
+              {!isOwn && !isBot && (!viewOnly || liveGame) && (
                 <div className="border-t border-border pt-5 mb-5 flex gap-2 flex-wrap">
                   {liveGame && (
                     <button
@@ -533,6 +540,7 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
                       ▶ Watch Live
                     </button>
                   )}
+                  {!viewOnly && (
                   <button
                     onClick={sendFriendRequest}
                     disabled={friendStatus === 'sent' || friendStatus === 'friends'}
@@ -548,6 +556,7 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
                      friendStatus === 'error'   ? 'Already sent' :
                      '+ Add Friend'}
                   </button>
+                  )}
                 </div>
               )}
 

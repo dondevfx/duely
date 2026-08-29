@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import GameIcon from '../components/GameIcon';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { usePageReady } from '../hooks/usePageReady';
@@ -164,11 +165,14 @@ export default function SpectateView() {
     : score2;
 
   const gameLabel = {
-    scrabble:   '🔤 Word VS',
-    blockBlast: '🟦 Block Burst',
-    coinFlip:   '🟡 Coin Flip',
-    blackjack:  '🃏 Blackjack',
-  }[gameType] ?? '🎮 Live Game';
+    scrabble:   'Word VS',
+    blockBlast: 'Block Burst',
+    coinFlip:   'Coin Flip',
+    blackjack:  'Blackjack',
+    carDash:    'Rush Hour',
+    colorRush:  'Color Rush',
+    tower:      'Tower',
+  }[gameType] ?? 'Live Game';
 
   return (
     <div
@@ -201,7 +205,9 @@ export default function SpectateView() {
               <span className="w-2 h-2 rounded-full bg-danger inline-block" />
               LIVE
             </div>
-            <h1 className="text-2xl font-black text-white">{gameLabel}</h1>
+            <h1 className="text-2xl font-black text-white flex items-center justify-center gap-2">
+              <GameIcon game={gameType} size={26} />{gameLabel}
+            </h1>
           </div>
 
           {/* Scoreboard */}

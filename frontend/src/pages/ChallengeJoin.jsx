@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import GlowButton from '../components/GlowButton';
 import CoinIcon from '../components/CoinIcon';
+import GameIcon from '../components/GameIcon';
 import InAppBrowserNotice from '../components/InAppBrowserNotice';
 
 // Landing page for a shared challenge link: /challenge/:gameType/:code
@@ -26,13 +27,13 @@ const GAME_ROUTES = {
 };
 
 const GAME_NAMES = {
-  blackjack:   '🃏 Blackjack',
-  'coin-flip': '🟡 Coin Flip',
-  scrabble:    '🔤 Word VS',
-  blockBlast:  '🟦 Block Burst',
-  carDash:     '🚗 Rush Hour',
-  colorRush:   '🎨 Color Rush',
-  tower:       '🗼 Tower',
+  blackjack:   'Blackjack',
+  'coin-flip': 'Coin Flip',
+  scrabble:    'Word VS',
+  blockBlast:  'Block Burst',
+  carDash:     'Rush Hour',
+  colorRush:   'Color Rush',
+  tower:       'Tower',
 };
 
 export const PENDING_CHALLENGE_KEY = 'duely_pending_challenge';
@@ -135,7 +136,9 @@ export default function ChallengeJoin() {
           <>
             <div className="text-5xl mb-3">🎮</div>
             <p className="text-muted text-sm mb-1">{info.hostUsername} challenged you to</p>
-            <h1 className="text-2xl font-black text-white mb-4">{gameName}</h1>
+            <h1 className="text-2xl font-black text-white mb-4 flex items-center justify-center gap-2">
+              <GameIcon game={gameType} size={26} />{gameName}
+            </h1>
 
             <div className="bg-bg border border-border rounded-xl p-4 mb-5 space-y-2">
               <div className="flex items-center justify-between text-sm">
