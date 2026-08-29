@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import DiamondIcon from './DiamondIcon';
 import RankIcon from './RankIcon';
+import { BotAvatar } from './UiIcon';
 import { getRank } from '../utils/ranks';
 import CoinIcon from './CoinIcon';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -369,7 +370,7 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
                       border: `3px solid ${data.profile_color || '#1250B4'}`,
                       color: data.profile_color || '#1250B4',
                     }}>
-                    {isBot ? '🤖' : (data.avatar_url
+                    {isBot ? <BotAvatar size="100%" className="w-full h-full" /> : (data.avatar_url
                       ? <img src={data.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
                       : data.username?.[0]?.toUpperCase())}
                   </div>
@@ -820,7 +821,7 @@ export default function ChatSidebar({ open, onToggle }) {
                     <div
                       className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black"
                       style={{ backgroundColor: `${msgColor}33`, border: `1.5px solid ${msgColor}`, color: msgColor }}>
-                      {msg.isBot ? '🤖' : (msg.avatarUrl
+                      {msg.isBot ? <BotAvatar size="100%" className="w-full h-full" /> : (msg.avatarUrl
                         ? <img src={msg.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
                         : msg.username?.[0]?.toUpperCase())}
                     </div>
@@ -949,7 +950,7 @@ export default function ChatSidebar({ open, onToggle }) {
                     >
                       <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black"
                         style={{ backgroundColor: `${msgColor}33`, border: `1.5px solid ${msgColor}`, color: msgColor }}>
-                        {msg.isBot ? '🤖' : (msg.avatarUrl
+                        {msg.isBot ? <BotAvatar size="100%" className="w-full h-full" /> : (msg.avatarUrl
                           ? <img src={msg.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
                           : msg.username?.[0]?.toUpperCase())}
                       </div>

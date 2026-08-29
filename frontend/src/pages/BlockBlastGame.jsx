@@ -915,7 +915,13 @@ export default function BlockBlastGame() {
                        color={opponent.profileColor} isBot={!!opponent.isBot} size="w-5 h-5" />
                 </p>}
               {/* Solo Endless has no opponent — naming the bot invents one. */}
-              {isSolo && entryFee > 0 && <p className="text-xs text-muted mt-2">vs Duely Bot</p>}
+              {/* The bot gets the same treatment as a player: its name is next to
+                  its face, not on its own as bare text. */}
+              {isSolo && entryFee > 0 && (
+                <p className="text-xs text-muted mt-2 flex items-center justify-center gap-1.5">
+                  vs <PlayerName username="Duely Bot" isBot size="w-5 h-5" />
+                </p>
+              )}
             </>
           ) : (
             <>

@@ -37,6 +37,15 @@ const {
   evaluateGuess, MAX_GUESSES, WORD_LENGTH,
 } = require('../services/wordleEngine');
 const { isValidWord } = require('../services/wordValidator');
+
+// Whether the client should draw this opponent with the Duely Bot face.
+//
+// Not simply `p.isBot`: the bots that fill a free or casual queue are given a
+// random human name on purpose and are meant to be indistinguishable from a
+// player. Flagging those would hand the disguise away in the avatar. Only the
+// bot that openly calls itself Duely Bot gets the robot face.
+const isDuelyBot = (p) => p?.isBot === true && p.username === 'Duely Bot';
+
 const {
   addToCoinFlipQueue, removeFromCoinFlipQueue,
   createDirectCoinFlipRoom,
@@ -655,8 +664,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         const s2 = io.sockets.sockets.get(p2.socketId);
         const bbP1Name = p1.isDemo ? randomFunnyName() : p1.username;
         const bbP2Name = p2.isDemo ? randomFunnyName() : p2.username;
-        if (s1) { s1.join(roomId); s1.emit('block_blast_match_found', { roomId, opponent: { userId: p2.userId, username: bbP2Name, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null }, entryFee: p1.entryFee, currency: p1.currency }); }
-        if (s2) { s2.join(roomId); s2.emit('block_blast_match_found', { roomId, opponent: { userId: p1.userId, username: bbP1Name, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null }, entryFee: p2.entryFee, currency: p2.currency }); }
+        if (s1) { s1.join(roomId); s1.emit('block_blast_match_found', { roomId, opponent: { userId: p2.userId, username: bbP2Name, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null, isBot: isDuelyBot(p2) }, entryFee: p1.entryFee, currency: p1.currency }); }
+        if (s2) { s2.join(roomId); s2.emit('block_blast_match_found', { roomId, opponent: { userId: p1.userId, username: bbP1Name, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null, isBot: isDuelyBot(p1) }, entryFee: p2.entryFee, currency: p2.currency }); }
         io.emit('queue_entry_removed', { id: p1.socketId });
         io.emit('queue_entry_removed', { id: p2.socketId });
         if (!p1.isBot && !p2.isBot) {
@@ -705,7 +714,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
             const { roomId } = createDirectBlockBlastRoom(player, bot);
             if (entryFee > 0) { const r = getBlockBlastRoom(roomId); if (r) r.feesDeducted = true; }
             socket.join(roomId);
-            socket.emit('block_blast_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null }, entryFee, currency, vsBot: true });
+            socket.emit('block_blast_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null, isBot: isDuelyBot(bot) }, entryFee, currency, vsBot: true });
             startBlockBlastCountdown(io, supabase, roomId);
           }, 3000);
         }
@@ -756,7 +765,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return;
         }
         incrementCount('block-blast', socket.id, entryFee, currency);
-        socket.emit('block_blast_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null }, entryFee, vsBot: true });
+        socket.emit('block_blast_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null, isBot: isDuelyBot(bot) }, entryFee, vsBot: true });
         startBlockBlastCountdown(io, supabase, roomId);
       } finally {
         socket._startingGame = null;
@@ -866,8 +875,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         const s2 = io.sockets.sockets.get(p2.socketId);
         const twP1Name = p1.isDemo ? randomFunnyName() : p1.username;
         const twP2Name = p2.isDemo ? randomFunnyName() : p2.username;
-        if (s1) { s1.join(roomId); s1.emit('tower_match_found', { roomId, opponent: { userId: p2.userId, username: twP2Name, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null }, entryFee: p1.entryFee, currency: p1.currency }); }
-        if (s2) { s2.join(roomId); s2.emit('tower_match_found', { roomId, opponent: { userId: p1.userId, username: twP1Name, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null }, entryFee: p2.entryFee, currency: p2.currency }); }
+        if (s1) { s1.join(roomId); s1.emit('tower_match_found', { roomId, opponent: { userId: p2.userId, username: twP2Name, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null, isBot: isDuelyBot(p2) }, entryFee: p1.entryFee, currency: p1.currency }); }
+        if (s2) { s2.join(roomId); s2.emit('tower_match_found', { roomId, opponent: { userId: p1.userId, username: twP1Name, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null, isBot: isDuelyBot(p1) }, entryFee: p2.entryFee, currency: p2.currency }); }
         io.emit('queue_entry_removed', { id: p1.socketId });
         io.emit('queue_entry_removed', { id: p2.socketId });
         if (!p1.isBot && !p2.isBot) {
@@ -916,7 +925,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
             const { roomId } = createDirectTowerRoom(player, bot);
             if (entryFee > 0) { const r = getTowerRoom(roomId); if (r) r.feesDeducted = true; }
             socket.join(roomId);
-            socket.emit('tower_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null }, entryFee, currency, vsBot: true });
+            socket.emit('tower_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null, isBot: isDuelyBot(bot) }, entryFee, currency, vsBot: true });
             startTowerCountdown(io, supabase, roomId);
           }, 3000);
         }
@@ -967,7 +976,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return;
         }
         incrementCount('tower', socket.id, entryFee, currency);
-        socket.emit('tower_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null }, entryFee, vsBot: true });
+        socket.emit('tower_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null, isBot: isDuelyBot(bot) }, entryFee, vsBot: true });
         startTowerCountdown(io, supabase, roomId);
       } finally {
         socket._startingGame = null;
@@ -1076,8 +1085,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           const s2 = io.sockets.sockets.get(p2.socketId);
           const n1 = p1.isDemo ? randomFunnyName() : p1.username;
           const n2 = p2.isDemo ? randomFunnyName() : p2.username;
-          if (s1) { s1.join(roomId); s1.emit('car_dash_match_found', { roomId, opponent: { userId: p2.userId, username: n2, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null }, entryFee, currency }); }
-          if (s2) { s2.join(roomId); s2.emit('car_dash_match_found', { roomId, opponent: { userId: p1.userId, username: n1, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null }, entryFee, currency }); }
+          if (s1) { s1.join(roomId); s1.emit('car_dash_match_found', { roomId, opponent: { userId: p2.userId, username: n2, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null, isBot: isDuelyBot(p2) }, entryFee, currency }); }
+          if (s2) { s2.join(roomId); s2.emit('car_dash_match_found', { roomId, opponent: { userId: p1.userId, username: n1, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null, isBot: isDuelyBot(p1) }, entryFee, currency }); }
           io.emit('queue_entry_removed', { id: p1.socketId });
           io.emit('queue_entry_removed', { id: p2.socketId });
           startCarDashCountdown(io, supabase, roomId);
@@ -1109,7 +1118,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
               const { roomId } = createDirectCarDashRoom(player, bot);
               const r = getCarDashRoom(roomId); if (r) r.feesDeducted = true;
               socket.join(roomId);
-              socket.emit('car_dash_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null }, entryFee, currency, vsBot: true });
+              socket.emit('car_dash_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null, isBot: isDuelyBot(bot) }, entryFee, currency, vsBot: true });
               startCarDashCountdown(io, supabase, roomId);
             }, 3000);
           }
@@ -1156,7 +1165,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return;
         }
         incrementCount('car-dash', socket.id, entryFee, currency);
-        socket.emit('car_dash_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null }, entryFee, currency, vsBot: true });
+        socket.emit('car_dash_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null, isBot: isDuelyBot(bot) }, entryFee, currency, vsBot: true });
         startCarDashCountdown(io, supabase, roomId);
       } finally {
         socket._startingGame = null;
@@ -1245,8 +1254,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           const s2 = io.sockets.sockets.get(p2.socketId);
           const n1 = p1.isDemo ? randomFunnyName() : p1.username;
           const n2 = p2.isDemo ? randomFunnyName() : p2.username;
-          if (s1) { s1.join(roomId); s1.emit('color_rush_match_found', { roomId, opponent: { userId: p2.userId, username: n2, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null }, entryFee, currency }); }
-          if (s2) { s2.join(roomId); s2.emit('color_rush_match_found', { roomId, opponent: { userId: p1.userId, username: n1, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null }, entryFee, currency }); }
+          if (s1) { s1.join(roomId); s1.emit('color_rush_match_found', { roomId, opponent: { userId: p2.userId, username: n2, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null, isBot: isDuelyBot(p2) }, entryFee, currency }); }
+          if (s2) { s2.join(roomId); s2.emit('color_rush_match_found', { roomId, opponent: { userId: p1.userId, username: n1, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null, isBot: isDuelyBot(p1) }, entryFee, currency }); }
           io.emit('queue_entry_removed', { id: p1.socketId });
           io.emit('queue_entry_removed', { id: p2.socketId });
           startColorRushCountdown(io, supabase, roomId);
@@ -1278,7 +1287,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
               const { roomId } = createDirectColorRushRoom(player, bot);
               const r = getColorRushRoom(roomId); if (r) r.feesDeducted = true;
               socket.join(roomId);
-              socket.emit('color_rush_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null }, entryFee, currency, vsBot: true });
+              socket.emit('color_rush_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null, isBot: isDuelyBot(bot) }, entryFee, currency, vsBot: true });
               startColorRushCountdown(io, supabase, roomId);
             }, 3000);
           }
@@ -1325,7 +1334,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return;
         }
         incrementCount('color-rush', socket.id, entryFee, currency);
-        socket.emit('color_rush_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null }, entryFee, currency, vsBot: true });
+        socket.emit('color_rush_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null, isBot: isDuelyBot(bot) }, entryFee, currency, vsBot: true });
         startColorRushCountdown(io, supabase, roomId);
       } finally {
         socket._startingGame = null;
@@ -1707,8 +1716,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           const s2 = io.sockets.sockets.get(p2.socketId);
           const wvP1Name = p1.isDemo ? randomFunnyName() : p1.username;
           const wvP2Name = p2.isDemo ? randomFunnyName() : p2.username;
-          if (s1) { s1.join(roomId); s1.emit('scrabble_match_found', { roomId, opponent: { userId: p2.userId, username: wvP2Name, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null }, entryFee: p1.entryFee, currency: p1.currency }); }
-          if (s2) { s2.join(roomId); s2.emit('scrabble_match_found', { roomId, opponent: { userId: p1.userId, username: wvP1Name, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null }, entryFee: p2.entryFee, currency: p2.currency }); }
+          if (s1) { s1.join(roomId); s1.emit('scrabble_match_found', { roomId, opponent: { userId: p2.userId, username: wvP2Name, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null, isBot: isDuelyBot(p2) }, entryFee: p1.entryFee, currency: p1.currency }); }
+          if (s2) { s2.join(roomId); s2.emit('scrabble_match_found', { roomId, opponent: { userId: p1.userId, username: wvP1Name, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null, isBot: isDuelyBot(p1) }, entryFee: p2.entryFee, currency: p2.currency }); }
           io.emit('queue_entry_removed', { id: p1.socketId });
           io.emit('queue_entry_removed', { id: p2.socketId });
           io.to(roomId).emit('scrabble_countdown', { count: 3 });
@@ -1750,7 +1759,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
               const room = getWordleRoom(roomId);
               if (room) room.feesDeducted = true;
               socket.join(roomId);
-              socket.emit('scrabble_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null }, entryFee, currency, vsBot: true });
+              socket.emit('scrabble_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null, isBot: isDuelyBot(bot) }, entryFee, currency, vsBot: true });
               socket.emit('scrabble_countdown', { count: 3 });
               await new Promise(r => setTimeout(r, 1000));
               if (!getWordleRoom(roomId)) return;
@@ -1807,7 +1816,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         const room = getWordleRoom(roomId);
         if (room) room.feesDeducted = true;
         socket.join(roomId);
-        socket.emit('scrabble_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null }, entryFee, vsBot: true });
+        socket.emit('scrabble_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null, isBot: isDuelyBot(bot) }, entryFee, vsBot: true });
         socket.emit('scrabble_countdown', { count: 3 });
         await new Promise(r => setTimeout(r, 1000));
         if (!getWordleRoom(roomId)) return;
@@ -1964,8 +1973,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         // Demo-vs-demo: relabel each opponent with a funny name.
         const p1Name = match.p1.isDemo ? randomFunnyName() : match.p1.username;
         const p2Name = match.p2.isDemo ? randomFunnyName() : match.p2.username;
-        if (s1) { s1.join(match.roomId); s1.emit('coin_flip_match_found', { roomId: match.roomId, opponent: { userId: match.p2.userId, username: p2Name, elo: match.p2.elo, avatarUrl: match.p2.avatarUrl ?? null, profileColor: match.p2.profileColor ?? null }, side: match.p1.side, entryFee, currency: match.p1.currency }); }
-        if (s2) { s2.join(match.roomId); s2.emit('coin_flip_match_found', { roomId: match.roomId, opponent: { userId: match.p1.userId, username: p1Name, elo: match.p1.elo, avatarUrl: match.p1.avatarUrl ?? null, profileColor: match.p1.profileColor ?? null }, side: match.p2.side, entryFee, currency: match.p2.currency }); }
+        if (s1) { s1.join(match.roomId); s1.emit('coin_flip_match_found', { roomId: match.roomId, opponent: { userId: match.p2.userId, username: p2Name, elo: match.p2.elo, avatarUrl: match.p2.avatarUrl ?? null, profileColor: match.p2.profileColor ?? null, isBot: isDuelyBot(match.p2) }, side: match.p1.side, entryFee, currency: match.p1.currency }); }
+        if (s2) { s2.join(match.roomId); s2.emit('coin_flip_match_found', { roomId: match.roomId, opponent: { userId: match.p1.userId, username: p1Name, elo: match.p1.elo, avatarUrl: match.p1.avatarUrl ?? null, profileColor: match.p1.profileColor ?? null, isBot: isDuelyBot(match.p1) }, side: match.p2.side, entryFee, currency: match.p2.currency }); }
         // 3s countdown + 3s spin = 6s before resolving
         setTimeout(() => resolveCoinFlip(io, supabase, match.roomId), 6000);
       } else {
@@ -1987,7 +1996,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
             const { roomId } = createDirectCoinFlipRoom(player, bot);
             if (entryFee > 0) { const r = getCoinFlipRoom(roomId); if (r) r.feesDeducted = true; }
             socket.join(roomId);
-            socket.emit('coin_flip_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null }, side, entryFee, currency, vsBot: true });
+            socket.emit('coin_flip_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null, isBot: isDuelyBot(bot) }, side, entryFee, currency, vsBot: true });
             setTimeout(() => resolveCoinFlip(io, supabase, roomId), 6000);
           }, 3000);
         }
@@ -2036,7 +2045,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           await _handleForfeit(io, supabase, { roomId, room: getCoinFlipRoom(roomId) }, socket.id, deleteCoinFlipRoom, 'coin_flip');
           return;
         }
-        socket.emit('coin_flip_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null }, side, entryFee, vsBot: true });
+        socket.emit('coin_flip_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null, isBot: isDuelyBot(bot) }, side, entryFee, vsBot: true });
         // Resolve after countdown (6s) + flip animation via the standard resolveCoinFlip
         setTimeout(() => resolveCoinFlip(io, supabase, roomId), 6000);
       } finally {
@@ -2102,8 +2111,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         const s2 = io.sockets.sockets.get(match.p2.socketId);
         const p1Name = match.p1.isDemo ? randomFunnyName() : match.p1.username;
         const p2Name = match.p2.isDemo ? randomFunnyName() : match.p2.username;
-        if (s1) { s1.join(match.roomId); s1.emit('bj_match_found', { roomId: match.roomId, opponent: { userId: match.p2.userId, username: p2Name, elo: match.p2.elo, avatarUrl: match.p2.avatarUrl ?? null, profileColor: match.p2.profileColor ?? null }, entryFee, currency: match.p1.currency }); }
-        if (s2) { s2.join(match.roomId); s2.emit('bj_match_found', { roomId: match.roomId, opponent: { userId: match.p1.userId, username: p1Name, elo: match.p1.elo, avatarUrl: match.p1.avatarUrl ?? null, profileColor: match.p1.profileColor ?? null }, entryFee, currency: match.p2.currency }); }
+        if (s1) { s1.join(match.roomId); s1.emit('bj_match_found', { roomId: match.roomId, opponent: { userId: match.p2.userId, username: p2Name, elo: match.p2.elo, avatarUrl: match.p2.avatarUrl ?? null, profileColor: match.p2.profileColor ?? null, isBot: isDuelyBot(match.p2) }, entryFee, currency: match.p1.currency }); }
+        if (s2) { s2.join(match.roomId); s2.emit('bj_match_found', { roomId: match.roomId, opponent: { userId: match.p1.userId, username: p1Name, elo: match.p1.elo, avatarUrl: match.p1.avatarUrl ?? null, profileColor: match.p1.profileColor ?? null, isBot: isDuelyBot(match.p1) }, entryFee, currency: match.p2.currency }); }
         startBlackjackGame(io, supabase, match.roomId);
       } else {
         socket.emit('bj_queue_joined');
@@ -2123,7 +2132,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
             const { roomId } = createDirectBlackjackRoom(player, bot);
             if (entryFee > 0) { const r = getBlackjackRoom(roomId); if (r) r.feesDeducted = true; }
             socket.join(roomId);
-            socket.emit('bj_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null }, entryFee, currency, vsBot: true });
+            socket.emit('bj_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null, isBot: isDuelyBot(bot) }, entryFee, currency, vsBot: true });
             startBlackjackGame(io, supabase, roomId);
           }, 3000);
         }
@@ -2245,7 +2254,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           return;
         }
         incrementCount('blackjack', socket.id, entryFee, currency);
-        socket.emit('bj_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null }, entryFee, vsBot: true });
+        socket.emit('bj_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null, isBot: isDuelyBot(bot) }, entryFee, vsBot: true });
         startBlackjackGame(io, supabase, roomId);
       } finally {
         socket._startingGame = null;
@@ -2554,10 +2563,10 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     if (s1) s1.join(roomId);
     if (s2) s2.join(roomId);
     if (!p1.isBot) io.to(p1.socketId).emit('match_found', {
-      roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null }, entryFee: p1.entryFee,
+      roomId, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null, isBot: isDuelyBot(p2) }, entryFee: p1.entryFee,
     });
     if (!p2.isBot) io.to(p2.socketId).emit('match_found', {
-      roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null }, entryFee: p2.entryFee,
+      roomId, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null, isBot: isDuelyBot(p1) }, entryFee: p2.entryFee,
     });
     startCountdown(io, supabase, roomId);
   }
@@ -2589,8 +2598,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
     function emit2(event, extra1 = {}, extra2 = {}) {
       s1.join(roomId); s2.join(roomId);
-      s1.emit(event, { roomId, isPrivate: true, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null }, entryFee: p1.entryFee, ...extra1 });
-      s2.emit(event, { roomId, isPrivate: true, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null }, entryFee: p2.entryFee, ...extra2 });
+      s1.emit(event, { roomId, isPrivate: true, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null, isBot: isDuelyBot(p2) }, entryFee: p1.entryFee, ...extra1 });
+      s2.emit(event, { roomId, isPrivate: true, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null, isBot: isDuelyBot(p1) }, entryFee: p2.entryFee, ...extra2 });
     }
 
     let roomId;
@@ -2609,8 +2618,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         ({ roomId } = createDirectWordleRoom(p1, p2));
         if (entryFee > 0) { const r = getWordleRoom(roomId); if (r) r.feesDeducted = true; }
         s1.join(roomId); s2.join(roomId);
-        s1.emit('scrabble_match_found', { roomId, isPrivate: true, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null }, entryFee: p1.entryFee, currency: p1.currency });
-        s2.emit('scrabble_match_found', { roomId, isPrivate: true, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null }, entryFee: p2.entryFee, currency: p2.currency });
+        s1.emit('scrabble_match_found', { roomId, isPrivate: true, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null, isBot: isDuelyBot(p2) }, entryFee: p1.entryFee, currency: p1.currency });
+        s2.emit('scrabble_match_found', { roomId, isPrivate: true, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null, isBot: isDuelyBot(p1) }, entryFee: p2.entryFee, currency: p2.currency });
         io.to(roomId).emit('scrabble_countdown', { count: 3 });
         setTimeout(() => io.to(roomId).emit('scrabble_countdown', { count: 2 }), 1000);
         setTimeout(() => io.to(roomId).emit('scrabble_countdown', { count: 1 }), 2000);
@@ -2623,8 +2632,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         const p2cf = result.p2;
         if (entryFee > 0) { const r = getCoinFlipRoom(roomId); if (r) r.feesDeducted = true; }
         s1.join(roomId); s2.join(roomId);
-        s1.emit('coin_flip_match_found', { roomId, isPrivate: true, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null }, side: p1.side, entryFee: p1.entryFee, currency: p1.currency });
-        s2.emit('coin_flip_match_found', { roomId, isPrivate: true, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null }, side: p2cf.side, entryFee: p2.entryFee, currency: p2.currency });
+        s1.emit('coin_flip_match_found', { roomId, isPrivate: true, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null, isBot: isDuelyBot(p2) }, side: p1.side, entryFee: p1.entryFee, currency: p1.currency });
+        s2.emit('coin_flip_match_found', { roomId, isPrivate: true, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null, isBot: isDuelyBot(p1) }, side: p2cf.side, entryFee: p2.entryFee, currency: p2.currency });
         setTimeout(() => resolveCoinFlip(io, supabase, roomId), 6000);
         break;
       }
@@ -2635,8 +2644,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         ({ roomId } = createDirectCarDashRoom(p1, p2));
         if (entryFee > 0) { const r = getCarDashRoom(roomId); if (r) r.feesDeducted = true; }
         s1.join(roomId); s2.join(roomId);
-        s1.emit('car_dash_match_found', { roomId, isPrivate: true, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null }, entryFee: p1.entryFee, currency: p1.currency });
-        s2.emit('car_dash_match_found', { roomId, isPrivate: true, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null }, entryFee: p2.entryFee, currency: p2.currency });
+        s1.emit('car_dash_match_found', { roomId, isPrivate: true, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null, isBot: isDuelyBot(p2) }, entryFee: p1.entryFee, currency: p1.currency });
+        s2.emit('car_dash_match_found', { roomId, isPrivate: true, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null, isBot: isDuelyBot(p1) }, entryFee: p2.entryFee, currency: p2.currency });
         startCarDashCountdown(io, supabase, roomId);
         break;
       }
@@ -2644,8 +2653,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         ({ roomId } = createDirectColorRushRoom(p1, p2));
         if (entryFee > 0) { const r = getColorRushRoom(roomId); if (r) r.feesDeducted = true; }
         s1.join(roomId); s2.join(roomId);
-        s1.emit('color_rush_match_found', { roomId, isPrivate: true, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null }, entryFee: p1.entryFee, currency: p1.currency });
-        s2.emit('color_rush_match_found', { roomId, isPrivate: true, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null }, entryFee: p2.entryFee, currency: p2.currency });
+        s1.emit('color_rush_match_found', { roomId, isPrivate: true, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null, isBot: isDuelyBot(p2) }, entryFee: p1.entryFee, currency: p1.currency });
+        s2.emit('color_rush_match_found', { roomId, isPrivate: true, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null, isBot: isDuelyBot(p1) }, entryFee: p2.entryFee, currency: p2.currency });
         startColorRushCountdown(io, supabase, roomId);
         break;
       }
@@ -2653,8 +2662,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         ({ roomId } = createDirectBlackjackRoom(p1, p2));
         if (entryFee > 0) { const r = getBlackjackRoom(roomId); if (r) r.feesDeducted = true; }
         s1.join(roomId); s2.join(roomId);
-        s1.emit('bj_match_found', { roomId, isPrivate: true, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null }, entryFee: p1.entryFee, currency: p1.currency });
-        s2.emit('bj_match_found', { roomId, isPrivate: true, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null }, entryFee: p2.entryFee, currency: p2.currency });
+        s1.emit('bj_match_found', { roomId, isPrivate: true, opponent: { userId: p2.userId, username: p2.username, elo: p2.elo, avatarUrl: p2.avatarUrl ?? null, profileColor: p2.profileColor ?? null, isBot: isDuelyBot(p2) }, entryFee: p1.entryFee, currency: p1.currency });
+        s2.emit('bj_match_found', { roomId, isPrivate: true, opponent: { userId: p1.userId, username: p1.username, elo: p1.elo, avatarUrl: p1.avatarUrl ?? null, profileColor: p1.profileColor ?? null, isBot: isDuelyBot(p1) }, entryFee: p2.entryFee, currency: p2.currency });
         startBlackjackGame(io, supabase, roomId);
         break;
       }

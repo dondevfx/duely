@@ -3,6 +3,7 @@ import DiamondIcon from './DiamondIcon';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import CoinIcon from './CoinIcon';
+import { OutcomeIcon } from './UiIcon';
 
 function fmt(n) {
   return Number(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -26,7 +27,7 @@ export default function ForfeitToast() {
       onClick={clearForfeitWin}
     >
       <div className="bg-surface border border-success/40 rounded-2xl px-6 py-4 shadow-glow text-center min-w-72 cursor-pointer">
-        <div className="text-2xl mb-1">🏆</div>
+        <div className="mb-1 flex justify-center"><OutcomeIcon kind="disconnect" size={26} /></div>
         <div className="text-white font-black text-lg">Opponent Disconnected!</div>
         <div className="text-success font-bold text-base mt-1">
           +{fmt(forfeitWin.winnerPayout)} {sym}

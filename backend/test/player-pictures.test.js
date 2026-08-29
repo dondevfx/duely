@@ -204,3 +204,52 @@ test('the admin dashboard reports what the wheels have paid out', () => {
   assert.match(src.slice(at, at + 700), /try \{[\s\S]*?\} catch/);
   assert.match(fe('pages', 'Admin.jsx'), /Coins Paid by Wheels/);
 });
+
+// ── The bot's face ──────────────────────────────────────────────────────────
+
+test('the opponent payload says whether it is the Duely Bot', () => {
+  // Without this the client's isBot prop is always false, so the drawn robot
+  // face never appeared anywhere — every bot rendered as a letter avatar.
+  const payloads = HANDLERS.match(/opponent: \{ userId:[^}]*\}/g) || [];
+  const bare = payloads.filter(p => !/\bisBot:/.test(p));
+  assert.equal(bare.length, 0, `${bare.length} opponent payloads do not say if it is a bot`);
+});
+
+test('only the openly named bot is flagged, not the disguised queue bots', () => {
+  // The free and casual queues fill with bots carrying random human names on
+  // purpose. Flagging those would hand the disguise away in the avatar.
+  const src = be('socket', 'handlers.js');
+  assert.match(src, /const isDuelyBot = \(p\) =>/);
+  assert.match(src, /p\?\.isBot === true && p\.username === 'Duely Bot'/);
+  assert.equal((HANDLERS.match(/isBot: \w+(?:\.\w+)?\.isBot/g) || []).length, 0,
+    'a payload is passing isBot straight through instead of through the helper');
+});
+
+test('the chat draws the bot rather than an emoji robot', () => {
+  const src = fe('components', 'ChatSidebar.jsx');
+  assert.doesNotMatch(src, /\u{1F916}/u, 'the emoji robot is still in the chat');
+  // All three places it appears: both message lists and the profile card.
+  assert.equal((src.match(/<BotAvatar/g) || []).length, 3,
+    'every bot face in the chat must be the drawn one');
+});
+
+test('a bot countdown names the bot beside its face, not as bare text', () => {
+  for (const page of GAME_PAGES) {
+    const src = fe('pages', `${page}.jsx`);
+    assert.deepEqual(src.match(/>vs Duely Bot</g) || [], [],
+      `${page} shows "vs Duely Bot" as plain text`);
+  }
+});
+
+// ── Result headers ──────────────────────────────────────────────────────────
+
+test('the four result headers are drawn, not emoji', () => {
+  const ui = fe('components', 'UiIcon.jsx');
+  for (const kind of ['win', 'loss', 'draw', 'disconnect']) {
+    assert.match(ui, new RegExp(`^  ${kind}: `, 'm'), `no drawn header for ${kind}`);
+  }
+  const res = fe('components', 'ResultScreen.jsx');
+  assert.match(res, /<OutcomeIcon kind=\{isDraw \? 'draw' : isWinner \? 'win' : 'loss'\}/);
+  assert.doesNotMatch(res, /\u{1F3C6}|\u{1F480}|\u{1F91D}/u, 'an emoji header survived');
+  assert.match(fe('components', 'ForfeitToast.jsx'), /<OutcomeIcon kind="disconnect"/);
+});

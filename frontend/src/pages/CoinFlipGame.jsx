@@ -11,6 +11,7 @@ import BetSlider from '../components/BetSlider';
 import ResultScreen from '../components/ResultScreen';
 import GameHelp from '../components/GameHelp';
 import GameIcon from '../components/GameIcon';
+import PlayerName from '../components/PlayerName';
 import GlowButton from '../components/GlowButton';
 import { topUpRoute, topUpLabel } from '../utils/topUpRoute';
 import CreateRoomModal from '../components/CreateRoomModal';
@@ -682,7 +683,15 @@ export default function CoinFlipGame() {
               {countdown}
             </div>
             <p className="text-muted">Get ready…</p>
-            {statusMsg && <p className="text-xs text-muted mt-2">{statusMsg}</p>}
+            {/* Once the match lands we know who it is, so the opponent gets a
+                face here like in every other game; statusMsg is the fallback
+                for the states before that (queueing, cancelled, errors). */}
+            {opponent ? (
+              <p className="text-xs text-muted mt-2 flex items-center justify-center gap-1.5">
+                vs <PlayerName username={opponent.username} avatarUrl={opponent.avatarUrl}
+                     color={opponent.profileColor} isBot={!!opponent.isBot} size="w-5 h-5" />
+              </p>
+            ) : statusMsg ? <p className="text-xs text-muted mt-2">{statusMsg}</p> : null}
           </div>
         )}
 

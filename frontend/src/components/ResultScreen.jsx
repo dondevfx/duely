@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import DiamondIcon from './DiamondIcon';
 import PlayerName from './PlayerName';
+import { OutcomeIcon } from './UiIcon';
 import { getRank, isRanked, placementMatches, getDisplayRank } from '../utils/ranks';
 import CoinIcon from './CoinIcon';
 import { playWin, playLoss, playDraw } from '../utils/sound';
@@ -209,8 +210,8 @@ export default function ResultScreen({
         <div className="p-7">
           {/* Win / Loss / Draw header */}
           <div className="text-center mb-5">
-            <div className="text-5xl mb-2">
-              {isDraw ? '🤝' : isWinner ? '🏆' : '💀'}
+            <div className="mb-2 flex justify-center">
+              <OutcomeIcon kind={isDraw ? 'draw' : isWinner ? 'win' : 'loss'} size={54} />
             </div>
             <div className={`text-3xl font-black ${isDraw ? 'text-accent' : isWinner ? 'text-success' : 'text-danger'}`}>
               {isDraw ? 'Draw!' : isWinner ? 'Victory!' : 'Defeat'}

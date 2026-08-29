@@ -261,3 +261,69 @@ export default function UiIcon({ name, size = 20, className = '', title }) {
     </svg>
   );
 }
+
+// ── Result headers ──────────────────────────────────────────────────────────
+//
+// The four cards that end a match opened with 🏆 💀 🤝 🔌. At the 3rem size
+// they are drawn at, an emoji is the one place on the page rendered by the
+// operating system rather than by us: it is a different illustration on iOS,
+// Android and Windows, and none of them match the site. These are the same
+// four ideas, drawn once, in the colour the card is already using.
+const OUTCOME = {
+  win: { label: 'Victory', art: (
+    <>
+      <path d="M6 4h12v4.5a6 6 0 0 1-12 0z" fill="#F5C518" />
+      <path d="M6 5.2H3.4v1.9a4.2 4.2 0 0 0 3.3 4.1M18 5.2h2.6v1.9a4.2 4.2 0 0 1-3.3 4.1"
+        fill="none" stroke="#F5C518" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M12 14.5v3.2" stroke="#C99A0E" strokeWidth="2" strokeLinecap="round" />
+      <rect x="7.6" y="17.6" width="8.8" height="2.6" rx="1" fill="#C99A0E" />
+      {/* the shine that makes it read as metal rather than a flat cup */}
+      <path d="M8.6 5.4v3a3.4 3.4 0 0 0 1.5 2.8" fill="none" stroke="#FFF3C4"
+        strokeWidth="1.1" strokeLinecap="round" opacity="0.85" />
+    </>
+  ) },
+  loss: { label: 'Defeat', art: (
+    <>
+      {/* A cracked shield, not a skull: the loss is the guard breaking, and it
+          keeps the same shield language the rank badges use. */}
+      <path d="M12 2.6l7.4 2.7v6c0 4.5-3.1 8.2-7.4 10-4.3-1.8-7.4-5.5-7.4-10v-6z"
+        fill="#FF4D5E22" stroke="#FF4D5E" strokeWidth="1.7" strokeLinejoin="round" />
+      <path d="M12.8 5.6l-3.2 5.6h3.1l-2.5 6" fill="none" stroke="#FF4D5E"
+        strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ) },
+  draw: { label: 'Draw', art: (
+    <>
+      {/* Balanced scales — two equal sides, which is what a draw is. */}
+      <path d="M12 4.4v14.2" stroke="#8FB4FF" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="12" cy="3.6" r="1.5" fill="#8FB4FF" />
+      <path d="M4.6 7.6h14.8" stroke="#8FB4FF" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M4.6 7.6L2 13.2h5.2zM19.4 7.6L16.8 13.2H22z"
+        fill="#2E7BF6" stroke="#8FB4FF" strokeWidth="1.2" strokeLinejoin="round" />
+      <rect x="7.4" y="18.6" width="9.2" height="2.4" rx="1.1" fill="#8FB4FF" />
+    </>
+  ) },
+  disconnect: { label: 'Opponent disconnected', art: (
+    <>
+      {/* A plug pulled out of its socket, with the gap drawn between them. */}
+      <rect x="2.6" y="8.4" width="6.4" height="7.2" rx="1.6" fill="#F5C518" />
+      <path d="M9 10.6h2.2M9 13.4h2.2" stroke="#F5C518" strokeWidth="1.7" strokeLinecap="round" />
+      <rect x="15" y="8.4" width="6.4" height="7.2" rx="1.6"
+        fill="none" stroke="#8A8F98" strokeWidth="1.7" />
+      <path d="M15 10.6h-2.2M15 13.4h-2.2" stroke="#8A8F98" strokeWidth="1.7" strokeLinecap="round" />
+      <path d="M12 4.4v2M9.4 5.4l1 1.6M14.6 5.4l-1 1.6"
+        stroke="#F5C518" strokeWidth="1.5" strokeLinecap="round" opacity="0.8" />
+    </>
+  ) },
+};
+
+export function OutcomeIcon({ kind, size = 48, className = '' }) {
+  const o = OUTCOME[kind];
+  if (!o) return null;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" role="img" aria-label={o.label}
+      focusable="false" className={`inline-block shrink-0 align-middle ${className}`}>
+      {o.art}
+    </svg>
+  );
+}
