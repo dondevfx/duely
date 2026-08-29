@@ -40,15 +40,35 @@ function BlockBurst() {
   return <g>{[cell(4.4, 3.2, 'a'), cell(4.4, 10, 'b'), cell(4.4, 16.8, 'c'), cell(11.2, 16.8, 'd')]}</g>;
 }
 
-// ── Coin Flip: the heads face ───────────────────────────────────────────────
+// ── Coin Flip: the heads face, as it is drawn in the game ───────────────────
+// The in-game coin is BLUE metal with a white H, not gold — the gold coin here
+// was the C Coin, which is a different thing entirely and made the game look
+// like it was about coins rather than the flip.
 function CoinFlip() {
+  const ticks = [];
+  for (let i = 0; i < 20; i++) {
+    const a = (i / 20) * Math.PI * 2;
+    ticks.push(
+      <line key={i}
+        x1={12 + Math.cos(a) * 8.2} y1={12 + Math.sin(a) * 8.2}
+        x2={12 + Math.cos(a) * 9.4} y2={12 + Math.sin(a) * 9.4}
+        stroke="rgba(195,228,255,0.75)" strokeWidth="0.8" />
+    );
+  }
   return (
     <g>
-      <circle cx="12" cy="12" r="9.2" fill="#F5C518" stroke="#B8860B" strokeWidth="1.1" />
-      <circle cx="12" cy="12" r="6.6" fill="none" stroke="#FFE9A3" strokeWidth="0.9" opacity="0.75" />
-      {/* A face in profile, the way a coin's heads side reads at this size */}
-      <circle cx="12" cy="9.7" r="2.5" fill="#8A6206" />
-      <path d="M6.9 17.4c0.7-3.1 2.7-4.7 5.1-4.7s4.4 1.6 5.1 4.7z" fill="#8A6206" />
+      <defs>
+        <radialGradient id="cf_face" cx="38%" cy="32%" r="72%">
+          <stop offset="0%"  stopColor="#A0D8FF" />
+          <stop offset="42%" stopColor="#1250B4" />
+          <stop offset="100%" stopColor="#003088" />
+        </radialGradient>
+      </defs>
+      <circle cx="12" cy="12" r="9.6" fill="url(#cf_face)" stroke="#0066DD" strokeWidth="1.4" />
+      {ticks}
+      <circle cx="12" cy="12" r="7" fill="none" stroke="rgba(160,216,255,0.55)" strokeWidth="0.8" />
+      <text x="12" y="16.2" fontSize="10.5" fontWeight="900" textAnchor="middle"
+        fontFamily="system-ui, sans-serif" fill="#FFFFFF">H</text>
     </g>
   );
 }

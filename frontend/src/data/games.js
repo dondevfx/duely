@@ -30,10 +30,35 @@ export const GAMES = [
     countKey: 'block-blast',
   },
   {
+    slug:     'car-dash',
+    title:    'Rush Hour',
+    route:    '/game/car-dash',
+    countKey: 'car-dash',
+  },
+  {
     slug:     'coin-flip',
     title:    'Coin Flip',
     route:    '/game/coin-flip',
     countKey: 'coin-flip',
+  },
+  {
+    slug:     'color-rush',
+    title:    'Color Rush',
+    route:    '/game/color-rush',
+    countKey: 'color-rush',
+    // The poster is a full 1284x2778 phone screenshot while the clip is a
+    // near-square 480x476 recording. In a square card, object-cover shows only
+    // the middle 46% of a frame that tall, which lands below the obstacles
+    // entirely — the still would show empty black and then snap to the game
+    // the moment the video started. Anchoring to the top keeps the rings and
+    // the ball, which sit in the upper third of that screenshot.
+    clipPosition: 'center top',
+  },
+  {
+    slug:     'tower',
+    title:    'Tower',
+    route:    '/game/tower',
+    countKey: 'tower',
   },
   {
     slug:     'scrabble',
@@ -46,24 +71,6 @@ export const GAMES = [
     // entire crop budget (~5%) on the bottom instead, which is empty guess
     // rows for most of a match.
     clipPosition: 'center top',
-  },
-  {
-    slug:     'car-dash',
-    title:    'Rush Hour',
-    route:    '/game/car-dash',
-    countKey: 'car-dash',
-  },
-  {
-    slug:     'color-rush',
-    title:    'Color Rush',
-    route:    '/game/color-rush',
-    countKey: 'color-rush',
-  },
-  {
-    slug:     'tower',
-    title:    'Tower',
-    route:    '/game/tower',
-    countKey: 'tower',
   },
   {
     slug:     'blackjack',

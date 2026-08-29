@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import GameIcon from './GameIcon';
+import DiamondIcon from './DiamondIcon';
 import CoinIcon from './CoinIcon';
 import { useSocket } from '../context/SocketContext';
 
@@ -8,8 +9,10 @@ const MOBILE_MAX = 6;
 
 function fmtPayout(payout, diamonds) {
   if (diamonds) {
-    if (payout >= 1000) return `+${(payout / 1000).toFixed(1).replace(/\.0$/, '')}k 💎`;
-    return `+${payout} 💎`;
+    const n = payout >= 1000
+      ? `+${(payout / 1000).toFixed(1).replace(/\.0$/, '')}k`
+      : `+${payout}`;
+    return <span className="inline-flex items-center gap-0.5">{n}<DiamondIcon size="0.9em" /></span>;
   }
   const amt = payout >= 1000
     ? `+${(payout / 1000).toFixed(1).replace(/\.0$/, '')}k`

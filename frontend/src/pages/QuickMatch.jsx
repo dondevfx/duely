@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import DiamondIcon from '../components/DiamondIcon';
 import { useNavigate } from 'react-router-dom';
 import GameIcon from '../components/GameIcon';
 import { useAuth } from '../context/AuthContext';
@@ -48,7 +49,7 @@ export default function QuickMatch() {
 
   const isDiamonds   = betCurrency === 'diamonds';
   const fees         = isDiamonds ? DIAMOND_FEES : COIN_FEES;
-  const currLabel    = isDiamonds ? '💎' : <CoinIcon size="0.85em" />;
+  const currLabel    = isDiamonds ? <DiamondIcon /> : <CoinIcon size="0.85em" />;
   const myBalance    = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const insufficient = entryFee > 0 && myBalance < entryFee;
   // Find index; if current entryFee not in new fees array, default to 0
@@ -105,7 +106,7 @@ export default function QuickMatch() {
     ? (entryFee * 2).toLocaleString()
     : ((entryFee * 2 * 0.95) % 1 === 0 ? (entryFee * 2 * 0.95).toLocaleString() : (entryFee * 2 * 0.95).toFixed(2));
   const payout = isDiamonds
-    ? `${payoutAmt} 💎`
+    ? <span className="inline-flex items-center gap-1">{payoutAmt} <DiamondIcon /></span>
     : <span className="inline-flex items-center gap-1">{payoutAmt} <CoinIcon size="0.85em" /></span>;
 
   return (
@@ -116,8 +117,11 @@ export default function QuickMatch() {
       <div className="w-full max-w-md animate-slide-up">
 
         <div className="text-center mb-3 sm:mb-6">
-          <div className="text-3xl sm:text-5xl mb-1 sm:mb-3">⚡</div>
-          <h1 className="text-4xl sm:text-6xl font-black text-white mb-2 leading-tight">Quick Match</h1>
+          {/* Beside the title, not above it — every other betting screen puts
+              the icon on the same line (see GameLobby's heading). */}
+          <h1 className="text-4xl sm:text-6xl font-black text-white mb-2 leading-tight flex items-center justify-center gap-3">
+            <GameIcon game="quickMatch" size={48} className="w-9 h-9 sm:w-14 sm:h-14" />Quick Match
+          </h1>
           <p className="text-muted text-xs sm:text-base">Pick your bet — we'll choose the game</p>
         </div>
 
@@ -149,7 +153,7 @@ export default function QuickMatch() {
                 onClick={() => switchCurrency('diamonds')}
                 className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}
               >
-                💎 Diamonds
+                <DiamondIcon /> Diamonds
               </button>
             </div>
           </div>
@@ -185,7 +189,7 @@ export default function QuickMatch() {
         >
           {!session ? '🔒 Login to Play'
             : insufficient ? topUpLabel(betCurrency)
-            : rolling ? '⚡ Finding game…' : '⚡ Play'}
+            : rolling ? 'Finding game…' : 'Play'}
         </GlowButton>
 
         {!authenticated && (

@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import DiamondIcon from './DiamondIcon';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import CoinIcon from './CoinIcon';
@@ -56,7 +57,7 @@ export default function NotifyToast() {
       {toasts.map(t => {
         const isDiamonds = t.currency === 'diamonds';
         const amountEl = isDiamonds
-          ? <>{Number(t.amount).toLocaleString()} 💎</>
+          ? <span className="inline-flex items-center gap-1">{Number(t.amount).toLocaleString()} <DiamondIcon /></span>
           : <span className="inline-flex items-center gap-1">{fmt(t.amount)} <CoinIcon size="0.85em" /></span>;
         return (
           <div

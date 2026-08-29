@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import DiamondIcon from './DiamondIcon';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { playWheelSpin, playWin } from '../utils/sound';
@@ -160,7 +161,7 @@ export default function SpinWheel({ locked = false }) {
       {/* Top banner */}
       <div className="w-full px-5 pt-5 text-center">
         <div className="font-black text-white text-lg tracking-widest uppercase">Daily Spin</div>
-        <div className="text-xs mt-1" style={{ color: '#64748b' }}>Win up to <span className="font-bold text-white">50,000 💎</span></div>
+        <div className="text-xs mt-1" style={{ color: '#64748b' }}>Win up to <span className="font-bold text-white">50,000 <DiamondIcon size="0.9em" /></span></div>
       </div>
 
       {/* Wheel */}
@@ -264,8 +265,7 @@ export default function SpinWheel({ locked = false }) {
                     textAnchor="middle" dominantBaseline="middle"
                     fontSize="10"
                     transform={`rotate(${mid}, ${lp.x}, ${lp.y})`}
-                  >
-                    💎
+                  ><DiamondIcon />
                   </text>
                 </g>
               );
@@ -292,7 +292,7 @@ export default function SpinWheel({ locked = false }) {
             <circle cx={CX} cy={CY} r={30} fill="#0f172a" stroke="#1e293b" strokeWidth="2.5" />
             <circle cx={CX} cy={CY} r={24} fill="url(#hubGrad)" stroke="#334155" strokeWidth="1.5" />
             <circle cx={CX} cy={CY} r={18} fill="none" stroke="#1e293b" strokeWidth="1" />
-            <text x={CX} y={CY + 1} textAnchor="middle" dominantBaseline="middle" fontSize="16">💎</text>
+            <text x={CX} y={CY + 1} textAnchor="middle" dominantBaseline="middle" fontSize="16"><DiamondIcon /></text>
           </svg>
           </div>
         </div>
@@ -311,7 +311,7 @@ export default function SpinWheel({ locked = false }) {
             <div className="font-black text-2xl inline-flex items-center justify-center gap-1.5 whitespace-nowrap max-w-full"
               style={{ color: THEMES[wonTheme].glow }}>
               <span>+{won.toLocaleString()}</span>
-              <span className="inline-flex items-center leading-none">💎</span>
+              <DiamondIcon className="inline-flex items-center leading-none" />
             </div>
             <div className="text-xs mt-0.5" style={{ color: '#64748b' }}>
               {won === 50000 ? '🏆 JACKPOT! Maximum prize!' : won === 20000 ? 'Massive win!' : 'Added to your balance!'}

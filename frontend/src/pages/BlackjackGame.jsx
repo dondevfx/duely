@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import DiamondIcon from '../components/DiamondIcon';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -345,7 +346,7 @@ function BlackjackGame() {
 
   const isDiamonds = betCurrency === 'diamonds';
   const fees = isDiamonds ? DIAMOND_FEES : COIN_FEES;
-  const currLabel = isDiamonds ? '💎' : <CoinIcon size="0.85em" />;
+  const currLabel = isDiamonds ? <DiamondIcon /> : <CoinIcon size="0.85em" />;
   const myBalance = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const insufficient = entryFee > 0 && myBalance < entryFee;
   // Falls back to 0, silently, when entryFee is not one of this currency's
@@ -1152,7 +1153,7 @@ function BlackjackGame() {
             <span className="text-base font-bold text-white">Entry Fee</span>
             <div className="flex items-center gap-0.5 bg-bg border border-border rounded-lg p-1">
               <button onClick={() => switchCurrency('coins')} className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${!isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}><CoinIcon size="0.85em" /> Coins</button>
-              <button onClick={() => switchCurrency('diamonds')} className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}>💎 Diamonds</button>
+              <button onClick={() => switchCurrency('diamonds')} className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}><DiamondIcon size="0.85em" /> Diamonds</button>
             </div>
           </div>
           <BetSlider fees={fees} entryFee={entryFee} setEntryFee={setEntryFee} currLabel={currLabel} isDiamonds={isDiamonds} />
@@ -1201,7 +1202,7 @@ function BlackjackGame() {
               {/* Diamond bet-vs-bot gets its own full-width row — too long to share */}
               {isDiamonds && (
                 <button onClick={() => playVsBot(false)} disabled={!authenticated || insufficient} className={SMALL_BTN}>
-                  Bet vs Bot — {fmtFee(entryFee)} 💎
+                  Bet vs Bot — {fmtFee(entryFee)} <DiamondIcon />
                 </button>
               )}
               <div className="flex gap-2">

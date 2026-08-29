@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom';
+import DiamondIcon from '../components/DiamondIcon';
+import GameIcon from '../components/GameIcon';
 import GameVideoCard from '../components/GameVideoCard';
 import DailyBonus from '../components/DailyBonus';
 import SpinWheel from '../components/SpinWheel';
@@ -21,7 +23,7 @@ function DailySpinWidget({ profile }) {
       <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] rounded-2xl gap-3">
         <div className="text-3xl">🎡</div>
         <p className="text-white font-black text-lg">Daily Spin</p>
-        <p className="text-muted text-sm text-center px-4">Win up to 50,000 💎 every day</p>
+        <p className="text-muted text-sm text-center px-4">Win up to 50,000 <DiamondIcon /> every day</p>
         <Link
           to="/login"
           className="px-6 py-2.5 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl transition-all text-sm"
@@ -64,7 +66,7 @@ export default function Home() {
                 {/* min-w-[175px] on both so they match.
                     The padding, text size and height were already identical —
                     the only difference was the word: "Wallet" is shorter than
-                    "⚡ Play Now", so it rendered 120px against 175px and read
+                    "Play Now", so it rendered 120px against 175px and read
                     as the smaller button. A shared minimum makes them equal
                     without stretching either past its natural size.
 
@@ -72,9 +74,9 @@ export default function Home() {
                     made the label look lighter as well as narrower. */}
                 <Link
                   to="/games"
-                  className="min-w-[175px] text-center px-8 py-4 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl shadow-glow hover:shadow-glow-lg transition-all text-lg"
+                  className="min-w-[175px] px-8 py-4 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl shadow-glow hover:shadow-glow-lg transition-all text-lg inline-flex items-center justify-center gap-2"
                 >
-                  ⚡ Play Now
+                  <GameIcon game="quickMatch" size={22} />Play Now
                 </Link>
                 <Link
                   to="/wallet"
@@ -193,7 +195,7 @@ export default function Home() {
               <DailyBonus />
             ) : (
               <div className="bg-surface border border-surfaceLight rounded-2xl p-5 text-center">
-                <div className="text-2xl mb-2">💎</div>
+                <div className="text-2xl mb-2"><DiamondIcon /></div>
                 <div className="font-bold text-white mb-1">Diamond Bonus</div>
                 <div className="text-sm text-muted mb-3">Claim 500 Diamonds every minute — free!</div>
                 <Link
@@ -213,11 +215,11 @@ export default function Home() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-accent">•</span>
-                  💎 Diamonds are free — claim 500 every 1 min
+                  <DiamondIcon /> Diamonds are free — claim 500 every 1 min
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary">•</span>
-                  <span>Bet <span className="inline-flex items-center gap-1 align-middle"><CoinIcon size="1em" /></span> Coins or 💎 Diamonds on any game</span>
+                  <span>Bet <span className="inline-flex items-center gap-1 align-middle"><CoinIcon size="1em" /></span> Coins or <DiamondIcon /> Diamonds on any game</span>
                 </li>
               </ul>
               <Link

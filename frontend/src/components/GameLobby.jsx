@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import DiamondIcon from './DiamondIcon';
 import GlowButton from './GlowButton';
 import { useSocket } from '../context/SocketContext';
 import BetSlider from './BetSlider';
@@ -92,7 +93,7 @@ export default function GameLobby({
 
   const isDiamonds = betCurrency === 'diamonds';
   const fees       = isDiamonds ? DIAMOND_FEES : COIN_FEES;
-  const currLabel  = isDiamonds ? '💎' : <CoinIcon size="0.85em" />;
+  const currLabel  = isDiamonds ? <DiamondIcon /> : <CoinIcon size="0.85em" />;
 
   // ── Starting a match freezes the affordability check ──────────────────────
   //
@@ -146,7 +147,7 @@ export default function GameLobby({
     ? (entryFee * 2).toLocaleString()
     : ((entryFee * 2 * 0.95) % 1 === 0 ? (entryFee * 2 * 0.95).toLocaleString() : (entryFee * 2 * 0.95).toFixed(2));
   const payout = isDiamonds
-    ? `${payoutAmt} 💎`
+    ? <span className="inline-flex items-center gap-1">{payoutAmt} <DiamondIcon /></span>
     : <span className="inline-flex items-center gap-1">{payoutAmt} <CoinIcon size="0.9em" /></span>;
 
   return (
@@ -176,7 +177,7 @@ export default function GameLobby({
               onClick={() => switchCurrency('diamonds')}
               className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}
             >
-              💎 Diamonds
+              <DiamondIcon /> Diamonds
             </button>
           </div>
         </div>
@@ -278,7 +279,9 @@ export default function GameLobby({
                 onClick={insufficient ? () => navigate(topUpRoute(betCurrency)) : commit(onBot)}
                 className={SMALL_BTN}
               >
-                {insufficient ? 'Insufficient 💎 — Get More' : `Bet vs Bot — ${fmtFee(entryFee)} 💎`}
+                {insufficient
+                  ? <span className="inline-flex items-center gap-1">Insufficient <DiamondIcon /> — Get More</span>
+                  : <span className="inline-flex items-center gap-1">Bet vs Bot — {fmtFee(entryFee)} <DiamondIcon /></span>}
               </button>
             )}
             <div className="flex gap-2 sm:gap-2">

@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect, useCallback } from 'react';
 import { api } from '../utils/api';
+import DiamondIcon from './DiamondIcon';
 import { useAuth } from '../context/AuthContext';
 import GlowButton from './GlowButton';
 
@@ -58,7 +59,7 @@ export default function DailyBonus() {
     setMessage(null);
     try {
       const data = await api.post('/bonus/diamond-claim', {});
-      setMessage({ type: 'success', text: `+${data.credited} 💎 claimed!` });
+      setMessage({ type: 'success', text: <span className="inline-flex items-center gap-1">+{data.credited} <DiamondIcon /> claimed!</span> });
       await refreshProfile();
       await fetchStatus();
     } catch (err) {
@@ -72,7 +73,7 @@ export default function DailyBonus() {
 
   return (
     <div className="flex flex-col items-center gap-3 p-5 bg-surface border border-surfaceLight rounded-2xl">
-      <div className="text-2xl">💎</div>
+      <div className="text-2xl"><DiamondIcon /></div>
       <div className="text-center">
         <div className="font-bold text-white">Diamond Bonus</div>
         <div className="text-sm text-muted">
@@ -82,7 +83,7 @@ export default function DailyBonus() {
 
       {status.canClaim ? (
         <GlowButton variant="success" onClick={handleClaim} disabled={claiming} className="w-full">
-          {claiming ? 'Claiming...' : `Claim 💎 ${amount ? amount.toLocaleString() : ''}`}
+          {claiming ? 'Claiming...' : <span className="inline-flex items-center gap-1.5">Claim <DiamondIcon /> {amount ? amount.toLocaleString() : ''}</span>}
         </GlowButton>
       ) : (
         <div className="text-center">

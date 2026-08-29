@@ -271,3 +271,33 @@ export function playCoinLand() {
   tone(2093, 0.02, 0.16, { type: 'triangle', gain: 0.10 });
   tone(1046, 0.00, 0.10, { type: 'sine',     gain: 0.08 });
 }
+
+// ── Color Rush ──────────────────────────────────────────────────────────────
+//
+// The tap fires around eleven times per obstacle, so it has to be nearly
+// subliminal — audible as texture rather than as a note. Anything with a real
+// pitch becomes a melody you did not ask for within about five seconds, and
+// anything at Tower's level becomes a machine gun. It is a short breath of
+// filtered noise with a faint body under it, at roughly a fifth of the level
+// of the other games' feedback.
+export function playCrTap() {
+  noiseBurst(0.020, { gain: 0.030, filter: 'bandpass', freq: 1700, q: 1.1 });
+  tone(520, 0.00, 0.030, { type: 'sine', gain: 0.035, slideTo: 660 });
+}
+
+// A diamond collected — the one sound here that is allowed to be pleasant.
+// Two notes a fifth apart, bright and short, sitting well above the tap so it
+// cuts through a run of them without being loud.
+export function playCrDiamond() {
+  tone(1568, 0.000, 0.085, { type: 'triangle', gain: 0.13 });
+  tone(2349, 0.045, 0.110, { type: 'triangle', gain: 0.095 });
+}
+
+// Death. Deliberately not a stinger: the result card is about to arrive and
+// say what happened, so this only has to mark the moment. A soft falling body
+// with a little air on it.
+export function playCrDeath() {
+  tone(420, 0.00, 0.30, { type: 'sine', gain: 0.16, slideTo: 150 });
+  tone(210, 0.02, 0.26, { type: 'sine', gain: 0.09, slideTo: 90 });
+  noiseBurst(0.16, { gain: 0.045, filter: 'lowpass', freq: 900 });
+}

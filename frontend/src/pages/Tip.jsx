@@ -1,5 +1,6 @@
 ﻿import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import DiamondIcon from '../components/DiamondIcon';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
 import GlowButton from '../components/GlowButton';
@@ -19,7 +20,7 @@ export default function Tip() {
   const [result, setResult]       = useState(null); // { type: 'success'|'error', text }
 
   const isDiamonds    = currency === 'diamonds';
-  const currencyLabel = isDiamonds ? '💎' : <CoinIcon size="0.85em" />;
+  const currencyLabel = isDiamonds ? <DiamondIcon /> : <CoinIcon size="0.85em" />;
   const myBalance     = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const tipAmount     = isDiamonds ? Math.floor(parseFloat(amount)) : parseFloat(amount);
 
@@ -58,11 +59,14 @@ export default function Tip() {
         currency,
       });
       const label = isDiamonds
-        ? `${Number(data.amount).toLocaleString()} 💎`
+        ? <span className="inline-flex items-center gap-1">{Number(data.amount).toLocaleString()} <DiamondIcon /></span>
         : `${parseFloat(data.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} coins`;
       setResult({
         type: 'success',
-        text: data.demoBalanceSet ? `Balance set to ${label}.` : `Sent ${label} to ${data.recipient}!`,
+        // Nodes again: `label` may carry the drawn diamond.
+        text: data.demoBalanceSet
+          ? <span className="inline-flex items-center gap-1">Balance set to {label}.</span>
+          : <span className="inline-flex items-center gap-1">Sent {label} to {data.recipient}!</span>,
       });
       setRecipient('');
       setAmount('');
@@ -75,12 +79,14 @@ export default function Tip() {
   }
 
   const amountLabel = Number.isFinite(tipAmount)
-    ? (isDiamonds ? tipAmount.toLocaleString() + ' 💎'
+    ? (isDiamonds ? <span className="inline-flex items-center gap-1">{tipAmount.toLocaleString()} <DiamondIcon /></span>
                   : tipAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' coins')
     : '';
+  // Nodes, not strings: amountLabel carries the drawn diamond, and dropping a
+  // node into a template literal renders "[object Object]".
   const sendLabel = demoSetter
-    ? (amountLabel ? `Set balance to ${amountLabel}` : 'Set Balance')
-    : (tipAmount > 0 ? `Send ${amountLabel}` : 'Send');
+    ? (amountLabel ? <span className="inline-flex items-center gap-1">Set balance to {amountLabel}</span> : 'Set Balance')
+    : (tipAmount > 0 ? <span className="inline-flex items-center gap-1">Send {amountLabel}</span> : 'Send');
 
   if (!session) return (
     <div className="min-h-[calc(100vh-56px)] bg-bg flex items-center justify-center px-4">
@@ -121,7 +127,7 @@ export default function Tip() {
               isDiamonds ? 'bg-primary text-white shadow-glow' : 'text-muted hover:text-white'
             }`}
           >
-            💎 Diamonds
+            <DiamondIcon /> Diamonds
           </button>
         </div>
 
@@ -131,7 +137,7 @@ export default function Tip() {
             <span className="text-sm text-muted shrink-0">Your {isDiamonds ? 'diamonds' : 'balance'}</span>
             <span className="font-mono font-black text-white min-w-0 overflow-hidden" title={isDiamonds ? `${fmtExact(profile.diamonds, true)} diamonds` : `${fmtExact(profile.c_coins)} coins`}>
               {isDiamonds
-                ? <span className="inline-flex items-center gap-1 max-w-full"><span className="truncate min-w-0">{fmtDiamonds(profile.diamonds)}</span> <span className="text-sm">💎</span></span>
+                ? <span className="inline-flex items-center gap-1 max-w-full"><span className="truncate min-w-0">{fmtDiamonds(profile.diamonds)}</span> <DiamondIcon className="text-sm" /></span>
                 : <span className="inline-flex items-center gap-1 max-w-full"><span className="truncate min-w-0">{fmtCoins(profile.c_coins)}</span> <CoinIcon size="0.85em" /></span>
               }
             </span>
@@ -172,7 +178,7 @@ export default function Tip() {
             <p className="text-danger text-xs -mt-2">
               Insufficient {isDiamonds ? 'diamonds' : 'balance'} — you have{' '}
               {isDiamonds
-                ? `${(profile?.diamonds ?? 0).toLocaleString()} 💎`
+                ? <span className="inline-flex items-center gap-1">{(profile?.diamonds ?? 0).toLocaleString()} <DiamondIcon /></span>
                 : `${profile?.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} coins`}
             </p>
           )}

@@ -11,6 +11,8 @@ import { getRank } from '../utils/ranks';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
 import GameIcon from '../components/GameIcon';
+import RankIcon from '../components/RankIcon';
+import DiamondIcon from '../components/DiamondIcon';
 import { ProfilePopup } from '../components/ChatSidebar';
 import FriendInviteBox from '../components/FriendInviteBox';
 import { isMuted, setMuted, playMatchFound } from '../utils/sound';
@@ -205,8 +207,8 @@ function MatchRow({ match, myId }) {
     const fee = match.entry_fee_diamonds ?? 0;
     if (fee > 0) {
       payout = isWinner
-        ? { amount: fee * 2, currency: '💎' }
-        : { amount: -fee, currency: '💎' };
+        ? { amount: fee * 2, diamonds: true }
+        : { amount: -fee, diamonds: true };
     }
   } else {
     const pool = match.prize_pool_c ?? 0;
@@ -248,7 +250,7 @@ function MatchRow({ match, myId }) {
           <div className={`text-sm font-bold ${payout.amount >= 0 ? 'text-success' : 'text-danger'}`}>
             {payout.amount >= 0 ? '+' : '-'}
             {isDiamonds
-              ? `${Math.abs(payout.amount).toLocaleString()} ${payout.currency}`
+              ? <span className="inline-flex items-center gap-0.5">{Math.abs(payout.amount).toLocaleString()} <DiamondIcon size="0.8em" /></span>
               : <span className="inline-flex items-center gap-0.5">{fmt(Math.abs(payout.amount))} <CoinIcon size="0.8em" /></span>
             }
           </div>
@@ -1438,7 +1440,7 @@ export default function Profile() {
               />
               <span className="absolute -bottom-1 -right-1 text-2xl leading-none drop-shadow-lg pointer-events-none"
                 title={getRank(profile.elo).name}>
-                {getRank(profile.elo).icon}
+                <RankIcon rank={getRank(profile.elo)} size={26} />
               </span>
               {(profile.current_streak ?? 0) >= 1 && (
                 <span
@@ -1535,7 +1537,7 @@ export default function Profile() {
               )}
               {error && <p className="text-danger text-sm mt-1">{error}</p>}
               <p className="text-sm font-bold mt-0.5" style={{ color: getRank(profile.elo).color }}>
-                {getRank(profile.elo).icon} {getRank(profile.elo).name}
+                <RankIcon rank={getRank(profile.elo)} size={18} /> {getRank(profile.elo).name}
               </p>
               <p className="text-muted text-xs mt-0.5">
                 Member since {new Date(profile.created_at).toLocaleDateString()}
@@ -1599,7 +1601,7 @@ export default function Profile() {
                   only value that is a WORD, and "Champion" at text-xl does
                   not fit a half-width cell. truncate is the backstop. */}
               <div className="text-base sm:text-xl font-black truncate" style={{ color: getRank(profile.elo).color }}>
-                {getRank(profile.elo).icon} {getRank(profile.elo).name}
+                <RankIcon rank={getRank(profile.elo)} size={18} /> {getRank(profile.elo).name}
               </div>
               <div className="text-xs text-muted mt-0.5">{profile.elo} ELO</div>
             </div>

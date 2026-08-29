@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import DiamondIcon from './DiamondIcon';
 import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
@@ -112,7 +113,7 @@ export default function InviteToasts() {
         const betEl = (inv.entryFee ?? 0) === 0
           ? <span className="text-muted">Free</span>
           : isDiamonds
-            ? <>{Number(inv.entryFee).toLocaleString()} 💎</>
+            ? <span className="inline-flex items-center gap-1">{Number(inv.entryFee).toLocaleString()} <DiamondIcon /></span>
             : <span className="inline-flex items-center gap-1">{Number(inv.entryFee).toLocaleString()} <CoinIcon size="0.8em" /></span>;
         return (
           <div key={inv.inviteId} className="pointer-events-auto animate-slide-down bg-surface border border-primary/40 rounded-xl px-4 py-3 shadow-glow w-[260px]">

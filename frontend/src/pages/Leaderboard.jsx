@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import { getRank } from '../utils/ranks';
 import CoinIcon from '../components/CoinIcon';
 import GameIcon from '../components/GameIcon';
+import DiamondIcon from '../components/DiamondIcon';
+import RankIcon from '../components/RankIcon';
 import { ProfilePopup } from '../components/ChatSidebar';
 import { usePageReady } from '../hooks/usePageReady';
 
@@ -50,7 +52,7 @@ function RankBadge({ rank }) {
 const TABS = [
   { id: 'elo',             label: 'ELO',             icon: '⚔️', endpoint: '/leaderboard',                 valueKey: 'elo',           isDiamond: false, label2: 'ELO' },
   { id: 'wagered',         label: 'Wagered',          icon: 'coin', endpoint: '/leaderboard/wagered',       valueKey: 'total_wagered', isDiamond: false, label2: 'Wagered' },
-  { id: 'wagered-diamonds',label: '💎 Wagered',       icon: '',   endpoint: '/leaderboard/wagered-diamonds',valueKey: 'total_wagered', isDiamond: true,  label2: 'Wagered' },
+  { id: 'wagered-diamonds',label: 'Wagered', diamondTab: true,       icon: '',   endpoint: '/leaderboard/wagered-diamonds',valueKey: 'total_wagered', isDiamond: true,  label2: 'Wagered' },
   { id: 'games',           label: 'Games',           icon: '🎮', endpoint: null,                           valueKey: null,            isDiamond: false, label2: 'Score' },
   { id: 'streak',          label: '🔥 Streaks',       icon: '',   endpoint: '/leaderboard/streak',          valueKey: 'current_streak',isDiamond: false, label2: 'Streak' },
 ];
@@ -149,20 +151,20 @@ export default function Leaderboard() {
 
   function fmtValue(player) {
     const v = player[tab.valueKey] ?? 0;
-    if (tab.id === 'elo') return `${getRank(v).icon} ${v} ELO`;
+    if (tab.id === 'elo') return <span className="inline-flex items-center gap-1"><RankIcon rank={getRank(v)} size={15} />{v} ELO</span>;
     if (tab.id === 'streak') return player.current_streak >= 1 ? `🔥 ${player.current_streak}` : `0 wins`;
-    if (tab.isDiamond) return `💎 ${Number(v).toLocaleString()}`;
+    if (tab.isDiamond) return <span className="inline-flex items-center gap-1"><DiamondIcon size="0.9em" />{Number(v).toLocaleString()}</span>;
     return <span className="inline-flex items-center gap-1"><CoinIcon size="0.85em" /> {Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
   }
 
   // Get user's own value from profile for rank banner (works even outside top 500)
   function fmtMyValue() {
     if (!profile) return '';
-    if (tab.id === 'elo') return `${getRank(profile.elo ?? 0).icon} ${profile.elo ?? 0} ELO`;
+    if (tab.id === 'elo') return <span className="inline-flex items-center gap-1"><RankIcon rank={getRank(profile.elo ?? 0)} size={15} />{profile.elo ?? 0} ELO</span>;
     if (tab.id === 'wagered' || tab.id === 'wagered-diamonds') {
       const myEntry = players.find(p => p.id === profile.id);
       const w = myEntry?.total_wagered ?? current?.userWagered ?? 0;
-      if (tab.isDiamond) return `💎 ${Number(w).toLocaleString()}`;
+      if (tab.isDiamond) return <span className="inline-flex items-center gap-1"><DiamondIcon size="0.9em" />{Number(w).toLocaleString()}</span>;
       return <span className="inline-flex items-center gap-1"><CoinIcon size="0.85em" />{Number(w).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
     }
     if (tab.id === 'streak') return `🔥 ${profile?.current_streak ?? 0}`;
@@ -208,8 +210,10 @@ export default function Leaderboard() {
                   : 'text-muted hover:text-white'
               }`}
             >
-              {t.icon === 'coin' ? <CoinIcon size="0.9em" /> : t.icon ? <span>{t.icon}</span> : null}
-              <span>{t.icon ? t.label2 || t.label : t.label}</span>
+              {t.icon === 'coin' ? <CoinIcon size="0.9em" />
+                : t.diamondTab   ? <DiamondIcon size="0.9em" />
+                : t.icon         ? <span>{t.icon}</span> : null}
+              <span>{(t.icon || t.diamondTab) ? t.label2 || t.label : t.label}</span>
             </button>
           ))}
         </div>

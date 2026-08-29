@@ -44,7 +44,7 @@ test('the details actually shown are the ones the server sent', () => {
 test('the stake is spelled out, free included', () => {
   assert.match(MODAL, /'Free'/, "a free room must say Free rather than showing nothing");
   assert.match(MODAL, /CoinIcon/,  'a coin stake shows the coin');
-  assert.match(MODAL, /💎/,        'a diamond stake shows the diamond');
+  assert.match(MODAL, /DiamondIcon/, 'a diamond stake shows the diamond');
 });
 
 test('a bad code is reported in the modal, not swallowed', () => {

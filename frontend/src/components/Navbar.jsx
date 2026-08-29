@@ -1,6 +1,9 @@
 ﻿import { useState, useRef, useEffect, useCallback } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
+import DiamondIcon from './DiamondIcon';
 import GameIcon from './GameIcon';
+import RankIcon from './RankIcon';
+import UiIcon from './UiIcon';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { useSocket } from '../context/SocketContext';
@@ -11,24 +14,24 @@ import { fmtCoins, fmtDiamonds } from '../utils/format';
 import Avatar from './Avatar';
 
 const NAV_LINKS = [
-  { icon: '🏠', label: 'Home',        to: '/' },
-  { icon: '🎮', label: 'Games',       to: '/games' },
-  { icon: '🎡', label: 'Rewards',     to: '/rewards' },
-  { icon: '👤', label: 'Profile',     to: '/profile' },
-  { icon: '🏆', label: 'Leaderboard', to: '/leaderboard' },
-  { icon: '💳', label: 'Wallet',      to: '/wallet' },
-  { icon: '💸', label: 'Tip',         to: '/tip' },
+  { ui: 'home',        label: 'Home',        to: '/' },
+  { ui: 'games',       label: 'Games',       to: '/games' },
+  { ui: 'rewards',     label: 'Rewards',     to: '/rewards' },
+  { ui: 'profile',     label: 'Profile',     to: '/profile' },
+  { ui: 'leaderboard', label: 'Leaderboard', to: '/leaderboard' },
+  { ui: 'wallet',      label: 'Wallet',      to: '/wallet' },
+  { ui: 'tip',         label: 'Tip',         to: '/tip' },
 ];
 
 const GAME_LINKS = [
   { game: 'quickMatch', label: 'Quick Match', to: '/game/quick-match' },
   { game: 'blockBlast', label: 'Block Burst', to: '/game/block-blast', countKey: 'block-blast' },
-  { game: 'coin-flip',  label: 'Coin Flip',   to: '/game/coin-flip',   countKey: 'coin-flip' },
-  { game: 'scrabble',   label: 'Word VS',     to: '/game/scrabble',    countKey: 'scrabble' },
-  { game: 'blackjack',  label: 'Blackjack',   to: '/game/blackjack',   countKey: 'blackjack' },
   { game: 'carDash',    label: 'Rush Hour',   to: '/game/car-dash',    countKey: 'car-dash' },
+  { game: 'coin-flip',  label: 'Coin Flip',   to: '/game/coin-flip',   countKey: 'coin-flip' },
   { game: 'colorRush',  label: 'Color Rush',  to: '/game/color-rush',  countKey: 'color-rush' },
   { game: 'tower',      label: 'Tower',       to: '/game/tower',       countKey: 'tower' },
+  { game: 'scrabble',   label: 'Word VS',     to: '/game/scrabble',    countKey: 'scrabble' },
+  { game: 'blackjack',  label: 'Blackjack',   to: '/game/blackjack',   countKey: 'blackjack' },
 ];
 
 
@@ -125,8 +128,10 @@ export default function Navbar() {
   }
 
   const isDiamonds = displayCurrency === 'diamonds';
+  // A node, not a string: the diamond is a drawn icon now, and it cannot be
+  // concatenated into one.
   const balanceDisplay = isDiamonds
-    ? `${fmtDiamonds(profile?.diamonds)} 💎`
+    ? <span className="inline-flex items-center gap-1">{fmtDiamonds(profile?.diamonds)} <DiamondIcon /></span>
     : fmtCoins(profile?.c_coins);
 
   return (
@@ -169,7 +174,7 @@ export default function Navbar() {
                 >
                   {isDiamonds ? (
                     <>
-                      <span className="relative -top-px">💎</span>
+                      <DiamondIcon className="relative -top-px" />
                       <span className="text-sm font-black text-white font-mono">
                         {fmtDiamonds(profile.diamonds)}
                       </span>
@@ -196,7 +201,7 @@ export default function Navbar() {
                       </button>
                       <button onClick={() => { setDisplayCurrency('diamonds'); setDropdownOpen(false); }}
                         className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all ${isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
-                        <span className="relative -top-px">💎</span>
+                        <DiamondIcon className="relative -top-px" />
                         <div className="flex flex-col items-start min-w-0">
                           <span className="font-medium text-xs">Diamonds</span>
                           <span className="font-mono font-bold text-white text-sm leading-tight">{fmtDiamonds(profile.diamonds)}</span>
@@ -223,13 +228,13 @@ export default function Navbar() {
                   title="Rakeback"
                   className="flex items-center justify-center w-9 h-9 rounded-full border border-primary bg-primary hover:bg-blue-500 transition-all text-lg shadow-glow"
                 >
-                  🎁
+                  <UiIcon name="rakeback" size={19} />
                 </button>
 
                 {rakebackOpen && (
                   <div className="absolute top-full mt-2 right-0 bg-surface border border-border rounded-xl shadow-glow-lg z-[200] overflow-hidden" style={{ minWidth: 'min(300px, calc(100vw - 16px))', right: 0 }}>
                     <div className="px-4 py-3 border-b border-border">
-                      <span className="text-sm font-bold text-white">🎁 Rakeback</span>
+                      <span className="text-sm font-bold text-white flex items-center gap-1.5"><UiIcon name="rakeback" size={15} />Rakeback</span>
                       <p className="text-[10px] text-muted mt-0.5">Earned from coin wagers only</p>
                     </div>
                     {rakebackLoading ? (
@@ -325,7 +330,7 @@ export default function Navbar() {
                   style={{ fontSize: 13 }}
                 >
                   <span className="font-mono">{isDiamonds ? fmtDiamonds(profile.diamonds) : fmtCoins(profile.c_coins)}</span>
-                  {isDiamonds ? <span>💎</span> : <CoinIcon size="0.9em" />}
+                  {isDiamonds ? <DiamondIcon /> : <CoinIcon size="0.9em" />}
                   <span className="text-muted" style={{ fontSize: 10 }}>▾</span>
                 </button>
                 {mobileCurrencyOpen && (
@@ -341,7 +346,7 @@ export default function Navbar() {
                       </button>
                       <button onClick={() => { setDisplayCurrency('diamonds'); setMobileCurrencyOpen(false); }}
                         className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs transition-all ${isDiamonds ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-surfaceLight hover:text-white'}`}>
-                        <span>💎</span>
+                        <DiamondIcon />
                         <div className="flex flex-col items-start min-w-0">
                           <span className="font-medium">Diamonds</span>
                           <span className="font-mono font-bold text-white leading-tight">{fmtDiamonds(profile.diamonds)}</span>
@@ -376,12 +381,12 @@ export default function Navbar() {
                   style={{ fontSize: 14 }}
                   title="Rakeback"
                 >
-                  🎁
+                  <UiIcon name="rakeback" size={19} />
                 </button>
                 {mobileRakebackOpen && (
                   <div className="absolute top-full mt-2 right-0 bg-surface border border-border rounded-xl shadow-glow-lg z-[200] overflow-hidden" style={{ minWidth: 'min(280px, calc(100vw - 32px))', right: -8 }}>
                     <div className="px-4 py-3 border-b border-border">
-                      <span className="text-sm font-bold text-white">🎁 Rakeback</span>
+                      <span className="text-sm font-bold text-white flex items-center gap-1.5"><UiIcon name="rakeback" size={15} />Rakeback</span>
                       <p className="text-[10px] text-muted mt-0.5">Earned from coin wagers only</p>
                     </div>
                     {rakebackLoading ? (
@@ -437,11 +442,11 @@ export default function Navbar() {
                       className="w-8 h-8 lg:w-10 lg:h-10"
                       textClassName="text-xs lg:text-sm"
                     />
-                    <span className="absolute -bottom-1 -right-1 text-sm leading-none" title={getDisplayRank(profile).name}>
-                      {getDisplayRank(profile).icon}
+                    <span className="absolute -bottom-1 -right-1 leading-none" title={getDisplayRank(profile).name}>
+                      <RankIcon rank={getDisplayRank(profile)} size={15} />
                     </span>
                     {(profile.current_streak ?? 0) >= 1 && (
-                      <span className="absolute -top-1 -left-1 flex items-center justify-center min-w-[18px] h-[18px] rounded-full text-[10px] font-black leading-none px-0.5"
+                      <span className="absolute -top-0.5 -left-0.5 flex items-center justify-center min-w-[14px] h-[14px] rounded-full text-[8px] font-black leading-none px-0.5"
                         style={{ background: 'rgba(0,0,0,0.85)', color: '#fb923c', border: '1px solid rgba(251,146,60,0.4)', textShadow: '0 0 6px rgba(251,146,60,0.6)' }}>
                         🔥{profile.current_streak}
                       </span>
@@ -494,7 +499,7 @@ export default function Navbar() {
                       isActive ? 'bg-primary/15 text-primary border border-primary/20' : 'text-muted hover:text-white hover:bg-surfaceLight'
                     }`
                   }>
-                  <span className="text-xl">{item.game ? <GameIcon game={item.game} size={22} /> : item.icon}</span>
+                  <UiIcon name={item.ui} size={21} />
                   {item.label}
                 </NavLink>
               ))}

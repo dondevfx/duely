@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { playCrTap, playCrDiamond, playCrDeath } from '../utils/sound';
 
 /**
  * ColorRushCanvas — "Color Rush"
@@ -269,6 +270,7 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
       if (S.dead) return;
       S.started = true;
       S.vy = JUMP_V;
+      playCrTap();
     }
     const onPointer = (e) => { e.preventDefault(); tap(); };
     const onKey = (e) => {
@@ -348,6 +350,7 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
         const o = obstacleAt(j);
         if (o.diamond && Math.abs(S.y - o.y) < BALL_R + 22) {
           o.diamond = false; S.score += 1; S.pulse = 1;
+          playCrDiamond();
         }
         if (o.switcher && Math.abs(S.y - o.switcherY) < BALL_R + SWITCHER_R) {
           o.switcher = false;
@@ -401,6 +404,7 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
       // and drawing the pieces at its real position put the whole animation off
       // screen, so the death simply had no animation at all.
       S.burstY = Math.max(S.y, S.camBottom + VIEW_H * 0.12);
+      playCrDeath();
       cbRef.current.onDeath?.(Math.floor(S.score), Math.floor(S.simT * 1000));
     }
 

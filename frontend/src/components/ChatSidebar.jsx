@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import DiamondIcon from './DiamondIcon';
 import CoinIcon from './CoinIcon';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
@@ -359,8 +360,8 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
                   </div>
                   {(data.current_streak ?? 0) >= 1 && (
                     <span
-                      className="absolute -top-1 -left-1 flex items-center justify-center min-w-[22px] h-[22px] rounded-full font-black leading-none px-1"
-                      style={{ background: 'rgba(0,0,0,0.88)', color: '#fb923c', border: '1.5px solid rgba(251,146,60,0.5)', fontSize: 11, textShadow: '0 0 8px rgba(251,146,60,0.7)' }}
+                      className="absolute -top-1 -left-1 flex items-center justify-center min-w-[17px] h-[17px] rounded-full font-black leading-none px-1"
+                      style={{ background: 'rgba(0,0,0,0.88)', color: '#fb923c', border: '1.5px solid rgba(251,146,60,0.5)', fontSize: 9, textShadow: '0 0 8px rgba(251,146,60,0.7)' }}
                     >
                       🔥{data.current_streak}
                     </span>
@@ -424,7 +425,7 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
                     title={`${Number(data.total_wagered_diamonds ?? 0).toLocaleString()} diamonds wagered`}
                   >
                     <span className="truncate min-w-0">{fmtDiamonds(data.total_wagered_diamonds)}</span>
-                    <span>💎</span>
+                    <DiamondIcon />
                   </div>
                 </div>
               </div>
@@ -571,7 +572,7 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
                         className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
                           tipCurrency === c ? 'bg-primary text-white' : 'bg-surfaceLight text-muted hover:text-white'
                         }`}>
-                        {c === 'coins' ? <span className="inline-flex items-center gap-1"><CoinIcon size="0.8em" /> Coins</span> : '💎 Diamonds'}
+                        {c === 'coins' ? <span className="inline-flex items-center gap-1"><CoinIcon size="0.8em" /> Coins</span> : <span className="inline-flex items-center gap-1"><DiamondIcon size="0.8em" /> Diamonds</span>}
                       </button>
                     ))}
                   </div>

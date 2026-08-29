@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import DiamondIcon from './DiamondIcon';
 import GlowButton from './GlowButton';
 import CoinIcon from './CoinIcon';
 import GameIcon from './GameIcon';
@@ -66,7 +67,7 @@ export default function JoinRoomModal({ open, onClose, onJoin, authenticated = t
   const isFree = !info || (info.entryFee ?? 0) === 0;
   const stake  = info && !isFree && (
     info.currency === 'diamonds'
-      ? <>{Number(info.entryFee).toLocaleString()} 💎</>
+      ? <span className="inline-flex items-center gap-1">{Number(info.entryFee).toLocaleString()} <DiamondIcon /></span>
       : <span className="inline-flex items-center gap-1">{Number(info.entryFee).toLocaleString()} <CoinIcon size="0.9em" /></span>
   );
 

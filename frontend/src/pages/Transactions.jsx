@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import DiamondIcon from '../components/DiamondIcon';
 import { api } from '../utils/api';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
@@ -25,7 +26,7 @@ const FILTERS = [
   { key: 'match_win',  label: 'Wins',                                                                                   short: 'Wins',                    text: 'Match Wins' },
   { key: 'match_loss', label: 'Losses',                                                                                 short: 'Losses',                  text: 'Match Losses' },
   { key: 'coins',      label: <span className="inline-flex items-center gap-1"><CoinIcon size="0.9em" /> Coins</span>,   short: <CoinIcon size="1.1em" />, text: 'Coins' },
-  { key: 'diamonds',   label: '💎 Diamonds',                                                                            short: '💎',                      text: 'Diamonds' },
+  { key: 'diamonds',   label: <span className="inline-flex items-center gap-1"><DiamondIcon size="0.9em" /> Diamonds</span>,                                                                            short: <DiamondIcon size="1.1em" />,                      text: 'Diamonds' },
   { key: 'tip',        label: 'Tips',                                                                                   short: 'Tips',                    text: 'Tips' },
 ];
 
@@ -75,7 +76,7 @@ function TxRow({ tx }) {
   const badge       = statusBadge(tx.status);
   const isDiamonds  = tx.crypto_symbol?.toLowerCase() === 'diamonds';
   const amountLabel = isDiamonds
-    ? `${Number(tx.crypto_amount || 0).toLocaleString()} 💎`
+    ? <span className="inline-flex items-center gap-1">{Number(tx.crypto_amount || 0).toLocaleString()} <DiamondIcon size="0.85em" /></span>
     : `${fmt(tx.amount_c)} coins`;
 
   return (

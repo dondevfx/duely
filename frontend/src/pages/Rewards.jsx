@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import DiamondIcon from '../components/DiamondIcon';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { isRanked, placementMatches } from '../utils/ranks';
@@ -433,8 +434,7 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
                         textAnchor="middle" dominantBaseline="middle"
                         fontSize="10"
                         transform={`rotate(${mid}, ${lp.x}, ${lp.y})`}
-                      >
-                        💎
+                      ><DiamondIcon />
                       </text>
                     </>
                   )}
@@ -463,7 +463,7 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
             <circle cx={CX} cy={CY} r={30} fill="#0f172a"             stroke="#1e293b"  strokeWidth="2.5" />
             <circle cx={CX} cy={CY} r={24} fill={`url(#${gradId}_hub)`} stroke="#334155" strokeWidth="1.5" />
             <circle cx={CX} cy={CY} r={18} fill="none"                stroke="#1e293b"  strokeWidth="1"   />
-            <text x={CX} y={CY + 1} textAnchor="middle" dominantBaseline="middle" fontSize="16">💎</text>
+            <text x={CX} y={CY + 1} textAnchor="middle" dominantBaseline="middle" fontSize="16"><DiamondIcon /></text>
           </svg>
         </div>
         </div>
@@ -511,7 +511,7 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
           >
             <span>+{won.amount.toLocaleString()}</span>
             <span className="inline-flex items-center leading-none">
-              {won.currency === 'coins' ? <CoinIcon size="0.85em" /> : '💎'}
+              {won.currency === 'coins' ? <CoinIcon size="0.85em" /> : <DiamondIcon size="0.85em" />}
             </span>
           </div>
           <div className="text-xs mt-0.5" style={{ color: '#64748b' }}>Added to your balance!</div>
@@ -656,7 +656,7 @@ export default function Rewards() {
         {/* 1-min diamond bonus */}
         {session ? <DailyBonus /> : (
           <div className="bg-surface border border-surfaceLight rounded-2xl p-5 text-center">
-            <div className="text-2xl mb-2">💎</div>
+            <div className="text-2xl mb-2"><DiamondIcon /></div>
             <div className="font-bold text-white mb-1">Diamond Bonus</div>
             <div className="text-sm text-muted mb-3">Claim 500 free diamonds every minute</div>
             <Link to="/login" className="inline-block px-6 py-2.5 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl transition-all text-sm">

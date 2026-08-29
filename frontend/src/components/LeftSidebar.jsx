@@ -4,26 +4,31 @@ import { useSocket } from '../context/SocketContext';
 import { getDisplayRank, isRanked } from '../utils/ranks';
 import Avatar from './Avatar';
 import GameIcon from './GameIcon';
+import UiIcon from './UiIcon';
+import RankIcon from './RankIcon';
 
+// Order is deliberate and shared with the home and games pages — see
+// data/games.js, which drives both. Changing it in one place only is how the
+// three lists drift apart.
 const GAMES = [
   { game: 'quickMatch', label: 'Quick Match',  route: '/game/quick-match', live: true },
   { game: 'blockBlast', label: 'Block Burst',  route: '/game/block-blast', live: true },
-  { game: 'coin-flip',  label: 'Coin Flip',    route: '/game/coin-flip',   live: true },
-  { game: 'scrabble',   label: 'Word VS',      route: '/game/scrabble',    live: true },
-  { game: 'blackjack',  label: 'Blackjack',    route: '/game/blackjack',   live: true },
   { game: 'carDash',    label: 'Rush Hour',    route: '/game/car-dash',    live: true },
+  { game: 'coin-flip',  label: 'Coin Flip',    route: '/game/coin-flip',   live: true },
   { game: 'colorRush',  label: 'Color Rush',   route: '/game/color-rush',  live: true },
   { game: 'tower',      label: 'Tower',        route: '/game/tower',       live: true },
+  { game: 'scrabble',   label: 'Word VS',      route: '/game/scrabble',    live: true },
+  { game: 'blackjack',  label: 'Blackjack',    route: '/game/blackjack',   live: true },
 ];
 
 const NAV = [
-  { icon: '🏠', label: 'Home',         route: '/' },
-  { icon: '🎮', label: 'Games',         route: '/games' },
-  { icon: '🎡', label: 'Rewards',       route: '/rewards' },
-  { icon: '👤', label: 'Profile',       route: '/profile' },
-  { icon: '🏆', label: 'Leaderboard',   route: '/leaderboard' },
-  { icon: '💳', label: 'Wallet',         route: '/wallet' },
-  { icon: '💸', label: 'Tip',            route: '/tip' },
+  { ui: 'home',        label: 'Home',        route: '/' },
+  { ui: 'games',       label: 'Games',       route: '/games' },
+  { ui: 'rewards',     label: 'Rewards',     route: '/rewards' },
+  { ui: 'profile',     label: 'Profile',     route: '/profile' },
+  { ui: 'leaderboard', label: 'Leaderboard', route: '/leaderboard' },
+  { ui: 'wallet',      label: 'Wallet',      route: '/wallet' },
+  { ui: 'tip',         label: 'Tip',         route: '/tip' },
 ];
 
 function linkCls(isActive) {
@@ -63,7 +68,7 @@ export default function LeftSidebar() {
             end={item.route === '/'}
             className={({ isActive }) => linkCls(isActive)}
           >
-            <span className="text-lg leading-none">{item.icon}</span>
+            <UiIcon name={item.ui} size={19} />
             {item.label}
           </NavLink>
         ))}
@@ -122,7 +127,7 @@ export default function LeftSidebar() {
                     </span>
                   )}
                 </div>
-                {rank && <div className="text-xs text-muted">{rank.icon} {rank.name}{ranked ? ` · ${profile.elo} ELO` : ''}</div>}
+                {rank && <div className="text-xs text-muted flex items-center gap-1"><RankIcon rank={rank} size={14} />{rank.name}{ranked ? ` · ${profile.elo} ELO` : ''}</div>}
               </div>
             </div>
           </div>

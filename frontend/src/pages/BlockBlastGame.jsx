@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import DiamondIcon from '../components/DiamondIcon';
 import { useLocation } from 'react-router-dom';
 import { playMatchFound, playCountdown, playPlace, playClear, playBlast } from '../utils/sound';
 import { useSocket } from '../context/SocketContext';
@@ -289,7 +290,7 @@ export default function BlockBlastGame() {
 
   const isDiamonds   = betCurrency === 'diamonds';
   const fees         = isDiamonds ? DIAMOND_FEES : COIN_FEES;
-  const currLabel    = isDiamonds ? '💎' : <CoinIcon size="0.85em" />;
+  const currLabel    = isDiamonds ? <DiamondIcon /> : <CoinIcon size="0.85em" />;
   const balance      = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
   const insufficient = entryFee > 0 && balance < entryFee;
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import DiamondIcon from './DiamondIcon';
 import { getRank, isRanked, placementMatches, getDisplayRank } from '../utils/ranks';
 import CoinIcon from './CoinIcon';
 import { playWin, playLoss, playDraw } from '../utils/sound';
@@ -258,7 +259,7 @@ export default function ResultScreen({
                   <span className="text-muted">Prize pool</span>
                   <span className="text-white font-bold">
                     {currency === 'diamonds'
-                      ? `${(entryFee * 2).toLocaleString()} 💎`
+                      ? <span className="inline-flex items-center gap-1">{(entryFee * 2).toLocaleString()} <DiamondIcon size="0.85em" /></span>
                       : <span className="inline-flex items-center gap-1">{fmt(entryFee * 2)} <CoinIcon size="0.85em" /></span>}
                   </span>
                 </div>
@@ -306,15 +307,15 @@ export default function ResultScreen({
                 >
                   {isDraw ? (
                     currency === 'diamonds'
-                      ? `+${Math.round(balanceChange?.winnerPayout ?? entryFee).toLocaleString()} 💎`
+                      ? <span className="inline-flex items-center gap-1">+{Math.round(balanceChange?.winnerPayout ?? entryFee).toLocaleString()} <DiamondIcon size="0.8em" /></span>
                       : <span className="inline-flex items-center gap-1">+{fmt(balanceChange?.winnerPayout ?? entryFee)} <CoinIcon size="0.8em" /></span>
                   ) : isWinner ? (
                     currency === 'diamonds'
-                      ? `+${Math.round(balanceChange?.winnerPayout ?? 0).toLocaleString()} 💎`
+                      ? <span className="inline-flex items-center gap-1">+{Math.round(balanceChange?.winnerPayout ?? 0).toLocaleString()} <DiamondIcon size="0.8em" /></span>
                       : <span className="inline-flex items-center gap-1">+{fmt(balanceChange?.winnerPayout ?? 0)} <CoinIcon size="0.8em" /></span>
                   ) : (
                     currency === 'diamonds'
-                      ? `-${entryFee} 💎`
+                      ? <span className="inline-flex items-center gap-1">-{entryFee} <DiamondIcon size="0.8em" /></span>
                       : <span className="inline-flex items-center gap-1">-{entryFee} <CoinIcon size="0.8em" /></span>
                   )}
                 </div>

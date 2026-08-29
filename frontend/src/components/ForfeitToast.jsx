@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import DiamondIcon from './DiamondIcon';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import CoinIcon from './CoinIcon';
@@ -17,7 +18,7 @@ export default function ForfeitToast() {
 
   if (!forfeitWin) return null;
 
-  const sym = forfeitWin.currency === 'diamonds' ? '💎' : <CoinIcon size="0.85em" />;
+  const sym = forfeitWin.currency === 'diamonds' ? <DiamondIcon /> : <CoinIcon size="0.85em" />;
 
   return (
     <div

@@ -69,7 +69,7 @@ test("the claim button shows the icon and a derived amount", () => {
   // Plain substring checks: this is JSX containing `${...}` and quotes, and
   // every attempt to write it as a regex through a shell lost a backslash and
   // silently matched nothing.
-  assert.ok(UI.includes("Claim 💎 "),
+  assert.ok(UI.includes("Claim <DiamondIcon />"),
     'the button must carry the diamond icon');
   assert.ok(UI.includes("amount.toLocaleString()"),
     'the amount must still be derived, never typed in');

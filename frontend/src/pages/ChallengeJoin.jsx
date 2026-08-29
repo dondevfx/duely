@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import DiamondIcon from '../components/DiamondIcon';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -85,7 +86,7 @@ export default function ChallengeJoin() {
   const isFree = !info || (info.entryFee ?? 0) === 0;
   const stake = info && !isFree && (
     info.currency === 'diamonds'
-      ? <>{info.entryFee.toLocaleString()} 💎</>
+      ? <span className="inline-flex items-center gap-1">{info.entryFee.toLocaleString()} <DiamondIcon /></span>
       : <span className="inline-flex items-center gap-1">{info.entryFee.toLocaleString()} <CoinIcon size="0.9em" /></span>
   );
 
