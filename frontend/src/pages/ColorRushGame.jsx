@@ -143,11 +143,7 @@ export default function ColorRushGame() {
   // scrollers, and re-pins across the next few frames and on resize, which is
   // when a mobile browser reflows as its address bar shows or hides.
   useEffect(() => {
-    // Locked while PLAYING only. The countdown is deliberately left scrollable:
-    // on a phone, scrolling down is the only thing that collapses the browser's
-    // own address bar, and that has to happen before the run starts because it
-    // cannot happen during it.
-    if (phase !== 'playing') return;
+    if (phase !== 'queue' && phase !== 'playing') return;
     const main = document.querySelector('main');
     const body = document.body;
     const html = document.documentElement;
@@ -465,13 +461,9 @@ export default function ColorRushGame() {
   // ── Playing ──
   if (phase === 'playing') {
     return (
-      // Fixed and full-bleed: the run covers the site header rather than
-      // sitting under it, so the whole screen is play area. Scrolling the
-      // header away would depend on the page being taller than the viewport,
-      // which it is not once the game is up.
-      <div className="fixed inset-0 z-[60] bg-bg">
-        {/* bottom-left: the canvas draws the score top-left and the timer
-            top-right, and the catch-up banner takes the top centre. */}
+      <div className="relative">
+        {/* bottom-left: the canvas draws the score top-right, and the catch-up
+            banner takes the top centre. */}
         <GameHelp gameType="colorRush" placement="bottom-left" />
         <ColorRushCanvas
           seed={seed}

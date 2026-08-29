@@ -443,6 +443,44 @@ test('bands are drawn by clipping one continuous outline, not by cutting it', ()
     'the stroked path must be the whole closed outline');
 });
 
+test('the run sits in the page like every other game', () => {
+  // It was briefly fixed and full-bleed to cover the site header, which also
+  // covered the sidebar and the chat. Every other game renders its canvas
+  // inside the normal page, and this one has to match or it is the odd one
+  // out on every screen.
+  const at = PAGE.indexOf("if (phase === 'playing')");
+  assert.notEqual(at, -1, 'the playing branch is gone');
+  const branch = PAGE.slice(at, at + 400);
+  assert.doesNotMatch(branch, /fixed inset-0/,
+    'a full-bleed run hides the header, sidebar and chat');
+  assert.match(branch, /className="relative"/, 'same wrapper as the other games');
+  // And the canvas has to leave room for the header rather than sitting under it.
+  assert.match(CANVAS, /height: 'calc\(100dvh - 56px\)'/);
+  assert.match(CANVAS, /maxWidth: 'calc\(\(100dvh - 56px\) \* 0\.62\)'/);
+});
+
+test('the death burst is the ball colour, and on screen', () => {
+  const at = CANVAS.indexOf('function drawBits');
+  const body = CANVAS.slice(at, CANVAS.indexOf('function render', at));
+  assert.match(body, /const col = COLORS\[S\.color\];/, 'the burst takes the ball colour');
+  assert.match(body, /fillStyle = col\.fill/);
+  assert.match(body, /strokeStyle = col\.fill/, 'the ring too');
+  assert.doesNotMatch(body, /#FFFFFF|'white'/, 'nothing in the burst may be hard-coded white');
+
+  // Small pieces under a heavy glow read as white however saturated the fill
+  // is, which is what this looked like on a phone.
+  const blur = Number(body.match(/shadowBlur = (\d+)/)[1]);
+  assert.ok(blur <= 6, `a ${blur}px glow on a small piece washes the colour out`);
+
+  // Falling out of the bottom is one of the two ways to die, and the ball is
+  // then BELOW the frame — drawing the burst at its real position put the
+  // whole animation off screen.
+  assert.match(body, /sy\(S\.burstY\)/, 'the burst must draw from the clamped origin');
+  const die = CANVAS.slice(CANVAS.indexOf('function die'), CANVAS.indexOf('function stepBits'));
+  assert.match(die, /S\.burstY = Math\.max\(S\.y, S\.camBottom \+ VIEW_H \* [\d.]+\)/,
+    'the origin must be clamped into view');
+});
+
 test('the start screen runs out instead of waiting forever', () => {
   assert.match(CANVAS, /const START_GRACE = 10;/);
   const at = CANVAS.indexOf('function step');

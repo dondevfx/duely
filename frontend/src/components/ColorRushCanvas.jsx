@@ -261,7 +261,7 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
       waitT: 0,
       pulse: 0,
       deathT: 0,
-      bits: [],
+      bits: [], burstY: 0,
     };
 
     // ── Input ───────────────────────────────────────────────────────────────
@@ -390,12 +390,17 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
       // pure decoration and never touches the outcome, which the server has
       // already been told about on the line below.
       S.bits = [];
-      for (let k = 0; k < 18; k++) {
-        const a = (k / 18) * TAU + Math.random() * 0.3;
-        const sp = 160 + Math.random() * 300;
+      for (let k = 0; k < 14; k++) {
+        const a = (k / 14) * TAU + Math.random() * 0.35;
+        const sp = 120 + Math.random() * 190;
         S.bits.push({ x: 0, y: 0, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-                      r: 3 + Math.random() * 5, spin: (Math.random() - 0.5) * 8 });
+                      r: 6 + Math.random() * 6 });
       }
+      // Where the burst is drawn from. The ball itself can be BELOW the frame
+      // when it dies — falling out of the bottom is one of the two ways to go —
+      // and drawing the pieces at its real position put the whole animation off
+      // screen, so the death simply had no animation at all.
+      S.burstY = Math.max(S.y, S.camBottom + VIEW_H * 0.12);
       cbRef.current.onDeath?.(Math.floor(S.score), Math.floor(S.simT * 1000));
     }
 
@@ -523,17 +528,34 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
       ctx.shadowBlur = 0;
     }
 
+    // The burst is the ball coming apart, so it is the ball's color.
+    //
+    // It was already reading S.color, and it was already drawing in that color —
+    // but the pieces were 2-5px under a 10px glow, and a small dot with that
+    // much bloom on a black background reads as white however saturated the
+    // fill is. Bigger pieces and much less blur is what makes the color
+    // actually legible; the ring is there so the color registers in the first
+    // frame, before anything has had time to spread out and fade.
     function drawBits() {
-      const fade = Math.max(0, 1 - S.deathT / DEATH_FX);
-      const x0 = sx(LANE_X), y0 = sy(S.y);
+      const t    = Math.min(1, S.deathT / DEATH_FX);
+      const fade = 1 - t * t;                       // holds up, then drops away
+      const x0 = sx(LANE_X), y0 = sy(S.burstY);
       const col = COLORS[S.color];
-      ctx.globalAlpha = fade;
+
+      ctx.globalAlpha = Math.max(0, 1 - t) * 0.55;
+      ctx.strokeStyle = col.fill;
+      ctx.lineWidth = Math.max(2, 5 * (1 - t)) * scale * 1.6;
+      ctx.beginPath();
+      ctx.arc(x0, y0, (BALL_R + t * 150) * scale, 0, TAU);
+      ctx.stroke();
+
+      ctx.globalAlpha = Math.max(0, fade);
       ctx.fillStyle = col.fill;
       ctx.shadowColor = col.fill;
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = 4;
       for (const b of S.bits) {
         ctx.beginPath();
-        ctx.arc(x0 + b.x * scale, y0 - b.y * scale, b.r * scale * (0.5 + fade * 0.5), 0, TAU);
+        ctx.arc(x0 + b.x * scale, y0 - b.y * scale, b.r * scale * (0.55 + fade * 0.45), 0, TAU);
         ctx.fill();
       }
       ctx.shadowBlur = 0;
@@ -639,7 +661,7 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
     <div
       className="relative w-full bg-bg flex justify-center overflow-hidden select-none"
       style={{
-        height: '100dvh',
+        height: 'calc(100dvh - 56px)',
         userSelect: 'none',
         WebkitUserSelect: 'none',
         WebkitTouchCallout: 'none',
@@ -652,7 +674,7 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
         className="relative h-full block touch-none select-none w-full"
         style={{
           cursor: 'pointer',
-          maxWidth: 'calc(100dvh * 0.62)',
+          maxWidth: 'calc((100dvh - 56px) * 0.62)',
           userSelect: 'none',
           WebkitUserSelect: 'none',
           WebkitTouchCallout: 'none',
