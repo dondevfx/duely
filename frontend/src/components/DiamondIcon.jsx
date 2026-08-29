@@ -46,3 +46,20 @@ export default function DiamondIcon({ size = '1em', className = '', title }) {
     </svg>
   );
 }
+
+// The diamond drawn as bare SVG geometry, for use INSIDE an existing <svg>.
+//
+// DiamondIcon renders its own <svg> element, and an <svg> is not a legal child
+// of <text> — dropping it in there silently renders nothing, which is what
+// emptied both wheels. This is the same shape as plain paths that can sit in
+// any SVG scene.
+export function DiamondGlyph({ cx, cy, size = 11, opacity = 1 }) {
+  const w = size * 0.42, hTop = size * 0.30, hBot = size * 0.52;
+  return (
+    <g opacity={opacity}>
+      <path d={`M${cx - w} ${cy - hTop * 0.1} L${cx} ${cy + hBot} L${cx + w} ${cy - hTop * 0.1} Z`} fill="#2FA9D8" />
+      <path d={`M${cx - w * 0.62} ${cy - hTop} L${cx + w * 0.62} ${cy - hTop} L${cx + w} ${cy - hTop * 0.1} L${cx - w} ${cy - hTop * 0.1} Z`} fill="#7FE3FA" />
+      <path d={`M${cx - w} ${cy - hTop * 0.1} L${cx + w} ${cy - hTop * 0.1}`} stroke="rgba(255,255,255,0.8)" strokeWidth={size * 0.06} />
+    </g>
+  );
+}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import PlayerName from '../components/PlayerName';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -307,6 +308,7 @@ export default function TowerGame() {
         <ResultScreen
           isWinner={isWinner}
           vsBot={!!result.vsBot}
+          opponent={opponent}
           solo={freeSolo}
           winnerUsername={result.isSolo
             ? (isWinner ? (profile?.username ?? 'You') : 'Duely Bot')
@@ -400,7 +402,10 @@ export default function TowerGame() {
               </div>
               <p className="text-muted">Get ready...</p>
               {opponent && !soloEndless && (
-                <p className="text-xs text-muted mt-2">vs {opponent.username}</p>
+                <p className="text-xs text-muted mt-2 flex items-center justify-center gap-1.5">
+                  vs <PlayerName username={opponent.username} avatarUrl={opponent.avatarUrl}
+                       color={opponent.profileColor} isBot={!!opponent.isBot} size="w-5 h-5" />
+                </p>
               )}
             </div>
           </div>

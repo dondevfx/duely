@@ -217,6 +217,9 @@ export default function CoinFlipGame() {
   const [joinCode, setJoinCode] = useState('');
   const [entryFee, setEntryFee] = useState(() => location.state?.entryFee ?? (betCurrency === 'diamonds' ? DIAMOND_FEES[0] : COIN_FEES[0]));
   const [statusMsg, setStatusMsg] = useState('');
+  // The opponent as the server described them, for their picture on the
+  // result card. The page only kept a status string before this.
+  const [opponent, setOpponent] = useState(null);
   const [flipResult, setFlipResult] = useState(null);
   const [resultData, setResultData] = useState(null);
   const [resultLanded, setResultLanded] = useState(false);
@@ -354,6 +357,7 @@ export default function CoinFlipGame() {
       setResultLanded(false);
       rotRef.current = 0;
       setStatusMsg(`vs ${opponent.username}`);
+      setOpponent(opponent);
       setCountdown(3);
       playMatchFound();
       setPhase('countdown');
@@ -630,6 +634,7 @@ export default function CoinFlipGame() {
           <div className="w-full flex items-center justify-center" style={{ minHeight: 'calc(100vh - 56px)' }}>
             <ResultScreen
               vsBot={!!resultData?.vsBot}
+              opponent={opponent}
               isWinner={isWinner}
               isDraw={false}
               winnerUsername={resultData.winnerUsername}

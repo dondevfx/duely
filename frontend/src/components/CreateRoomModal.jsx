@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import UiIcon from './UiIcon';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
@@ -65,7 +66,9 @@ export default function CreateRoomModal({ open, onClose, gameType, entryFee = 0,
         {err && <p className="text-danger text-xs mb-2 font-medium">{err}</p>}
 
         <GlowButton variant="primary" className="w-full" onClick={() => { onCreateCode?.(); onClose(); }}>
-          🔗 Get Challenge Link
+          <span className="inline-flex items-center justify-center gap-2 whitespace-nowrap">
+            <UiIcon name="share" size={18} />Get Challenge Link
+          </span>
         </GlowButton>
 
         {/* Online friends — one tap to invite directly */}

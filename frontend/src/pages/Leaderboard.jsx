@@ -7,6 +7,7 @@ import CoinIcon from '../components/CoinIcon';
 import GameIcon from '../components/GameIcon';
 import DiamondIcon from '../components/DiamondIcon';
 import RankIcon from '../components/RankIcon';
+import { PlaceIcon, StatIcon } from '../components/UiIcon';
 import { ProfilePopup } from '../components/ChatSidebar';
 import { usePageReady } from '../hooks/usePageReady';
 
@@ -16,13 +17,10 @@ import { usePageReady } from '../hooks/usePageReady';
 // One component rather than the two copies that were here, because the two
 // copies had already drifted: they render identically but only one of them
 // would have got the click if this were bolted on per table.
-function PlayerTag({ player, isMe, onOpen }) {
+function PlayerTag({ player, isMe }) {
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(player)}
-      className="flex items-center gap-1.5 sm:gap-2 min-w-0 text-left rounded-lg -mx-1 px-1 py-0.5 hover:bg-white/5 transition-colors"
-      title={`View ${player.username}'s profile`}
+    <span
+      className="flex items-center gap-1.5 sm:gap-2 min-w-0 text-left"
     >
       <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-xs font-bold text-primary shrink-0 overflow-hidden">
         {player.avatar_url
@@ -38,22 +36,20 @@ function PlayerTag({ player, isMe, onOpen }) {
           🔥{player.current_streak}
         </span>
       )}
-    </button>
+    </span>
   );
 }
 
 function RankBadge({ rank }) {
-  if (rank === 1) return <span className="text-yellow-400 font-black">🥇</span>;
-  if (rank === 2) return <span className="text-gray-300 font-black">🥈</span>;
-  if (rank === 3) return <span className="text-amber-600 font-black">🥉</span>;
+  if (rank <= 3) return <PlaceIcon place={rank} size={22} />;
   return <span className="text-muted font-mono text-sm">#{rank}</span>;
 }
 
 const TABS = [
-  { id: 'elo',             label: 'ELO',             icon: '⚔️', endpoint: '/leaderboard',                 valueKey: 'elo',           isDiamond: false, label2: 'ELO' },
+  { id: 'elo',             label: 'ELO',             icon: 'elo', endpoint: '/leaderboard',                 valueKey: 'elo',           isDiamond: false, label2: 'ELO' },
   { id: 'wagered',         label: 'Wagered',          icon: 'coin', endpoint: '/leaderboard/wagered',       valueKey: 'total_wagered', isDiamond: false, label2: 'Wagered' },
   { id: 'wagered-diamonds',label: 'Wagered', diamondTab: true,       icon: '',   endpoint: '/leaderboard/wagered-diamonds',valueKey: 'total_wagered', isDiamond: true,  label2: 'Wagered' },
-  { id: 'games',           label: 'Games',           icon: '🎮', endpoint: null,                           valueKey: null,            isDiamond: false, label2: 'Score' },
+  { id: 'games',           label: 'Games',           icon: 'score', endpoint: null,                           valueKey: null,            isDiamond: false, label2: 'Score' },
   { id: 'streak',          label: '🔥 Streaks',       icon: '',   endpoint: '/leaderboard/streak',          valueKey: 'current_streak',isDiamond: false, label2: 'Streak' },
 ];
 
@@ -210,9 +206,11 @@ export default function Leaderboard() {
                   : 'text-muted hover:text-white'
               }`}
             >
-              {t.icon === 'coin' ? <CoinIcon size="0.9em" />
-                : t.diamondTab   ? <DiamondIcon size="0.9em" />
-                : t.icon         ? <span>{t.icon}</span> : null}
+              {t.icon === 'coin'  ? <CoinIcon size="0.9em" />
+                : t.diamondTab    ? <DiamondIcon size="0.9em" />
+                : t.icon === 'elo'   ? <StatIcon kind="elo" size={16} />
+                : t.icon === 'score' ? <StatIcon kind="score" size={16} />
+                : t.icon          ? <span>{t.icon}</span> : null}
               <span>{(t.icon || t.diamondTab) ? t.label2 || t.label : t.label}</span>
             </button>
           ))}
@@ -284,8 +282,13 @@ export default function Leaderboard() {
                       return (
                         <div
                           key={player.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setViewing(player)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setViewing(player); } }}
+                          title={`View ${player.username}'s profile`}
                           className={`
-                            grid grid-cols-10 px-3 sm:px-5 py-3 sm:py-4 items-center border-b border-surfaceLight/50 transition-colors
+                            grid grid-cols-10 px-3 sm:px-5 py-3 sm:py-4 items-center border-b border-surfaceLight/50 transition-colors cursor-pointer
                             ${isMe ? 'bg-primary/10 border-l-2 border-l-primary' : 'hover:bg-surfaceLight/30'}
                             ${i === 0 ? 'bg-yellow-500/5' : ''}
                           `}
@@ -294,7 +297,7 @@ export default function Leaderboard() {
                             <RankBadge rank={player.rank} />
                           </span>
                           <span className={`${gameMeta?.showTime ? 'col-span-4' : 'col-span-6'} flex items-center min-w-0`}>
-                            <PlayerTag player={player} isMe={isMe} onOpen={setViewing} />
+                            <PlayerTag player={player} isMe={isMe} />
                           </span>
                           {gameMeta?.showTime && (
                             <span className="col-span-2 text-right font-mono text-xs sm:text-sm text-muted">
@@ -325,7 +328,14 @@ export default function Leaderboard() {
                 <div className="text-sm text-primary font-semibold">Your Rank</div>
                 <div className="text-sm font-bold text-white flex items-center gap-2">
                   {userRank != null ? `#${userRank}` : (loading ? '...' : '—')}
-                  <span className="text-muted text-xs">({fmtMyValue()})</span>
+                  {/* inline-flex on the whole bracket group: fmtMyValue now
+                      returns a node that is itself inline-flex, and an
+                      inline-flex child inside a plain text span sits on its own
+                      baseline — which dropped the value below the brackets
+                      instead of between them. */}
+                  <span className="text-muted text-xs inline-flex items-center gap-0.5">
+                    <span>(</span>{fmtMyValue()}<span>)</span>
+                  </span>
                 </div>
               </div>
             )}
@@ -353,8 +363,13 @@ export default function Leaderboard() {
                   return (
                     <div
                       key={player.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setViewing(player)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setViewing(player); } }}
+                      title={`View ${player.username}'s profile`}
                       className={`
-                        grid grid-cols-10 px-3 sm:px-5 py-3 sm:py-4 items-center border-b border-surfaceLight/50 transition-colors
+                        grid grid-cols-10 px-3 sm:px-5 py-3 sm:py-4 items-center border-b border-surfaceLight/50 transition-colors cursor-pointer
                         ${isMe ? 'bg-primary/10 border-l-2 border-l-primary' : 'hover:bg-surfaceLight/30'}
                         ${i === 0 ? 'bg-yellow-500/5' : ''}
                       `}
@@ -364,7 +379,7 @@ export default function Leaderboard() {
                       </span>
 
                       <span className="col-span-5 flex items-center min-w-0">
-                        <PlayerTag player={player} isMe={isMe} onOpen={setViewing} />
+                        <PlayerTag player={player} isMe={isMe} />
                       </span>
 
                       <span className={`col-span-3 text-right font-mono font-bold text-sm ${

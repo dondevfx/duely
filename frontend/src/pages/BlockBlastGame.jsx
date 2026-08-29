@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import PlayerName from '../components/PlayerName';
 import DiamondIcon from '../components/DiamondIcon';
 import { useLocation } from 'react-router-dom';
 import { playMatchFound, playCountdown, playPlace, playClear, playBlast } from '../utils/sound';
@@ -773,6 +774,7 @@ export default function BlockBlastGame() {
         <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center overflow-y-auto py-2 w-full">
           <ResultScreen
             vsBot={!!result.vsBot}
+            opponent={opponent}
             isWinner={isWinner}
             isDraw={result.draw}
             winnerUsername={result.winnerUsername}
@@ -805,6 +807,7 @@ export default function BlockBlastGame() {
       {phase === 'result' && result && result.isSolo && result.humanWon !== null && (
         <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center overflow-y-auto py-2 w-full">
           <ResultScreen
+            opponent={opponent}
             // Solo means a bot opponent, so no streak was ever at stake.
             vsBot
             isWinner={result.humanWon}
@@ -838,6 +841,7 @@ export default function BlockBlastGame() {
       {phase === 'result' && result && result.isSolo && result.humanWon === null && (
         <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center overflow-y-auto py-2 w-full">
           <ResultScreen
+            opponent={opponent}
             solo
             isWinner
             winnerUsername={profile?.username ?? 'You'}
@@ -906,7 +910,10 @@ export default function BlockBlastGame() {
                 {countdown}
               </div>
               <p className="text-muted">Get ready...</p>
-              {!isSolo && opponent && <p className="text-xs text-muted mt-2">vs {opponent.username}</p>}
+              {!isSolo && opponent && <p className="text-xs text-muted mt-2 flex items-center justify-center gap-1.5">
+                  vs <PlayerName username={opponent.username} avatarUrl={opponent.avatarUrl}
+                       color={opponent.profileColor} isBot={!!opponent.isBot} size="w-5 h-5" />
+                </p>}
               {/* Solo Endless has no opponent — naming the bot invents one. */}
               {isSolo && entryFee > 0 && <p className="text-xs text-muted mt-2">vs Duely Bot</p>}
             </>

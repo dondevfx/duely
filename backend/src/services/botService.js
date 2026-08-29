@@ -12,6 +12,11 @@ function createBotPlayer(entryFee = 0, gameType = 'reaction') {
     userId:   `bot_${Date.now()}`,
     username: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)],
     elo:      950 + Math.floor(Math.random() * 100),
+    // No picture and no colour: the client draws the bot's own face when it
+    // sees isBot, so sending nulls here keeps every opponent payload the same
+    // shape without inventing an avatar URL that does not exist.
+    avatarUrl:    null,
+    profileColor: null,
     entryFee,
     isBot:    true,
     gameType,

@@ -1,6 +1,8 @@
 ﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import DiamondIcon from '../components/DiamondIcon';
+import DiamondIcon, { DiamondGlyph } from '../components/DiamondIcon';
+import RankIcon from '../components/RankIcon';
+import UiIcon, { RakebackTierIcon } from '../components/UiIcon';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { isRanked, placementMatches } from '../utils/ranks';
@@ -282,11 +284,14 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
           borderBottom: `1px solid ${isUnlocked ? tier.color + '25' : '#1e293b'}`,
         }}
       >
+        {/* The rank badge, same drawing the navbar and profile use. tier.label
+            matches the rank name in utils/ranks.js, which is what RankIcon
+            keys on — so a wheel and its rank can never show different art. */}
         <span
-          className="text-2xl leading-none"
+          className="leading-none"
           style={{ filter: isUnlocked ? `drop-shadow(0 0 6px ${tier.color})` : 'grayscale(1) opacity(0.4)' }}
         >
-          {tier.icon}
+          <RankIcon rank={{ name: tier.label, color: tier.color }} size={26} />
         </span>
         <div>
           <div
@@ -429,13 +434,9 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
                       >
                         {label}
                       </text>
-                      <text
-                        x={lp.x} y={lp.y + 9}
-                        textAnchor="middle" dominantBaseline="middle"
-                        fontSize="10"
-                        transform={`rotate(${mid}, ${lp.x}, ${lp.y})`}
-                      ><DiamondIcon />
-                      </text>
+                      <g transform={`rotate(${mid}, ${lp.x}, ${lp.y})`}>
+                        <DiamondGlyph cx={lp.x} cy={lp.y + 9} size={11} />
+                      </g>
                     </>
                   )}
                 </g>
@@ -463,7 +464,7 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
             <circle cx={CX} cy={CY} r={30} fill="#0f172a"             stroke="#1e293b"  strokeWidth="2.5" />
             <circle cx={CX} cy={CY} r={24} fill={`url(#${gradId}_hub)`} stroke="#334155" strokeWidth="1.5" />
             <circle cx={CX} cy={CY} r={18} fill="none"                stroke="#1e293b"  strokeWidth="1"   />
-            <text x={CX} y={CY + 1} textAnchor="middle" dominantBaseline="middle" fontSize="16"><DiamondIcon /></text>
+            <DiamondGlyph cx={CX} cy={CY + 1} size={17} />
           </svg>
         </div>
         </div>
@@ -670,11 +671,13 @@ export default function Rewards() {
           className="rounded-2xl border px-6 py-5"
           style={{ background: 'rgba(255,255,255,0.02)', borderColor: '#1e293b' }}
         >
-          <h2 className="font-black text-white text-base tracking-wider uppercase mb-3">🎁 Rakeback</h2>
+          <h2 className="font-black text-white text-base tracking-wider uppercase mb-3 flex items-center gap-2">
+            <UiIcon name="rakeback" size={18} />Rakeback
+          </h2>
           <p className="text-sm" style={{ color: '#64748b' }}>
             Earn coins back on every game — no matter if you win or lose.<br />
             Portions credited instantly, daily, and weekly.<br />
-            Claim anytime from the 🎁 button in the top bar.
+            Claim anytime from the <UiIcon name="rakeback" size={14} className="align-middle" /> button in the top bar.
           </p>
         </div>
 

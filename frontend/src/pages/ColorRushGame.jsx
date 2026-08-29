@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import PlayerName from '../components/PlayerName';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -399,6 +400,7 @@ export default function ColorRushGame() {
     return (
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-4">
         <ResultScreen
+          opponent={opponent}
           solo
           // Finishing an endless run is the goal, so it reads as a win. There is
           // no opponent to lose to and nothing staked to lose.
@@ -426,6 +428,7 @@ export default function ColorRushGame() {
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-4">
         <ResultScreen
           vsBot={!!result.vsBot}
+          opponent={opponent}
           isWinner={isWinner}
           winnerUsername={result.winnerUsername}
           loserUsername={result.loserUsername}
@@ -497,7 +500,10 @@ export default function ColorRushGame() {
             <p className="text-muted">Get ready...</p>
             {/* Solo Endless has no opponent — the bot is plumbing, not a rival. */}
             {opponent && lastModeRef.current !== 'bot_free' && (
-              <p className="text-xs text-muted mt-2">vs {opponent.username}</p>
+              <p className="text-xs text-muted mt-2 flex items-center justify-center gap-1.5">
+                  vs <PlayerName username={opponent.username} avatarUrl={opponent.avatarUrl}
+                       color={opponent.profileColor} isBot={!!opponent.isBot} size="w-5 h-5" />
+                </p>
             )}
           </div>
         </div>

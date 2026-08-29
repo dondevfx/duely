@@ -46,13 +46,30 @@ export default function MatchTicker() {
       setItems(prev => [item, ...prev].slice(0, MAX));
     }
 
+    // Asking for the seed has to happen on every route back INTO a live
+    // connection, not once on mount.
+    //
+    // The row renders nothing when it has no items, and the only thing that
+    // ever fills it is a seed the server sends when asked. Switching away from
+    // Safari and back suspends the page and drops the socket; on return the
+    // component is still mounted, so this effect never re-ran and nothing ever
+    // asked again — the row stayed empty until a reload. It looked like the
+    // ticker had "gone away", and it had, permanently.
+    const ask = () => { if (socket.connected) socket.emit('request_ticker_seed'); };
+    const onVisible = () => { if (document.visibilityState === 'visible') ask(); };
+
     socket.on('ticker_seed', onSeed);
     socket.on('ticker_item', onItem);
-    // Re-request the seed every time the component mounts (handles SPA navigation)
-    socket.emit('request_ticker_seed');
+    socket.on('connect', ask);          // reconnected after a drop
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('pageshow', ask);   // returning from the bfcache
+    ask();
     return () => {
       socket.off('ticker_seed', onSeed);
       socket.off('ticker_item', onItem);
+      socket.off('connect', ask);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('pageshow', ask);
     };
   }, [socket]);
 

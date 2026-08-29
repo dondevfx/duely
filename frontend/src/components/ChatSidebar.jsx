@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import DiamondIcon from './DiamondIcon';
+import RankIcon from './RankIcon';
+import { getRank } from '../utils/ranks';
 import CoinIcon from './CoinIcon';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
@@ -98,6 +100,14 @@ function fmtAxis(v) {
   return v.toFixed(0);
 }
 
+// Accepts a date-only string or a full ISO timestamp, and returns null rather
+// than an Invalid Date for anything else.
+function toDate(dateStr) {
+  if (!dateStr) return null;
+  const d = String(dateStr).length === 10 ? new Date(dateStr + 'T12:00:00') : new Date(dateStr);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 function LineChart({ data }) {
   const wrapRef  = useRef(null);
   const [svgW, setSvgW] = useState(560);
@@ -135,7 +145,12 @@ function LineChart({ data }) {
   const xTickIdxs = [0, Math.round((data.length - 1) * 0.33), Math.round((data.length - 1) * 0.66), data.length - 1];
 
   function fmtXDate(dateStr) {
-    return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    // The API sends a full ISO timestamp per transaction, plus a legacy
+    // YYYY-MM-DD for the opening point. Appending T12:00:00 to a string that
+    // already carries a time produces "...000ZT12:00:00", which parses to
+    // Invalid Date — every label on this chart read "Invalid Date".
+    const d = toDate(dateStr);
+    return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
   }
 
   function handleMouseMove(e) {
@@ -384,13 +399,26 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
               {/* ELO / Wins / Losses */}
               <div className="grid grid-cols-3 gap-3 mb-4">
                 {[
-                  { label: 'ELO',    value: (data.elo ?? 0).toLocaleString(),    color: 'text-accent'  },
-                  { label: 'Wins',   value: (data.wins ?? 0).toLocaleString(),   color: 'text-success' },
-                  { label: 'Losses', value: (data.losses ?? 0).toLocaleString(), color: 'text-danger'  },
+                  // ELO carries its rank the same way the profile page does —
+                  // the badge, the rank's name and the rank's colour. A bare
+                  // number said nothing about where the player actually sits.
+                  { label: 'ELO', value: (data.elo ?? 0).toLocaleString(),
+                    color: getRank(data.elo ?? 0).color, rank: getRank(data.elo ?? 0) },
+                  { label: 'Wins',   value: (data.wins ?? 0).toLocaleString(),   cls: 'text-success' },
+                  { label: 'Losses', value: (data.losses ?? 0).toLocaleString(), cls: 'text-danger'  },
                 ].map(s => (
-                  <div key={s.label} className="bg-bg rounded-xl p-4 text-center">
-                    <div className={`text-2xl font-black ${s.color}`}>{s.value}</div>
-                    <div className="text-sm text-muted mt-1">{s.label}</div>
+                  <div key={s.label} className="bg-bg rounded-xl p-4 text-center overflow-hidden"
+                    style={s.rank ? { boxShadow: `inset 0 0 20px ${s.rank.glow}` } : undefined}>
+                    <div className={`text-2xl font-black ${s.cls || ''}`}
+                      style={s.color ? { color: s.color } : undefined}>{s.value}</div>
+                    {s.rank ? (
+                      <div className="text-xs font-bold mt-1 flex items-center justify-center gap-1 truncate"
+                        style={{ color: s.rank.color }}>
+                        <RankIcon rank={s.rank} size={13} />{s.rank.name}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted mt-1">{s.label}</div>
+                    )}
                   </div>
                 ))}
               </div>

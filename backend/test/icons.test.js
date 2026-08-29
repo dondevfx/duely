@@ -31,7 +31,14 @@ test('nothing uses an icon component it has not imported', () => {
     const src = fs.readFileSync(file, 'utf8');
     for (const c of ['GameIcon', 'UiIcon', 'RankIcon', 'DiamondIcon']) {
       if (!new RegExp(`<${c}[\\s/>]`).test(src)) continue;
-      if (new RegExp(`import ${c} from`).test(src)) continue;
+      // Accepts every import form the codebase actually uses, including
+      // `import UiIcon, { RakebackTierIcon } from './UiIcon'` — matching only
+      // `import X from` reported that one as missing.
+      //
+      // Checked against the import LINES rather than the whole file, so a
+      // mention of the name in a comment cannot pass for an import.
+      const imports = src.split(/\r?\n/).filter((l) => /^\s*import\b/.test(l)).join('\n');
+      if (new RegExp(`\\b${c}\\b`).test(imports)) continue;
       bad.push(`${path.basename(file)} uses <${c}> without importing it`);
     }
   }

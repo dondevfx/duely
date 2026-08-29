@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import DiamondIcon from './DiamondIcon';
+import DiamondIcon, { DiamondGlyph } from './DiamondIcon';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { playWheelSpin, playWin } from '../utils/sound';
@@ -260,13 +260,9 @@ export default function SpinWheel({ locked = false }) {
                   >
                     {seg.label}
                   </text>
-                  <text
-                    x={lp.x} y={lp.y + 9}
-                    textAnchor="middle" dominantBaseline="middle"
-                    fontSize="10"
-                    transform={`rotate(${mid}, ${lp.x}, ${lp.y})`}
-                  ><DiamondIcon />
-                  </text>
+                  <g transform={`rotate(${mid}, ${lp.x}, ${lp.y})`}>
+                    <DiamondGlyph cx={lp.x} cy={lp.y + 9} size={11} />
+                  </g>
                 </g>
               );
             })}
@@ -292,7 +288,7 @@ export default function SpinWheel({ locked = false }) {
             <circle cx={CX} cy={CY} r={30} fill="#0f172a" stroke="#1e293b" strokeWidth="2.5" />
             <circle cx={CX} cy={CY} r={24} fill="url(#hubGrad)" stroke="#334155" strokeWidth="1.5" />
             <circle cx={CX} cy={CY} r={18} fill="none" stroke="#1e293b" strokeWidth="1" />
-            <text x={CX} y={CY + 1} textAnchor="middle" dominantBaseline="middle" fontSize="16"><DiamondIcon /></text>
+            <DiamondGlyph cx={CX} cy={CY + 1} size={17} />
           </svg>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import DiamondIcon from './DiamondIcon';
+import PlayerName from './PlayerName';
 import { getRank, isRanked, placementMatches, getDisplayRank } from '../utils/ranks';
 import CoinIcon from './CoinIcon';
 import { playWin, playLoss, playDraw } from '../utils/sound';
@@ -65,6 +66,11 @@ export default function ResultScreen({
   isDraw = false,
   winnerUsername,
   loserUsername,
+  // The opponent as the server described them at match_found. Their picture is
+  // resolved by NAME rather than being passed per side, because the card is
+  // told who won and lost by username and does not otherwise know which of the
+  // two that is.
+  opponent = null,
   newWinnerElo,
   newLoserElo,
   // Authoritative before-values from the engine. Optional: a page that has
@@ -120,6 +126,13 @@ export default function ResultScreen({
   // onBackToLobby falls back to onPlayAgain for pages that haven't split the two yet
   const goBack = onBackToLobby ?? onPlayAgain;
   const elo = isWinner ? newWinnerElo : newLoserElo; // undefined = no ELO data yet
+
+  // Which picture belongs to a name. There are only ever two players on this
+  // card, so anything that is not me is the opponent — the card is told who
+  // won and lost by username and does not otherwise know which side that is.
+  const who = (name) => (name && profile?.username && name === profile.username)
+    ? { username: name, avatarUrl: profile?.avatar_url, color: profile?.profile_color }
+    : { username: name, avatarUrl: opponent?.avatarUrl, color: opponent?.profileColor, isBot: !!vsBot };
 
   // The BEFORE value the server actually computed against, when it sends one.
   //
@@ -240,10 +253,17 @@ export default function ResultScreen({
           {/* Stats */}
           <div className="bg-bg rounded-xl p-4 mb-4 space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-muted">
-                {solo
-                  ? (profile?.username || 'You')
-                  : `${isWinner ? winnerUsername : loserUsername} vs ${isWinner ? loserUsername : winnerUsername}`}
+              <span className="text-muted min-w-0 flex items-center gap-1.5 overflow-hidden">
+                {solo ? (
+                  <PlayerName username={profile?.username || 'You'} avatarUrl={profile?.avatar_url}
+                    color={profile?.profile_color} size="w-5 h-5" />
+                ) : (
+                  <>
+                    <PlayerName {...who(isWinner ? winnerUsername : loserUsername)} size="w-5 h-5" />
+                    <span className="shrink-0">vs</span>
+                    <PlayerName {...who(isWinner ? loserUsername : winnerUsername)} size="w-5 h-5" />
+                  </>
+                )}
               </span>
               <span className="text-xs text-muted">{gameLabel}</span>
             </div>

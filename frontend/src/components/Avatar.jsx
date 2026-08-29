@@ -1,3 +1,5 @@
+import { BotAvatar } from './UiIcon';
+
 /**
  * One player avatar, everywhere.
  *
@@ -41,7 +43,10 @@ export default function Avatar({
       {...rest}
     >
       {isBot
-        ? '🤖'
+        // The bot's own face, drawn — it was a 🤖 emoji, which is a different
+        // robot on every platform and looked like a fallback rather than a
+        // character.
+        ? <BotAvatar size="100%" className="w-full h-full" />
         : avatarUrl
           // object-cover, not contain: these are circles, and a
           // non-square upload letterboxed inside one looks broken.

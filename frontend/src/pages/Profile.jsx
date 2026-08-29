@@ -12,6 +12,7 @@ import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
 import GameIcon from '../components/GameIcon';
 import RankIcon from '../components/RankIcon';
+import UiIcon from '../components/UiIcon';
 import DiamondIcon from '../components/DiamondIcon';
 import { ProfilePopup } from '../components/ChatSidebar';
 import FriendInviteBox from '../components/FriendInviteBox';
@@ -113,7 +114,7 @@ function AffiliateCodeCard() {
 
   return (
     <div className="bg-surface border border-surfaceLight rounded-2xl p-5 mb-6">
-      <div className="text-sm font-bold text-white mb-3">🔗 Affiliate Code</div>
+      <div className="text-sm font-bold text-white mb-3 flex items-center gap-2"><UiIcon name="affiliate" size={16} />Affiliate Code</div>
 
       {status?.appliedCode ? (
         <div>
@@ -513,7 +514,7 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
 
           {/* Affiliate code (my own) */}
           <div className="mb-5">
-            <div className="text-sm font-bold text-white mb-2">🔗 Your Affiliate Code</div>
+            <div className="text-sm font-bold text-white mb-2 flex items-center gap-2"><UiIcon name="affiliate" size={16} />Your Affiliate Code</div>
 
             {affStatus?.myCode && !changingAff ? (
               <div>
@@ -794,15 +795,23 @@ function fmtAxis(v) {
   return v.toFixed(0);
 }
 
+// Plain YYYY-MM-DD (legacy) vs full ISO timestamp (one point per transaction).
+// Returns null rather than an Invalid Date, so a bad value renders as nothing
+// instead of the words "Invalid Date" across the axis.
+function toDate(dateStr) {
+  if (!dateStr) return null;
+  const d = String(dateStr).length === 10 ? new Date(dateStr + 'T12:00:00') : new Date(dateStr);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 function fmtXDate(dateStr) {
-  // Plain YYYY-MM-DD (legacy) vs full ISO timestamp (one point per transaction)
-  const d = dateStr.length === 10 ? new Date(dateStr + 'T12:00:00') : new Date(dateStr);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const d = toDate(dateStr);
+  return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
 }
 
 function fmtXDateTime(dateStr) {
-  const d = dateStr.length === 10 ? new Date(dateStr + 'T12:00:00') : new Date(dateStr);
-  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const d = toDate(dateStr);
+  return d ? d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
 }
 
 function ProfileLineChart({ data }) {
@@ -1048,7 +1057,7 @@ function FriendsPanel({ myId, myUsername, myReferralCode, activeGames }) {
         mobile it sits in the page flow under the profile card, and sticking
         would pin it over the sections below as you scroll past. */}
     <div className="bg-surface border border-surfaceLight rounded-2xl p-5 lg:sticky lg:top-20">
-      <div className="text-base font-black text-white mb-4">👥 Friends</div>
+      <div className="text-base font-black text-white mb-4 flex items-center gap-2"><UiIcon name="friends" size={18} />Friends</div>
 
       {/* Friend Requests button */}
       <button
@@ -1552,14 +1561,14 @@ export default function Profile() {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-surfaceLight text-muted hover:text-white hover:border-primary transition-all text-xs font-semibold"
               title="Transaction History"
             >
-              📋 Transactions
+              <UiIcon name="transactions" size={15} /> Transactions
             </Link>
             <button
               onClick={() => setShowSettings(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-surfaceLight text-muted hover:text-white hover:border-primary transition-all text-xs font-semibold"
               title="Settings"
             >
-              ⚙️ Settings
+              <UiIcon name="settings" size={15} /> Settings
             </button>
           </div>
 

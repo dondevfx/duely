@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import PlayerName from '../components/PlayerName';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { playMatchFound, playCountdown, playType } from '../utils/sound';
@@ -632,6 +633,7 @@ export default function WordleGame() {
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-3 sm:px-4 py-0 sm:py-8">
         <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
         <ResultScreen
+          opponent={opponent}
           vsBot
           isWinner={solved}
           isDraw={false}
@@ -671,6 +673,7 @@ export default function WordleGame() {
         <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
         <ResultScreen
           vsBot={!!result.vsBot}
+          opponent={opponent}
           isWinner={result.iWon}
           isDraw={result.isDraw}
           winnerUsername={result.winnerUsername}
@@ -769,7 +772,10 @@ export default function WordleGame() {
           <p className="text-muted">Get ready…</p>
           {lastModeRef.current === 'solo'
             ? (entryFee > 0 ? <p className="text-xs text-muted mt-2">vs Duely Bot</p> : null)
-            : opponent && <p className="text-xs text-muted mt-2">vs {opponent.username}</p>}
+            : opponent && <p className="text-xs text-muted mt-2 flex items-center justify-center gap-1.5">
+                  vs <PlayerName username={opponent.username} avatarUrl={opponent.avatarUrl}
+                       color={opponent.profileColor} isBot={!!opponent.isBot} size="w-5 h-5" />
+                </p>}
         </div>
       </div>
     );
@@ -804,7 +810,10 @@ export default function WordleGame() {
           {/* My guess count */}
           <div className="text-center min-w-[72px]">
             <div className="text-xl font-black font-mono text-success">{guessNum}</div>
-            <div className="text-[10px] text-muted">{profile?.username ?? 'You'}</div>
+            <div className="text-[10px] text-muted flex items-center justify-center">
+              <PlayerName username={profile?.username ?? 'You'} avatarUrl={profile?.avatar_url}
+                color={profile?.profile_color} size="w-4 h-4" />
+            </div>
           </div>
 
           {/* Center: mode */}
@@ -831,8 +840,11 @@ export default function WordleGame() {
             <div className={`text-xl font-black font-mono ${oppCount > guessNum ? 'text-danger' : oppCount < guessNum ? 'text-success' : 'text-accent'}`}>
               {isSoloMode ? '—' : oppCount}
             </div>
-            <div className="text-[10px] text-muted">
-              {isSoloMode ? 'Solo' : (opponent?.username ?? 'Opponent')}
+            <div className="text-[10px] text-muted flex items-center justify-center">
+              {isSoloMode ? 'Solo' : (
+                <PlayerName username={opponent?.username ?? 'Opponent'} avatarUrl={opponent?.avatarUrl}
+                  color={opponent?.profileColor} isBot={!!opponent?.isBot} size="w-4 h-4" />
+              )}
             </div>
           </div>
         </div>

@@ -84,6 +84,25 @@ module.exports = function adminRoutes(supabase, io) {
     // fee_balance rather than left to look like a shortfall. Separate query so
     // a missing referral_rewards table before the migration degrades to 0
     // rather than breaking the whole admin dashboard.
+    // What the wheels have paid out. Both currencies, because the rank wheels
+    // pay diamonds and the coin slot pays coins, and "collected from wheels"
+    // means different money in each case.
+    //
+    // Separate query with its own catch, like the referral total above: a
+    // failure here must cost one tile rather than the whole dashboard.
+    let wheelCoins = 0, wheelDiamonds = 0;
+    try {
+      const { data: spins } = await supabase
+        .from('transactions').select('amount_c, crypto_amount, crypto_symbol')
+        .eq('type', 'rewards_spin');
+      for (const r of spins || []) {
+        wheelCoins += parseFloat(r.amount_c) || 0;
+        if ((r.crypto_symbol || '').toLowerCase() === 'diamonds') {
+          wheelDiamonds += parseFloat(r.crypto_amount) || 0;
+        }
+      }
+    } catch { /* one tile, not the dashboard */ }
+
     let referralReserved = 0;
     try {
       const { data: owed } = await supabase
@@ -131,6 +150,8 @@ module.exports = function adminRoutes(supabase, io) {
       active_users_7d:    distinctPlayerCount(activeRows7d),
       matches_by_game:    matchesByGame,
       total_diamonds_circulating: totalDiamonds,
+      wheel_coins_paid:    parseFloat(wheelCoins.toFixed(4)),
+      wheel_diamonds_paid: Math.round(wheelDiamonds),
       fees_coins:         parseFloat((adminProfile?.c_coins ?? 0).toFixed(2)),
       fees_diamonds:      adminProfile?.diamonds ?? 0,
       fee_balance:        parseFloat((adminProfile?.fee_balance ?? 0).toFixed(4)),

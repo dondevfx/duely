@@ -726,6 +726,11 @@ export default function Admin() {
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
               <StatCard label="Diamonds in Circulation" value={(stats?.total_diamonds_circulating ?? 0).toLocaleString()} sub="sum of all player balances" color="text-accent" />
+              {/* What the wheels have handed out. Coins and diamonds are
+                  separate tiles because they are separate money: the rank
+                  wheels pay diamonds, and only the 1-in-10M slot pays coins. */}
+              <StatCard label="Coins Paid by Wheels"    value={(stats?.wheel_coins_paid ?? 0).toLocaleString()}    sub="all-time, incl. the coin slot" color="text-warning" />
+              <StatCard label="Diamonds Paid by Wheels" value={(stats?.wheel_diamonds_paid ?? 0).toLocaleString()} sub="all-time, daily + rank wheels" color="text-accent" />
             </div>
 
             {/* Matches by game */}

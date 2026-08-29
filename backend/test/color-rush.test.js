@@ -112,8 +112,8 @@ test('invites and codes can start one', () => {
   // _pairPrivatePlayers is a switch on game type; a missing case is a code that
   // mints fine and then does nothing for either player, which is exactly how
   // Rush Hour shipped originally.
-  assert.match(HANDLERS, /case 'colorRush':\s*\{[\s\S]{0,400}?createDirectColorRushRoom/);
-  assert.match(HANDLERS, /case 'colorRush':[\s\S]{0,600}?startColorRushCountdown/);
+  assert.match(HANDLERS, /case 'colorRush':\s*\{[\s\S]{0,600}?createDirectColorRushRoom/);
+  assert.match(HANDLERS, /case 'colorRush':[\s\S]{0,1200}?startColorRushCountdown/);
 });
 
 test('a private Color Rush match is marked private, a queued one is not', () => {

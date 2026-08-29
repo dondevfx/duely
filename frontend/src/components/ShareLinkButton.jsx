@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import UiIcon from './UiIcon';
 
 // Share a link through the device's own share sheet.
 //
@@ -57,7 +58,14 @@ export default function ShareLinkButton({
     setTimeout(() => setState(null), 2200);
   }
 
-  const defaultLabel = canNativeShare() ? `📤 Share ${noun}` : `📋 Copy ${noun}`;
+  // A node, not a string. As a string the emoji sat on its own line whenever
+  // the label wrapped, which is what put it under the words on three screens.
+  const defaultLabel = (
+    <span className="inline-flex items-center justify-center gap-2 whitespace-nowrap">
+      <UiIcon name={canNativeShare() ? 'share' : 'transactions'} size={18} />
+      {canNativeShare() ? `Share ${noun}` : `Copy ${noun}`}
+    </span>
+  );
 
   return (
     <>
@@ -65,7 +73,7 @@ export default function ShareLinkButton({
         onClick={share}
         className={`w-full bg-primary hover:bg-blue-500 text-white font-black py-4 rounded-xl transition-all text-base ${className}`}
       >
-        {state === 'copied' ? '✓ Link Copied!'
+        {state === 'copied' ? <span className="inline-flex items-center justify-center gap-2">✓ Link Copied!</span>
           : state === 'failed' ? 'Copy blocked — select it below'
           : (label || defaultLabel)}
       </button>

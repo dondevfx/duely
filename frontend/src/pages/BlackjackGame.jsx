@@ -252,6 +252,9 @@ function BlackjackGame() {
   useGameScrollLock(countdown > 0 || phase === 'playing' || phase === 'reveal');
 
   const [opponentUsername, setOpponentUsername] = useState('');
+  // The whole opponent as the server described them, for their picture. The
+  // page only ever kept the name, so there was nothing to draw an avatar from.
+  const [opponent, setOpponent] = useState(null);
   const [myHand, setMyHand] = useState([]);
   const [myScore, setMyScore] = useState(0);
   const [opponentHandSize, setOpponentHandSize] = useState(2);
@@ -388,6 +391,7 @@ function BlackjackGame() {
       pendingStartRef.current = null;
       setRoomId(rid);
       setOpponentUsername(opponent.username);
+      setOpponent(opponent);
       setCountdown(3); // triggers countdown → game starts when countdown hits 0
       playMatchFound();
       if ((fee ?? 0) > 0) {
@@ -788,6 +792,7 @@ function BlackjackGame() {
       <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-3 sm:px-4 py-0 sm:py-4">
         <ResultScreen
           vsBot={!!resultData?.vsBot}
+          opponent={opponent}
           isWinner={isWinner}
           isDraw={resultData.isDraw}
           winnerUsername={resultData.winnerUsername}
@@ -894,14 +899,9 @@ function BlackjackGame() {
           position: 'relative',
         }}>
           <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: '50%',
-              background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 14, fontWeight: 900, color: '#fff',
-            }}>
-              {(opponentUsername || 'Bot')[0].toUpperCase()}
-            </div>
+            <Avatar username={opponentUsername || 'Duely Bot'} avatarUrl={opponent?.avatarUrl}
+              color={opponent?.profileColor || '#6366f1'} isBot={!opponentUsername || !!opponent?.isBot}
+              className="w-9 h-9" textClassName="text-sm" />
             <div>
               <div style={{ fontWeight: 800, fontSize: 15, color: textPrimary }}>
                 {opponentUsername || 'Duely Bot'}
@@ -948,14 +948,8 @@ function BlackjackGame() {
           overflowY: 'auto',
         }}>
           <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: '50%',
-              background: 'linear-gradient(135deg, #1250B4, #0066cc)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 14, fontWeight: 900, color: '#fff',
-            }}>
-              {(profile?.username || 'Y')[0].toUpperCase()}
-            </div>
+            <Avatar username={profile?.username || 'You'} avatarUrl={profile?.avatar_url}
+              color={profile?.profile_color} className="w-9 h-9" textClassName="text-sm" />
             <div>
               <div style={{ fontWeight: 800, fontSize: 15, color: textPrimary }}>
                 {profile?.username || 'You'}
@@ -1109,7 +1103,10 @@ function BlackjackGame() {
               {countdown}
             </div>
             <p className="text-muted">Get ready...</p>
-            <p className="text-xs text-muted mt-2">vs {opponentUsername}</p>
+            <p className="text-xs text-muted mt-2 flex items-center justify-center gap-1.5">
+              vs <PlayerName username={opponentUsername} avatarUrl={opponent?.avatarUrl}
+                   color={opponent?.profileColor} isBot={!!opponent?.isBot} size="w-5 h-5" />
+            </p>
           </div>
         </div>
       );

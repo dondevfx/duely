@@ -12,9 +12,42 @@ module.exports = function authRoutes(supabase) {
   // sender's name must never turn a successful add into an error response.
   async function _notifyFriendRequest(db, fromId, toUserId) {
     try {
-      const { data } = await db.from('profiles').select('username').eq('id', fromId).single();
-      gameEvents.emit('friend_request', { toUserId, fromUsername: data?.username || 'Someone' });
+      // The picture and the id come along so the toast can show a face and
+      // accept or decline in place — it used to carry only a name, which is
+      // why it could do nothing but point at the friends list.
+      const { data } = await db.from('profiles')
+        .select('username, avatar_url, profile_color').eq('id', fromId).single();
+      gameEvents.emit('friend_request', {
+        toUserId,
+        fromUserId:   fromId,
+        fromUsername: data?.username || 'Someone',
+        fromAvatar:   data?.avatar_url ?? null,
+        fromColor:    data?.profile_color ?? null,
+      });
     } catch { /* the row is written either way */ }
+  }
+
+  // A pending inbox has a ceiling.
+  //
+  // Without one, a player can be buried: 500 pending rows means the friends
+  // panel is unusable and every one of them has to be dealt with by hand. The
+  // cap is on the RECIPIENT's pending inbox, not on how many the sender has
+  // out, because it is the recipient who suffers.
+  //
+  // A request over the cap is refused and NOT written — "deleted" and "never
+  // inserted" look the same to everyone involved, and not inserting cannot
+  // leave a half-row behind if the delete fails.
+  const MAX_PENDING_REQUESTS = 30;
+  async function _inboxFull(db, toUserId) {
+    const { count, error } = await db
+      .from('friends')
+      .select('id', { count: 'exact', head: true })
+      .eq('addressee_id', toUserId)
+      .eq('status', 'pending');
+    // A failed count must not block a legitimate request — fail open, since
+    // the worst case is one request over the line.
+    if (error) return false;
+    return (count ?? 0) >= MAX_PENDING_REQUESTS;
   }
 
   // Upsert profile on first login
@@ -307,6 +340,9 @@ module.exports = function authRoutes(supabase) {
       .or(`and(requester_id.eq.${myId},addressee_id.eq.${target.id}),and(requester_id.eq.${target.id},addressee_id.eq.${myId})`)
       .maybeSingle();
     if (existing) return res.status(400).json({ error: existing.status === 'accepted' ? 'Already friends' : 'Request already sent' });
+    if (await _inboxFull(supabase, target.id)) {
+      return res.status(429).json({ error: "That player's friend requests are full." });
+    }
     const { error } = await supabase.from('friends').insert({ requester_id: myId, addressee_id: target.id });
     if (error) return res.status(400).json({ error: 'User not found' });
     _notifyFriendRequest(supabase, myId, target.id);
@@ -328,6 +364,9 @@ module.exports = function authRoutes(supabase) {
       .or(`and(requester_id.eq.${myId},addressee_id.eq.${userId}),and(requester_id.eq.${userId},addressee_id.eq.${myId})`)
       .maybeSingle();
     if (existing) return res.status(400).json({ error: existing.status === 'accepted' ? 'Already friends' : 'Request already sent' });
+    if (await _inboxFull(supabase, userId)) {
+      return res.status(429).json({ error: "That player's friend requests are full." });
+    }
     const { error } = await supabase.from('friends').insert({ requester_id: myId, addressee_id: userId });
     if (error) return res.status(400).json({ error: 'User not found' });
     _notifyFriendRequest(supabase, myId, userId);
@@ -413,6 +452,35 @@ module.exports = function authRoutes(supabase) {
     const { error } = await supabase.from('friends')
       .update({ status: 'accepted' })
       .eq('id', req.params.id)
+      .eq('addressee_id', req.user.id)
+      .eq('status', 'pending');
+    if (error) return res.status(400).json({ error: error.message });
+    res.json({ ok: true });
+  });
+
+  // Accept or decline straight from the notification, which knows WHO asked
+  // but not which row that is. Both scope the update to a pending row where I
+  // am the addressee, so neither can touch a friendship I am not part of or
+  // re-accept one that was already answered.
+  router.post('/friend-accept-by-user', requireAuth, async (req, res) => {
+    const { userId } = req.body;
+    if (!userId || !UUID_RE.test(userId)) return res.status(400).json({ error: 'userId required' });
+    const { data, error } = await supabase.from('friends')
+      .update({ status: 'accepted' })
+      .eq('requester_id', userId)
+      .eq('addressee_id', req.user.id)
+      .eq('status', 'pending')
+      .select('id');
+    if (error) return res.status(400).json({ error: error.message });
+    if (!data || data.length === 0) return res.status(404).json({ error: 'No pending request from that player.' });
+    res.json({ ok: true });
+  });
+
+  router.post('/friend-decline-by-user', requireAuth, async (req, res) => {
+    const { userId } = req.body;
+    if (!userId || !UUID_RE.test(userId)) return res.status(400).json({ error: 'userId required' });
+    const { error } = await supabase.from('friends').delete()
+      .eq('requester_id', userId)
       .eq('addressee_id', req.user.id)
       .eq('status', 'pending');
     if (error) return res.status(400).json({ error: error.message });

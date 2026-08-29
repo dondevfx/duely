@@ -3,7 +3,7 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import DiamondIcon from './DiamondIcon';
 import GameIcon from './GameIcon';
 import RankIcon from './RankIcon';
-import UiIcon from './UiIcon';
+import UiIcon, { RakebackTierIcon } from './UiIcon';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { useSocket } from '../context/SocketContext';
@@ -247,7 +247,7 @@ export default function Navbar() {
                         <div className="rounded-xl border border-border bg-bg p-3">
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
-                              <span className="text-base">⚡</span>
+                              <RakebackTierIcon tier="instant" size={17} />
                               <span className="text-sm font-semibold text-white">Instant</span>
                             </div>
                           </div>
@@ -268,7 +268,7 @@ export default function Navbar() {
                         <div className="rounded-xl border border-border bg-bg p-3">
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
-                              <span className="text-base">⏱️</span>
+                              <RakebackTierIcon tier="daily" size={17} />
                               <span className="text-sm font-semibold text-white">Daily</span>
                             </div>
                           </div>
@@ -289,7 +289,7 @@ export default function Navbar() {
                         <div className="rounded-xl border border-border bg-bg p-3">
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
-                              <span className="text-base">📆</span>
+                              <RakebackTierIcon tier="weekly" size={17} />
                               <span className="text-sm font-semibold text-white">Weekly</span>
                             </div>
                           </div>
@@ -396,14 +396,14 @@ export default function Navbar() {
                     ) : (
                       <div className="p-3 space-y-2">
                         {[
-                          { key: 'instant', label: 'Instant', icon: '⚡', amount: rakebackData.instant ?? 0, claimable: rakebackData.instantClaimable ?? false, countdown: rakebackCountdowns.instant },
-                          { key: 'daily',   label: 'Daily',   icon: '⏱️', amount: rakebackData.daily   ?? 0, claimable: rakebackData.dailyClaimable,             countdown: rakebackCountdowns.daily },
-                          { key: 'weekly',  label: 'Weekly',  icon: '📆', amount: rakebackData.weekly  ?? 0, claimable: rakebackData.weeklyClaimable,             countdown: rakebackCountdowns.weekly },
-                        ].map(({ key, label, icon, claimable, countdown }) => (
+                          { key: 'instant', label: 'Instant', amount: rakebackData.instant ?? 0, claimable: rakebackData.instantClaimable ?? false, countdown: rakebackCountdowns.instant },
+                          { key: 'daily',   label: 'Daily',   amount: rakebackData.daily   ?? 0, claimable: rakebackData.dailyClaimable,             countdown: rakebackCountdowns.daily },
+                          { key: 'weekly',  label: 'Weekly',  amount: rakebackData.weekly  ?? 0, claimable: rakebackData.weeklyClaimable,             countdown: rakebackCountdowns.weekly },
+                        ].map(({ key, label, claimable, countdown }) => (
                           <div key={key} className="rounded-xl border border-border bg-bg p-3">
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-2">
-                                <span className="text-base">{icon}</span>
+                                <RakebackTierIcon tier={key} size={17} />
                                 <span className="text-sm font-semibold text-white">{label}</span>
                               </div>
                             </div>
