@@ -602,9 +602,27 @@ module.exports = function walletRoutes(supabase, io) {
           // shows at the top of the admin attention queue.
           console.error(`CRITICAL: refund failed user=${req.user.id} amount=${amount} — manual credit required:`, refundErr.message);
           await recordFailure('refund_failed', `payout: ${payoutErr.message} | refund: ${refundErr.message}`);
-          throw new Error(`Payout failed and refund failed — contact support. Payout error: ${payoutErr.message}`);
+          // Same reasoning: the detail is on the row and in the CRITICAL log
+          // above, not in the reply.
+          throw new Error('Withdrawal failed and your balance could not be corrected automatically. Please contact support.');
         }
-        return res.status(500).json({ error: `Payout failed: ${payoutErr.message}` });
+        // Deliberately says nothing about WHY.
+        //
+        // The raw provider message went straight to the player, and it names
+        // our own operational state: "Admin wallet USDC balance too low: has
+        // 41.2, needs 500". That tells someone probing the site exactly how
+        // much the hot wallet is holding and what size withdrawal it cannot
+        // cover — which is reconnaissance, handed over on request, by anyone
+        // willing to attempt a withdrawal they know will fail.
+        //
+        // The real reason is on the transaction row's `notes` and in the
+        // console, which is where the admin dashboard reads it from.
+        //
+        // The refund IS mentioned: it is the player's own money and saying so
+        // stops a support ticket, and it reveals nothing about us.
+        return res.status(500).json({
+          error: 'Withdrawal failed. Your coins have been returned to your balance.',
+        });
       }
 
       // ── Record transaction ───────────────────────────────────────────
@@ -662,8 +680,16 @@ module.exports = function walletRoutes(supabase, io) {
       res.json({ success: true, new_balance: newBalance });
 
     } catch (err) {
+      // Anything reaching here is unexpected, so its message is an internal
+      // one — a missing key names an environment variable, a database error
+      // names a column. Only the messages this route wrote itself are safe to
+      // pass on, and those are the ones already phrased for a player.
+      console.error(`[withdraw] unhandled user=${req.user.id}:`, err.message);
       const isBalanceError = err.message?.includes('Insufficient');
-      res.status(isBalanceError ? 400 : 500).json({ error: err.message });
+      const safe = isBalanceError || err.message?.startsWith('Withdrawal failed');
+      res.status(isBalanceError ? 400 : 500).json({
+        error: safe ? err.message : 'Withdrawal failed. Please try again or contact support.',
+      });
     } finally {
       activeWithdrawals.delete(req.user.id);
     }
@@ -841,8 +867,12 @@ module.exports = function walletRoutes(supabase, io) {
       res.json({ success: true, new_balance: newBalance, payoutId, status: 'sending' });
 
     } catch (err) {
+      // Same as the crypto route: an unexpected message is an internal one.
+      console.error(`[withdraw-fiat] unhandled user=${req.user.id}:`, err.message);
       const isBalanceError = err.message?.includes('Insufficient');
-      res.status(isBalanceError ? 400 : 500).json({ error: err.message });
+      res.status(isBalanceError ? 400 : 500).json({
+        error: isBalanceError ? err.message : 'Withdrawal failed. Please try again or contact support.',
+      });
     } finally {
       activeWithdrawals.delete(req.user.id);
     }

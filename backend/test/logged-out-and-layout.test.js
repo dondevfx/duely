@@ -137,3 +137,35 @@ test('the logged-out pages are drawn, not emoji', () => {
       `${page}'s signed-out screen still has its emoji`);
   }
 });
+
+// ── What a failed withdrawal tells the player ───────────────────────────────
+
+test('a failed withdrawal does not report why to the player', () => {
+  // The provider's raw message went straight to the client, and it names our
+  // own operational state: "Admin wallet USDC balance too low: has 41.2, needs
+  // 500". Anyone willing to attempt a withdrawal they know will fail could
+  // read the hot wallet's balance off the error.
+  const src = be('routes', 'wallet.js');
+  assert.doesNotMatch(src, /error: `Payout failed: \$\{payoutErr\.message\}`/,
+    'the provider message is still being sent to the player');
+  assert.match(src, /error: 'Withdrawal failed\. Your coins have been returned to your balance\.'/);
+
+  // And the catch-all must not pass an internal message through either — a
+  // missing key names an environment variable, a database error names a column.
+  const at = src.indexOf("router.post('/withdraw'");
+  const body = src.slice(at, src.indexOf("// ── Fiat withdrawal"));
+  assert.doesNotMatch(body, /res\.status\(isBalanceError \? 400 : 500\)\.json\(\{ error: err\.message \}\)/,
+    'the withdrawal catch-all still returns the raw error');
+  assert.match(body, /safe \? err\.message : 'Withdrawal failed\. Please try again or contact support\.'/);
+});
+
+test('the real reason is still written where the admin page reads it', () => {
+  // Suppressing it for the player is only safe if it survives somewhere.
+  const src = be('routes', 'wallet.js');
+  assert.match(src, /await recordFailure\('failed', payoutErr\.message\);/,
+    'the failure row must carry the provider message');
+  assert.match(src, /notes:\s+String\(err\)\.slice\(0, 300\)/);
+  assert.match(be('routes', 'admin.js'), /status, tx_hash, notes, created_at'\)\s*\n\s*\.eq\('user_id', id\)/,
+    'the admin player view must select notes');
+  assert.match(fe('pages', 'Admin.jsx'), /\{t\.notes &&/, 'and render it');
+});
