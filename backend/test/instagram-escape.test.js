@@ -2,8 +2,9 @@
 //
 // Instagram opens links in its own webview, which has its own cookie jar — a
 // player who signs in there is signed out everywhere else, and taps through
-// from a story landing logged out is the bug that prompted this. /go exists to
-// hand the visitor to their real browser before any of that happens.
+// from a story landing logged out is the bug that prompted this. /go tries to
+// hand the visitor to their real browser, and loads the site anyway when it
+// cannot. It is never a destination: nobody should ever be left looking at it.
 //
 // Tested against real user-agent strings rather than the regex in isolation,
 // because the failure that matters is not "the regex is wrong", it is "Chrome
@@ -75,21 +76,36 @@ test('each platform gets the escape that exists for it', () => {
   assert.match(PAGE, /instagram:\/\/extbrowser\/\?url='/);
 });
 
-test('the manual way out is on screen before the automatic one is tried', () => {
-  // The whole point. Both auto-attempts can silently do nothing — the iOS one
-  // is undocumented and Meta can drop it without notice — and a visitor left
-  // watching a spinner that never resolves is worse than no page at all.
-  const reveal = PAGE.indexOf("document.getElementById('stuck').className = '';");
-  const attempt = PAGE.indexOf('setTimeout(escape, 350);');
-  assert.ok(reveal > 0 && attempt > 0, 'expected both the reveal and the attempt');
-  assert.ok(reveal < attempt, 'the instructions must be shown before the attempt is made');
+test('nobody is ever left sitting on this page', () => {
+  // The interstitial is gone: no button, no instructions, nothing to read. That
+  // makes the fallback the only thing standing between a failed escape and a
+  // dead end, so it has to be unconditional.
+  assert.doesNotMatch(PAGE, /id="open"|id="copy"|Open in your browser/,
+    'the interstitial is back');
+  assert.match(PAGE, /setTimeout\(function \(\) \{[\s\S]{0,200}?window\.location\.replace\(target\);[\s\S]{0,40}?\}, 1200\);/,
+    'a failed escape must still end on the site');
+  // Fires once. A retry loop in a webview that ignores the scheme just makes
+  // the page unusable.
+  assert.equal((PAGE.match(/setTimeout\(/g) || []).length, 1);
+});
 
-  assert.match(PAGE, /id="open"/, 'no button to retry by hand');
-  assert.match(PAGE, /id="copy"/, 'no way to copy the link out');
-  assert.match(PAGE, /execCommand\('copy'\)/, 'clipboard API is blocked in some webviews');
-  // Fires once. A retry loop in a webview that ignores the scheme makes the
-  // page unusable, and the visitor already has the button.
-  assert.equal((PAGE.match(/setTimeout\(escape/g) || []).length, 1);
+test('the fallback stands down when the escape actually worked', () => {
+  // Neither scheme reports success, so the signal is that the webview went to
+  // the background. Without the check, the fallback drags the abandoned webview
+  // to the home page behind the browser that just opened — leaving a stale
+  // signed-out Duely inside Instagram to be found later.
+  assert.match(PAGE, /if \(left \|\| document\.hidden\) return;/);
+  for (const ev of ['visibilitychange', 'pagehide', 'blur']) {
+    assert.ok(PAGE.includes(ev), `nothing listens for ${ev}`);
+  }
+});
+
+test('an in-app browser with no escape goes straight to the site', () => {
+  // Recognised as stuck, but neither Android nor iOS — there is nothing to try,
+  // so it must not wait out the timer first.
+  const fn = PAGE.slice(PAGE.indexOf('function attempt()'), PAGE.indexOf('// Did the hand-off work?'));
+  assert.match(fn, /Nothing to try\.\s*\n\s*window\.location\.replace\(target\);/,
+    'the no-escape path does not fall through to the site');
 });
 
 test('the hop carries a referral through but cannot be pointed elsewhere', () => {
