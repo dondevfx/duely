@@ -9,6 +9,7 @@ import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
 import { takePendingInvite } from '../utils/pendingInvite';
 import { AUTOFOCUS } from '../utils/device';
+import { LockIcon } from '../components/UiIcon';
 
 // If the user arrived from a shared challenge link, resume it after login.
 const GAME_ROUTES = {
@@ -22,6 +23,25 @@ const GAME_ROUTES = {
 // completes in one step rather than dropping them into a live match.
 function postLoginTarget() {
   return takePendingInvite() || pendingChallengeTarget();
+}
+
+/**
+ * Drop the user into the app on a fresh page load rather than a route change.
+ *
+ * Signing in changes almost everything the app holds — the socket has to
+ * re-authenticate, the profile, balances, rakeback, notifications and the
+ * ticker all have to be fetched for a user that did not exist a moment ago.
+ * A client-side navigation asks every one of those to catch up in place, and
+ * whichever one loses the race is a panel that stays empty until a reload.
+ * Reloading once, at the only moment the user expects a wait, means the app
+ * mounts already knowing who it is.
+ *
+ * A pending challenge is the exception: its join code lives in router state,
+ * which a reload throws away, so that one still goes through the router.
+ */
+function enterApp(navigate, target) {
+  if (target?.state) { navigate(target.route, { state: target.state }); return; }
+  window.location.assign(target?.route || '/');
 }
 
 function pendingChallengeTarget() {
@@ -101,10 +121,10 @@ export default function Login() {
         if (sessionStorage.getItem('rd_pending_username')) {
           setNeedsUsername(true);
         } else {
-          { const t = postLoginTarget(); if (t) navigate(t.route, { state: t.state }); else navigate('/'); }
+          enterApp(navigate, postLoginTarget());
         }
       } else {
-        { const t = postLoginTarget(); if (t) navigate(t.route, { state: t.state }); else navigate('/'); }
+        enterApp(navigate, postLoginTarget());
       }
     } catch (err) {
       setError(err.message);
@@ -121,7 +141,7 @@ export default function Login() {
     try {
       await completeMfaLogin(mfaState.factorId, mfaCode);
       // MFA passed — navigate regardless of profile fetch result
-      { const t = postLoginTarget(); if (t) navigate(t.route, { state: t.state }); else navigate('/'); }
+      enterApp(navigate, postLoginTarget());
     } catch (err) {
       console.error('[MFA verify error]', err);
       const msg = String(err?.message || err?.error_description || err || '').toLowerCase();
@@ -162,7 +182,7 @@ export default function Login() {
       // needed before a new account could play — the reload was only re-running
       // auth at a point where the profile finally existed.
       doAuth?.();
-      { const t = postLoginTarget(); if (t) navigate(t.route, { state: t.state }); else navigate('/'); }
+      enterApp(navigate, postLoginTarget());
     } catch (err) {
       setError(err.message || 'Failed to create profile. Try a different username.');
     } finally {
@@ -229,7 +249,7 @@ export default function Login() {
           </div>
           <div className="bg-surface border border-surfaceLight rounded-2xl p-6">
             <div className="text-center mb-5">
-              <div className="text-4xl mb-2">🔐</div>
+              <div className="mb-2 flex justify-center"><LockIcon size={40} /></div>
               <p className="text-sm text-white font-semibold">Enter your authenticator code</p>
               <p className="text-xs text-muted mt-1">Open Google Authenticator or Authy and enter the 6-digit code</p>
             </div>

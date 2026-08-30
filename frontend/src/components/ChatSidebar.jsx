@@ -271,6 +271,10 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
   const [reportDone, setReportDone]     = useState(false);
   const [reportErr, setReportErr]       = useState('');
   const isOwn = userId === myProfile?.id;
+  // Signed out, every action on this card (tip, add friend, report, spectate)
+  // needs a session the visitor does not have, so none of them are offered.
+  // The card itself still opens: the leaderboard that led here is public.
+  const canAct = !!myProfile && !isOwn && !isBot;
 
   const liveGame = !isBot && !isOwn
     ? activeGames?.find(g => g.player1?.username === username || g.player2?.username === username)
@@ -480,7 +484,7 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
               {/* Report — any player, not just admins. Automated checks catch
                   explicit imagery at upload; impersonation and cheating only
                   surface because somebody says so. */}
-              {!isOwn && !isBot && !viewOnly && (
+              {canAct && !viewOnly && (
                 <div className="border-t border-border pt-5 mb-5">
                   {reportDone ? (
                     <p className="text-sm text-success font-semibold">
@@ -560,7 +564,7 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
               {/* Friend request + Watch Live. In viewOnly the friend button is
                   gone, so the row only earns its space when there is a live
                   game to watch. */}
-              {!isOwn && !isBot && (!viewOnly || liveGame) && (
+              {canAct && (!viewOnly || liveGame) && (
                 <div className="border-t border-border pt-5 mb-5 flex gap-2 flex-wrap">
                   {liveGame && (
                     <button
@@ -591,7 +595,7 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
               )}
 
               {/* Tip */}
-              {!isOwn && !isBot && (
+              {canAct && (
                 <div className="border-t border-border pt-5">
                   <div className="text-sm text-muted mb-3 font-semibold">Send Tip</div>
                   <div className="flex gap-2 mb-3">

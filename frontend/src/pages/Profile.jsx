@@ -12,7 +12,7 @@ import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
 import GameIcon from '../components/GameIcon';
 import RankIcon from '../components/RankIcon';
-import UiIcon from '../components/UiIcon';
+import UiIcon, { LockIcon } from '../components/UiIcon';
 import DiamondIcon from '../components/DiamondIcon';
 import { ProfilePopup } from '../components/ChatSidebar';
 import FriendInviteBox from '../components/FriendInviteBox';
@@ -682,7 +682,7 @@ function TwoFactorSection() {
 
   return (
     <div className="mb-5">
-      <div className="text-sm font-bold text-white mb-2">🔐 Two-Factor Authentication</div>
+      <div className="text-sm font-bold text-white mb-2 flex items-center gap-1.5"><LockIcon size={15} /> Two-Factor Authentication</div>
 
       {factors === null ? (
         <p className="text-xs text-muted">Loading…</p>
@@ -1389,7 +1389,7 @@ export default function Profile() {
     return (
       <div className="min-h-[calc(100vh-56px)] bg-bg flex items-center justify-center px-4">
         <div className="text-center">
-          <div className="text-5xl mb-4">👤</div>
+          <div className="mb-4 flex justify-center text-primary"><UiIcon name="profile" size={52} /></div>
           <h2 className="text-2xl font-black text-white mb-2">Your Profile</h2>
           <p className="text-muted mb-6">Login to view your stats, match history, and achievements.</p>
           <Link to="/login" className="px-6 py-3 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl transition-all">Login to View</Link>

@@ -1,3 +1,5 @@
+import { ICON_ALIGN } from './UiIcon';
+
 /**
  * GameIcon — the little picture that stands for each game.
  *
@@ -29,6 +31,15 @@ const ALIASES = {
   coinflip:      'coin-flip',
   coinFlip:      'coin-flip',
   'quick-match': 'quickMatch',
+  // The database writes game_type with underscores (profiles' per-game stats
+  // read straight off it), so the same game arrives spelled three ways
+  // depending on who is asking. Coin Flip's stat card on the profile drew
+  // nothing at all because of exactly this.
+  coin_flip:     'coin-flip',
+  block_blast:   'blockBlast',
+  car_dash:      'carDash',
+  color_rush:    'colorRush',
+  word_vs:       'scrabble',
 };
 
 // ── Block Burst: the blue L piece ───────────────────────────────────────────
@@ -186,7 +197,7 @@ export default function GameIcon({ game, size = 24, className = '', title }) {
   return (
     <svg
       width={size} height={size} viewBox="0 0 24 24"
-      className={`inline-block shrink-0 align-middle ${className}`}
+      className={`inline-block shrink-0 ${className}`} style={ICON_ALIGN}
       role={title ? 'img' : 'presentation'}
       aria-label={title || undefined}
       aria-hidden={title ? undefined : 'true'}

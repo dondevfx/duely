@@ -16,6 +16,7 @@ import GameHelp from '../components/GameHelp';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
 import PrivateWaiting from '../components/PrivateWaiting';
 import { usePrivateRematch } from '../hooks/usePrivateRematch';
+import { useGameScrollLock } from '../hooks/useGameScrollLock';
 
 function fmtTime(ms) {
   const s = (ms ?? 0) / 1000;
@@ -61,6 +62,12 @@ export default function CarDashGame() {
   const [entryFee, setEntryFee] = useState(location.state?.entryFee ?? 1);
   const [statusMsg, setStatusMsg] = useState('');
   const [countdown, setCountdown] = useState(0);
+
+  // Both of these were left out when the lock was added to the other five, so
+  // a player who had scrolled the lobby began the countdown — and then the
+  // match — looking at the middle of the board, with the top of the track off
+  // the screen.
+  useGameScrollLock(countdown > 0 || phase === 'playing');
   const [opponent, setOpponent] = useState(null);
   const [seed, setSeed] = useState(null);
   const [roomId, setRoomId] = useState(null);

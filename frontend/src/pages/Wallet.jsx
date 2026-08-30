@@ -8,6 +8,8 @@ import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
 import { fmtCoins, fmtExact } from '../utils/format';
+import UiIcon from '../components/UiIcon';
+import { LockIcon } from '../components/UiIcon';
 
 // ── Supported deposit coins ───────────────────────────────────────────
 // Must match DEPOSIT_MINS in backend/src/routes/wallet.js, which explains how
@@ -288,7 +290,7 @@ export default function Wallet() {
   if (!session) return (
     <div className="min-h-[calc(100vh-56px)] bg-bg flex items-center justify-center px-4">
       <div className="text-center">
-        <div className="text-5xl mb-4">💰</div>
+        <div className="mb-4 flex justify-center text-primary"><UiIcon name="wallet" size={52} /></div>
         <h2 className="text-2xl font-black text-white mb-2">Wallet</h2>
         <p className="text-muted mb-6">Login to deposit, withdraw, and manage your balance.</p>
         <Link to="/login" className="px-6 py-3 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl transition-all">Login to Access</Link>
@@ -509,7 +511,7 @@ export default function Wallet() {
 
             {hasMfa && (
               <div>
-                <label className="block text-xs text-muted mb-1">🔐 Authenticator Code</label>
+                <label className="text-xs text-muted mb-1 flex items-center gap-1.5"><LockIcon size={13} /> Authenticator Code</label>
                 <input
                   type="text"
                   inputMode="numeric"

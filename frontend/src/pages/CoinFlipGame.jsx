@@ -11,6 +11,7 @@ import BetSlider from '../components/BetSlider';
 import ResultScreen from '../components/ResultScreen';
 import GameHelp from '../components/GameHelp';
 import GameIcon from '../components/GameIcon';
+import { LockIcon } from '../components/UiIcon';
 import PlayerName from '../components/PlayerName';
 import GlowButton from '../components/GlowButton';
 import { topUpRoute, topUpLabel } from '../utils/topUpRoute';
@@ -776,12 +777,12 @@ export default function CoinFlipGame() {
             <div className="flex flex-col gap-2 sm:gap-3">
               {!session ? (
                 <GlowButton onClick={() => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent">
-                  🔒 Login to Play
+                  <LockIcon /> Login to Play
                 </GlowButton>
               ) : (
               <>
               <GlowButton onClick={insufficient ? () => navigate(topUpRoute(betCurrency)) : joinQueue} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent" disabled={session && !authenticated}>
-                {!session ? '🔒 Login to Play'
+                {!session ? <><LockIcon /> Login to Play</>
                   : insufficient ? topUpLabel(betCurrency)
                   : `Find Opponent (${side === 'heads' ? '🔵 Heads' : '⚪ Tails'})`}
               </GlowButton>

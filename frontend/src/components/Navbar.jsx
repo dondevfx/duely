@@ -1,5 +1,5 @@
 ﻿import { useState, useRef, useEffect, useCallback } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import DiamondIcon from './DiamondIcon';
 import GameIcon from './GameIcon';
 import RankIcon from './RankIcon';
@@ -51,6 +51,7 @@ export default function Navbar() {
   const { displayCurrency, setDisplayCurrency } = useCurrency();
   const { playerCounts } = useSocket();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [dropdownOpen, setDropdownOpen]   = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileCurrencyOpen, setMobileCurrencyOpen] = useState(false);
@@ -154,7 +155,22 @@ export default function Navbar() {
 
           {/* Logo — left-aligned (in flex flow) so a large balance can't overlap it */}
           <div className="relative shrink-0 lg:w-56 flex justify-start pointer-events-auto">
-            <Link to="/" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-1.5 pointer-events-auto">
+            {/* Home, and a reload if you are already home.
+                A logo that always hard-reloaded would throw away the socket and
+                every cached panel on a click people make casually, which is
+                worse than the problem. But a logo that does nothing at all when
+                you are already on the page you are looking at is a dead
+                control — and "click the logo" is the gesture people reach for
+                when something looks stuck. Clicking it from home reloads, which
+                is both a real action and the escape hatch. */}
+            <Link
+              to="/"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                if (pathname === '/') window.location.reload();
+              }}
+              className="flex items-center gap-1.5 pointer-events-auto"
+            >
               <span className="text-[27px] lg:text-[34px] font-black tracking-tight text-primary" style={{ textShadow: '0 0 22px rgba(18,80,180,0.6)' }}>
                 Duely
               </span>

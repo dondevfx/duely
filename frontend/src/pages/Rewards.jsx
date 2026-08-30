@@ -2,7 +2,7 @@
 import { Link } from 'react-router-dom';
 import DiamondIcon, { DiamondGlyph } from '../components/DiamondIcon';
 import RankIcon from '../components/RankIcon';
-import UiIcon, { RakebackTierIcon } from '../components/UiIcon';
+import UiIcon, { RakebackTierIcon, LockIcon } from '../components/UiIcon';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { isRanked, placementMatches } from '../utils/ranks';
@@ -477,7 +477,7 @@ function TierWheelCard({ tier, isUnlocked, isActive, statusInfo, onSpinComplete,
           className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl z-10"
           style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(1px)' }}
         >
-          <span className="text-4xl mb-2">🔒</span>
+          <LockIcon size={40} className="mb-2" />
           <div className="text-sm font-bold text-white/80">{lockText}</div>
           <div className="text-xs text-white/40 mt-1">Advance your rank to unlock</div>
         </div>
@@ -599,7 +599,7 @@ export default function Rewards() {
         {/* Guest login prompt */}
         {!session && (
           <div className="bg-primary/10 border border-primary/30 rounded-2xl p-6 text-center">
-            <div className="text-3xl mb-2">🎡</div>
+            <div className="mb-2 flex justify-center text-primary"><UiIcon name="rewards" size={36} /></div>
             <p className="text-white font-bold mb-1">Log in to spin the wheels</p>
             <p className="text-muted text-sm mb-4">Earn free diamonds every day — no purchase needed</p>
             <Link to="/login" className="inline-block px-8 py-3 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl transition-all">
@@ -647,7 +647,7 @@ export default function Rewards() {
                 <SpinWheel locked />
               </div>
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 rounded-2xl gap-2">
-                <span className="text-3xl">🔒</span>
+                <LockIcon size={30} />
                 <p className="text-white font-bold text-sm">Login to spin</p>
               </div>
             </div>

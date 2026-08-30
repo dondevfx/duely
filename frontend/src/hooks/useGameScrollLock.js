@@ -34,6 +34,20 @@ export function useGameScrollLock(active) {
 
     // Start at the top: a match should open on the board, not wherever the
     // lobby was left. Unconditional — this half is always right.
+    //
+    // Re-asserted over the next few frames rather than set once. The lobby is
+    // still mounted on the frame the countdown begins, and the browser restores
+    // the old scroll position after the taller lobby is swapped for the shorter
+    // board — so a single assignment here is undone a frame later and the match
+    // opens scrolled down anyway. Three frames covers the swap without ever
+    // fighting the player, since nothing they do in the first 50ms of a
+    // countdown can scroll.
+    let frames = 3;
+    const toTop = () => {
+      main.scrollTop = 0;
+      if (--frames > 0) raf = requestAnimationFrame(toTop);
+    };
+    let raf = requestAnimationFrame(toTop);
     main.scrollTop = 0;
 
     // Mobile browsers rubber-band the document past a locked child, which drags
@@ -86,6 +100,7 @@ export function useGameScrollLock(active) {
     document.addEventListener('visibilitychange', onVis);
 
     return () => {
+      cancelAnimationFrame(raf);
       ro.disconnect();
       window.removeEventListener('resize', apply);
       window.removeEventListener('orientationchange', apply);

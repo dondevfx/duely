@@ -142,7 +142,14 @@ module.exports = function authRoutes(supabase) {
   });
 
   // Public profile (for chat popup) — returns rank + total_wagered
-  router.get('/public/:userId', requireAuth, async (req, res) => {
+  // Readable without a session.
+  //
+  // The leaderboard is public, and tapping a row there opens this. Behind
+  // requireAuth every one of those taps answered "Player not found" for a
+  // logged-out visitor — which is most people arriving from a shared link.
+  // Nothing here is private: it is the same username, rank and record the
+  // leaderboard row they just tapped is already showing them.
+  router.get('/public/:userId', optionalAuth, async (req, res) => {
     const { userId } = req.params;
     if (!UUID_RE.test(userId)) return res.status(400).json({ error: 'Invalid user id' });
 

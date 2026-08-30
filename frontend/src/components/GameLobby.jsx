@@ -10,6 +10,7 @@ import GameIcon from './GameIcon';
 import { topUpRoute, topUpLabel } from '../utils/topUpRoute';
 import CreateRoomModal from './CreateRoomModal';
 import JoinRoomModal from './JoinRoomModal';
+import { LockIcon } from './UiIcon';
 
 // The secondary lobby actions: Challenge a Friend, Bet vs Bot, Play vs Bot,
 // Join Game. Below Find Opponent, which is the one primary action, but not so
@@ -226,7 +227,7 @@ export default function GameLobby({
       <div className="flex flex-col gap-2 sm:gap-3">
         {!session ? (
           <GlowButton onClick={() => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent">
-            🔒 Login to Play
+            <LockIcon /> Login to Play
           </GlowButton>
         ) : (
         <>
@@ -250,7 +251,7 @@ export default function GameLobby({
           className="w-full text-lg py-4 border border-transparent"
           disabled={session && !authenticated}
         >
-          {!session ? '🔒 Login to Play' : insufficient ? topUpLabel(betCurrency) : 'Find Opponent'}
+          {!session ? <><LockIcon /> Login to Play</> : insufficient ? topUpLabel(betCurrency) : 'Find Opponent'}
         </GlowButton>
 
         {/* Secondary options — small buttons, still visible but not competing

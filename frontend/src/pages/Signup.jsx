@@ -28,8 +28,10 @@ export default function Signup() {
       if (data.session) {
         // Email confirmation is OFF — logged in immediately. If they got here
         // from a friend invite link, finish that instead of dumping them home.
+        // A full load, not a route change — see enterApp in Login.jsx. A brand
+        // new account is the case where the least is already in memory.
         const invite = takePendingInvite();
-        navigate(invite ? invite.route : '/');
+        window.location.assign(invite ? invite.route : '/');
       } else {
         // Email confirmation is ON — tell user to check inbox
         setAwaitingConfirmation(true);

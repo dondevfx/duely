@@ -1,3 +1,5 @@
+import { ICON_ALIGN } from './UiIcon';
+
 /**
  * RankIcon — the badge for each ELO rank.
  *
@@ -106,7 +108,7 @@ export default function RankIcon({ rank, size = 18, className = '', title }) {
   return (
     <svg
       width={size} height={size} viewBox="0 0 24 24"
-      className={`inline-block shrink-0 align-middle ${className}`}
+      className={`inline-block shrink-0 ${className}`} style={ICON_ALIGN}
       role={title ? 'img' : 'presentation'}
       aria-label={title || name || undefined}
       aria-hidden={title || name ? undefined : 'true'}

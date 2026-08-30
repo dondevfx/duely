@@ -2,6 +2,7 @@ import { useState } from 'react';
 import DiamondIcon from '../components/DiamondIcon';
 import { useNavigate } from 'react-router-dom';
 import GameIcon from '../components/GameIcon';
+import { LockIcon } from '../components/UiIcon';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../utils/supabase';
 import { useSocket } from '../context/SocketContext';
@@ -48,6 +49,8 @@ export default function QuickMatch() {
   const [picked, setPicked]     = useState(null);
 
   const isDiamonds   = betCurrency === 'diamonds';
+  // Coin Flip is coins-only, so a diamond bet cannot land there.
+  const activePool   = isDiamonds ? POOL.filter(g => !g.coinsOnly) : POOL;
   const fees         = isDiamonds ? DIAMOND_FEES : COIN_FEES;
   const currLabel    = isDiamonds ? <DiamondIcon /> : <CoinIcon size="0.85em" />;
   const myBalance    = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
@@ -73,7 +76,7 @@ export default function QuickMatch() {
     setPicked(null);
 
     // Filter out coin flip for diamond matches
-    const pool = isDiamonds ? POOL.filter(g => !g.coinsOnly) : POOL;
+    const pool = activePool;
 
     // Decide the destination up front, from who is actually queued at this bet
     // right now. Quick Match used to pick uniformly at random, so it would
@@ -127,7 +130,7 @@ export default function QuickMatch() {
 
         {/* Game pool preview */}
         <div className="flex justify-center gap-3 mb-2 sm:mb-5">
-          {POOL.map(g => (
+          {activePool.map(g => (
             <div
               key={g.route}
               className={`text-2xl transition-all duration-75 ${picked?.route === g.route ? 'scale-125' : 'opacity-40 scale-100'}`}
@@ -187,20 +190,26 @@ export default function QuickMatch() {
           className="w-full text-lg py-4 border border-transparent"
           disabled={session && (!authenticated || rolling)}
         >
-          {!session ? '🔒 Login to Play'
+          {!session ? <><LockIcon /> Login to Play</>
             : insufficient ? topUpLabel(betCurrency)
             : rolling ? 'Finding game…' : 'Play'}
         </GlowButton>
 
-        {!authenticated && (
+        {/* Only worth saying to someone who is signed in and waiting on the
+            socket. A signed-out visitor has to log in before any of this
+            matters, so "Connecting…" under a Login button reads as a fault. */}
+        {session && !authenticated && (
           <div className="flex items-center justify-center gap-2 text-sm text-muted mt-3">
             <div className="w-2 h-2 rounded-full bg-warning animate-pulse" />
             Connecting…
           </div>
         )}
 
+        {/* Built from POOL rather than typed out. The hand-written version was
+            three games out of date the moment a game was added, and it also
+            has to drop Coin Flip on a diamond bet, which no fixed string can. */}
         <p className="text-center text-xs text-muted mt-4">
-          Pool: Block Burst · Coin Flip · Blackjack · Word VS
+          Pool: {activePool.map(g => g.name).join(' · ')}
         </p>
       </div>
     </div>

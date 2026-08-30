@@ -10,6 +10,7 @@ import BetSlider from '../components/BetSlider';
 import ResultScreen from '../components/ResultScreen';
 import GameHelp from '../components/GameHelp';
 import GameIcon from '../components/GameIcon';
+import { LockIcon } from '../components/UiIcon';
 import Avatar from '../components/Avatar';
 import PlayerName from '../components/PlayerName';
 import GameErrorBoundary from '../components/GameErrorBoundary';
@@ -1173,19 +1174,19 @@ function BlackjackGame() {
         <div className="flex flex-col gap-3">
           {!session ? (
             <GlowButton onClick={() => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent">
-              🔒 Login to Play
+              <LockIcon /> Login to Play
             </GlowButton>
           ) : (
           <>
           {!isDiamonds && (
             <GlowButton onClick={!session ? () => navigate('/login') : insufficient ? () => navigate(topUpRoute(betCurrency)) : joinQueue} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent" disabled={session && !authenticated}>
-              {!session ? '🔒 Login to Play' : insufficient ? topUpLabel(betCurrency) : 'Find Opponent'}
+              {!session ? <><LockIcon /> Login to Play</> : insufficient ? topUpLabel(betCurrency) : 'Find Opponent'}
             </GlowButton>
           )}
 
           {isDiamonds && (
             <GlowButton onClick={!session ? () => navigate('/login') : insufficient ? () => navigate(topUpRoute(betCurrency)) : joinQueue} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent" disabled={session && !authenticated}>
-              {!session ? '🔒 Login to Play' : insufficient ? topUpLabel(betCurrency) : 'Find Opponent'}
+              {!session ? <><LockIcon /> Login to Play</> : insufficient ? topUpLabel(betCurrency) : 'Find Opponent'}
             </GlowButton>
           )}
 

@@ -7,6 +7,7 @@ import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
 import { fmtCoins, fmtDiamonds, fmtExact } from '../utils/format';
+import UiIcon from '../components/UiIcon';
 
 
 export default function Tip() {
@@ -91,7 +92,7 @@ export default function Tip() {
   if (!session) return (
     <div className="min-h-[calc(100vh-56px)] bg-bg flex items-center justify-center px-4">
       <div className="text-center">
-        <div className="text-5xl mb-4">💸</div>
+        <div className="mb-4 flex justify-center text-primary"><UiIcon name="tip" size={52} /></div>
         <h2 className="text-2xl font-black text-white mb-2">Tip a Player</h2>
         <p className="text-muted mb-6">Login to send coins or diamonds to other players.</p>
         <Link to="/login" className="px-6 py-3 bg-primary hover:bg-blue-500 text-white font-bold rounded-xl transition-all">Login to Tip</Link>

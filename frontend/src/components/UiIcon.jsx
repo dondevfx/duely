@@ -1,4 +1,22 @@
 /**
+ * How a drawn icon sits on a line of text.
+ *
+ * These all used `vertical-align: middle`, which is the obvious choice and is
+ * wrong: it centres the box on the x-height midline, about 0.25em above the
+ * baseline, while text reads as centred on its cap height, about 0.35em above
+ * it. The icon therefore hangs roughly a tenth of an em low beside every
+ * label — the top edges line up and the bottom edge drops past the text, which
+ * is exactly what it looked like.
+ *
+ * Aligning to a fixed offset from the baseline instead puts an icon roughly as
+ * tall as its text visually centred on it, and matches what DiamondIcon and
+ * CoinIcon were already doing (those two never looked off). It is also inert
+ * inside a flex row, where vertical-align does not apply and `items-center`
+ * has already done the job — so this cannot nudge the icons that were fine.
+ */
+export const ICON_ALIGN = { verticalAlign: '-0.15em' };
+
+/**
  * UiIcon — the menu icons.
  *
  * Home, Games, Rewards, Profile, Leaderboard, Wallet, Tip and Rakeback were
@@ -156,7 +174,7 @@ export function RakebackTierIcon({ tier, size = 18, className = '' }) {
   if (!art) return null;
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false"
-      className={`inline-block shrink-0 align-middle ${className}`}>{art}</svg>
+      className={`inline-block shrink-0 ${className}`} style={ICON_ALIGN}>{art}</svg>
   );
 }
 
@@ -200,7 +218,7 @@ export function StatIcon({ kind, size = 18, className = '' }) {
   if (!art) return null;
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false"
-      className={`inline-block shrink-0 align-middle ${className}`}>{art}</svg>
+      className={`inline-block shrink-0 ${className}`} style={ICON_ALIGN}>{art}</svg>
   );
 }
 
@@ -216,7 +234,7 @@ export function PlaceIcon({ place, size = 18, className = '' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" role="img"
       aria-label={`${place} place`} focusable="false"
-      className={`inline-block shrink-0 align-middle ${className}`}>
+      className={`inline-block shrink-0 ${className}`} style={ICON_ALIGN}>
       <path d="M7.4 2.6l3.2 6.2H7.2L4.2 2.6z" fill={c.ribbon} />
       <path d="M16.6 2.6l-3.2 6.2h3.4l3-6.2z" fill={c.ribbon} opacity="0.75" />
       <circle cx="12" cy="15" r="6.6" fill={c.metal} stroke={c.dark} strokeWidth="1.1" />
@@ -251,7 +269,7 @@ export default function UiIcon({ name, size = 20, className = '', title }) {
   return (
     <svg
       width={size} height={size} viewBox="0 0 24 24"
-      className={`inline-block shrink-0 align-middle ${className}`}
+      className={`inline-block shrink-0 ${className}`} style={ICON_ALIGN}
       role={title ? 'img' : 'presentation'}
       aria-label={title || undefined}
       aria-hidden={title ? undefined : 'true'}
@@ -322,8 +340,35 @@ export function OutcomeIcon({ kind, size = 48, className = '' }) {
   if (!o) return null;
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" role="img" aria-label={o.label}
-      focusable="false" className={`inline-block shrink-0 align-middle ${className}`}>
+      focusable="false" className={`inline-block shrink-0 ${className}`} style={ICON_ALIGN}>
       {o.art}
+    </svg>
+  );
+}
+
+// ── Lock ────────────────────────────────────────────────────────────────────
+//
+// The 🔒 that gates every logged-out button and every rank wheel. It is the
+// most-repeated emoji on the site and the one most likely to render as a
+// different object per platform — on some it is a padlock, on others a
+// padlock with a key. Drawn in the site's gold so it reads as "you can have
+// this" rather than as an error.
+export function LockIcon({ size = '1em', open = false, className = '' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" role="img"
+      aria-label={open ? 'unlocked' : 'locked'} focusable="false"
+      className={`inline-block shrink-0 ${className}`} style={ICON_ALIGN}>
+      {/* The shackle. Open swings it clear of the body on one side, which is
+          how an unlocked state reads without needing a caption. */}
+      <path d={open ? 'M8 10.5V7a4 4 0 0 1 7.7-1.5' : 'M8 10.5V7a4 4 0 0 1 8 0v3.5'}
+        fill="none" stroke="#C99A0E" strokeWidth="2.1" strokeLinecap="round" />
+      <rect x="4.4" y="10.2" width="15.2" height="10.6" rx="2.4" fill="#F5C518" />
+      <rect x="4.4" y="10.2" width="15.2" height="10.6" rx="2.4"
+        fill="none" stroke="#C99A0E" strokeWidth="1" />
+      {/* the keyhole, which is what makes it a lock at 14px */}
+      <circle cx="12" cy="14.6" r="1.9" fill="#7A5A05" />
+      <path d="M12 15.6v2.6" stroke="#7A5A05" strokeWidth="2" strokeLinecap="round" />
+      <path d="M6.4 11.6h11.2" stroke="#FFF3C4" strokeWidth="1" opacity="0.5" strokeLinecap="round" />
     </svg>
   );
 }

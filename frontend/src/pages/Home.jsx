@@ -11,6 +11,7 @@ import CoinIcon from '../components/CoinIcon';
 import ReferralCard from '../components/ReferralCard';
 import { fmtCoins, fmtExact } from '../utils/format';
 import { GAMES } from '../data/games';
+import { LockIcon } from '../components/UiIcon';
 
 function DailySpinWidget({ profile }) {
   return profile ? (
@@ -21,7 +22,7 @@ function DailySpinWidget({ profile }) {
         <SpinWheel />
       </div>
       <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] rounded-2xl gap-3">
-        <div className="text-3xl">🎡</div>
+        <LockIcon size={32} />
         <p className="text-white font-black text-lg">Daily Spin</p>
         <p className="text-muted text-sm text-center px-4">Win up to 50,000 <DiamondIcon /> every day</p>
         <Link
