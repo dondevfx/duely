@@ -219,7 +219,11 @@ export default function Home() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary">•</span>
-                  <DiamondIcon /> Diamonds are free — claim 500 every 1 min
+                  {/* Wrapped, like the other two bullets. Bare, the icon was a
+                      flex CHILD of the li — items-start pinned it to the top of
+                      the line and vertical-align does not apply inside flex, so
+                      it floated above the sentence instead of sitting in it. */}
+                  <span><DiamondIcon /> Diamonds are free — claim 500 every 1 min</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary">•</span>
