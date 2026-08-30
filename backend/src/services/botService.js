@@ -2,6 +2,7 @@
 // BOT SERVICE  —  To disable all bots: BOTS_ENABLED = false
 // ─────────────────────────────────────────────────────────
 const BOTS_ENABLED = true;
+const { randomFunnyName, disguisedFace } = require('./demoAccounts');
 
 const BOT_NAMES = ['Duely Bot'];
 
@@ -21,6 +22,19 @@ function createBotPlayer(entryFee = 0, gameType = 'reaction') {
     isBot:    true,
     gameType,
   };
+}
+
+// Give a bot a human name AND the face that goes with it.
+//
+// The two were set apart: handlers assigned bot.username = randomFunnyName()
+// and left profileColor null, so every disguised opponent drew the same default
+// blue circle while real players vary. One call now, because a fake name
+// without a face is the bug.
+function disguiseBot(bot) {
+  if (!bot) return bot;
+  bot.username = randomFunnyName();
+  Object.assign(bot, disguisedFace(bot.username));
+  return bot;
 }
 
 // Bot clicks 700–1300ms after GO signal (human average is ~400-600ms so this is beatable)
@@ -50,4 +64,4 @@ function simulateBotTyping(io, roomId, text, onProgressFn, onCompleteFn) {
   setTimeout(tick, msPerChar);
 }
 
-module.exports = { BOTS_ENABLED, createBotPlayer, scheduleBotClick, simulateBotTyping };
+module.exports = { BOTS_ENABLED, createBotPlayer, disguiseBot, scheduleBotClick, simulateBotTyping };

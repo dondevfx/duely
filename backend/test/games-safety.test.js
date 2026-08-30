@@ -161,3 +161,70 @@ test('every game can be played privately as well as from the queue', () => {
   const unmarked = cases.filter((c) => !/feesDeducted = true/.test(c)).map((c) => c.slice(0, c.indexOf("'")));
   assert.deepEqual(unmarked, [], `these private matches would settle unpaid: ${unmarked}`);
 });
+
+// ── Disguised players ───────────────────────────────────────────────────────
+
+test('a fake name never arrives without a face to go with it', () => {
+  // Demo accounts play under a random name, and the bots that fill a casual
+  // queue are given one too. Both were sent with profileColor null, so every
+  // disguised opponent drew the same default blue circle while real players
+  // vary — which is how you spot a fake one at a glance.
+  const demo = be('services', 'demoAccounts.js');
+  assert.match(demo, /function disguisedFace\(name\)/);
+  assert.match(demo, /function shownAs\(p\)/);
+  // From the palette a real player actually picks from, not an invented colour.
+  assert.match(demo, /const PROFILE_COLORS = \[/);
+  assert.match(demo, /'#1250B4', '#00BFFF'/);
+
+  // Bots get name and face together, so the two cannot drift apart again.
+  const bot = be('services', 'botService.js');
+  assert.match(bot, /function disguiseBot\(bot\)/);
+  assert.match(bot, /bot\.username = randomFunnyName\(\);\s*\n\s*Object\.assign\(bot, disguisedFace\(bot\.username\)\);/);
+  assert.doesNotMatch(HANDLERS, /bot\.username = randomFunnyName\(\)/,
+    'a bot is still being named without being given a face');
+});
+
+test('every disguised payload sends the disguised face, not the real one', () => {
+  // A fake name beside the account's real photograph is a worse disguise than
+  // none, and it leaks the real player.
+  assert.doesNotMatch(HANDLERS, /isDemo \? randomFunnyName\(\)/,
+    'a payload still builds a name on its own');
+  const shown = [...HANDLERS.matchAll(/const (\w+) = shownAs\((?:\w|\.)+\);/g)].map((m) => m[1]);
+  assert.ok(shown.length >= 12, `expected every queue path, found ${shown.length}`);
+
+  const bad = [];
+  for (const v of shown) {
+    // Wherever the shown NAME is used, the shown face must be used with it.
+    // Escaped twice on purpose: inside a template literal `\w` is just "w".
+    const re = new RegExp(`username: ${v}\\.username,[^}]*?avatarUrl: ([\\w.]+),\\s*profileColor: ([\\w.]+)`, 'g');
+    let m, seen = 0;
+    while ((m = re.exec(HANDLERS))) {
+      seen++;
+      if (m[1] !== `${v}.avatarUrl` || m[2] !== `${v}.profileColor`) {
+        bad.push(`${v}: name is disguised but the face is ${m[1]}`);
+      }
+    }
+    if (seen === 0) bad.push(`${v}: computed but never used`);
+  }
+  assert.deepEqual(bad, [], bad.join('\n'));
+});
+
+test('the disguised colour is stable and from the real palette', () => {
+  // Stable, or an opponent changes colour between the countdown and the result
+  // card and reads as two different people.
+  const src = be('services', 'demoAccounts.js');
+  const geom = new Function(`${src.replace(/module\.exports[\s\S]*$/, '')}; return { disguisedFace, shownAs, PROFILE_COLORS };`)();
+  const a = geom.disguisedFace('ThighMaster69');
+  assert.deepEqual(a, geom.disguisedFace('ThighMaster69'), 'the colour changes between calls');
+  assert.ok(geom.PROFILE_COLORS.includes(a.profileColor));
+  assert.equal(a.avatarUrl, null, 'a disguise must not carry a picture');
+
+  // And it must actually spread across the palette rather than collapsing onto
+  // one colour, which is the bug in a different shape.
+  const used = new Set(geom.PROFILE_COLORS.map((_, i) => geom.disguisedFace(`Player${i}Name`).profileColor));
+  assert.ok(used.size >= 5, `only ${used.size} colours in use — they will still look alike`);
+
+  // A real player is passed through untouched.
+  const real = geom.shownAs({ username: 'jack', avatarUrl: 'u', profileColor: '#22c55e' });
+  assert.deepEqual(real, { username: 'jack', avatarUrl: 'u', profileColor: '#22c55e' });
+});
