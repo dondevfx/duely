@@ -19,7 +19,7 @@ export default function ToS() {
           },
           {
             title: '3. Deposits & Withdrawals',
-            body: 'Deposits are processed via supported crypto networks. Withdrawals require a minimum of 5 coins. The platform is not responsible for losses due to incorrect wallet addresses provided by the user. Withdrawal processing times vary by network.',
+            body: 'Deposits and withdrawals are made in cryptocurrency on supported networks. We do not accept payment cards, bank transfers, or any other payment method. Withdrawals require a minimum of 5 coins. The platform is not responsible for losses due to incorrect wallet addresses provided by the user. Withdrawal processing times vary by network.',
           },
           {
             title: '4. Fair Play',
@@ -35,7 +35,7 @@ export default function ToS() {
           },
           {
             title: '7. Prohibited Conduct',
-            body: 'The following are prohibited: collusion between players, money laundering, chargebacks, abusive behavior in chat, impersonation of other users or staff, and exploiting bugs without reporting them. Violations may result in account suspension or permanent ban.',
+            body: 'The following are prohibited: collusion between players, money laundering, reversing or disputing a completed deposit, abusive behavior in chat, impersonation of other users or staff, and exploiting bugs without reporting them. Violations may result in account suspension or permanent ban.',
           },
           {
             title: '8. Responsible Gaming',
@@ -46,8 +46,8 @@ export default function ToS() {
             body: 'Balances shown in your account represent an obligation owed to you by the platform. They are not a bank deposit, are not insured by any government or private deposit insurance scheme, and are not held in a segregated trust account for your individual benefit unless we state otherwise in writing. Digital assets are held in wallets controlled by the platform. You acknowledge that holding digital assets carries risk, including the risk of total loss.',
           },
           {
-            title: '10. Security Incidents',
-            body: 'We are not liable for loss of funds or data resulting from: compromise of your own account, device, email, or wallet; credentials you disclose to a third party; transactions you authorise, including transfers to an incorrect or fraudulent address; failure, congestion, fork, or reorganisation of any blockchain network; or the acts, insolvency, or compromise of any third-party payment processor, exchange, custodian, or infrastructure provider we rely on. Where a loss results from a security incident affecting the platform itself, our liability is limited as set out in Section 11, except that nothing in these Terms limits our liability for our own gross negligence, fraud, or wilful misconduct, or for any liability that cannot lawfully be excluded.',
+            title: '10. Security Incidents and Loss of Funds',
+            body: 'You use the platform at your own risk and accept the risk of loss of funds. To the fullest extent permitted by law, we are not liable for any loss of funds, digital assets, balance, or data resulting from: compromise of your own account, device, email, or wallet; credentials you disclose to a third party; transactions you authorise, including transfers to an incorrect or fraudulent address; failure, congestion, fork, or reorganisation of any blockchain network; the acts, insolvency, or compromise of any third-party exchange, custodian, or infrastructure provider we rely on; unauthorised access to our systems by any third party; theft, hacking, phishing, malware, or social engineering directed at you or at us; loss or compromise of private keys or wallet credentials; downtime, data loss, or misconfiguration of any hosting, database, or authentication provider; or any other event outside our reasonable control. This applies whether the loss is direct or indirect and however it arises. Where a loss results from a security incident affecting the platform itself, our liability is limited as set out in Section 11. You acknowledge that we do not guarantee the security of any system, that no system can be made completely secure, and that we give no warranty that funds held on the platform will be recoverable in the event of a security incident. Nothing in these Terms limits our liability for our own gross negligence, fraud, or wilful misconduct, or for any liability that cannot lawfully be excluded.',
           },
           {
             title: '11. Limitation of Liability',
