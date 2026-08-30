@@ -18,7 +18,7 @@ const { gamesWithSomeoneWaiting, chooseGame } = new Function(
 
 const POOL = [
   { route: '/game/block-blast', queueKey: 'block-blast' },
-  { route: '/game/coin-flip',   queueKey: 'coin-flip', coinsOnly: true },
+  { route: '/game/coin-flip',   queueKey: 'coin-flip' },
   { route: '/game/blackjack',   queueKey: 'blackjack' },
   { route: '/game/word-vs',     queueKey: 'scrabble' },
 ];
@@ -63,10 +63,12 @@ test('it only ever picks from games that have someone waiting', () => {
   }
 });
 
-test('a pool filtered for diamonds is respected', () => {
-  // Coin Flip is coins-only, so a diamond match must never land there even if
-  // that is where the waiting player is.
-  const pool = POOL.filter((g) => !g.coinsOnly);
+test('a narrowed pool is respected, even where the waiting players are', () => {
+  // Nothing is currency-restricted today — Coin Flip was, wrongly, and no
+  // longer is. This still guards the mechanism: whatever pool the caller hands
+  // in is the whole universe of answers, so a game left out cannot be chosen
+  // just because that is where someone is queued.
+  const pool = POOL.filter((g) => g.queueKey !== 'coin-flip');
   const counts = { 'coin-flip:50:diamonds': 5 };
   for (let i = 0; i < 100; i++) {
     assert.notEqual(chooseGame(pool, counts, 50, 'diamonds').queueKey, 'coin-flip');

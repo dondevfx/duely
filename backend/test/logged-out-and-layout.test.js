@@ -78,7 +78,11 @@ test('the Quick Match pool is listed from the pool, not typed out', () => {
   const src = fe('pages', 'QuickMatch.jsx');
   assert.match(src, /Pool: \{activePool\.map\(g => g\.name\)\.join\(' · '\)\}/);
   assert.doesNotMatch(src, /Pool: Block Burst/, 'the hand-typed list is still there');
-  assert.match(src, /const activePool\s+= isDiamonds \? POOL\.filter\(g => !g\.coinsOnly\) : POOL;/);
+  // Every game takes either currency now, so the listed pool is the whole
+  // pool. Coin Flip was flagged coins-only and was the one game a diamond
+  // Quick Match could never land on, despite the queue accepting diamonds.
+  assert.match(src, /const activePool\s+= POOL;/);
+  assert.doesNotMatch(src, /coinsOnly/, 'nothing is currency-restricted any more');
 });
 
 test('signing in reloads the app rather than navigating into it', () => {

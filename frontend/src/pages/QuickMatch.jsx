@@ -19,7 +19,7 @@ import { chooseGame } from '../utils/quickMatchPool';
 // (handlers.js incrementCount), so we can tell who is waiting where.
 const POOL = [
   { route: '/game/block-blast', name: 'Block Burst', queueKey: 'block-blast' },
-  { route: '/game/coin-flip',   name: 'Coin Flip', coinsOnly: true, queueKey: 'coin-flip' },
+  { route: '/game/coin-flip',   name: 'Coin Flip', queueKey: 'coin-flip' },
   { route: '/game/blackjack',   name: 'Blackjack', queueKey: 'blackjack' },
   { route: '/game/word-vs',     name: 'Word VS', queueKey: 'scrabble' },
   { route: '/game/car-dash',    name: 'Rush Hour', queueKey: 'car-dash' },
@@ -49,8 +49,11 @@ export default function QuickMatch() {
   const [picked, setPicked]     = useState(null);
 
   const isDiamonds   = betCurrency === 'diamonds';
-  // Coin Flip is coins-only, so a diamond bet cannot land there.
-  const activePool   = isDiamonds ? POOL.filter(g => !g.coinsOnly) : POOL;
+  // Every game in the pool takes either currency. Coin Flip was flagged
+  // coins-only, which was wrong — a diamond coin flip is an ordinary PvP
+  // match and the queue has always accepted one — so it was the one game a
+  // diamond Quick Match could never land on.
+  const activePool   = POOL;
   const fees         = isDiamonds ? DIAMOND_FEES : COIN_FEES;
   const currLabel    = isDiamonds ? <DiamondIcon /> : <CoinIcon size="0.85em" />;
   const myBalance    = isDiamonds ? (profile?.diamonds ?? 0) : (profile?.c_coins ?? 0);
