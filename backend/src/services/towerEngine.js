@@ -31,6 +31,14 @@ const SCORE_REFILL_PER_MS  = 0.004;    // 4 blocks/second sustained
 // Block Burst and Rush Hour, so the three do not teach different rules.
 const CATCHUP_MS = 15_000;
 
+// Stall watchdog. See the note in blockBlastEngine: Tower also pings only when
+// the score changes — one per landed block — so the 15s used by the continuously
+// pinging games would end the run of anyone lining up a careful drop. 45s of
+// dropping nothing while the opponent plays on is not an accident.
+const STALL_MS = 45_000;
+const WATCH_MS = 3_000;
+const MAX_MATCH_MS = 30 * 60_000;
+
 // Below this standard deviation between drops, a run is suspiciously metronomic.
 // Tower takes a single input, which makes it the easiest game here to script.
 // This only logs — a good player on an easy stretch can look consistent, and
@@ -198,6 +206,48 @@ async function startTowerCountdown(io, supabase, roomId) {
   // other game's start event.
   io.to(roomId).emit('tower_start', { seed: randomInt(1000000) });
 
+  // No match may hang forever waiting on a client that stops playing. Without
+  // this, joining a PvP match and never dropping a block held the room 'active'
+  // indefinitely: the opponent could play forever without winning, and their
+  // only way out was to forfeit and lose the stake.
+  const watch = setInterval(() => {
+    const r = getTowerRoom(roomId);
+    if (!r || r.state !== 'active') { clearInterval(watch); return; }
+    const now = Date.now();
+
+    if (now - (r.startTime || now) > MAX_MATCH_MS) {
+      clearInterval(watch);
+      _resolveFromScores(io, supabase, roomId).catch(() => {});
+      return;
+    }
+
+    // Solo has no second human to protect; the bot never ends on its own.
+    if (r.isSolo) return;
+
+    const live = r.players.filter(p => !p.isBot && r.scores[p.socketId] == null);
+    const stalled = live.filter((p) => {
+      const last = r.pingTimes[p.socketId] ?? r.startTime ?? now;
+      return now - last > STALL_MS;
+    });
+    if (stalled.length === 0) return;
+
+    if (stalled.length === live.length) {
+      // No one left to play on for — settle on the scores as they stand.
+      clearInterval(watch);
+      for (const p of live) r.scores[p.socketId] = r.pingScores[p.socketId] ?? 0;
+      _resolveFromScores(io, supabase, roomId).catch(() => {});
+      return;
+    }
+
+    // Treated exactly as their run ending: their score is what the server
+    // tracked, and their opponent plays on with the normal catch-up window.
+    for (const p of stalled) {
+      handleTowerComplete(io, supabase, roomId, p.socketId, r.pingScores[p.socketId] ?? 0)
+        .catch(() => {});
+    }
+  }, WATCH_MS);
+  current.botTimers.push(watch);
+
   if (current.isSolo) {
     const human = current.players.find(p => !p.isBot);
     if (human) {
@@ -267,7 +317,16 @@ async function handleTowerComplete(io, supabase, roomId, socketId, score = 0, ta
     if (!humanWon && botScore <= verified) botScore = verified + 1;
 
     let balanceChange = null;
-    if (room.entryFee > 0) {
+    // Never pay out a stake that was never taken. Every other engine carries
+    // this guard; Tower was the one that did not, even though handlers.js has
+    // always set the flag on its rooms. The deduction path cancels the match
+    // when it fails, so this should be unreachable — which is exactly why it is
+    // worth having, since the unreachable case is the one that would mint coins
+    // out of nothing.
+    if (room.entryFee > 0 && !room.feesDeducted) {
+      console.error(`[towerEngine] CRITICAL: solo room ${roomId} settled without feesDeducted — no payout issued`);
+      unlockUser(player.userId);
+    } else if (room.entryFee > 0) {
       try {
         balanceChange = await settleBotMatch(
           supabase, player.userId, room.entryFee, room.currency || 'coins', humanWon, { game: 'Tower' });
@@ -397,7 +456,10 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
     : await freshRatings(supabase, winner, loser);
 
   let balanceChange = null;
-  if (supabase && room.entryFee > 0) {
+  if (room.entryFee > 0 && !room.feesDeducted) {
+    console.error(`[towerEngine] CRITICAL: room ${roomId} settled without feesDeducted — no payout issued`);
+    unlockUser(winner.userId); unlockUser(loser.userId);
+  } else if (supabase && room.entryFee > 0) {
     try {
       const meta = { game: 'Tower', winnerUsername: winner.username, loserUsername: loser.username };
       balanceChange = (room.currency === 'diamonds')

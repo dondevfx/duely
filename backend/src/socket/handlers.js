@@ -158,8 +158,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     [getCoinFlipRoomBySocket,   deleteCoinFlipRoom,   'coin_flip'],
     [getBlackjackRoomBySocket,  deleteBlackjackRoom,  'blackjack'],
     [getCarDashRoomBySocket,    deleteCarDashRoom,    'carDash'],
-    [getColorRushRoomBySocket,  deleteColorRushRoom,  'colorRush'],
-    [getTowerRoomBySocket,      deleteTowerRoom,      'tower'],
+        [getColorRushRoomBySocket,  deleteColorRushRoom,  'colorRush'],
+        [getTowerRoomBySocket,      deleteTowerRoom,      'tower'],
   ]);
 
   // Is this socket already sitting in a live room of ANY game?
@@ -854,7 +854,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
             const room = getTowerRoom(roomId);
             if (room) room.feesDeducted = true;
           } catch (e) {
-            console.error('[block-blast] fee deduction failed:', e.message);
+            console.error('[tower] fee deduction failed:', e.message);
             deleteTowerRoom(roomId);
             unlockUser(p1.userId); unlockUser(p2.userId);
             decrementCount('tower', p1.socketId);
@@ -2160,6 +2160,10 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       removeFromCoinFlipQueue(socket.id);
       removeFromBlackjackQueue(socket.id);
       removeFromCarDashQueue(socket.id);
+      // Color Rush was missing from both cleanup lists — a player who left its
+      // lobby while queued stayed in the queue, and was matched later as a
+      // no-show that the opponent had to sit through until a timer caught it.
+      removeFromColorRushQueue(socket.id);
       removeFromTowerQueue(socket.id);
       if (authenticatedUser) { unlockUser(authenticatedUser.userId); userQueues.delete(authenticatedUser.userId); }
       io.emit('queue_entry_removed', { id: socket.id });
@@ -2183,8 +2187,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         [getCoinFlipRoomBySocket,   deleteCoinFlipRoom,   'coin_flip'],
         [getBlackjackRoomBySocket,  deleteBlackjackRoom,  'blackjack'],
         [getCarDashRoomBySocket,    deleteCarDashRoom,    'carDash'],
-    [getColorRushRoomBySocket,  deleteColorRushRoom,  'colorRush'],
-    [getTowerRoomBySocket,      deleteTowerRoom,      'tower'],
+        [getColorRushRoomBySocket,  deleteColorRushRoom,  'colorRush'],
+        [getTowerRoomBySocket,      deleteTowerRoom,      'tower'],
       ];
       let forfeited = false;
       for (const [getFn, delFn, gameType] of roomLookups) {
@@ -2209,6 +2213,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         removeFromCoinFlipQueue(socket.id);
         removeFromBlackjackQueue(socket.id);
         removeFromCarDashQueue(socket.id);
+        removeFromColorRushQueue(socket.id);
         removeFromTowerQueue(socket.id);
         removeFromBlockBlastQueue(socket.id);
         unlockUser(authenticatedUser.userId);
@@ -2322,6 +2327,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       removeFromCoinFlipQueue(socket.id);
       removeFromBlackjackQueue(socket.id);
       removeFromCarDashQueue(socket.id);
+      removeFromColorRushQueue(socket.id);
       removeFromTowerQueue(socket.id);
       // Broadcast queue entry removal so Play Now page stays in sync
       io.emit('queue_entry_removed', { id: socket.id });
@@ -2334,8 +2340,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         [getCoinFlipRoomBySocket,   deleteCoinFlipRoom,   'coin_flip'],
         [getBlackjackRoomBySocket,  deleteBlackjackRoom,  'blackjack'],
         [getCarDashRoomBySocket,    deleteCarDashRoom,    'carDash'],
-    [getColorRushRoomBySocket,  deleteColorRushRoom,  'colorRush'],
-    [getTowerRoomBySocket,      deleteTowerRoom,      'tower'],
+        [getColorRushRoomBySocket,  deleteColorRushRoom,  'colorRush'],
+        [getTowerRoomBySocket,      deleteTowerRoom,      'tower'],
       ];
 
       const pendingJobs = [];

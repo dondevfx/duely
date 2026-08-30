@@ -31,6 +31,22 @@ const blockBlastQueue = [];
 // Rush Hour's catch-up window, so the two games do not teach different rules.
 const CATCHUP_MS = 15_000;
 
+// Stall watchdog.
+//
+// Rush Hour and Color Rush ping continuously while a run is alive, so 15s of
+// silence there means the client is gone. Block Burst pings only when the score
+// CHANGES, and a player weighing three pieces against a crowded board can
+// legitimately think for half a minute — so the same 15s would end real runs.
+//
+// 45s of a player scoring nothing while their opponent plays on is not a game
+// state that happens by accident. Long enough never to catch a slow player,
+// short enough that refusing to play cannot hold a match open.
+const STALL_MS = 45_000;
+const WATCH_MS = 3_000;
+// Nothing runs this long. The ceiling exists so a match cannot outlive its
+// room even if both clients go quiet in a way the stall check cannot see.
+const MAX_MATCH_MS = 30 * 60_000;
+
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function addToBlockBlastQueue(player) {
@@ -164,6 +180,56 @@ async function startBlockBlastCountdown(io, supabase, roomId) {
   current.botTimers = current.botTimers || [];
   const seed = randomInt(1000000);
   io.to(roomId).emit('block_blast_start', { seed });
+
+  // No match may hang forever waiting on a client that stops playing.
+  //
+  // Without this a player could join a PvP match, never place a piece and
+  // never get stuck, and the room stayed 'active' indefinitely — the opponent
+  // could play as long as they liked and never win, and their only way out was
+  // to forfeit and lose the stake. Refusing to play must never be a way to hold
+  // someone else's coins hostage.
+  const watch = setInterval(() => {
+    const r = getBlockBlastRoom(roomId);
+    if (!r || r.state !== 'active') { clearInterval(watch); return; }
+    const now = Date.now();
+
+    if (now - (r.startTime || now) > MAX_MATCH_MS) {
+      clearInterval(watch);
+      _forceResolve(io, supabase, roomId).catch(() => {});
+      return;
+    }
+
+    // Solo has no second human to protect, and its bot never gets stuck — the
+    // run ends when the player's does.
+    if (r.isSolo) return;
+
+    const live = r.players.filter(p => !p.isBot && !r.stuck.has(p.socketId));
+    const stalled = live.filter((p) => {
+      const last = r.pingTimes[p.socketId] ?? r.startTime ?? now;
+      return now - last > STALL_MS;
+    });
+    if (stalled.length === 0) return;
+
+    if (stalled.length === live.length) {
+      // Everyone still in has gone quiet. There is no one left to play on for,
+      // so settle on the scores as they stand rather than marking each of them
+      // stuck in turn and arming a catch-up for a player who is also gone.
+      clearInterval(watch);
+      for (const p of live) r.scores[p.socketId] = r.pingScores[p.socketId] ?? 0;
+      _resolveFromScores(io, supabase, roomId).catch(() => {});
+      return;
+    }
+
+    // Otherwise treated exactly as getting stuck: their run ends at the score
+    // the server tracked, and THEIR OPPONENT PLAYS ON with the normal catch-up
+    // window. Resolving the whole match here would let the player who is ahead
+    // win by walking away.
+    for (const p of stalled) {
+      handleBlockBlastStuck(io, supabase, roomId, p.socketId, r.pingScores[p.socketId] ?? 0)
+        .catch(() => {});
+    }
+  }, WATCH_MS);
+  current.botTimers.push(watch);
 
   // Bot mode: score trails the human's live ping score, scaled by botRatio
   if (current.isSolo) {
