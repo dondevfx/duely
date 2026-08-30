@@ -467,8 +467,12 @@ test('the outcome and the shown scores never contradict each other', () => {
   assert.match(engine, /if \(!humanWon && botScore <= verified\)/);
 });
 
-test('the floor is stated before the bet, not discovered after it', () => {
-  assert.match(fe('pages', 'TowerGame.jsx'), /at least 15 blocks to win/);
+test('the diamond-bot floor is no longer advertised on the betting screen', () => {
+  // Removed on request. NOTE: DIAMOND_BOT_MIN_SCORE is still what decides a
+  // diamond bot match, so the rule now applies without being stated anywhere
+  // the player can read it. If the rule is ever dropped from the engine, this
+  // test and the constant go together.
+  assert.doesNotMatch(fe('pages', 'TowerGame.jsx'), /at least 15 blocks to win/);
 });
 
 test('the searching screen is the one every other game uses', () => {
