@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="robots" content="noindex" />
+<title>Opening Duely…</title>
+<!--
+  The link that goes in the Instagram bio.
+
+  Instagram opens links in its own embedded webview, not Safari or Chrome. That
+  webview has its own cookie and storage jar, which is why signing in there
+  "works" and then the session is gone the moment anyone opens the real site —
+  and why a player who taps through from a story lands logged out. It also
+  blocks parts of the crypto and wallet flows.
+
+  So this page's whole job is to get out of that webview and hand the visitor to
+  their real browser.
+
+  Three layers, deliberately, because the reliable ones do not exist:
+
+    1. Android — the intent:// scheme. Documented, and it works.
+    2. iOS — instagram://extbrowser, which asks Instagram itself to open the
+       link in the default browser. UNDOCUMENTED. It works today and Meta can
+       remove it in any release without telling anyone, so it is never the only
+       thing standing between a visitor and the site.
+    3. A visible button and instructions, always rendered. Layers 1 and 2 are
+       attempts; this one is the actual answer, and it is on screen before
+       either fires so a failed attempt leaves the visitor somewhere useful
+       rather than on a blank page.
+
+  Anyone NOT in an in-app browser is sent straight through and never sees this.
+-->
+<style>
+  :root {
+    --bg: #0D0D0D;
+    --surface: #141821;
+    --line: #232936;
+    --text: #FFFFFF;
+    --muted: #8A93A6;
+    --primary: #1250B4;
+    --primary-lift: #1B63D6;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); }
+  body {
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
+    color: var(--text);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .card { width: 100%; max-width: 380px; text-align: center; }
+  .mark {
+    font-size: 38px; font-weight: 900; letter-spacing: -0.02em;
+    color: var(--primary); text-shadow: 0 0 22px rgba(18, 80, 180, 0.55);
+    display: inline-flex; align-items: center; gap: 7px; margin-bottom: 20px;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--primary); }
+  h1 { font-size: 19px; font-weight: 800; margin: 0 0 8px; }
+  p { margin: 0 0 22px; color: var(--muted); font-size: 14px; }
+  .btn {
+    display: block; width: 100%; padding: 15px 20px; margin-bottom: 10px;
+    border: 0; border-radius: 13px; cursor: pointer;
+    font: 700 16px/1 inherit; color: #fff; background: var(--primary);
+    text-decoration: none; text-align: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active { background: var(--primary-lift); }
+  .btn.secondary { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+  .steps {
+    margin-top: 22px; padding: 16px; text-align: left;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 13px;
+  }
+  .steps h2 { font-size: 12px; font-weight: 800; letter-spacing: 0.09em;
+              text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  .steps ol { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13.5px; }
+  .steps li { margin-bottom: 5px; }
+  .steps li:last-child { margin-bottom: 0; }
+  .url {
+    margin-top: 16px; font-size: 12.5px; color: #5C6577;
+    word-break: break-all; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  /* Hidden until we know the visitor is stuck in an in-app browser, so someone
+     on a normal browser never sees a flash of instructions they don't need. */
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+  <main class="card">
+    <div class="mark">Duely<span class="dot"></span></div>
+
+    <div id="waiting">
+      <h1>Opening Duely…</h1>
+      <p>One moment.</p>
+    </div>
+
+    <div id="stuck" class="hidden">
+      <h1>Open in your browser</h1>
+      <p>Instagram&rsquo;s built-in browser can&rsquo;t keep you signed in. Open Duely in Safari or Chrome instead.</p>
+
+      <button class="btn" id="open" type="button">Open Duely</button>
+      <button class="btn secondary" id="copy" type="button">Copy link</button>
+
+      <div class="steps">
+        <h2>If that didn&rsquo;t work</h2>
+        <ol id="how"></ol>
+      </div>
+
+      <div class="url" id="url"></div>
+    </div>
+  </main>
+
+<script>
+(function () {
+  'use strict';
+
+  var SITE = 'https://www.duely.us';
+
+  // Carry the query string and hash through, so a referral or invite link still
+  // works after the hop. The path is not carried: this page is only ever the
+  // bio link, and forwarding an arbitrary path from a query parameter is an
+  // open-redirect waiting to happen.
+  var target = SITE + window.location.search + window.location.hash;
+  var bare   = target.replace(/^https?:\/\//, '');
+
+  var ua = navigator.userAgent || '';
+  // Instagram and the Facebook family share a webview. Messenger, Threads,
+  // TikTok, Snapchat, Twitter and LinkedIn all have the same problem, and the
+  // same escape hatch works, so they are all treated as "stuck".
+  var inApp = /Instagram|FBAN|FBAV|FB_IAB|FBIOS|Messenger|Threads|Line\/|MicroMessenger|TikTok|Snapchat|Twitter|LinkedInApp/i.test(ua);
+  var isIOS = /iPhone|iPad|iPod/i.test(ua) ||
+              // iPadOS reports itself as a Mac; the touch points give it away.
+              (/Macintosh/.test(ua) && typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 1);
+  var isAndroid = /Android/i.test(ua);
+
+  // A normal browser has no problem to solve. Replace rather than assign so
+  // this page never becomes a back-button trap between the visitor and the app.
+  if (!inApp) { window.location.replace(target); return; }
+
+  document.getElementById('url').textContent = bare;
+
+  // Per-platform instructions, because "tap the menu" is useless when the menu
+  // is in a different corner with a different icon on each one.
+  var steps = isIOS
+    ? ['Tap the <strong>&hellip;</strong> in the top right.',
+       'Choose <strong>Open in external browser</strong>.',
+       'Or copy the link above and paste it into Safari.']
+    : isAndroid
+      ? ['Tap the <strong>&#8942;</strong> in the top right.',
+         'Choose <strong>Open in Chrome</strong> (or <strong>Open in browser</strong>).',
+         'Or copy the link above and paste it into Chrome.']
+      : ['Open your browser and go to the address above.'];
+  document.getElementById('how').innerHTML =
+    steps.map(function (s) { return '<li>' + s + '</li>'; }).join('');
+
+  function escape() {
+    if (isAndroid) {
+      // Documented and reliable. `S.browser_fallback_url` is what runs when
+      // Chrome is not installed, so a device without it still lands on the site
+      // rather than on an error.
+      window.location.href =
+        'intent://' + bare +
+        '#Intent;scheme=https;package=com.android.chrome;' +
+        'S.browser_fallback_url=' + encodeURIComponent(target) + ';end';
+      return;
+    }
+    if (isIOS) {
+      // Undocumented, and the reason the button and the steps below are already
+      // on screen when this runs. If Meta drops it, nothing here breaks — the
+      // visitor just uses the instructions instead.
+      window.location.href = 'instagram://extbrowser/?url=' + encodeURIComponent(target);
+      return;
+    }
+    window.location.href = target;
+  }
+
+  // The instructions are shown FIRST, then the attempt is made. The other way
+  // round leaves the visitor watching a spinner that never resolves whenever the
+  // scheme is unsupported, and that is the case this page exists to survive.
+  document.getElementById('waiting').className = 'hidden';
+  document.getElementById('stuck').className = '';
+
+  document.getElementById('open').addEventListener('click', escape);
+
+  document.getElementById('copy').addEventListener('click', function () {
+    var btn = this;
+    var done = function () {
+      btn.textContent = 'Copied';
+      setTimeout(function () { btn.textContent = 'Copy link'; }, 1800);
+    };
+    // navigator.clipboard is unavailable in some in-app webviews even over
+    // https, so the old selection trick stays as the fallback.
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(target).then(done, legacy);
+    } else { legacy(); }
+
+    function legacy() {
+      var el = document.createElement('textarea');
+      el.value = target;
+      el.setAttribute('readonly', '');
+      el.style.cssText = 'position:absolute;left:-9999px;top:0';
+      document.body.appendChild(el);
+      el.select();
+      el.setSelectionRange(0, el.value.length);   // iOS ignores select() alone
+      try { document.execCommand('copy'); done(); } catch (e) { btn.textContent = 'Copy failed'; }
+      document.body.removeChild(el);
+    }
+  });
+
+  // One automatic attempt, on a short delay so the page has painted first.
+  // Not repeated: a retry loop in a webview that ignores the scheme just makes
+  // the page unusable, and the visitor already has the button.
+  setTimeout(escape, 350);
+}());
+</script>
+</body>
+</html>
