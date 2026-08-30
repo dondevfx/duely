@@ -162,6 +162,82 @@ function polyLoop(n, r, rot = Math.PI / 2) {
   return pts;
 }
 
+// Where the beads sit on a dotted outline.
+//
+// They used to be spread by VERTEX INDEX — 64 of them, walked as a fraction of
+// pts.length — which meant the spacing was an accident of how each shape
+// happened to be built. A circle is 120 points and a triangle is 3, so the same
+// 64 dots landed 11.6 units apart on an inner circle (they are 21 wide, so they
+// overlapped by half) and 22.3 apart on a triangle. And 64 does not divide by
+// 3, so no dot ever landed ON a triangle's corner: two of them straddled it
+// instead, leaving the corner looking broken open. That is the ragged edge.
+//
+// Spread by ARC LENGTH instead, in runs between real corners, with a dot pinned
+// to every corner. Density is then identical on every shape, and a corner is
+// always a single bead with the two edges running cleanly out of it.
+//
+// Pure geometry in the shape's own coordinates — rotation and position do not
+// change it — so it is computed once per shape and cached.
+const DOT_GAP = THICK * 1.3;   // centre to centre, in shape units
+
+function dotPositions(loop) {
+  if (loop._dots) return loop._dots;
+  const pts = loop.pts;
+  const n = pts.length;
+  const sub = (a, b) => [b[0] - a[0], b[1] - a[1]];
+  const len = (v) => Math.hypot(v[0], v[1]);
+
+  // A corner is a real change of direction, not the 3 degrees between two steps
+  // of a circle drawn as 120 segments.
+  const corners = [];
+  for (let i = 0; i < n; i++) {
+    const a = sub(pts[(i - 1 + n) % n], pts[i]);
+    const b = sub(pts[i], pts[(i + 1) % n]);
+    const turn = Math.abs(Math.atan2(a[0] * b[1] - a[1] * b[0], a[0] * b[0] + a[1] * b[1]));
+    if (turn > 0.26) corners.push(i);           // ~15 degrees
+  }
+
+  // The outline as runs between corners. A circle has none, so the whole ring
+  // is one run and the dots simply go evenly around it.
+  const runs = [];
+  if (corners.length === 0) {
+    runs.push(pts.concat([pts[0]]));
+  } else {
+    for (let c = 0; c < corners.length; c++) {
+      const from = corners[c], to = corners[(c + 1) % corners.length];
+      const run = [pts[from]];
+      for (let i = (from + 1) % n; ; i = (i + 1) % n) {
+        run.push(pts[i]);
+        if (i === to) break;
+      }
+      runs.push(run);
+    }
+  }
+
+  const out = [];
+  for (const run of runs) {
+    const seg = [];
+    let total = 0;
+    for (let i = 0; i < run.length - 1; i++) {
+      const L = len(sub(run[i], run[i + 1]));
+      seg.push(L); total += L;
+    }
+    if (total <= 0) continue;
+    // Rounded, so the spacing closes exactly at the far corner rather than
+    // leaving a short last gap where the next run starts.
+    const count = Math.max(1, Math.round(total / DOT_GAP));
+    for (let j = 0; j < count; j++) {   // j = 0 is the corner itself
+      let d = (j / count) * total, i = 0;
+      while (i < seg.length - 1 && d > seg[i]) { d -= seg[i]; i++; }
+      const f = seg[i] ? d / seg[i] : 0;
+      out.push([run[i][0] + (run[i + 1][0] - run[i][0]) * f,
+                run[i][1] + (run[i + 1][1] - run[i][1]) * f]);
+    }
+  }
+  loop._dots = out;
+  return out;
+}
+
 const inner = (pts) => ({ pts, spin: -1, mirror: true });
 const outer = (pts) => ({ pts, spin: 1, mirror: false });
 
@@ -445,14 +521,7 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
         // obstacle is exactly as solid as it appears. Real gaps would kill
         // players on something that looked like empty space.
         const r = THICK * 0.5 * scale;
-        const N = 64;
-        for (let k = 0; k < N; k++) {
-          // Walk the outline at even steps around the ring of corners.
-          const t = (k / N) * pts.length;
-          const i0 = Math.floor(t) % pts.length, i1 = (i0 + 1) % pts.length;
-          const f = t - Math.floor(t);
-          const p = [pts[i0][0] + (pts[i1][0] - pts[i0][0]) * f,
-                     pts[i0][1] + (pts[i1][1] - pts[i0][1]) * f];
+        for (const p of dotPositions(loop)) {
           const col = COLORS[colorAtAngle(Math.atan2(p[1], p[0]), offset, loop.mirror)];
           ctx.beginPath();
           ctx.arc(toX(p), toY(p), r, 0, TAU);

@@ -616,3 +616,71 @@ test('no Rush Hour wording survived the copy', () => {
     assert.ok(!PAGE.includes(word), `Rush Hour leftover in the Color Rush page: ${word}`);
   }
 });
+
+// ── Dotted outlines ─────────────────────────────────────────────────────────
+
+test('dots are spaced by distance, so every shape has the same density', () => {
+  // They used to be spread by VERTEX INDEX — 64 of them as a fraction of
+  // pts.length — so spacing was an accident of how each shape was built. A
+  // circle is 120 points and a triangle is 3: the same 64 dots landed 11.6
+  // units apart on an inner circle, where they are 21 wide, so they overlapped
+  // by half. That is the clumping on the edges.
+  const raw = fe('components', 'ColorRushCanvas.jsx');
+  assert.match(raw, /function dotPositions\(loop\)/, 'the dotting is not computed from geometry');
+  assert.match(raw, /const DOT_GAP = THICK \* 1\.3;/, 'no distance-based spacing');
+  assert.doesNotMatch(raw, /const N = 64;/, 'the fixed dot count is back');
+  assert.doesNotMatch(raw, /\(k \/ N\) \* pts\.length/, 'still walking by vertex index');
+});
+
+test('a dot lands exactly on every corner, at even spacing, on every shape', () => {
+  // Run the real geometry rather than assert on its source. 64 does not divide
+  // by 3, so no dot ever landed ON a triangle's corner — two straddled it and
+  // left the corner looking broken open.
+  const raw = fe('components', 'ColorRushCanvas.jsx');
+  const cut = (from, to) => raw.slice(raw.indexOf(from), raw.indexOf(to, raw.indexOf(from)));
+  const geom = new Function(
+    'const TAU=Math.PI*2, THICK=21;'
+    + cut('function circleLoop', 'function polyLoop')
+    + cut('function polyLoop', 'const DOT_GAP')
+    + cut('const DOT_GAP', 'const inner =')
+    + '; return { dotPositions, circleLoop, polyLoop };')();
+
+  const THICK = 21;
+  const shapes = {
+    'inner circle': [geom.circleLoop(118), false],
+    'outer circle': [geom.circleLoop(275), false],
+    triangle:       [geom.polyLoop(3, 275), true],
+    triangleCircle: [geom.polyLoop(3, 285), true],
+    square:         [geom.polyLoop(4, 235, 0), true],
+  };
+
+  for (const [name, [pts, isPoly]] of Object.entries(shapes)) {
+    const dots = geom.dotPositions({ pts });
+    let min = Infinity, max = 0;
+    for (let i = 0; i < dots.length; i++) {
+      const a = dots[i], b = dots[(i + 1) % dots.length];
+      const g = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (g > 1) { min = Math.min(min, g); max = Math.max(max, g); }
+    }
+    // No overlap: centres must be at least a dot's width apart.
+    assert.ok(min >= THICK, `${name}: dots overlap — closest pair is ${min.toFixed(1)} apart, they are ${THICK} wide`);
+    // Even: the whole outline reads as one rhythm rather than bunching.
+    assert.ok(max - min < 2, `${name}: spacing runs ${min.toFixed(1)}-${max.toFixed(1)}, which reads as clumped`);
+    // Consistent across shapes, which is what the index walk never was.
+    assert.ok(min > 25 && max < 31, `${name}: density ${min.toFixed(1)}-${max.toFixed(1)} is off the others`);
+    if (isPoly) {
+      for (const c of pts) {
+        assert.ok(dots.some(p => Math.hypot(p[0] - c[0], p[1] - c[1]) < 0.001),
+          `${name}: no dot sits on the corner at ${c.map(v => v.toFixed(0))} — it will look broken open`);
+      }
+    }
+  }
+});
+
+test('dotted is still only a look, never a real gap', () => {
+  // Collision does not consult the dots. If it ever did, a player would die on
+  // something that looked like empty space between two beads.
+  const raw = fe('components', 'ColorRushCanvas.jsx');
+  const hit = raw.slice(raw.indexOf('const laneBearing'), raw.indexOf('const laneBearing') + 400);
+  assert.doesNotMatch(hit, /dotted|dotPositions/, 'collision is reading the dotting');
+});
