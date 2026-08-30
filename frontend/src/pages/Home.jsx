@@ -218,7 +218,7 @@ export default function Home() {
                   <span className="inline-flex items-center gap-1">1 <CoinIcon size="1em" /> = $1 USD</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-accent">•</span>
+                  <span className="text-primary">•</span>
                   <DiamondIcon /> Diamonds are free — claim 500 every 1 min
                 </li>
                 <li className="flex items-start gap-2">
