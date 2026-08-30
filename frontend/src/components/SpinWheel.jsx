@@ -165,7 +165,11 @@ export default function SpinWheel({ locked = false }) {
       </div>
 
       {/* Wheel */}
-      <div className="relative flex items-center justify-center select-none px-5">
+      {/* Matches the rank wheels' own wheel row (Rewards.jsx: px-2 sm:px-4).
+          At px-5 this row ate 40px of a 164px card on a phone against their
+          16px, so the daily wheel drew at 122px beside their 146px — same card,
+          visibly smaller wheel, in a grid where they sit side by side. */}
+      <div className="relative flex items-center justify-center select-none px-2 sm:px-4">
         {/* Pointer */}
         <div className="absolute z-20" style={{
           top: -2, left: '50%', transform: 'translateX(-50%)',
@@ -178,7 +182,7 @@ export default function SpinWheel({ locked = false }) {
 
         {/* Wheel box — the ring measures against this, not the padded row.
             A percentage width on an absolute element resolves against its
-            containing block's PADDING box. The row outside carries px-5, so the
+            containing block's PADDING box. The row outside is padded, so the
             ring was sized from a box 40px wider than the one holding the SVG:
             two different denominators, which is why tuning the percentage alone
             never closed the gap. This wrapper is exactly the wheel's box. */}

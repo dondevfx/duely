@@ -173,3 +173,21 @@ test('the real reason is still written where the admin page reads it', () => {
     'the admin player view must select notes');
   assert.match(fe('pages', 'Admin.jsx'), /\{t\.notes &&/, 'and render it');
 });
+
+// ── The rewards wheels ──────────────────────────────────────────────────────
+
+test('the daily wheel is padded like the rank wheels it sits beside', () => {
+  // Six wheels in one grid, so any difference in the wheel row's horizontal
+  // padding shows up directly as a smaller wheel in the same size card. The
+  // daily one was px-5 against the rank wheels' px-2 sm:px-4 — 40px of a 164px
+  // phone card against 16px — and drew at 122px next to their 146px.
+  const daily = fe('components', 'SpinWheel.jsx');
+  const rank  = fe('pages', 'Rewards.jsx');
+  const row = (src) => {
+    const m = src.match(/relative flex items-center justify-center select-none ([^"]*)/);
+    assert.ok(m, 'could not find the wheel row');
+    return m[1].trim().split(/\s+/).filter((c) => /^(px|sm:px)-/.test(c)).join(' ');
+  };
+  assert.equal(row(daily), row(rank),
+    'the two wheels are padded differently, so they render at different sizes');
+});
