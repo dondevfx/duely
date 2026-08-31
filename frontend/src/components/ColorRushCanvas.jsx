@@ -252,12 +252,31 @@ const outer = (pts) => ({ pts, spin: 1, mirror: false });
 // 0/90/180/270) rather than between them, which is what makes each side
 // exactly one color. The triangle's three corners cannot all land on four
 // boundaries, so one of its sides always changes color partway along.
+// Sized against the widest thing that fits a phone.
+//
+// The canvas scales on HEIGHT (scale = H / VIEW_H), so how much width a shape
+// may use is decided by the aspect ratio: half-width <= 600 * (W/H) world
+// units, which is about 275 on the narrowest phones in circulation and 298 on a
+// 375x812 one.
+//
+// The triangles set that ceiling at 265 and are already there, so the others
+// were brought UP to it rather than everything being scaled together. That
+// half-width is measured to the outside of the STROKE, including the mitre that
+// sticks out past each corner — 15 units on a square's 90 degrees and 21 on a
+// triangle's 60 — which is why the square's radius is smaller than the
+// triangle's while ending up the same width on screen.
+//
+// Each nested pair is scaled by ONE factor, outer and inner together, so the
+// lane between the two rings keeps its proportions instead of the gap closing
+// up as the obstacle grows.
 const SHAPES = [
-  { name: 'circle',         loops: [outer(circleLoop(205))] },
-  { name: 'square',         loops: [outer(polyLoop(4, 235, 0))] },
+  { name: 'circle',         loops: [outer(circleLoop(254))] },
+  { name: 'square',         loops: [outer(polyLoop(4, 250, 0))] },
   { name: 'triangle',       loops: [outer(polyLoop(3, 275))] },
-  { name: 'doubleCircle',   loops: [outer(circleLoop(225)), inner(circleLoop(132))] },
-  { name: 'squareCircle',   loops: [outer(polyLoop(4, 235, 0)), inner(circleLoop(128))] },
+  // x1.129 on both rings
+  { name: 'doubleCircle',   loops: [outer(circleLoop(254)), inner(circleLoop(149))] },
+  // x1.064 on both rings
+  { name: 'squareCircle',   loops: [outer(polyLoop(4, 250, 0)), inner(circleLoop(136))] },
   { name: 'triangleCircle', loops: [outer(polyLoop(3, 285)), inner(circleLoop(118))] },
 ];
 

@@ -696,3 +696,60 @@ test('dotted is still only a look, never a real gap', () => {
   const hit = raw.slice(raw.indexOf('const laneBearing'), raw.indexOf('const laneBearing') + 400);
   assert.doesNotMatch(hit, /dotted|dotPositions/, 'collision is reading the dotting');
 });
+
+test('no obstacle grows wider than a phone screen', () => {
+  // The canvas scales on HEIGHT (scale = H / VIEW_H), so the width a shape may
+  // use is set by the aspect ratio: half-width <= 600 * (W/H) world units. On
+  // the narrowest phones in circulation — a 21:9 handset — that is about 276.
+  //
+  // Measured to the outside of the STROKE, including the mitre that overhangs
+  // each corner: 15 units on a square's 90 degrees, 21 on a triangle's 60. A
+  // radius that looks safe is not, which is the trap this test exists for.
+  const num = (re) => Number(CANVAS.match(re)[1]);
+  const thick = num(/const THICK\s*=\s*(\d+)/);
+  const hw = thick / 2;
+  const NARROWEST = 600 * (360 / 784);        // a 21:9 phone, navbar removed
+
+  const block = CANVAS.slice(CANVAS.indexOf('const SHAPES = ['),
+                             CANVAS.indexOf('];', CANVAS.indexOf('const SHAPES = [')));
+  const shapes = [...block.matchAll(/name: '(\w+)',\s+loops: \[(.*)\] \}/g)];
+  assert.equal(shapes.length, 6, `expected the six families, found ${shapes.length}`);
+
+  const polyHalf = (R, n, rot) => {
+    const miter = hw / Math.sin((Math.PI * (n - 2) / n) / 2);
+    let m = 0;
+    for (let i = 0; i < n; i++) m = Math.max(m, Math.abs(Math.cos(rot + (i / n) * 2 * Math.PI) * (R + miter)));
+    return m;
+  };
+
+  const tooWide = [];
+  for (const [, name, loops] of shapes) {
+    for (const l of loops.matchAll(/(outer|inner)\((circleLoop|polyLoop)\(([^)]*)\)\)/g)) {
+      const a = l[3].split(',').map((v) => Number(v.trim()));
+      const half = l[2] === 'circleLoop'
+        ? a[0] + hw
+        : polyHalf(a[1], a[0], a.length > 2 ? a[2] : Math.PI / 2);
+      if (half > NARROWEST) tooWide.push(`${name} ${l[1]}: ${half.toFixed(0)}u > ${NARROWEST.toFixed(0)}u`);
+    }
+  }
+  assert.deepEqual(tooWide, [], `these run off the side of a phone: ${tooWide.join(', ')}`);
+});
+
+test('a nested pair is scaled together, so the lane between them survives', () => {
+  // Growing an outer ring on its own closes the gap its inner ring sits in.
+  // The lane has to stay wide enough to hold station in.
+  const num = (re) => Number(CANVAS.match(re)[1]);
+  const thick = num(/const THICK\s*=\s*(\d+)/);
+  const ballR = num(/const BALL_R\s*=\s*(\d+)/);
+  const block = CANVAS.slice(CANVAS.indexOf('const SHAPES = ['),
+                             CANVAS.indexOf('];', CANVAS.indexOf('const SHAPES = [')));
+  const nested = [...block.matchAll(/name: '(\w+)',\s+loops: \[outer\((?:circleLoop|polyLoop)\(([^)]*)\)\), inner\(circleLoop\((\d+)\)\)\]/g)];
+  assert.equal(nested.length, 3, `expected three nested families, found ${nested.length}`);
+  for (const [, name, outerArgs, innerR] of nested) {
+    const a = outerArgs.split(',').map((v) => Number(v.trim()));
+    const outerR = a.length > 1 ? a[1] : a[0];
+    const lane = (outerR - thick / 2) - (Number(innerR) + thick / 2);
+    assert.ok(lane >= 2 * ballR + 20,
+      `${name}: only ${lane}u of lane between its rings, and the ball is ${2 * ballR}u across`);
+  }
+});
