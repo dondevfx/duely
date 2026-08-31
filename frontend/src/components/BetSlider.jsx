@@ -33,6 +33,7 @@ function applySliderDOM(rawIdx, fees, isDiamonds, thumb, fill, display, payout, 
  *   isDiamonds  bool       — controls payout formula (2x vs 1.9x)
  */
 export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDiamonds = false, payoutMult = 0.95 }) {
+  const hitRef     = useRef(null);
   const trackRef   = useRef(null);
   const thumbRef   = useRef(null);
   const fillRef    = useRef(null);
@@ -53,10 +54,13 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
 
   // Attach native pointer events once — smooth on mouse and touch
   useEffect(() => {
+    const hit   = hitRef.current;
     const track = trackRef.current;
-    if (!track) return;
+    if (!hit || !track) return;
 
     function rawFromX(clientX) {
+      // The VISIBLE bar, not the grab area — otherwise the gutters would shift
+      // every position by half a step and the thumb would sit off the tap.
       const rect = track.getBoundingClientRect();
       const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
       return pct * (dragRef.current.fees.length - 1);
@@ -69,7 +73,7 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
 
     function onDown(e) {
       dragRef.current.active = true;
-      track.setPointerCapture(e.pointerId);
+      hit.setPointerCapture(e.pointerId);
       apply(rawFromX(e.clientX));
       e.preventDefault();
     }
@@ -87,15 +91,15 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
       dragRef.current.setEntryFee(dragRef.current.fees[snapped]);
     }
 
-    track.addEventListener('pointerdown',   onDown);
-    track.addEventListener('pointermove',   onMove);
-    track.addEventListener('pointerup',     onUp);
-    track.addEventListener('pointercancel', onUp);
+    hit.addEventListener('pointerdown',   onDown);
+    hit.addEventListener('pointermove',   onMove);
+    hit.addEventListener('pointerup',     onUp);
+    hit.addEventListener('pointercancel', onUp);
     return () => {
-      track.removeEventListener('pointerdown',   onDown);
-      track.removeEventListener('pointermove',   onMove);
-      track.removeEventListener('pointerup',     onUp);
-      track.removeEventListener('pointercancel', onUp);
+      hit.removeEventListener('pointerdown',   onDown);
+      hit.removeEventListener('pointermove',   onMove);
+      hit.removeEventListener('pointerup',     onUp);
+      hit.removeEventListener('pointercancel', onUp);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -120,15 +124,29 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
         </div>
       )}
 
-      {/* Slider track.
-          The thumb is 24px wide and centred on its position, so it sticks out
-          12px past each end of the track. Without this inset it hangs off the
-          side of the card — and off the screen — at the min and max stops. */}
-      <div className="px-3">
+      {/* Slider.
+          Two boxes on purpose. The OUTER one catches the pointer; the inner one
+          is the bar you can see, and is the only thing positions are measured
+          against.
+          
+          They were the same box, which made the bar its own hit area — so a tap
+          a few pixels above or below it, or in the 12px gutters at either end,
+          landed on nothing at all. On a phone that is most of the taps aimed at
+          the ends of the range. The outer box adds 12px of grab above and below
+          and takes back the gutters, then cancels the height with a negative
+          margin so nothing on the screen moves.
+
+          The gutters exist because the thumb is 24px wide and centred on its
+          position, so it overhangs each end by 12px; without the inset it hangs
+          off the side of the card at the min and max stops. */}
+      <div
+        ref={hitRef}
+        className="relative -my-3 py-3 px-3 cursor-grab active:cursor-grabbing select-none touch-none"
+        style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+      >
       <div
         ref={trackRef}
-        className="relative w-full h-9 sm:h-12 flex items-center cursor-grab active:cursor-grabbing select-none touch-none"
-        style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+        className="relative w-full h-9 sm:h-12 flex items-center"
       >
         <div className="absolute left-0 right-0 h-2 rounded-full bg-border overflow-hidden">
           <div ref={fillRef} className="h-full rounded-full bg-primary" style={{ width: '0%' }} />
@@ -160,7 +178,7 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
           heading and would otherwise read as the heading's value. */}
       <div className="flex items-center justify-between gap-1 mt-1.5 sm:mt-3">
         <span className="text-[11px] sm:text-sm text-muted whitespace-nowrap">Min: {fmtFee(fees[0])} {currLabel}</span>
-        <span className="text-xl sm:text-2xl font-black text-white">
+        <span className="text-2xl sm:text-2xl font-black text-white">
           <span ref={displayRef}>{fmtFee(entryFee)}</span>{' '}
           <span className="text-primary">{currLabel}</span>
         </span>

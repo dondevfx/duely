@@ -228,3 +228,37 @@ test('the disguised colour is stable and from the real palette', () => {
   const real = geom.shownAs({ username: 'jack', avatarUrl: 'u', profileColor: '#22c55e' });
   assert.deepEqual(real, { username: 'jack', avatarUrl: 'u', profileColor: '#22c55e' });
 });
+
+// ── The bet slider ──────────────────────────────────────────────────────────
+
+test('the slider is grabbed by a bigger box than the bar it draws', () => {
+  // The bar was its own hit area, so a tap a few pixels above or below it, or
+  // in the 12px gutters the thumb overhangs into, landed on nothing — and on a
+  // phone that is most of the taps aimed at either end of the range.
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'src', 'components', 'BetSlider.jsx'), 'utf8');
+
+  assert.match(src, /const hitRef\s+= useRef\(null\)/, 'there is no separate grab area');
+  // Bigger on all four sides, and the height given back so nothing moves.
+  assert.match(src, /ref=\{hitRef\}[\s\S]{0,200}?-my-3 py-3 px-3/);
+  // Every pointer event listens on the grab area, not the bar.
+  for (const ev of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) {
+    // Escaped twice: inside a template literal `\.` is just a dot.
+    assert.match(src, new RegExp(`hit\\.addEventListener\\('${ev}'`), `${ev} is not on the grab area`);
+    assert.match(src, new RegExp(`hit\\.removeEventListener\\('${ev}'`), `${ev} is not cleaned up`);
+  }
+  assert.doesNotMatch(src, /track\.(add|remove)EventListener/, 'the bar is still listening');
+  assert.match(src, /hit\.setPointerCapture/, 'capture must follow the listener');
+
+  // But positions are still measured against the VISIBLE bar. Measuring the
+  // grab area instead would offset every stop by half a step, so the thumb
+  // would land beside the tap rather than under it.
+  // Searched FORWARD from rawFromX: applySliderDOM is defined above it and also
+  // starts "function apply", so an unanchored search sliced an empty string and
+  // the assertion below passed against nothing.
+  const at = src.indexOf('function rawFromX');
+  const fn = src.slice(at, src.indexOf('function apply', at));
+  assert.ok(fn.length > 50, 'could not isolate rawFromX');
+  assert.match(fn, /track\.getBoundingClientRect\(\)/);
+  assert.doesNotMatch(fn, /hit\.getBoundingClientRect\(\)/);
+});
