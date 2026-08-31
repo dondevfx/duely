@@ -228,7 +228,13 @@ test('obstacles are derived from the index, not from a random stream', () => {
 });
 
 test('each obstacle spins faster than the one below it, up to a readable limit', () => {
-  assert.match(CANVAS, /const SPIN_RAMP = 1\.16;/);
+  // The ramp itself is a tuning value and is allowed to move; what must hold is
+  // that it compounds, stays above 1, and does not reach the readable ceiling so
+  // early that the run is at its hardest before it has begun. It was 1.16, which
+  // capped out around obstacle 11 — too soon.
+  const ramp = Number(CANVAS.match(/const SPIN_RAMP = ([\d.]+);/)[1]);
+  assert.ok(ramp > 1, 'the spin must speed up, not slow down');
+  assert.ok(ramp < 1.2, `a ramp of ${ramp} reaches the cap almost immediately`);
   const at = CANVAS.indexOf('function obstacleAt');
   const body = CANVAS.slice(at, CANVAS.indexOf('\n    }', at));
   const start = body.indexOf('const speed');
@@ -239,8 +245,14 @@ test('each obstacle spins faster than the one below it, up to a readable limit',
   // The cap is what keeps this a game of reading the spin. A color is present
   // for a quarter turn, so the window to enter or leave is (pi/2)/omega — at
   // the cap that has to stay above what a person can actually react to.
-  const spinMax = Number(CANVAS.match(/const SPIN_MAX\s+=\s+([\d.]+)/)[1]);
+  const spinMaxOf = () => Number(CANVAS.match(/const SPIN_MAX\s+=\s+([\d.]+)/)[1]);
+  const spinMax = spinMaxOf();
   const window = (Math.PI / 2) / spinMax;
+  // And the climb must take a real run to arrive, not a handful of obstacles.
+  const base = Number(CANVAS.match(/([\d.]+) \* Math\.pow\(SPIN_RAMP, i\)/)[1]);
+  const capAt = Math.log(spinMaxOf() / base) / Math.log(ramp);
+  assert.ok(capAt >= 15, `the spin hits its ceiling by obstacle ${Math.round(capAt)} — too early to be a climb`);
+
   assert.ok(window >= 0.3,
     `at the cap a color is only present for ${window.toFixed(2)}s — too fast to act on`);
 

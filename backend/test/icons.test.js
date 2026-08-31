@@ -179,3 +179,32 @@ test('Color Rush has a tap, a pickup and a death sound, and the tap is the quiet
   assert.match(canvas, /playCrDiamond\(\);/, 'the pickup must fire on a diamond');
   assert.match(canvas, /playCrDeath\(\);/,   'the death must fire on death');
 });
+
+// ── Comments that were not comments ─────────────────────────────────────────
+
+test('no block comment sits unbraced in JSX children', () => {
+  // In JSX children a bare /* … */ is not a comment, it is TEXT. Two game
+  // countdowns shipped with a paragraph of source code printed under the timer,
+  // for every player, because the braces were missing.
+  //
+  // Expression position is fine — `cond ? ( /* … */ <div/> ) : …` is ordinary
+  // JS — so only lines that follow a JSX tag or a closing brace are flagged.
+  const bad = [];
+  for (const file of walk(FE())) {
+    const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+    lines.forEach((line, i) => {
+      if (!/^\s*\/\*/.test(line) || /^\s*\{\s*\/\*/.test(line)) return;
+      // What comes immediately before decides whether we are in children.
+      const prev = lines.slice(Math.max(0, i - 3), i).reverse().find((l) => l.trim());
+      if (!prev) return;
+      const t = prev.trim();
+      // Children: right after an element, a closing brace of an expression, or
+      // a closing tag. NOT after `? (`, `=> (`, `return (` — those are values.
+      if (/(\/>|<\/[A-Za-z][\w.]*>|\}\))$/.test(t)) {
+        bad.push(`${path.basename(file)}:${i + 1}`);
+      }
+    });
+  }
+  assert.deepEqual(bad, [],
+    `these render as visible text rather than as comments: ${bad.join(', ')}`);
+});
