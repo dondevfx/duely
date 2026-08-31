@@ -54,6 +54,18 @@ export default function Navbar() {
   const { pathname } = useLocation();
   const [dropdownOpen, setDropdownOpen]   = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Shut the drawer on ANY navigation, not just on the links that remember to
+  // call setMobileMenuOpen(false) themselves.
+  //
+  // Leaving it open is what makes the button look broken. Every link inside the
+  // drawer closes it, but the back button, a redirect and anything that
+  // navigates from elsewhere do not — so the state can sit true with nothing on
+  // screen (the overlay is md:hidden, so rotating to a wide viewport also hides
+  // it while the state stays). The next tap then CLOSES a drawer the player
+  // cannot see, which reads exactly as "I pressed it and nothing happened", and
+  // a reload clears it because the state starts false again.
+  useEffect(() => { setMobileMenuOpen(false); }, [pathname]);
   const [mobileCurrencyOpen, setMobileCurrencyOpen] = useState(false);
   const [rakebackOpen, setRakebackOpen]   = useState(false);
   const [rakebackData, setRakebackData]   = useState(null);
@@ -140,10 +152,20 @@ export default function Navbar() {
       <nav className="fixed top-0 inset-x-0 z-50 h-14 border-b border-border bg-surface/95 backdrop-blur-md">
         <div className="flex items-center h-full px-3 sm:px-4 gap-2">
 
-          {/* Hamburger — mobile only */}
+          {/* Hamburger — mobile only.
+              relative z-10 puts it above the nav's own backdrop-blur layer.
+              A blurred fixed bar is a compositing layer, and a button painted
+              into it can lose hit-testing on iOS in a way a repaint clears —
+              which is what "it works again after a refresh" looks like.
+
+              touch-action: manipulation drops the double-tap-zoom wait, so the
+              tap registers immediately rather than after the browser has
+              decided it was not a gesture. */}
           <button
-            className="md:hidden p-2 rounded-lg text-muted hover:text-white hover:bg-surfaceLight transition-colors shrink-0 w-9 h-9 flex items-center justify-center"
+            className="md:hidden relative z-10 p-2 rounded-lg text-muted hover:text-white hover:bg-surfaceLight transition-colors shrink-0 w-9 h-9 flex items-center justify-center"
+            style={{ touchAction: 'manipulation' }}
             onClick={() => setMobileMenuOpen(o => !o)}
+            aria-expanded={mobileMenuOpen}
             aria-label="Menu"
           >
             <div className="w-5 flex flex-col gap-1.5">

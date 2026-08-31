@@ -157,12 +157,16 @@ export default function CarDashGame() {
     const main = document.querySelector('main');
     const body = document.body;
     const html = document.documentElement;
-    const prev = {
-      main: main ? main.style.overflowY : null,
-      body: body.style.overflow,
-      html: html.style.overflow,
-      touch: body.style.touchAction,
-    };
+    // Restored to the UNLOCKED values, not to whatever was there when this ran.
+    //
+    // Capturing the previous values looks more careful and is the bug: these
+    // four styles are only ever set by this lock, so if a second game's effect
+    // starts while the first is still locked — going from Rush Hour straight to
+    // Color Rush, or re-entering a game — it captures 'hidden' and 'none' as
+    // the state to go back to. Its cleanup then restores the page to LOCKED,
+    // and nothing on the site takes a tap or scrolls until a reload. That is
+    // the hamburger that stops working.
+    const UNLOCKED = { main: '', body: '', html: '', touch: '' };
 
     const pin = () => {
       if (main) main.scrollTop = 0;
@@ -192,10 +196,10 @@ export default function CarDashGame() {
     // that only a reload clears. So the lock is dropped whenever the page hides
     // and retaken when it comes back.
     const restore = () => {
-      if (main) main.style.overflowY = prev.main;
-      body.style.overflow = prev.body;
-      html.style.overflow = prev.html;
-      body.style.touchAction = prev.touch;
+      if (main) main.style.overflowY = UNLOCKED.main;
+      body.style.overflow = UNLOCKED.body;
+      html.style.overflow = UNLOCKED.html;
+      body.style.touchAction = UNLOCKED.touch;
     };
     const relock = () => {
       if (main) main.style.overflowY = 'hidden';

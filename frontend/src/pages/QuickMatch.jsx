@@ -10,7 +10,7 @@ import { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
 import BetSlider from '../components/BetSlider';
 import { useCurrency } from '../context/CurrencyContext';
 import GlowButton from '../components/GlowButton';
-import { topUpRoute, topUpLabel } from '../utils/topUpRoute.jsx';
+import InsufficientModal from '../components/InsufficientModal';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
 import { chooseGame } from '../utils/quickMatchPool';
@@ -47,6 +47,7 @@ export default function QuickMatch() {
   });
   const [rolling, setRolling]   = useState(false);
   const [picked, setPicked]     = useState(null);
+  const [shortfall, setShortfall] = useState(false);
 
   const isDiamonds   = betCurrency === 'diamonds';
   // Every game in the pool takes either currency. Coin Flip was flagged
@@ -185,7 +186,7 @@ export default function QuickMatch() {
         <GlowButton
           onClick={
             !session      ? () => navigate('/login')
-            : insufficient ? () => navigate(topUpRoute(betCurrency))
+            : insufficient ? () => setShortfall(true)
             : play
           }
           variant="primary"
@@ -194,7 +195,6 @@ export default function QuickMatch() {
           disabled={session && (!authenticated || rolling)}
         >
           {!session ? <><LockIcon /> Login to Play</>
-            : insufficient ? topUpLabel(betCurrency)
             : rolling ? 'Finding game…' : 'Play'}
         </GlowButton>
 
@@ -211,6 +211,8 @@ export default function QuickMatch() {
         {/* Built from POOL rather than typed out. The hand-written version was
             three games out of date the moment a game was added, and it also
             has to drop Coin Flip on a diamond bet, which no fixed string can. */}
+        <InsufficientModal currency={betCurrency} open={shortfall} onClose={() => setShortfall(false)} />
+
         <p className="text-center text-xs text-muted mt-4">
           Pool: {activePool.map(g => g.name).join(' · ')}
         </p>

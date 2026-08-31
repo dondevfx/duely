@@ -14,9 +14,9 @@ import GameIcon from '../components/GameIcon';
 import { LockIcon } from '../components/UiIcon';
 import PlayerName from '../components/PlayerName';
 import GlowButton from '../components/GlowButton';
-import { topUpRoute, topUpLabel } from '../utils/topUpRoute.jsx';
 import CreateRoomModal from '../components/CreateRoomModal';
 import JoinRoomModal from '../components/JoinRoomModal';
+import InsufficientModal from '../components/InsufficientModal';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
 import PrivateWaiting from '../components/PrivateWaiting';
 import { usePageReady } from '../hooks/usePageReady';
@@ -215,6 +215,7 @@ export default function CoinFlipGame() {
   const [side, setSide] = useState('heads');
   const [privateCode, setPrivateCode] = useState('');
   const [privateMode, setPrivateMode] = useState(null);
+  const [shortfall, setShortfall] = useState(false);
   const [invitedFriend, setInvitedFriend] = useState(null);
   const [joinCode, setJoinCode] = useState('');
   const [entryFee, setEntryFee] = useState(() => location.state?.entryFee ?? (betCurrency === 'diamonds' ? DIAMOND_FEES[0] : COIN_FEES[0]));
@@ -781,9 +782,8 @@ export default function CoinFlipGame() {
                 </GlowButton>
               ) : (
               <>
-              <GlowButton onClick={insufficient ? () => navigate(topUpRoute(betCurrency)) : joinQueue} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent" disabled={session && !authenticated}>
+              <GlowButton onClick={insufficient ? () => setShortfall(true) : joinQueue} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent" disabled={session && !authenticated}>
                 {!session ? <><LockIcon /> Login to Play</>
-                  : insufficient ? topUpLabel(betCurrency)
                   : `Find Opponent (${side === 'heads' ? '🔵 Heads' : '⚪ Tails'})`}
               </GlowButton>
               <>
@@ -793,21 +793,19 @@ export default function CoinFlipGame() {
                       than like the one primary action above. */}
                   <div className="flex flex-col gap-2 pt-1">
                     <button
-                      onClick={insufficient ? () => navigate(topUpRoute(betCurrency)) : () => setPrivateMode('create')}
+                      onClick={insufficient ? () => setShortfall(true) : () => setPrivateMode('create')}
                       className={SMALL_BTN}
                     >
-                      {insufficient ? topUpLabel(betCurrency) : '🎮 Challenge a Friend'}
+                      {'🎮 Challenge a Friend'}
                     </button>
                     {/* Diamond bet-vs-bot gets its own full-width row — too long to share */}
                     {isDiamonds && (
                       <button
-                        onClick={insufficient ? () => navigate(topUpRoute(betCurrency)) : () => playVsBot(false)}
+                        onClick={insufficient ? () => setShortfall(true) : () => playVsBot(false)}
                         disabled={!authenticated}
                         className={SMALL_BTN}
                       >
-                        {insufficient
-                          ? <span className="inline-flex items-center gap-1">Insufficient <DiamondIcon /> — Get More</span>
-                          : <span className="inline-flex items-center gap-1">Bet vs Bot — {fmtFee(entryFee)} <DiamondIcon /></span>}
+                        <span className="inline-flex items-center gap-1">Bet vs Bot — {fmtFee(entryFee)} <DiamondIcon /></span>
                       </button>
                     )}
                     <div className="flex gap-2">
@@ -819,6 +817,8 @@ export default function CoinFlipGame() {
                       </button>
                     </div>
                   </div>
+      <InsufficientModal currency={betCurrency} open={shortfall} onClose={() => setShortfall(false)} />
+
                   <CreateRoomModal
                     open={privateMode === 'create'}
                     onClose={() => setPrivateMode(null)}

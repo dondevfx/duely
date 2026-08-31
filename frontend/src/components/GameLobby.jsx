@@ -7,10 +7,10 @@ import BetSlider from './BetSlider';
 import { useAuth } from '../context/AuthContext';
 import CoinIcon from './CoinIcon';
 import GameIcon from './GameIcon';
-import { topUpRoute, topUpLabel } from '../utils/topUpRoute.jsx';
 import CreateRoomModal from './CreateRoomModal';
 import JoinRoomModal from './JoinRoomModal';
 import { LockIcon } from './UiIcon';
+import InsufficientModal from './InsufficientModal';
 
 // The secondary lobby actions: Challenge a Friend, Bet vs Bot, Play vs Bot,
 // Join Game. Below Find Opponent, which is the one primary action, but not so
@@ -78,7 +78,8 @@ export default function GameLobby({
   liveCount,
   gameType,
 }) {
-  const [privateMode, setPrivateMode] = useState(null); // null | 'create' | 'join'
+  const [privateMode, setPrivateMode] = useState(null);
+  const [shortfall, setShortfall] = useState(false);
   const [joinCode, setJoinCode]       = useState('');
 
   const { betCounts } = useSocket() || {};
@@ -240,10 +241,14 @@ export default function GameLobby({
           The button stays ENABLED in that state and routes to wherever the
           currency is topped up. Disabled, it named the problem and then refused
           to help with it, leaving the player to find the wallet themselves. */}
+        {/* The label does not change with the balance. A button that renames
+            itself to an error still looks like the action you wanted until you
+            read it, and the screen changing shape means the control you were
+            reaching for has moved. Pressing it short opens the dialog. */}
         <GlowButton
           onClick={
             !session      ? () => navigate('/login')
-            : insufficient ? () => navigate(topUpRoute(betCurrency))
+            : insufficient ? () => setShortfall(true)
             : commit(onQueue)
           }
           variant="primary"
@@ -251,7 +256,7 @@ export default function GameLobby({
           className="w-full text-lg py-4 border border-transparent"
           disabled={session && !authenticated}
         >
-          {!session ? <><LockIcon /> Login to Play</> : insufficient ? topUpLabel(betCurrency) : 'Find Opponent'}
+          {!session ? <><LockIcon /> Login to Play</> : 'Find Opponent'}
         </GlowButton>
 
         {/* Secondary options — small buttons, still visible but not competing
@@ -272,10 +277,10 @@ export default function GameLobby({
                   because there is nothing there to buy diamonds with. */}
             {onCreatePrivate && (
               <button
-                onClick={insufficient ? () => navigate(topUpRoute(betCurrency)) : () => setPrivateMode('create')}
+                onClick={insufficient ? () => setShortfall(true) : () => setPrivateMode('create')}
                 className={SMALL_BTN}
               >
-                {insufficient ? topUpLabel(betCurrency) : '🎮 Challenge a Friend'}
+                🎮 Challenge a Friend
               </button>
             )}
             {/* Diamond bet-vs-bot gets its own full-width row — the label is too
@@ -286,12 +291,10 @@ export default function GameLobby({
                 the same as the main action above. */}
             {onBot && isDiamonds && entryFee > 0 && (
               <button
-                onClick={insufficient ? () => navigate(topUpRoute(betCurrency)) : commit(onBot)}
+                onClick={insufficient ? () => setShortfall(true) : commit(onBot)}
                 className={SMALL_BTN}
               >
-                {insufficient
-                  ? <span className="inline-flex items-center gap-1">Insufficient <DiamondIcon /> — Get More</span>
-                  : <span className="inline-flex items-center gap-1">Bet vs Bot — {fmtFee(entryFee)} <DiamondIcon /></span>}
+                <span className="inline-flex items-center gap-1">Bet vs Bot — {fmtFee(entryFee)} <DiamondIcon /></span>
               </button>
             )}
             <div className="flex gap-2 sm:gap-2">
@@ -309,7 +312,9 @@ export default function GameLobby({
           </div>
         )}
 
-        {/* ── Private Match modals ── */}
+        <InsufficientModal currency={betCurrency} open={shortfall} onClose={() => setShortfall(false)} />
+
+      {/* ── Private Match modals ── */}
         {onCreatePrivate && (
           <>
             <CreateRoomModal

@@ -363,46 +363,7 @@ test('demo transactions stay out of the admin lists', () => {
 
 // ── Not being able to afford it ─────────────────────────────────────────────
 
-test('every insufficient-balance button goes where that currency is topped up', () => {
-  // Coins are bought on the wallet page and diamonds are earned on the rewards
-  // page, so a diamond shortfall sent to the wallet is a dead end.
-  const route = fe('utils', 'topUpRoute.jsx');
-  assert.match(route, /betCurrency === 'diamonds' \? '\/rewards' : '\/wallet'/);
 
-  for (const f of ['components/GameLobby.jsx', 'pages/BlackjackGame.jsx', 'pages/CoinFlipGame.jsx']) {
-    const src = fe(...f.split('/'));
-    // Challenge a Friend opened a room the player could not fund.
-    assert.match(src, /insufficient \? \(\) => navigate\(topUpRoute\(betCurrency\)\) : \(\) => setPrivateMode\('create'\)/,
-      `${f}: Challenge a Friend ignores the balance`);
-  }
-
-  // The diamond bet-vs-bot button was DISABLED on a shortfall in two of the
-  // three. A dead button tells the player nothing — it looks broken and they
-  // cannot find out why — which is the rule the shared lobby already followed.
-  for (const f of ['pages/BlackjackGame.jsx', 'pages/CoinFlipGame.jsx']) {
-    const src = fe(...f.split('/'));
-    assert.doesNotMatch(src, /disabled=\{!authenticated \|\| insufficient\}/,
-      `${f}: a button is still dead on an unaffordable bet`);
-  }
-});
-
-test('the top-up label uses the drawn diamond, not the emoji', () => {
-  // It was the last emoji left on the betting screens, sitting six lines from
-  // the drawn diamond the price above it uses.
-  const route = fe('utils', 'topUpRoute.jsx');
-  assert.match(route, /<DiamondIcon \/>/);
-  // Comments stripped: the one mention left is the note recording what it
-  // replaced, and matching prose would fail for the wrong reason.
-  const code = route.split(/\r?\n/).filter((l) => !l.trim().startsWith('//')).join('\n');
-  assert.doesNotMatch(code, /\u{1F48E}/u);
-  // It returns markup now, so the file is .jsx and its importers say so — an
-  // extensionless import resolved in the build but 404'd in the dev server.
-  for (const f of ['components/GameLobby.jsx', 'pages/BlackjackGame.jsx',
-                   'pages/CoinFlipGame.jsx', 'pages/QuickMatch.jsx']) {
-    assert.match(fe(...f.split('/')), /from '\.\.\/utils\/topUpRoute\.jsx'/,
-      `${f} imports it without the extension`);
-  }
-});
 
 // ── The currency toggle ─────────────────────────────────────────────────────
 
@@ -434,4 +395,111 @@ test('the multiplier is drawn above the tower, in white', () => {
   assert.match(src, /ctx\.letterSpacing = '2px'/);
   assert.match(src, /ctx\.shadowColor = 'rgba\(0,0,0,0\.75\)'/);
   assert.match(src, /ctx\.fillRect\(-w \/ 2, 20, w, 1\.5\)/, 'no rule under the number');
+});
+
+// ── Not being able to afford it, part two ───────────────────────────────────
+
+test('the betting buttons look the same whatever the balance', () => {
+  // They used to rename themselves — the primary action became "Insufficient
+  // Balance — Deposit" and the bot button "Insufficient — Get More". A button
+  // whose label is an error still looks like the action you wanted until you
+  // read it, and the screen changing shape means the control you were reaching
+  // for has moved.
+  const files = ['components/GameLobby.jsx', 'pages/BlackjackGame.jsx',
+                 'pages/CoinFlipGame.jsx', 'pages/QuickMatch.jsx'];
+  for (const f of files) {
+    const src = fe(...f.split('/'));
+    assert.doesNotMatch(src, /topUpLabel/, `${f} still relabels a button on a shortfall`);
+    assert.doesNotMatch(src, /Insufficient <DiamondIcon \/> — Get More/,
+      `${f} still has the relabelled bot button`);
+    // The shortfall opens the dialog instead.
+    assert.match(src, /insufficient \? \(\) => setShortfall\(true\)/,
+      `${f} does not open the dialog on a shortfall`);
+    assert.match(src, /<InsufficientModal currency=\{betCurrency\} open=\{shortfall\}/,
+      `${f} never renders the dialog`);
+    assert.match(src, /const \[shortfall, setShortfall\] = useState\(false\)/, `${f} has no state for it`);
+  }
+  // And the old helper is gone rather than left behind unused.
+  assert.throws(() => fe('utils', 'topUpRoute.jsx'), /ENOENT/);
+});
+
+test('the dialog sends each currency where that currency comes from', () => {
+  const src = fe('components', 'InsufficientModal.jsx');
+  // Diamonds are earned, not bought — the wallet has nothing to sell.
+  assert.match(src, /const route = isDiamonds \? '\/rewards' : '\/wallet'/);
+  assert.match(src, /const cta   = isDiamonds \? 'Rewards' : 'Wallet'/);
+  assert.match(src, /Collect rewards to earn more Diamonds/);
+  assert.match(src, /Deposit to add more Coins/);
+  assert.match(src, /Insufficient balance/);
+  // Dismissable without going anywhere.
+  assert.match(src, /Not now/);
+  assert.match(src, /onClick=\{onClose\}/);
+});
+
+// ── Tipping ─────────────────────────────────────────────────────────────────
+
+test('tipping a demo account answers as though the name does not exist', () => {
+  // Demo accounts are kept out of the leaderboards, search and the ticker so
+  // they are not identifiable. A distinct error handed that back one username
+  // at a time.
+  const src = be('routes', 'wallet.js');
+  const at = src.indexOf("if (isDemo(recipient.id))");
+  assert.ok(at > 0, 'the demo recipient guard is gone');
+  const line = src.slice(at, src.indexOf('\n', at));
+  assert.match(line, /404/, 'it must answer with the same status a real miss gets');
+  assert.match(line, /User not found/);
+  assert.doesNotMatch(line, /[Dd]emo accounts cannot/, 'it still names the reason');
+  // The same wording as the genuine miss just above it, or the two are still
+  // distinguishable.
+  assert.match(src, /if \(!recipient\) return res\.status\(404\)\.json\(\{ error: 'User not found' \}\);/);
+});
+
+// ── The mobile menu ─────────────────────────────────────────────────────────
+
+test('the drawer cannot be left open with nothing on screen', () => {
+  // Every link inside it closes it, but the back button, a redirect and
+  // anything navigating from elsewhere do not — so the state could sit true
+  // with the overlay hidden, and the next tap closed a drawer the player could
+  // not see. That reads as "I pressed it and nothing happened".
+  const src = fe('components', 'Navbar.jsx');
+  assert.match(src, /useEffect\(\(\) => \{ setMobileMenuOpen\(false\); \}, \[pathname\]\);/);
+  // And the button sits above the nav's own blur layer, with the tap delay off.
+  assert.match(src, /md:hidden relative z-10 p-2/);
+  assert.match(src, /touchAction: 'manipulation'/);
+});
+
+test('a document-wide lock is always released, never restored to a captured value', () => {
+  // Rush Hour and Color Rush lock html, body and touch-action deliberately, and
+  // that is fine. What is not fine is CAPTURING the current values to restore
+  // later: these styles are only ever set by this lock, so a second game
+  // starting while the first still holds it captures 'hidden' and 'none' as the
+  // state to go back to. Its cleanup then leaves the document locked, and
+  // nothing on the site takes a tap or scrolls until a reload — which is what
+  // the menu button that stops working looks like.
+  //
+  // Matched on the CAPTURE, not on the lock, and comments stripped so the note
+  // recording the old shape does not read as the old shape.
+  const bad = [];
+  for (const f of fs.readdirSync(FE('pages'))) {
+    if (!f.endsWith('.jsx')) continue;
+    const src = fs.readFileSync(FE('pages', f), 'utf8')
+      .split(/\r?\n/).filter((l) => !l.trim().startsWith('//')).join('\n');
+    if (!/style\.touchAction\s*=\s*'none'/.test(src)) continue;
+    // The tell: reading the live value into something that is written back.
+    if (/touch:\s*\w+\.style\.touchAction/.test(src)
+        || /(prev|previous)\w*\.touch/.test(src)) {
+      bad.push(`${f} restores touch-action to a value captured while it may already be locked`);
+    }
+    if (!/UNLOCKED/.test(src)) {
+      bad.push(`${f} locks the document without an unconditional release`);
+    }
+  }
+  assert.deepEqual(bad, [], bad.join('\n'));
+
+  // And the two that do lock must both carry the release.
+  for (const f of ['CarDashGame.jsx', 'ColorRushGame.jsx']) {
+    const src = fe('pages', f);
+    assert.match(src, /const UNLOCKED = \{ main: '', body: '', html: '', touch: '' \};/,
+      `${f} does not release the lock unconditionally`);
+  }
 });

@@ -955,7 +955,13 @@ module.exports = function walletRoutes(supabase, io) {
     if (recipient.id === req.user.id) return res.status(400).json({ error: 'You cannot tip yourself' });
     // A real account still cannot tip a demo, or the demo's fake balance would
     // become real money in someone's pocket.
-    if (isDemo(recipient.id)) return res.status(403).json({ error: 'Demo accounts cannot send or receive tips.' });
+    //
+    // Answered as though the name does not exist, and with the same 404 the
+    // real miss returns. Naming the reason confirmed which accounts are demos
+    // to anyone who typed a username — the accounts are otherwise kept out of
+    // the leaderboards, search and the ticker precisely so they are not
+    // identifiable, and a distinct error handed that back one guess at a time.
+    if (isDemo(recipient.id)) return res.status(404).json({ error: 'User not found' });
 
     // A tip is two independent writes: take from the sender, give to the
     // recipient. If the second fails the first has already happened, and the

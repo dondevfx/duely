@@ -253,17 +253,16 @@ export default function BlockBlastGame() {
     return () => clearTimeout(t);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Lock page scroll on mobile while game is active (prevents scroll while dragging pieces)
-  useEffect(() => {
-    if (phase === 'playing') {
-      document.body.style.overflow = 'hidden';
-      document.body.style.touchAction = 'none';
-      return () => {
-        document.body.style.overflow = '';
-        document.body.style.touchAction = '';
-      };
-    }
-  }, [phase]);
+  // Scroll locking lives in useGameScrollLock above, which locks the <main>
+  // scroller rather than the document.
+  //
+  // What was here set `document.body.style.touchAction = 'none'` on a phase
+  // named 'playing' — a phase this page does not have; its values are lobby,
+  // queue, countdown, active, result and private_waiting. So it never ran, and
+  // it was one rename away from putting touch-action: none on the whole
+  // document, which stops taps reaching anything until a reload. Removed rather
+  // than corrected, because the shared hook already does the job properly and
+  // two things fighting over body styles is how one of them ends up stuck.
 
   // Blast mode countdown ticker
   useEffect(() => {
