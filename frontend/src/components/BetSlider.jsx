@@ -101,15 +101,20 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
 
   return (
     <>
-      {/* Fee display row */}
-      <div className="flex items-center justify-between gap-1 mb-1.5 sm:mb-3">
-        <span className="text-[11px] sm:text-sm text-muted whitespace-nowrap">Min: {fmtFee(fees[0])} {currLabel}</span>
-        <span className="text-2xl sm:text-2xl font-black text-white">
-          <span ref={displayRef}>{fmtFee(entryFee)}</span>{' '}
-          <span className="text-primary">{currLabel}</span>
-        </span>
-        <span className="text-[11px] sm:text-sm text-muted whitespace-nowrap">Max: {fmtFee(fees[fees.length - 1])} {currLabel}</span>
-      </div>
+      {/* What you stand to win, above the slider.
+          It leads because it is the number the bet is being chosen AGAINST —
+          the stake was on top and read as the headline, which put the cost of
+          playing in the most prominent place on the screen. Updates live during
+          the drag; on a phone the figure and its currency share one line, since
+          stacking them costs about 20px the action buttons need. */}
+      {entryFee > 0 && (
+        <div className="mb-1.5 sm:mb-3 text-center">
+          <div className="text-4xl sm:text-5xl font-black text-success inline-flex items-center gap-1" style={{ textShadow: '0 0 18px rgba(34,197,94,0.45)' }}>
+            <span ref={payoutRef}>{entryFee > 0 ? `+${calcPayout(entryFee, isDiamonds, payoutMult)}` : ''}</span>
+            {' '}{currLabel}
+          </div>
+        </div>
+      )}
 
       {/* Slider track.
           The thumb is 24px wide and centred on its position, so it sticks out
@@ -142,16 +147,17 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
       </div>
       </div>
 
-      {/* Live payout — updates during drag. On a phone the label and figure
-          share one line; stacked they cost ~20px the action buttons need. */}
-      {entryFee > 0 && (
-        <div className="mt-1.5 sm:mt-4 text-center">
-          <div className="text-3xl sm:text-4xl font-black text-success inline-flex items-center gap-1" style={{ textShadow: '0 0 18px rgba(34,197,94,0.45)' }}>
-            <span ref={payoutRef}>{entryFee > 0 ? `+${calcPayout(entryFee, isDiamonds, payoutMult)}` : ''}</span>
-            {' '}{currLabel}
-          </div>
-        </div>
-      )}
+      {/* The stake, under the slider it belongs to, with the range it moves
+          between. Deliberately smaller than the payout above — the two were the
+          same weight, so nothing said which one mattered. */}
+      <div className="flex items-center justify-between gap-1 mt-1.5 sm:mt-3">
+        <span className="text-[11px] sm:text-sm text-muted whitespace-nowrap">Min: {fmtFee(fees[0])} {currLabel}</span>
+        <span className="text-xl sm:text-2xl font-black text-white">
+          <span ref={displayRef}>{fmtFee(entryFee)}</span>{' '}
+          <span className="text-primary">{currLabel}</span>
+        </span>
+        <span className="text-[11px] sm:text-sm text-muted whitespace-nowrap">Max: {fmtFee(fees[fees.length - 1])} {currLabel}</span>
+      </div>
     </>
   );
 }
