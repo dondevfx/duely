@@ -101,7 +101,14 @@ module.exports = function authRoutes(supabase) {
       .single();
 
     if (error) return res.status(404).json({ error: 'Profile not found' });
-    res.json({ ...data, is_admin: req.user.id === process.env.ADMIN_USER_ID });
+    // is_demo travels with the profile so the client can show the demo-only
+    // affordances (see Profile.jsx). The list itself is an env var and stays
+    // server-side; only the answer for THIS account is sent.
+    res.json({
+      ...data,
+      is_admin: req.user.id === process.env.ADMIN_USER_ID,
+      is_demo: isDemo(req.user.id),
+    });
   });
 
   const VALID_COLORS = new Set([

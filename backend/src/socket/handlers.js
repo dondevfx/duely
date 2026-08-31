@@ -85,6 +85,11 @@ const canonicalGameType = (g) => GAME_ALIASES[g] || g;
 
 const { isDemo: isDemoAccount, randomFunnyName, shownAs } = require('../services/demoAccounts');
 
+// How long a demo account waits for another demo account before being given a
+// bot match instead. Short on purpose: nobody is watching a demo to see real
+// matchmaking, they are watching to see a game start.
+const DEMO_MATCH_MS = 1750;
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const {
   settleMatch, settleCoinFlip, settleMatchDiamonds, forfeitSettleDiamonds, forfeitSettleCoins,
@@ -694,8 +699,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           profileColor: authenticatedUser.profile_color || '#1E90FF',
           currentStreak: authenticatedUser.current_streak || 0,
         });
-        // Demo accounts: no other demo within 3s → bot match (demo always wins,
-        // bot score trails a little). Funny opponent name.
+        // Demo accounts: no other demo within DEMO_MATCH_MS → bot match (demo
+        // always wins, bot score trails a little). Funny opponent name.
         if (authenticatedUser.isDemo) {
           setTimeout(async () => {
             if (!removeFromBlockBlastQueue(socket.id)) return; // already matched or left
@@ -716,7 +721,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
             socket.join(roomId);
             socket.emit('block_blast_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null, isBot: isDuelyBot(bot) }, entryFee, currency, vsBot: true });
             startBlockBlastCountdown(io, supabase, roomId);
-          }, 3000);
+          }, DEMO_MATCH_MS);
         }
       }
       } finally {
@@ -905,8 +910,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           profileColor: authenticatedUser.profile_color || '#1E90FF',
           currentStreak: authenticatedUser.current_streak || 0,
         });
-        // Demo accounts: no other demo within 3s → bot match (demo always wins,
-        // bot score trails a little). Funny opponent name.
+        // Demo accounts: no other demo within DEMO_MATCH_MS → bot match (demo
+        // always wins, bot score trails a little). Funny opponent name.
         if (authenticatedUser.isDemo) {
           setTimeout(async () => {
             if (!removeFromTowerQueue(socket.id)) return; // already matched or left
@@ -927,7 +932,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
             socket.join(roomId);
             socket.emit('tower_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null, isBot: isDuelyBot(bot) }, entryFee, currency, vsBot: true });
             startTowerCountdown(io, supabase, roomId);
-          }, 3000);
+          }, DEMO_MATCH_MS);
         }
       }
       } finally {
@@ -1120,7 +1125,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
               socket.join(roomId);
               socket.emit('car_dash_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null, isBot: isDuelyBot(bot) }, entryFee, currency, vsBot: true });
               startCarDashCountdown(io, supabase, roomId);
-            }, 3000);
+            }, DEMO_MATCH_MS);
           }
         }
       } finally {
@@ -1289,7 +1294,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
               socket.join(roomId);
               socket.emit('color_rush_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null, isBot: isDuelyBot(bot) }, entryFee, currency, vsBot: true });
               startColorRushCountdown(io, supabase, roomId);
-            }, 3000);
+            }, DEMO_MATCH_MS);
           }
         }
       } finally {
@@ -1771,7 +1776,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
               if (!getWordleRoom(roomId)) return;
               startWordleGame(io, supabase, roomId);
               setTimeout(() => scheduleBotWordleMove(io, supabase, roomId, botSocketId), 500);
-            }, 3000);
+            }, DEMO_MATCH_MS);
           }
         }
       } finally {
@@ -1998,7 +2003,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
             socket.join(roomId);
             socket.emit('coin_flip_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null, isBot: isDuelyBot(bot) }, side, entryFee, currency, vsBot: true });
             setTimeout(() => resolveCoinFlip(io, supabase, roomId), 6000);
-          }, 3000);
+          }, DEMO_MATCH_MS);
         }
       }
     });
@@ -2134,7 +2139,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
             socket.join(roomId);
             socket.emit('bj_match_found', { roomId, opponent: { userId: bot.userId, username: bot.username, elo: bot.elo, avatarUrl: bot.avatarUrl ?? null, profileColor: bot.profileColor ?? null, isBot: isDuelyBot(bot) }, entryFee, currency, vsBot: true });
             startBlackjackGame(io, supabase, roomId);
-          }, 3000);
+          }, DEMO_MATCH_MS);
         }
       }
       } finally {

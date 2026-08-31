@@ -503,7 +503,13 @@ export default function CarDashGame() {
             <div className="text-8xl font-black text-primary mb-4" style={{ textShadow: '0 0 40px #1250B4' }}>{countdown}</div>
             <p className="text-muted">Get ready...</p>
             {/* Solo Endless has no opponent — the bot is plumbing, not a rival. */}
-            {opponent && lastModeRef.current !== 'bot_free' && (
+            /* A free bot game hides the opponent because the bot is plumbing rather
+                 than a rival. A DEMO match is the opposite: it is free, it is
+                 against a bot, and looking like an ordinary PvP match is the
+                 entire point — hiding the opponent turned it into a solo run.
+                 The opponent's own isBot flag is the difference: only the
+                 openly-named Duely Bot carries it, a disguised one does not. */
+            {opponent && !(lastModeRef.current === 'bot_free' && opponent.isBot) && (
               <p className="text-xs text-muted mt-2 flex items-center justify-center gap-1.5">
                   vs <PlayerName username={opponent.username} avatarUrl={opponent.avatarUrl}
                        color={opponent.profileColor} isBot={!!opponent.isBot} size="w-5 h-5" />

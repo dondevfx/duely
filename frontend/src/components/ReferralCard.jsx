@@ -6,6 +6,7 @@ import ShareLinkButton from './ShareLinkButton';
 import CoinIcon from './CoinIcon';
 import { getCachedCode, setCachedCode } from '../utils/referralCode';
 import SetCodeModal from './SetCodeModal';
+import FitText from './FitText';
 
 // Referral offer. Two variants:
 //   full    — Rewards page: offer, link, counts, collect button
@@ -143,13 +144,13 @@ export default function ReferralCard({ variant = 'full' }) {
         <>
           <div className="flex gap-2 mt-3">
             <div className="flex-1 bg-bg border border-border rounded-xl px-3 py-2.5 text-center">
-              <div className="text-lg font-black text-white">{qualified}</div>
+              <FitText className="text-lg font-black text-white">{qualified}</FitText>
               <div className="text-[10px] text-muted">Players joined</div>
             </div>
             <div className="flex-1 bg-bg border border-border rounded-xl px-3 py-2.5 text-center">
-              <div className="text-lg font-black text-success inline-flex items-center gap-1">
-                {collectable} <CoinIcon size="0.75em" />
-              </div>
+              <FitText className="text-lg font-black text-success">
+                <span className="inline-flex items-center gap-1">{collectable} <CoinIcon size="0.75em" /></span>
+              </FitText>
               <div className="text-[10px] text-muted">Ready to collect</div>
             </div>
           </div>

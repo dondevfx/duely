@@ -903,7 +903,7 @@ function BlackjackGame() {
         }}>
           <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <Avatar username={opponentUsername || 'Duely Bot'} avatarUrl={opponent?.avatarUrl}
-              color={opponent?.profileColor || '#6366f1'} isBot={!opponentUsername || !!opponent?.isBot}
+              color={opponent?.profileColor || '#6366f1'} isBot={!!opponent?.isBot}
               className="w-9 h-9" textClassName="text-sm" />
             <div>
               <div style={{ fontWeight: 800, fontSize: 15, color: textPrimary }}>

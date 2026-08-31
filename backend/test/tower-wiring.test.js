@@ -350,12 +350,19 @@ test('streaks stay PvP-only', () => {
   assert.match(engine, /!winner\.isBot && !loser\.isBot/);
 });
 
-test('Solo Endless does not show a bot opponent', () => {
-  // It is played through the bot plumbing, but there is nobody to race.
+test('Solo Endless does not show a bot opponent, but a demo match does', () => {
+  // Solo Endless is played through the bot plumbing and there is nobody to
+  // race, so the opponent panel is hidden.
+  //
+  // A DEMO match is also free and also against a bot, and it must NOT be
+  // hidden: looking like an ordinary PvP match is the whole point of the demo,
+  // and the old condition swallowed it, turning it into a solo run. The
+  // opponent's own isBot flag separates the two — only the openly-named Duely
+  // Bot carries it, a disguised one does not.
   const src = fe('pages', 'TowerGame.jsx');
   assert.match(src, /const \[soloEndless, setSoloEndless\]/);
   assert.match(src, /\{opponent && !soloEndless &&/, 'the score panel must be hidden');
-  assert.match(src, /setSoloEndless\(!!vsBot && !\(fee > 0\)\)/);
+  assert.match(src, /setSoloEndless\(!!vsBot && !\(fee > 0\) && !!opp\?\.isBot\)/);
 });
 
 test('the countdown matches the other games', () => {

@@ -17,6 +17,7 @@ import DiamondIcon from '../components/DiamondIcon';
 import { ProfilePopup } from '../components/ChatSidebar';
 import FriendInviteBox from '../components/FriendInviteBox';
 import { isMuted, setMuted, playMatchFound } from '../utils/sound';
+import FitText from '../components/FitText';
 
 // Keyed by the game_type stored on MATCHES. The personal-best table uses its own
 // keys, which do not all agree — Word VS records matches as 'scrabble' but high
@@ -1017,7 +1018,7 @@ function FriendsPanel({ myId, myUsername, myReferralCode, activeGames }) {
   const [adding, setAdding] = useState(false);
   const [showRequests, setShowRequests] = useState(false);
   const [confirmUnadd, setConfirmUnadd] = useState(null); // { id, username }
-  const [viewingFriend, setViewingFriend] = useState(null); // { id, username }
+  const [viewingFriend, setViewingFriend] = useState(null);
 
   const load = useCallback(async () => {
     try { setFriendships(await api.get('/auth/friends')); } catch {}
@@ -1258,6 +1259,9 @@ export default function Profile() {
   const [loadingStats, setLoadingStats] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [matchesExpanded, setMatchesExpanded] = useState(false);
+  // Demo accounts can open their own profile card from their name — it is how
+  // the card gets demonstrated without a second account to click on.
+  const [viewingSelf, setViewingSelf] = useState(false);
 
   const COLORS = [
     '#1250B4','#00BFFF','#22c55e','#ef4444','#f97316',
@@ -1271,27 +1275,71 @@ export default function Profile() {
     else document.documentElement.classList.remove('light');
   }, []);
 
+  // Squash whatever the player picked down to an avatar.
+  //
+  // It is displayed at 80px at the very largest, so a 12-megapixel photo is
+  // three orders of magnitude more data than the circle can show. Drawn to a
+  // 512px square and re-encoded as JPEG, which lands around 40-120KB whatever
+  // went in — under every limit, and fast to upload on a phone.
+  //
+  // Cropped to a centre square rather than squashed: the avatar is a circle and
+  // a stretched face is worse than a cropped one. Falls back to sending the
+  // original if anything here fails, so a browser that cannot do this still
+  // gets whatever the server will accept.
+  async function shrinkForAvatar(file) {
+    const readAsDataUrl = () => new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => res(fr.result);
+      fr.onerror = () => rej(new Error('Could not read that file.'));
+      fr.readAsDataURL(file);
+    });
+
+    const original = await readAsDataUrl();
+    try {
+      const img = await new Promise((res, rej) => {
+        const i = new Image();
+        i.onload = () => res(i);
+        i.onerror = () => rej(new Error('not an image'));
+        i.src = original;
+      });
+      const SIDE = 512;
+      const side = Math.min(img.naturalWidth, img.naturalHeight);
+      if (!side) return original;
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = SIDE;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(
+        img,
+        (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side,
+        0, 0, SIDE, SIDE,
+      );
+      const out = canvas.toDataURL('image/jpeg', 0.85);
+      // A canvas tainted by anything odd returns a stub; never send that.
+      return out && out.length > 2000 ? out : original;
+    } catch {
+      return original;
+    }
+  }
+
   async function pickPhoto(e) {
     const file = e.target.files?.[0];
     e.target.value = ''; // so re-picking the same file fires change again
     if (!file) return;
 
     setAvatarErr('');
-    // Checked here too, not only server-side: reading a 20MB file into base64
-    // just to be told no is a slow way to learn it.
-    if (file.size > 3 * 1024 * 1024) {
-      setAvatarErr('That image is too large. Maximum size is 3MB.');
+    // A sanity ceiling only. The real size problem is solved by resizing below
+    // rather than by refusing the file: a photo straight off a phone is 3-8MB,
+    // so a 3MB limit rejected ordinary pictures and there was nothing the
+    // player could do about it from their phone.
+    if (file.size > 40 * 1024 * 1024) {
+      setAvatarErr('That file is enormous. Please pick a photo, not a video.');
       return;
     }
 
     setAvatarBusy(true);
     try {
-      const dataUrl = await new Promise((res, rej) => {
-        const fr = new FileReader();
-        fr.onload = () => res(fr.result);
-        fr.onerror = () => rej(new Error('Could not read that file.'));
-        fr.readAsDataURL(file);
-      });
+      const dataUrl = await shrinkForAvatar(file);
       const { avatar_url } = await api.post('/avatar', { image: dataUrl });
       updateProfile({ avatar_url });
       setAvatarMenu(false);
@@ -1535,7 +1583,21 @@ export default function Profile() {
                 </div>
               ) : (
                 <div className="flex items-center gap-3">
-                  <h1 className="text-2xl font-black text-white">{profile.username}</h1>
+                  {/* Demo accounts can open their own card from here.
+                      It is how the popup gets demonstrated without a second
+                      account to click on, and it is read-only — the card is
+                      opened viewOnly so there is no Add Friend on yourself. */}
+                  {profile.is_demo ? (
+                    <button
+                      onClick={() => setViewingSelf(true)}
+                      className="text-2xl font-black text-white hover:text-primary transition-colors"
+                      title="View your profile card"
+                    >
+                      {profile.username}
+                    </button>
+                  ) : (
+                    <h1 className="text-2xl font-black text-white">{profile.username}</h1>
+                  )}
                   <button
                     onClick={() => setEditing(true)}
                     className="text-xs text-muted hover:text-white transition-colors"
@@ -1600,7 +1662,7 @@ export default function Profile() {
             {/* Win Rate leads; the rank card sits second, where it reads as
                 one stat among six rather than a header above them. */}
             <div className="bg-bg rounded-xl p-3 text-center overflow-hidden">
-              <div className="text-xl font-black text-success truncate">{winRate}%</div>
+              <FitText className="text-xl font-black text-success">{winRate}%</FitText>
               <div className="text-xs text-muted mt-0.5">Win Rate</div>
             </div>
 
@@ -1609,9 +1671,9 @@ export default function Profile() {
               {/* Smaller than the other cards' text on purpose: this is the
                   only value that is a WORD, and "Champion" at text-xl does
                   not fit a half-width cell. truncate is the backstop. */}
-              <div className="text-base sm:text-xl font-black truncate" style={{ color: getRank(profile.elo).color }}>
+              <FitText className="text-base sm:text-xl font-black" style={{ color: getRank(profile.elo).color }}>
                 <RankIcon rank={getRank(profile.elo)} size={18} /> {getRank(profile.elo).name}
-              </div>
+              </FitText>
               <div className="text-xs text-muted mt-0.5">{profile.elo} ELO</div>
             </div>
 
@@ -1622,7 +1684,7 @@ export default function Profile() {
               { label: 'Wagered', value: `${fmtCoins(extraStats.total_wagered)} coins`, title: `${fmtExact(extraStats.total_wagered)} coins wagered`, color: 'text-white' },
             ].map(s => (
               <div key={s.label} className="bg-bg rounded-xl p-3 text-center overflow-hidden">
-                <div className={`text-xl font-black ${s.color} truncate`} title={s.title}>{s.value}</div>
+                <FitText className={`text-xl font-black ${s.color}`} title={s.title}>{s.value}</FitText>
                 <div className="text-xs text-muted mt-0.5">{s.label}</div>
               </div>
             ))}
@@ -1778,6 +1840,22 @@ export default function Profile() {
         </div>
         </div>{/* end relative container */}
       </div>
+
+      {/* Your own card, opened from your name — demo accounts only. Read-only:
+          viewOnly drops Add Friend and Report, which make no sense on yourself. */}
+      {viewingSelf && (
+        <ProfilePopup
+          userId={profile.id}
+          username={profile.username}
+          isBot={false}
+          isAdmin={false}
+          isBanned={false}
+          viewOnly
+          onBan={() => {}}
+          onUnban={() => {}}
+          onClose={() => setViewingSelf(false)}
+        />
+      )}
     </div>
   );
 }

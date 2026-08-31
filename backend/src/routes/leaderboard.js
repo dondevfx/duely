@@ -210,13 +210,18 @@ module.exports = function leaderboardRoutes(supabase) {
     res.json({ players, userRank });
   });
 
-  // Returns the start of the current week (Monday 00:00:00 UTC)
+  // The start of the current week — Monday 00:00 in the platform's own zone.
+  //
+  // This was Monday 00:00 UTC, which is Sunday 5pm in Pacific: the board wiped
+  // seven hours before the Monday anyone was looking at, mid-Sunday-evening
+  // while people were still playing for it. Pacific is where the platform is
+  // run from, so that is the midnight the countdown on the page means.
+  //
+  // Computed through Intl rather than a fixed -7, so the switch to and from
+  // daylight saving is handled rather than silently shifting the reset by an
+  // hour twice a year.
   function weekStart() {
-    const now = new Date();
-    const day = now.getUTCDay(); // 0=Sun, 1=Mon … 6=Sat
-    const diff = (day === 0 ? 6 : day - 1); // days since Monday
-    const mon = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - diff));
-    return mon.toISOString();
+    return startOfPacificWeek(new Date()).toISOString();
   }
 
   // Total wagered leaderboard — current week only (resets every Monday)

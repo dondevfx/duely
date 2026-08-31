@@ -10,6 +10,7 @@ import RankIcon from '../components/RankIcon';
 import { PlaceIcon, StatIcon } from '../components/UiIcon';
 import { ProfilePopup } from '../components/ChatSidebar';
 import { usePageReady } from '../hooks/usePageReady';
+import { nextPacificWeek } from '../utils/weekReset';
 
 
 // Avatar + name, clickable, used by both leaderboard tables.
@@ -66,15 +67,10 @@ const GAME_LEADERBOARDS = [
   { id: 'blackjack',     label: 'Blackjack', scoreLabel: 'Wins'  },
 ];
 
-function getNextMonday() {
-  const now = new Date();
-  const day = now.getUTCDay(); // 0=Sun, 1=Mon...
-  const daysUntilMonday = day === 0 ? 1 : 8 - day;
-  const next = new Date(now);
-  next.setUTCDate(now.getUTCDate() + daysUntilMonday);
-  next.setUTCHours(0, 0, 0, 0);
-  return next;
-}
+// Monday 00:00 Pacific, matching the server's filter exactly. This was Monday
+// 00:00 UTC on both sides, which is Sunday 5pm here — the board wiped seven
+// hours before the Monday this countdown was counting down to.
+const getNextMonday = nextPacificWeek;
 
 function formatMs(ms) {
   if (ms <= 0) return '0d 0h 0m';

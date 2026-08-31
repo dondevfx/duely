@@ -133,7 +133,11 @@ export default function ResultScreen({
   // won and lost by username and does not otherwise know which side that is.
   const who = (name) => (name && profile?.username && name === profile.username)
     ? { username: name, avatarUrl: profile?.avatar_url, color: profile?.profile_color }
-    : { username: name, avatarUrl: opponent?.avatarUrl, color: opponent?.profileColor, isBot: !!vsBot };
+    // The BOT FACE comes from the opponent, never from the mode. vsBot is true
+    // for a demo match too, and those bots wear a random human name on purpose
+    // — giving them the robot face here handed the disguise away on the result
+    // card while the countdown showed them correctly.
+    : { username: name, avatarUrl: opponent?.avatarUrl, color: opponent?.profileColor, isBot: !!opponent?.isBot };
 
   // The BEFORE value the server actually computed against, when it sends one.
   //

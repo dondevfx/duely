@@ -12,6 +12,7 @@ import ReferralCard from '../components/ReferralCard';
 import { fmtCoins, fmtExact } from '../utils/format';
 import { GAMES } from '../data/games';
 import { LockIcon } from '../components/UiIcon';
+import FitText from '../components/FitText';
 
 function DailySpinWidget({ profile }) {
   return profile ? (
@@ -129,7 +130,9 @@ export default function Home() {
               { label: 'Losses', value: profile.losses ?? 0 },
             ].map(stat => (
               <div key={stat.label} className="bg-surface border border-surfaceLight rounded-xl py-3 px-1.5 sm:py-4 sm:px-3 md:p-4 text-center overflow-hidden min-w-0">
-                <div className="text-sm sm:text-xl md:text-2xl font-black text-white font-mono overflow-hidden">{stat.value}</div>
+                <FitText className="text-sm sm:text-xl md:text-2xl font-black text-white font-mono">
+                  {stat.value}
+                </FitText>
                 <div className="text-[10px] sm:text-xs text-muted mt-0.5 sm:mt-1">{stat.label}</div>
               </div>
             ))}

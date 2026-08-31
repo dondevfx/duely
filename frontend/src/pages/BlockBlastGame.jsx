@@ -986,7 +986,9 @@ export default function BlockBlastGame() {
                   username={isSolo ? 'Duely Bot' : (opponent?.username ?? 'Opponent')}
                   avatarUrl={isSolo ? null : opponent?.avatarUrl}
                   color={isSolo ? null : opponent?.profileColor}
-                  isBot={isSolo || !!opponent?.isBot}
+                  // Not isSolo: a demo match is solo AND disguised, and the
+                  // mode does not know which. Only the opponent does.
+                  isBot={!!opponent?.isBot}
                   size="w-4 h-4" />
               </div>
             </div>

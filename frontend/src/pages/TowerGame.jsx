@@ -150,7 +150,13 @@ export default function TowerGame() {
       eloBeforeRef.current = profile?.elo ?? 1000;
       lastSettings.current = { entryFee: fee ?? 0, currency: currency ?? 'coins' };
       lastModeRef.current = vsBot ? (fee > 0 ? 'bot_paid' : 'bot_free') : 'pvp';
-      setSoloEndless(!!vsBot && !(fee > 0));
+      /* A free bot game hides the opponent because the bot is plumbing rather
+         than a rival. A DEMO match is the opposite: it is free, it is against a
+         bot, and looking like an ordinary PvP match is the entire point —
+         hiding the opponent turned it into a solo run with nobody in it. The
+         opponent's own isBot flag is the difference: only the openly-named
+         Duely Bot carries it, a disguised one does not. */
+      setSoloEndless(!!vsBot && !(fee > 0) && !!opp?.isBot);
       setPhase('countdown');
       playMatchFound();
     };
