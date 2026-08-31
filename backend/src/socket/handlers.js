@@ -667,8 +667,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         }
         const s1 = io.sockets.sockets.get(p1.socketId);
         const s2 = io.sockets.sockets.get(p2.socketId);
-        const bbP1Shown = shownAs(p1);
-        const bbP2Shown = shownAs(p2);
+        const bbP1Shown = shownAs(p1, p2);
+        const bbP2Shown = shownAs(p2, p1);
         if (s1) { s1.join(roomId); s1.emit('block_blast_match_found', { roomId, opponent: { userId: p2.userId, username: bbP2Shown.username, elo: p2.elo, avatarUrl: bbP2Shown.avatarUrl, profileColor: bbP2Shown.profileColor, isBot: isDuelyBot(p2) }, entryFee: p1.entryFee, currency: p1.currency }); }
         if (s2) { s2.join(roomId); s2.emit('block_blast_match_found', { roomId, opponent: { userId: p1.userId, username: bbP1Shown.username, elo: p1.elo, avatarUrl: bbP1Shown.avatarUrl, profileColor: bbP1Shown.profileColor, isBot: isDuelyBot(p1) }, entryFee: p2.entryFee, currency: p2.currency }); }
         io.emit('queue_entry_removed', { id: p1.socketId });
@@ -878,8 +878,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         }
         const s1 = io.sockets.sockets.get(p1.socketId);
         const s2 = io.sockets.sockets.get(p2.socketId);
-        const twP1Shown = shownAs(p1);
-        const twP2Shown = shownAs(p2);
+        const twP1Shown = shownAs(p1, p2);
+        const twP2Shown = shownAs(p2, p1);
         if (s1) { s1.join(roomId); s1.emit('tower_match_found', { roomId, opponent: { userId: p2.userId, username: twP2Shown.username, elo: p2.elo, avatarUrl: twP2Shown.avatarUrl, profileColor: twP2Shown.profileColor, isBot: isDuelyBot(p2) }, entryFee: p1.entryFee, currency: p1.currency }); }
         if (s2) { s2.join(roomId); s2.emit('tower_match_found', { roomId, opponent: { userId: p1.userId, username: twP1Shown.username, elo: p1.elo, avatarUrl: twP1Shown.avatarUrl, profileColor: twP1Shown.profileColor, isBot: isDuelyBot(p1) }, entryFee: p2.entryFee, currency: p2.currency }); }
         io.emit('queue_entry_removed', { id: p1.socketId });
@@ -1088,8 +1088,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           }
           const s1 = io.sockets.sockets.get(p1.socketId);
           const s2 = io.sockets.sockets.get(p2.socketId);
-          const n1 = shownAs(p1);
-          const n2 = shownAs(p2);
+          const n1 = shownAs(p1, p2);
+          const n2 = shownAs(p2, p1);
           if (s1) { s1.join(roomId); s1.emit('car_dash_match_found', { roomId, opponent: { userId: p2.userId, username: n2.username, elo: p2.elo, avatarUrl: n2.avatarUrl, profileColor: n2.profileColor, isBot: isDuelyBot(p2) }, entryFee, currency }); }
           if (s2) { s2.join(roomId); s2.emit('car_dash_match_found', { roomId, opponent: { userId: p1.userId, username: n1.username, elo: p1.elo, avatarUrl: n1.avatarUrl, profileColor: n1.profileColor, isBot: isDuelyBot(p1) }, entryFee, currency }); }
           io.emit('queue_entry_removed', { id: p1.socketId });
@@ -1257,8 +1257,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           }
           const s1 = io.sockets.sockets.get(p1.socketId);
           const s2 = io.sockets.sockets.get(p2.socketId);
-          const n1 = shownAs(p1);
-          const n2 = shownAs(p2);
+          const n1 = shownAs(p1, p2);
+          const n2 = shownAs(p2, p1);
           if (s1) { s1.join(roomId); s1.emit('color_rush_match_found', { roomId, opponent: { userId: p2.userId, username: n2.username, elo: p2.elo, avatarUrl: n2.avatarUrl, profileColor: n2.profileColor, isBot: isDuelyBot(p2) }, entryFee, currency }); }
           if (s2) { s2.join(roomId); s2.emit('color_rush_match_found', { roomId, opponent: { userId: p1.userId, username: n1.username, elo: p1.elo, avatarUrl: n1.avatarUrl, profileColor: n1.profileColor, isBot: isDuelyBot(p1) }, entryFee, currency }); }
           io.emit('queue_entry_removed', { id: p1.socketId });
@@ -1719,8 +1719,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           }
           const s1 = io.sockets.sockets.get(p1.socketId);
           const s2 = io.sockets.sockets.get(p2.socketId);
-          const wvP1Shown = shownAs(p1);
-          const wvP2Shown = shownAs(p2);
+          const wvP1Shown = shownAs(p1, p2);
+          const wvP2Shown = shownAs(p2, p1);
           if (s1) { s1.join(roomId); s1.emit('scrabble_match_found', { roomId, opponent: { userId: p2.userId, username: wvP2Shown.username, elo: p2.elo, avatarUrl: wvP2Shown.avatarUrl, profileColor: wvP2Shown.profileColor, isBot: isDuelyBot(p2) }, entryFee: p1.entryFee, currency: p1.currency }); }
           if (s2) { s2.join(roomId); s2.emit('scrabble_match_found', { roomId, opponent: { userId: p1.userId, username: wvP1Shown.username, elo: p1.elo, avatarUrl: wvP1Shown.avatarUrl, profileColor: wvP1Shown.profileColor, isBot: isDuelyBot(p1) }, entryFee: p2.entryFee, currency: p2.currency }); }
           io.emit('queue_entry_removed', { id: p1.socketId });
@@ -1976,8 +1976,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         const s1 = io.sockets.sockets.get(match.p1.socketId);
         const s2 = io.sockets.sockets.get(match.p2.socketId);
         // Demo-vs-demo: relabel each opponent with a funny name.
-        const p1Shown = shownAs(match.p1);
-        const p2Shown = shownAs(match.p2);
+        const p1Shown = shownAs(match.p1, match.p2);
+        const p2Shown = shownAs(match.p2, match.p1);
         if (s1) { s1.join(match.roomId); s1.emit('coin_flip_match_found', { roomId: match.roomId, opponent: { userId: match.p2.userId, username: p2Shown.username, elo: match.p2.elo, avatarUrl: p2Shown.avatarUrl, profileColor: p2Shown.profileColor, isBot: isDuelyBot(match.p2) }, side: match.p1.side, entryFee, currency: match.p1.currency }); }
         if (s2) { s2.join(match.roomId); s2.emit('coin_flip_match_found', { roomId: match.roomId, opponent: { userId: match.p1.userId, username: p1Shown.username, elo: match.p1.elo, avatarUrl: p1Shown.avatarUrl, profileColor: p1Shown.profileColor, isBot: isDuelyBot(match.p1) }, side: match.p2.side, entryFee, currency: match.p2.currency }); }
         // 3s countdown + 3s spin = 6s before resolving
@@ -2114,8 +2114,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         }
         const s1 = io.sockets.sockets.get(match.p1.socketId);
         const s2 = io.sockets.sockets.get(match.p2.socketId);
-        const p1Shown = shownAs(match.p1);
-        const p2Shown = shownAs(match.p2);
+        const p1Shown = shownAs(match.p1, match.p2);
+        const p2Shown = shownAs(match.p2, match.p1);
         if (s1) { s1.join(match.roomId); s1.emit('bj_match_found', { roomId: match.roomId, opponent: { userId: match.p2.userId, username: p2Shown.username, elo: match.p2.elo, avatarUrl: p2Shown.avatarUrl, profileColor: p2Shown.profileColor, isBot: isDuelyBot(match.p2) }, entryFee, currency: match.p1.currency }); }
         if (s2) { s2.join(match.roomId); s2.emit('bj_match_found', { roomId: match.roomId, opponent: { userId: match.p1.userId, username: p1Shown.username, elo: match.p1.elo, avatarUrl: p1Shown.avatarUrl, profileColor: p1Shown.profileColor, isBot: isDuelyBot(match.p1) }, entryFee, currency: match.p2.currency }); }
         startBlackjackGame(io, supabase, match.roomId);

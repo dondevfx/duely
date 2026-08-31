@@ -171,7 +171,9 @@ test('a fake name never arrives without a face to go with it', () => {
   // vary — which is how you spot a fake one at a glance.
   const demo = be('services', 'demoAccounts.js');
   assert.match(demo, /function disguisedFace\(name\)/);
-  assert.match(demo, /function shownAs\(p\)/);
+  // Takes the viewer too, so two demo accounts matched together can be shown
+  // to each other as themselves — see demo-and-limits.test.js.
+  assert.match(demo, /function shownAs\(p, viewer\)/);
   // From the palette a real player actually picks from, not an invented colour.
   assert.match(demo, /const PROFILE_COLORS = \[/);
   assert.match(demo, /'#1250B4', '#00BFFF'/);
@@ -189,7 +191,7 @@ test('every disguised payload sends the disguised face, not the real one', () =>
   // none, and it leaks the real player.
   assert.doesNotMatch(HANDLERS, /isDemo \? randomFunnyName\(\)/,
     'a payload still builds a name on its own');
-  const shown = [...HANDLERS.matchAll(/const (\w+) = shownAs\((?:\w|\.)+\);/g)].map((m) => m[1]);
+  const shown = [...HANDLERS.matchAll(/const (\w+) = shownAs\([^)]*\);/g)].map((m) => m[1]);
   assert.ok(shown.length >= 12, `expected every queue path, found ${shown.length}`);
 
   const bad = [];

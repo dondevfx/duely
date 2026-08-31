@@ -32,6 +32,10 @@ export default function TowerCanvas({
   // Callbacks live in refs so the loop never restarts when a parent re-renders —
   // restarting it mid-run would reset the tower.
   const cb = useRef({ onScore, onGameOver, onPerfect, onPlace });
+  // The floating "3x" from the last perfect drop, or null. A ref rather than
+  // state: it is animated every frame and re-rendering React for it would cost
+  // more than drawing it.
+  const multPop = useRef(null);
   useEffect(() => { cb.current = { onScore, onGameOver, onPerfect, onPlace }; });
 
   useEffect(() => {
@@ -53,10 +57,18 @@ export default function TowerCanvas({
     window.addEventListener('orientationchange', resize);
 
     const run = createRun({
-      onLand: ({ perfect, score }) => {
+      onLand: ({ perfect, score, mult }) => {
         cb.current.onScore?.(score);
         if (perfect) cb.current.onPerfect?.();
         else cb.current.onPlace?.();
+        // The multiplier only means something from the second perfect on, so
+        // that is when it appears. A 1x badge on every clean drop would be
+        // noise on the one screen that has to stay readable.
+        if (perfect && mult > 1) {
+          multPop.current = { mult, t: 0, x: run.state.blocks[run.state.blocks.length - 1].x,
+                              y: run.state.blocks[run.state.blocks.length - 1].y,
+                              level: run.state.blocks[run.state.blocks.length - 1].level };
+        }
       },
       onOver: ({ score }) => {
         cb.current.onGameOver?.({ score, taps: run.state.taps.slice() });
@@ -254,6 +266,33 @@ export default function TowerCanvas({
           sx: m.sx, sy: m.sy,
           index: s.blocks.length,
         }, topLevel + 1);
+      }
+
+      // ── perfect multiplier ──
+      // Rides up out of the block that earned it and fades. Gold, because it is
+      // the only thing on this screen that is a reward rather than a state.
+      const mp = multPop.current;
+      if (mp) {
+        mp.t += dt;
+        const life = mp.t / 0.75;
+        if (life >= 1) {
+          multPop.current = null;
+        } else {
+          const f = blockFaces({ x: mp.x, y: mp.y, sx: 0, sy: 0, index: 0 }, mp.level, view);
+          const cx = (f.top[0].px + f.top[2].px) / 2;
+          const cy = (f.top[0].py + f.top[2].py) / 2 - life * 46;
+          ctx.save();
+          ctx.globalAlpha = 1 - life * life;
+          ctx.font = `900 ${Math.round(26 + (1 - life) * 6)}px system-ui, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.lineWidth = 4;
+          ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+          ctx.strokeText(`${mp.mult}x`, cx, cy);
+          ctx.fillStyle = '#F5C518';
+          ctx.fillText(`${mp.mult}x`, cx, cy);
+          ctx.restore();
+        }
       }
 
       // ── perfect-drop burst ──

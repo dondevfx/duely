@@ -24,8 +24,17 @@ const gameEvents = require('./gameEvents');
 // second, so ~3 drops/second is the physical maximum. 4/second sustained leaves
 // headroom for timing jitter without leaving room to fabricate a run.
 const MAX_SCORE            = 100_000;
-const MAX_DELTA_PER_PING   = 6;        // burst capacity, in blocks
-const SCORE_REFILL_PER_MS  = 0.004;    // 4 blocks/second sustained
+// The bucket is in POINTS, and a point is no longer a block: a run of perfect
+// drops scores up to 10 for one placement. At the physical ceiling of about
+// three drops a second that is ~30 points a second, so the old 4/second — sized
+// when every block was worth exactly 1 — would have throttled a good run and
+// silently capped the very play the multiplier rewards.
+//
+// Still tied to what is physically possible rather than raised to be
+// comfortable: 40/second sustained is three perfect drops a second with
+// headroom for jitter, and nothing faster than that can be played.
+const MAX_DELTA_PER_PING   = 60;       // burst capacity, in points
+const SCORE_REFILL_PER_MS  = 0.04;     // 40 points/second sustained
 
 // How long the surviving player gets to beat a finished score. Same value as
 // Block Burst and Rush Hour, so the three do not teach different rules.

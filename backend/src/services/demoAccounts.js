@@ -8,14 +8,24 @@ const isDemo = (userId) => DEMO_IDS.includes(userId);
 
 // Funny opponent names shown for demo-account matches (vs a rigged bot, or when
 // two demo accounts get matched — the opponent is relabelled with one of these).
+// The names a disguised opponent plays under.
+//
+// These were joke names — ToiletGoblin, SirFartsALot, PoopSockSteve. Every one
+// of them read as a bot, because no real account is called that, and a lobby
+// full of them made the whole opponent list look generated.
+//
+// Written as tags now: the shapes people actually pick. Handle plus number,
+// two words jammed together, a deliberate misspelling, an initial-and-word, the
+// occasional lowercase one. A couple of plain first-name handles are in there
+// on purpose — a list with no ordinary names in it is its own kind of tell.
 const FUNNY_NAMES = [
-  'SussyBaka420', 'ToiletGoblin', 'MoistBandit', 'SirFartsALot', 'CheekClapper9000',
-  'BigChungus', 'GaryGooch', 'DumpsterRaccoon', 'SoggyWaffle', 'PoopSockSteve',
-  'ThiccNoodle', 'CrustySock', 'GassyGus', 'BeefusMcGee', 'MayoFingers',
-  'NuggetNutz', 'SquishyPancake', 'GrandmaSlayer', 'WetSockWilly', 'ChonkyBoi',
-  'SirLoinSteak', 'DiaperDon', 'GurgleMcGoo', 'SlipperyPete', 'FartKnuckle',
-  'CheesyGordita', 'MoldyBagel', 'ThighMaster69', 'SmellyMcNugget', 'BoogerBaron',
-  'TurboTaco', 'LimpBiscuit', 'GoblinGremlin', 'SweatyBetty', 'ClammyCarl',
+  'Vantiq', 'zeroCool', 'mBaker', 'Krypto_7', 'NoScopeNate', 'drifty',
+  'Halcyon', 'TKM', 'sh4dow', 'Renn', 'Quickscope', 'PixelJay',
+  'OmenX', 'lowkeyjay', 'Trevn', 'Bl1tz', 'SaltyRook', 'Vex',
+  'nightowl_', 'Kaz', 'RiftWalker', 'jonas', 'Prowl', 'M4verick',
+  'Slipstream', 'ttv_Kobe', 'ghostmode', 'Ardyn', 'Nyx', 'Cardinal',
+  'Dez', 'frostbyte', 'AceOfSpvdes', 'Loop', 'Kestrel', 'winterborn',
+  'Tycho', 'Rook', 'sable', 'NVR', 'Halfstep', 'Mako',
 ];
 
 const randomFunnyName = () => FUNNY_NAMES[Math.floor(Math.random() * FUNNY_NAMES.length)];
@@ -47,14 +57,23 @@ function disguisedFace(name) {
 // What another player is allowed to see of this one. A demo account plays under
 // a random name so it is not identifiable in a live match; everyone else is
 // shown as themselves.
-function shownAs(p) {
-  if (!p || !p.isDemo) {
-    return {
-      username:     p && p.username,
-      avatarUrl:    (p && p.avatarUrl) ?? null,
-      profileColor: (p && p.profileColor) ?? null,
-    };
-  }
+function shownAs(p, viewer) {
+  const plain = () => ({
+    username:     p && p.username,
+    avatarUrl:    (p && p.avatarUrl) ?? null,
+    profileColor: (p && p.profileColor) ?? null,
+  });
+  if (!p || !p.isDemo) return plain();
+
+  // Two demo accounts matched against each other see each other AS THEMSELVES.
+  //
+  // The disguise exists so a demo account is not identifiable to a real player
+  // in a live match. Between two demos there is no one to hide from, and the
+  // fake name made the demo look like it was playing a bot — which is the
+  // opposite of what the demo is for, since a demo-vs-demo match is the only
+  // genuinely real PvP either of them will play.
+  if (viewer && viewer.isDemo) return plain();
+
   const username = randomFunnyName();
   return { username, ...disguisedFace(username) };
 }

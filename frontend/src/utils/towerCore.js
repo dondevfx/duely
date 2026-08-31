@@ -40,6 +40,11 @@ const SPEED_START = 1.35;   // world units per second
 const SPEED_STEP  = 0.030;   // was 0.062 — full speed arrived by ~block 55
 const SPEED_MAX   = 4.6;
 
+// The ceiling on the perfect-drop multiplier. Ten is where it stops climbing;
+// a run that is still perfect after ten stays at 10x rather than running away
+// with the leaderboard.
+export const MAX_PERFECT_MULT = 10;
+
 export const speedForScore = (score) =>
   Math.min(SPEED_MAX, SPEED_START + score * SPEED_STEP);
 
@@ -266,9 +271,16 @@ export function createRun({ onLand, onOver } = {}) {
       state.bursts.push({ x: placed.x, y: placed.y, sx: placed.sx, sy: placed.sy, level, t: 0 });
     }
 
-    state.score++;
+    // Consecutive perfect drops are worth more, up to a ceiling.
+    //
+    // perfectStreak was incremented above, so the FIRST perfect is worth 1 —
+    // the multiplier appears on the second, which is where it starts meaning
+    // something. A miss resets the streak, so it is a run of accuracy that pays
+    // rather than accuracy in total.
+    const mult = perfect ? Math.min(MAX_PERFECT_MULT, state.perfectStreak) : 1;
+    state.score += mult;
     state.taps.push(state.elapsed);
-    onLand?.({ perfect, score: state.score });
+    onLand?.({ perfect, score: state.score, mult, gained: mult });
 
     // A successful landing NEVER ends the run, however thin the survivor is.
     //

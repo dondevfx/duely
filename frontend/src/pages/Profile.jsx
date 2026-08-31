@@ -1681,7 +1681,13 @@ export default function Profile() {
               { label: 'Leaderboard', value: extraStats.rank ? `#${extraStats.rank}` : '-', color: 'text-accent' },
               { label: 'Wins', value: profile.wins, color: 'text-success' },
               { label: 'Losses', value: profile.losses, color: 'text-danger' },
-              { label: 'Wagered', value: `${fmtCoins(extraStats.total_wagered)} coins`, title: `${fmtExact(extraStats.total_wagered)} coins wagered`, color: 'text-white' },
+              // The coin mark rather than the word. "2,500.00 coins" is the
+              // longest thing any of these tiles holds and it was the one that
+              // overflowed; the icon says the same in a fifth of the width, and
+              // it is what every other balance on the site already uses.
+              { label: 'Wagered',
+                value: <span className="inline-flex items-center gap-1">{fmtCoins(extraStats.total_wagered)} <CoinIcon size="0.8em" /></span>,
+                title: `${fmtExact(extraStats.total_wagered)} coins wagered`, color: 'text-white' },
             ].map(s => (
               <div key={s.label} className="bg-bg rounded-xl p-3 text-center overflow-hidden">
                 <FitText className={`text-xl font-black ${s.color}`} title={s.title}>{s.value}</FitText>

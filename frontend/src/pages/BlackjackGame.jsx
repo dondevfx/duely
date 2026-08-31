@@ -10,7 +10,7 @@ import BetSlider from '../components/BetSlider';
 import ResultScreen from '../components/ResultScreen';
 import GameHelp from '../components/GameHelp';
 import GameIcon from '../components/GameIcon';
-import { LockIcon } from '../components/UiIcon';
+import { LockIcon, BjIcon, OutcomeIcon } from '../components/UiIcon';
 import Avatar from '../components/Avatar';
 import PlayerName from '../components/PlayerName';
 import GameErrorBoundary from '../components/GameErrorBoundary';
@@ -908,14 +908,14 @@ function BlackjackGame() {
             <div>
               <div style={{ fontWeight: 800, fontSize: 15, color: textPrimary }}>
                 {opponentUsername || 'Duely Bot'}
-                {rd && rd.winnerId === oppId && <span style={{ marginLeft: 6, fontSize: 14 }}>👑</span>}
+                {rd && rd.winnerId === oppId && <BjIcon kind="crown" size={15} className="ml-1.5" />}
               </div>
               {/* Score: reveal-phase uses server data; playing phase uses live visible cards (no bust until reveal) */}
               {oppReveal
                 ? <ScoreBadge score={oppReveal.score} bust={oppReveal.score > 21} isLight={isLight} />
                 : oppHand.length > 0
                   ? (() => { const s = calcScore(oppHand); return s <= 21 ? <ScoreBadge score={s} isLight={isLight} /> : null; })()
-                  : <span style={{ fontSize: 12, color: textMuted }}>{oppHasSplit ? '✂️ Split · ' : ''}{opponentHandSize} cards</span>
+                  : <span style={{ fontSize: 12, color: textMuted }}>{oppHasSplit ? <><BjIcon kind="split" size={12} /> Split · </> : ''}{opponentHandSize} cards</span>
               }
             </div>
           </div>
@@ -956,7 +956,7 @@ function BlackjackGame() {
             <div>
               <div style={{ fontWeight: 800, fontSize: 15, color: textPrimary }}>
                 {profile?.username || 'You'}
-                {rd && rd.winnerId === profile?.id && <span style={{ marginLeft: 6, fontSize: 14 }}>👑</span>}
+                {rd && rd.winnerId === profile?.id && <BjIcon kind="crown" size={15} className="ml-1.5" />}
               </div>
               {/* Hidden during a split: each hand carries its own badge under
                   its cards, and this one has no hand to belong to. With a split
@@ -1043,7 +1043,9 @@ function BlackjackGame() {
 
           {/* Draw result banner */}
           {phase === 'reveal' && rd?.isDraw && (
-            <div style={{ marginBottom: 16, fontSize: 18, fontWeight: 900, color: '#fbbf24' }}>🤝 Draw!</div>
+            <div style={{ marginBottom: 16, fontSize: 18, fontWeight: 900, color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <OutcomeIcon kind="draw" size={20} /> Draw!
+            </div>
           )}
 
           {/* HIT / STAND / SPLIT — for normal (non-split) play. During a split the
@@ -1072,12 +1074,12 @@ function BlackjackGame() {
           {/* Waiting status */}
           {phase === 'playing' && stood && !bust && (
             <p style={{ marginTop: 14, fontSize: 13, color: textMuted, fontWeight: 600 }}>
-              ✅ Stood — waiting for opponent…
+              <BjIcon kind="stand" size={15} /> Stood — waiting for opponent…
             </p>
           )}
           {phase === 'playing' && bust && !splitData && (
             <p style={{ marginTop: 14, fontSize: 13, color: '#f87171', fontWeight: 700 }}>
-              💥 Bust — waiting for opponent…
+              <BjIcon kind="bust" size={15} /> Bust — waiting for opponent…
             </p>
           )}
           {/* Suppressed while splitPending, because the hand column above is
@@ -1087,7 +1089,7 @@ function BlackjackGame() {
               set splitPending, so that case still gets this banner. */}
           {phase === 'playing' && bust && splitData && !splitPending && (
             <p style={{ marginTop: 14, fontSize: 13, color: '#f97316', fontWeight: 700 }}>
-              💥 Bust on Hand {splitData.activeHand === 1 ? '1' : '2'} — moving to {splitData.activeHand === 1 ? 'Hand 2' : 'next'}…
+              <BjIcon kind="bust" size={15} /> Bust on Hand {splitData.activeHand === 1 ? '1' : '2'} — moving to {splitData.activeHand === 1 ? 'Hand 2' : 'next'}…
             </p>
           )}
         </div>

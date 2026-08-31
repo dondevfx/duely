@@ -221,3 +221,126 @@ test('a deposit cannot be credited twice', () => {
   assert.match(hooks, /invalid signature — rejecting/, 'the webhook is not authenticated');
   assert.match(hooks, /claimErr\.code === '23505'/);
 });
+
+// ── Demo vs demo ────────────────────────────────────────────────────────────
+
+test('two demo accounts matched together see each other, not two fake names', () => {
+  // The disguise exists so a demo is not identifiable to a REAL player. Between
+  // two demos there is nobody to hide from, and the fake names made the only
+  // genuine PvP either of them plays look like a bot match.
+  const { shownAs } = require('../src/services/demoAccounts');
+  const a = { isDemo: true, username: 'DemoOne', avatarUrl: 'a.png', profileColor: '#22c55e' };
+  const b = { isDemo: true, username: 'DemoTwo', avatarUrl: 'b.png', profileColor: '#ef4444' };
+  const real = { username: 'jack', avatarUrl: 'j.png', profileColor: '#1250B4' };
+
+  assert.deepEqual(shownAs(a, b), { username: 'DemoOne', avatarUrl: 'a.png', profileColor: '#22c55e' },
+    'a demo must see the other demo as itself, picture and all');
+  assert.notEqual(shownAs(a, real).username, 'DemoOne', 'a real player must still see the disguise');
+  assert.equal(shownAs(a, real).avatarUrl, null, 'and must not get the real picture');
+  assert.deepEqual(shownAs(real, a), { username: 'jack', avatarUrl: 'j.png', profileColor: '#1250B4' });
+
+  // Every call site must pass the viewer, or the rule cannot apply.
+  const bare = [...HANDLERS.matchAll(/shownAs\(([^)]*)\)/g)].filter((m) => !m[1].includes(','));
+  assert.deepEqual(bare.map((m) => m[0]), [], 'a call site is not passing the viewer');
+});
+
+test('the disguise names read like handles, not like jokes', () => {
+  // They were ToiletGoblin, SirFartsALot, PoopSockSteve — every one of them
+  // read as generated, which is exactly what the disguise is trying not to do.
+  const { FUNNY_NAMES } = require('../src/services/demoAccounts');
+  assert.ok(FUNNY_NAMES.length >= 30, 'too few names to avoid repeats in a lobby');
+  const joke = /fart|poop|toilet|butt|diaper|booger|smelly|moist|soggy|crusty|gassy|thicc|chonky/i;
+  const bad = FUNNY_NAMES.filter((n) => joke.test(n));
+  assert.deepEqual(bad, [], `these still read as jokes: ${bad.join(', ')}`);
+  // Long names break the layouts they appear in.
+  const long = FUNNY_NAMES.filter((n) => n.length > 14);
+  assert.deepEqual(long, [], `too long for a name slot: ${long.join(', ')}`);
+});
+
+// ── Blackjack table marks ───────────────────────────────────────────────────
+
+test('stand, bust, draw, crown and split are drawn rather than emoji', () => {
+  const ui = fe('components', 'UiIcon.jsx');
+  assert.match(ui, /export function BjIcon/);
+  for (const kind of ['stand', 'bust', 'crown', 'split']) {
+    assert.match(ui, new RegExp(`^  ${kind}: `, 'm'), `no drawn mark for ${kind}`);
+  }
+  const src = fe('pages', 'BlackjackGame.jsx');
+  // The draw banner reuses the scales from the result card rather than growing
+  // a second drawing of the same idea.
+  assert.match(src, /<OutcomeIcon kind="draw"/);
+  for (const kind of ['stand', 'bust', 'crown', 'split']) {
+    assert.match(src, new RegExp(`<BjIcon kind="${kind}"`), `${kind} is not used`);
+  }
+  // No emoji left ON THE TABLE — the in-game surface, up to where the lobby
+  // starts. The lobby's "Challenge a Friend" keeps its controller: the same
+  // button exists in five other files, and converting one copy would be exactly
+  // the inconsistency this whole icon effort exists to remove. Card pips are
+  // characters rather than emoji and stay either way.
+  const felt = src.slice(0, src.indexOf('─ Lobby'));
+  assert.ok(felt.length > 1000, 'could not find where the lobby starts');
+  const bad = [];
+  felt.split(/\r?\n/).forEach((l, i) => {
+    if (/[\u{1F300}-\u{1FAFF}]/u.test(l)) bad.push(`${i + 1}: ${l.trim().slice(0, 50)}`);
+  });
+  assert.deepEqual(bad, [], `emoji left on the table: ${bad.join(' | ')}`);
+});
+
+// ── Tower multiplier ────────────────────────────────────────────────────────
+
+test('consecutive perfect drops pay 2x, 3x … 10x and then hold', () => {
+  const src = fe('utils', 'towerCore.js');
+  assert.match(src, /export const MAX_PERFECT_MULT = 10;/);
+  assert.match(src, /const mult = perfect \? Math\.min\(MAX_PERFECT_MULT, state\.perfectStreak\) : 1;/);
+  assert.match(src, /state\.score \+= mult;/);
+  assert.doesNotMatch(src, /state\.score\+\+;/, 'the flat +1 is still there');
+
+  // Run the rule rather than trust the reading of it.
+  const MAX = 10;
+  let streak = 0, score = 0;
+  const drop = (perfect) => {
+    if (perfect) streak++; else streak = 0;
+    const m = perfect ? Math.min(MAX, streak) : 1;
+    score += m;
+    return m;
+  };
+  // The first perfect is worth 1 — the multiplier starts on the SECOND, which
+  // is where it means something.
+  assert.equal(drop(true), 1, 'the first perfect must not already be 2x');
+  assert.equal(drop(true), 2);
+  assert.equal(drop(true), 3);
+  for (let i = 0; i < 6; i++) drop(true);          // up to the 9th
+  assert.equal(drop(true), 10, 'the tenth perfect is 10x');
+  assert.equal(drop(true), 10, 'and it holds there');
+  assert.equal(drop(false), 1, 'a miss resets it');
+  assert.equal(drop(true), 1, 'and the streak starts again');
+});
+
+test('the score limit was rescaled with the multiplier', () => {
+  // The bucket is in POINTS and a point is no longer a block. Left at 4/second
+  // — sized when every block scored exactly 1 — a run of perfect drops would
+  // have been throttled, silently capping the very play the multiplier rewards.
+  const eng = be('services', 'towerEngine.js');
+  const refill = Number(eng.match(/const SCORE_REFILL_PER_MS\s+=\s+([\d.]+)/)[1]);
+  const burst  = Number(eng.match(/const MAX_DELTA_PER_PING\s+=\s+(\d+)/)[1]);
+  const perSecond = refill * 1000;
+  // Three drops a second is the physical ceiling; at 10x that is 30 points.
+  assert.ok(perSecond >= 30, `${perSecond} points/second throttles legitimate perfect play`);
+  assert.ok(perSecond <= 60, `${perSecond} points/second is loose enough to fabricate a run`);
+  assert.ok(burst >= 10, 'a single 10x drop must fit in the burst allowance');
+});
+
+// ── The wagered tile ────────────────────────────────────────────────────────
+
+test('the wagered tile shows the coin mark, not the word', () => {
+  // "2,500.00 coins" was the longest thing any of these tiles holds, and the
+  // one that overflowed. The icon says the same in a fifth of the width.
+  const src = fe('pages', 'Profile.jsx');
+  const at = src.indexOf("{ label: 'Wagered'");
+  assert.ok(at > 0, 'the wagered tile is gone');
+  const tile = src.slice(at, at + 400);
+  assert.match(tile, /<CoinIcon/, 'it does not use the coin mark');
+  assert.doesNotMatch(tile, /\} coins`/, 'it still spells out the word');
+  // The full figure stays reachable on hover.
+  assert.match(tile, /title: `\$\{fmtExact\(extraStats\.total_wagered\)\} coins wagered`/);
+});

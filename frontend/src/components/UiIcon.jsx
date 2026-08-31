@@ -372,3 +372,58 @@ export function LockIcon({ size = '1em', open = false, className = '' }) {
     </svg>
   );
 }
+
+// ── Blackjack table marks ───────────────────────────────────────────────────
+//
+// Stood, bust, the winner's crown and the split marker were ✅ 💥 👑 ✂️. These
+// sit right on the felt next to the cards, which is the worst place for the one
+// thing on screen drawn by the operating system: the check is flat green on
+// Android and a rounded badge on iOS, and at 12px the scissors is a smudge.
+// Drawn here in the colours the table already uses.
+const BJ = {
+  stand: { label: 'stood', art: (
+    <>
+      <circle cx="12" cy="12" r="9.2" fill="#2FD46B22" stroke="#2FD46B" strokeWidth="1.8" />
+      <path d="M7.6 12.3l3 3 5.8-6.4" fill="none" stroke="#2FD46B" strokeWidth="2.4"
+        strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ) },
+  bust: { label: 'bust', art: (
+    <>
+      {/* A burst, not a bomb: the hand blew past 21, and the shape reads at
+          12px where anything with detail does not. */}
+      <path d="M12 1.8l2.3 4.6 5-1.6-1.6 5 4.5 2.2-4.5 2.2 1.6 5-5-1.6L12 22.2l-2.3-4.6-5 1.6 1.6-5L1.8 12l4.5-2.2-1.6-5 5 1.6z"
+        fill="#FF4D5E33" stroke="#FF4D5E" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M12 7.4v5.4" stroke="#FF4D5E" strokeWidth="2.2" strokeLinecap="round" />
+      <circle cx="12" cy="16.2" r="1.3" fill="#FF4D5E" />
+    </>
+  ) },
+  crown: { label: 'winner', art: (
+    <>
+      <path d="M3.4 17.2l-1.6-9 5.1 3.4L12 4.6l5.1 7 5.1-3.4-1.6 9z" fill="#F5C518" />
+      <rect x="3.4" y="18.2" width="17.2" height="2.6" rx="1" fill="#C99A0E" />
+      <circle cx="12" cy="7.6" r="1.5" fill="#FFF3C4" />
+    </>
+  ) },
+  split: { label: 'split', art: (
+    <>
+      {/* One hand becoming two — the fork says what happened; scissors only
+          ever said "cut", which is not what a split is. */}
+      <path d="M12 20.5V13m0 0L6.4 6.6M12 13l5.6-6.4" fill="none" stroke="#8FB4FF"
+        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="6.4" cy="5" r="2.5" fill="#2E7BF6" stroke="#8FB4FF" strokeWidth="1.2" />
+      <circle cx="17.6" cy="5" r="2.5" fill="#2E7BF6" stroke="#8FB4FF" strokeWidth="1.2" />
+    </>
+  ) },
+};
+
+export function BjIcon({ kind, size = 16, className = '' }) {
+  const o = BJ[kind];
+  if (!o) return null;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" role="img" aria-label={o.label}
+      focusable="false" className={`inline-block shrink-0 ${className}`} style={ICON_ALIGN}>
+      {o.art}
+    </svg>
+  );
+}
