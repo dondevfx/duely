@@ -394,7 +394,10 @@ test('the multiplier is drawn above the tower, in white', () => {
   // Its own style: spaced, haloed rather than outlined, with a rule under it.
   assert.match(src, /ctx\.letterSpacing = '2px'/);
   assert.match(src, /ctx\.shadowColor = 'rgba\(0,0,0,0\.75\)'/);
-  assert.match(src, /ctx\.fillRect\(-w \/ 2, 20, w, 1\.5\)/, 'no rule under the number');
+  // The rule under it is gone — it read as a stray mark at the size the badge
+  // is now, and the halo already separates it from the tower.
+  assert.doesNotMatch(src, /ctx\.fillRect\(-w \/ 2, 20, w, 1\.5\)/, 'the rule is back');
+  assert.match(src, /'800 38px system-ui/, 'the badge should be the larger size');
 });
 
 // ── Not being able to afford it, part two ───────────────────────────────────

@@ -303,7 +303,7 @@ export default function TowerCanvas({
           const scale = 1 + (1 - Math.min(1, life * 4)) * 0.35;
           ctx.translate(cx, cy);
           ctx.scale(scale, scale);
-          ctx.font = '800 30px system-ui, -apple-system, "Segoe UI", sans-serif';
+          ctx.font = '800 38px system-ui, -apple-system, "Segoe UI", sans-serif';
           if (ctx.letterSpacing !== undefined) ctx.letterSpacing = '2px';
           // A soft dark halo instead of a hard outline — the tower behind it is
           // mid-blue, and white on that needs separating without a cartoon
@@ -313,11 +313,6 @@ export default function TowerCanvas({
           ctx.fillStyle = '#FFFFFF';
           ctx.fillText(label, 0, 0);
           ctx.shadowBlur = 0;
-          // A hairline under it, drawn to the width of the text, which is what
-          // makes it read as a badge rather than as floating debris.
-          const w = ctx.measureText(label).width;
-          ctx.globalAlpha *= 0.55;
-          ctx.fillRect(-w / 2, 20, w, 1.5);
           ctx.restore();
         }
       }

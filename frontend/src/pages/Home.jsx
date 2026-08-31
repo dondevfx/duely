@@ -49,10 +49,6 @@ export default function Home() {
         <div className="relative max-w-7xl mx-auto">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6 md:gap-12">
             <div className="flex-1 text-center md:text-left">
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 border border-primary/30 rounded-full text-primary text-sm font-medium mb-3 md:mb-6">
-                <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
-                Live — Play Now
-              </div>
               <h1 className="text-5xl md:text-7xl font-black text-white mb-3 md:mb-6 leading-tight">
                 1v1{' '}
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-primary">
