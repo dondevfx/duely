@@ -7,7 +7,7 @@ import { playMatchFound, playCountdown, playPlace, playClear, playBlast } from '
 import { useSocket } from '../context/SocketContext';
 import { useCurrency } from '../context/CurrencyContext';
 import GlowButton from '../components/GlowButton';
-import GameLobby from '../components/GameLobby';
+import GameLobby, { COIN_FEES } from '../components/GameLobby';
 import ResultScreen from '../components/ResultScreen';
 import GameHelp from '../components/GameHelp';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
@@ -19,7 +19,12 @@ import { useResumeMatch } from '../hooks/useResumeMatch';
 import CoinIcon from '../components/CoinIcon';
 import { usePrivateRematch } from '../hooks/usePrivateRematch';
 
-const COIN_FEES    = [1, 5, 10, 25, 50, 100];
+// Coin tiers come from the shared list — this page had its own copy, so a tier
+// added anywhere else silently skipped Block Burst.
+//
+// The DIAMOND tiers are deliberately still local: Block Burst offers six of
+// them where the shared list has three, and folding it in would quietly remove
+// four bet sizes players can currently pick.
 const DIAMOND_FEES = [50, 100, 250, 500, 1000, 50000];
 
 const GRID         = 8;

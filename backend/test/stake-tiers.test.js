@@ -113,3 +113,42 @@ test('handler bodies are extracted at a plausible size', () => {
     assert.ok(len < 20000, `${name} body came out at ${len} chars — the extractor ran past the end of the handler`);
   }
 });
+
+// The client can only offer tiers the server will take.
+//
+// The two lists are in different files and were edited separately: adding a
+// tier to the betting screen without adding it to VALID_COIN_FEES produces a
+// bet size that is selectable, looks normal, and is refused with "Invalid entry
+// fee" the moment Find Opponent is pressed.
+test('every coin tier the betting screens offer is one the server accepts', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const server = source().match(/VALID_COIN_FEES\s*=\s*new Set\(\[([^\]]*)\]\)/);
+  assert.ok(server, 'VALID_COIN_FEES not found');
+  const accepted = new Set(server[1].split(',').map((s) => Number(s.trim())));
+
+  const lobby = fs2.readFileSync(
+    path2.join(__dirname, '..', '..', 'frontend', 'src', 'components', 'GameLobby.jsx'), 'utf8');
+  const client = lobby.match(/COIN_FEES\s*=\s*\[([^\]]*)\]/);
+  assert.ok(client, 'COIN_FEES not found on the betting screen');
+  const offered = client[1].split(',').map((s) => Number(s.trim()));
+
+  const rejected = offered.filter((f) => !accepted.has(f));
+  assert.deepEqual(rejected, [],
+    `these bet sizes can be picked but the server refuses them: ${rejected.join(', ')}`);
+});
+
+test('the coin tiers live in one place, not one copy per game', () => {
+  // Block Burst kept its own copy, so a tier added to the shared list skipped
+  // that one game — which is exactly how "for all games" quietly means "for
+  // seven of the eight".
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const dir = path2.join(__dirname, '..', '..', 'frontend', 'src', 'pages');
+  const bad = [];
+  for (const f of fs2.readdirSync(dir).filter((n) => n.endsWith('.jsx'))) {
+    const src = fs2.readFileSync(path2.join(dir, f), 'utf8');
+    if (/^const COIN_FEES\s*=\s*\[/m.test(src)) bad.push(f);
+  }
+  assert.deepEqual(bad, [], `these pages define their own coin tiers: ${bad.join(', ')}`);
+});

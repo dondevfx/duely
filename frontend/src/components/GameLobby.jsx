@@ -32,7 +32,7 @@ export const SMALL_BTN =
   'border border-border bg-surface text-white ' +
   'hover:border-primary hover:bg-surfaceLight active:bg-surfaceLight transition-all';
 
-export const COIN_FEES    = [1, 5, 10, 25, 50, 100];
+export const COIN_FEES    = [1, 2, 5, 10, 25, 50, 100];
 export const DIAMOND_FEES = [500, 5000, 50000];
 
 function fmtFee(fee) {
