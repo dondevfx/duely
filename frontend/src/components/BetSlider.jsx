@@ -109,6 +109,10 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
           stacking them costs about 20px the action buttons need. */}
       {entryFee > 0 && (
         <div className="mb-1.5 sm:mb-3 text-center">
+          {/* Labelled, because the payout now sits directly under the panel
+              heading. Unlabelled it read as the heading's value — a big green
+              number under the words "Entry Fee" looks like the entry fee. */}
+          <div className="text-[10px] sm:text-xs uppercase tracking-widest text-muted font-bold">You win</div>
           <div className="text-4xl sm:text-5xl font-black text-success inline-flex items-center gap-1" style={{ textShadow: '0 0 18px rgba(34,197,94,0.45)' }}>
             <span ref={payoutRef}>{entryFee > 0 ? `+${calcPayout(entryFee, isDiamonds, payoutMult)}` : ''}</span>
             {' '}{currLabel}
@@ -150,6 +154,10 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
       {/* The stake, under the slider it belongs to, with the range it moves
           between. Deliberately smaller than the payout above — the two were the
           same weight, so nothing said which one mattered. */}
+      {/* No label on the stake: the panel heading already says Your Bet, and the
+          figure sits between the Min and Max of the slider it belongs to. Only
+          the payout needed naming, because it is the one that sits under the
+          heading and would otherwise read as the heading's value. */}
       <div className="flex items-center justify-between gap-1 mt-1.5 sm:mt-3">
         <span className="text-[11px] sm:text-sm text-muted whitespace-nowrap">Min: {fmtFee(fees[0])} {currLabel}</span>
         <span className="text-xl sm:text-2xl font-black text-white">
