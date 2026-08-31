@@ -10,7 +10,7 @@ import { COIN_FEES, DIAMOND_FEES } from '../components/GameLobby';
 import BetSlider from '../components/BetSlider';
 import { useCurrency } from '../context/CurrencyContext';
 import GlowButton from '../components/GlowButton';
-import { topUpRoute, topUpLabel } from '../utils/topUpRoute';
+import { topUpRoute, topUpLabel } from '../utils/topUpRoute.jsx';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
 import { chooseGame } from '../utils/quickMatchPool';
@@ -151,13 +151,13 @@ export default function QuickMatch() {
             <div className="flex items-center gap-0.5 bg-bg border border-border rounded-lg p-1">
               <button
                 onClick={() => switchCurrency('coins')}
-                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${!isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}
+                className={`px-3 sm:px-4 py-2.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${!isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}
               >
                 <CoinIcon size="0.85em" /> Coins
               </button>
               <button
                 onClick={() => switchCurrency('diamonds')}
-                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}
+                className={`px-3 sm:px-4 py-2.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}
               >
                 <DiamondIcon /> Diamonds
               </button>

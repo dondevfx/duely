@@ -7,7 +7,7 @@ import BetSlider from './BetSlider';
 import { useAuth } from '../context/AuthContext';
 import CoinIcon from './CoinIcon';
 import GameIcon from './GameIcon';
-import { topUpRoute, topUpLabel } from '../utils/topUpRoute';
+import { topUpRoute, topUpLabel } from '../utils/topUpRoute.jsx';
 import CreateRoomModal from './CreateRoomModal';
 import JoinRoomModal from './JoinRoomModal';
 import { LockIcon } from './UiIcon';
@@ -170,13 +170,13 @@ export default function GameLobby({
           <div className="flex items-center gap-0.5 bg-bg border border-border rounded-lg p-1">
             <button
               onClick={() => switchCurrency('coins')}
-              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${!isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}
+              className={`px-3 sm:px-4 py-2.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${!isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}
             >
               <CoinIcon size="0.85em" /> Coins
             </button>
             <button
               onClick={() => switchCurrency('diamonds')}
-              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}
+              className={`px-3 sm:px-4 py-2.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}
             >
               <DiamondIcon /> Diamonds
             </button>
@@ -264,9 +264,18 @@ export default function GameLobby({
             match, like the three below it, so it looks like them. */}
         {session && (onBot || onBotFree || onCreatePrivate) && (
           <div className="flex flex-col gap-2 sm:gap-2 pt-0.5 sm:pt-1">
+            {/* Sends a player who cannot afford the stake to wherever that
+                  currency is topped up, rather than opening a room they cannot
+                  fund. Coins are bought on the wallet page and diamonds are
+                  earned on the rewards page, so the destination follows the
+                  bet — a diamond shortfall sent to the wallet is a dead end,
+                  because there is nothing there to buy diamonds with. */}
             {onCreatePrivate && (
-              <button onClick={() => setPrivateMode('create')} className={SMALL_BTN}>
-                🎮 Challenge a Friend
+              <button
+                onClick={insufficient ? () => navigate(topUpRoute(betCurrency)) : () => setPrivateMode('create')}
+                className={SMALL_BTN}
+              >
+                {insufficient ? topUpLabel(betCurrency) : '🎮 Challenge a Friend'}
               </button>
             )}
             {/* Diamond bet-vs-bot gets its own full-width row — the label is too

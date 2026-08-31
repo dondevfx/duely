@@ -269,28 +269,55 @@ export default function TowerCanvas({
       }
 
       // ── perfect multiplier ──
-      // Rides up out of the block that earned it and fades. Gold, because it is
-      // the only thing on this screen that is a reward rather than a state.
+      //
+      // Sits well above the block that earned it and lifts from there, so it
+      // clears the tower instead of overlapping the piece just landed — at the
+      // block itself it sat right where the eye already is and covered the
+      // thing being looked at.
+      //
+      // White, spaced and thin-ruled rather than the heavy gold it was: gold
+      // reads as currency on a site where gold IS the currency, and the number
+      // it sat beside is a score, not a payout.
       const mp = multPop.current;
       if (mp) {
         mp.t += dt;
-        const life = mp.t / 0.75;
+        const life = mp.t / 0.85;
         if (life >= 1) {
           multPop.current = null;
         } else {
           const f = blockFaces({ x: mp.x, y: mp.y, sx: 0, sy: 0, index: 0 }, mp.level, view);
           const cx = (f.top[0].px + f.top[2].px) / 2;
-          const cy = (f.top[0].py + f.top[2].py) / 2 - life * 46;
+          // Starts a block and a half up and rises a little further. `ease`
+          // moves most of the distance early, so it reads as a pop rather than
+          // a drift.
+          const ease = 1 - Math.pow(1 - life, 2.2);
+          const cy = (f.top[0].py + f.top[2].py) / 2 - view.blockPx * 2.6 - ease * 26;
+          const label = `${mp.mult}×`;
+
           ctx.save();
-          ctx.globalAlpha = 1 - life * life;
-          ctx.font = `900 ${Math.round(26 + (1 - life) * 6)}px system-ui, sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.lineWidth = 4;
-          ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-          ctx.strokeText(`${mp.mult}x`, cx, cy);
-          ctx.fillStyle = '#F5C518';
-          ctx.fillText(`${mp.mult}x`, cx, cy);
+          // Fades in over the first fifth, then holds, then fades out.
+          ctx.globalAlpha = Math.min(1, life * 5) * (1 - Math.pow(life, 3));
+          // A touch of overshoot on the way in, so it lands rather than appears.
+          const scale = 1 + (1 - Math.min(1, life * 4)) * 0.35;
+          ctx.translate(cx, cy);
+          ctx.scale(scale, scale);
+          ctx.font = '800 30px system-ui, -apple-system, "Segoe UI", sans-serif';
+          if (ctx.letterSpacing !== undefined) ctx.letterSpacing = '2px';
+          // A soft dark halo instead of a hard outline — the tower behind it is
+          // mid-blue, and white on that needs separating without a cartoon
+          // stroke.
+          ctx.shadowColor = 'rgba(0,0,0,0.75)';
+          ctx.shadowBlur = 10;
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillText(label, 0, 0);
+          ctx.shadowBlur = 0;
+          // A hairline under it, drawn to the width of the text, which is what
+          // makes it read as a badge rather than as floating debris.
+          const w = ctx.measureText(label).width;
+          ctx.globalAlpha *= 0.55;
+          ctx.fillRect(-w / 2, 20, w, 1.5);
           ctx.restore();
         }
       }

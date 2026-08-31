@@ -14,7 +14,7 @@ import GameIcon from '../components/GameIcon';
 import { LockIcon } from '../components/UiIcon';
 import PlayerName from '../components/PlayerName';
 import GlowButton from '../components/GlowButton';
-import { topUpRoute, topUpLabel } from '../utils/topUpRoute';
+import { topUpRoute, topUpLabel } from '../utils/topUpRoute.jsx';
 import CreateRoomModal from '../components/CreateRoomModal';
 import JoinRoomModal from '../components/JoinRoomModal';
 import ChallengeLinkBox from '../components/ChallengeLinkBox';
@@ -735,8 +735,8 @@ export default function CoinFlipGame() {
               <div className="flex items-center justify-between mb-1.5 sm:mb-4">
                 <span className="text-base font-bold text-white">Your Bet</span>
                 <div className="flex items-center gap-0.5 bg-bg border border-border rounded-lg p-1">
-                  <button onClick={() => switchCurrency('coins')} className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${!isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}><CoinIcon size="0.85em" /> Coins</button>
-                  <button onClick={() => switchCurrency('diamonds')} className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}><DiamondIcon size="0.85em" /> Diamonds</button>
+                  <button onClick={() => switchCurrency('coins')} className={`px-3 sm:px-4 py-2.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${!isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}><CoinIcon size="0.85em" /> Coins</button>
+                  <button onClick={() => switchCurrency('diamonds')} className={`px-3 sm:px-4 py-2.5 sm:py-2 rounded text-xs sm:text-sm font-bold transition-all ${isDiamonds ? 'bg-primary text-white' : 'text-muted hover:text-white'}`}><DiamondIcon size="0.85em" /> Diamonds</button>
                 </div>
               </div>
               <BetSlider fees={fees} entryFee={entryFee} setEntryFee={setEntryFee} currLabel={currLabel} isDiamonds={isDiamonds} payoutMult={0.98} />
@@ -792,13 +792,22 @@ export default function CoinFlipGame() {
                       same way the others do, so it is sized like them rather
                       than like the one primary action above. */}
                   <div className="flex flex-col gap-2 pt-1">
-                    <button onClick={() => setPrivateMode('create')} className={SMALL_BTN}>
-                      🎮 Challenge a Friend
+                    <button
+                      onClick={insufficient ? () => navigate(topUpRoute(betCurrency)) : () => setPrivateMode('create')}
+                      className={SMALL_BTN}
+                    >
+                      {insufficient ? topUpLabel(betCurrency) : '🎮 Challenge a Friend'}
                     </button>
                     {/* Diamond bet-vs-bot gets its own full-width row — too long to share */}
                     {isDiamonds && (
-                      <button onClick={() => playVsBot(false)} disabled={!authenticated || insufficient} className={SMALL_BTN}>
-                        Bet vs Bot — {fmtFee(entryFee)} <DiamondIcon />
+                      <button
+                        onClick={insufficient ? () => navigate(topUpRoute(betCurrency)) : () => playVsBot(false)}
+                        disabled={!authenticated}
+                        className={SMALL_BTN}
+                      >
+                        {insufficient
+                          ? <span className="inline-flex items-center gap-1">Insufficient <DiamondIcon /> — Get More</span>
+                          : <span className="inline-flex items-center gap-1">Bet vs Bot — {fmtFee(entryFee)} <DiamondIcon /></span>}
                       </button>
                     )}
                     <div className="flex gap-2">

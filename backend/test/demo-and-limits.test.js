@@ -344,3 +344,94 @@ test('the wagered tile shows the coin mark, not the word', () => {
   // The full figure stays reachable on hover.
   assert.match(tile, /title: `\$\{fmtExact\(extraStats\.total_wagered\)\} coins wagered`/);
 });
+
+// ── Admin ───────────────────────────────────────────────────────────────────
+
+test('demo transactions stay out of the admin lists', () => {
+  // Demo matches move coins that are not real money, so every demo game is a
+  // row of noise between the transactions that actually need looking at — and
+  // the attention queue is the one list where that matters most.
+  const src = be('routes', 'admin.js');
+  const at = src.indexOf("router.get('/transactions'");
+  assert.ok(at > 0);
+  const body = src.slice(at, src.indexOf('const { data, error } = await q;', at));
+  assert.match(body, /filterDemos\(/, 'the transaction list does not exclude demo accounts');
+  // Filtered on the OWNER column, not the row id — filterDemos defaults to 'id',
+  // which on this table is the transaction's own id and would match nothing.
+  assert.match(body, /'user_id',/, 'filtered on the wrong column');
+});
+
+// ── Not being able to afford it ─────────────────────────────────────────────
+
+test('every insufficient-balance button goes where that currency is topped up', () => {
+  // Coins are bought on the wallet page and diamonds are earned on the rewards
+  // page, so a diamond shortfall sent to the wallet is a dead end.
+  const route = fe('utils', 'topUpRoute.jsx');
+  assert.match(route, /betCurrency === 'diamonds' \? '\/rewards' : '\/wallet'/);
+
+  for (const f of ['components/GameLobby.jsx', 'pages/BlackjackGame.jsx', 'pages/CoinFlipGame.jsx']) {
+    const src = fe(...f.split('/'));
+    // Challenge a Friend opened a room the player could not fund.
+    assert.match(src, /insufficient \? \(\) => navigate\(topUpRoute\(betCurrency\)\) : \(\) => setPrivateMode\('create'\)/,
+      `${f}: Challenge a Friend ignores the balance`);
+  }
+
+  // The diamond bet-vs-bot button was DISABLED on a shortfall in two of the
+  // three. A dead button tells the player nothing — it looks broken and they
+  // cannot find out why — which is the rule the shared lobby already followed.
+  for (const f of ['pages/BlackjackGame.jsx', 'pages/CoinFlipGame.jsx']) {
+    const src = fe(...f.split('/'));
+    assert.doesNotMatch(src, /disabled=\{!authenticated \|\| insufficient\}/,
+      `${f}: a button is still dead on an unaffordable bet`);
+  }
+});
+
+test('the top-up label uses the drawn diamond, not the emoji', () => {
+  // It was the last emoji left on the betting screens, sitting six lines from
+  // the drawn diamond the price above it uses.
+  const route = fe('utils', 'topUpRoute.jsx');
+  assert.match(route, /<DiamondIcon \/>/);
+  // Comments stripped: the one mention left is the note recording what it
+  // replaced, and matching prose would fail for the wrong reason.
+  const code = route.split(/\r?\n/).filter((l) => !l.trim().startsWith('//')).join('\n');
+  assert.doesNotMatch(code, /\u{1F48E}/u);
+  // It returns markup now, so the file is .jsx and its importers say so — an
+  // extensionless import resolved in the build but 404'd in the dev server.
+  for (const f of ['components/GameLobby.jsx', 'pages/BlackjackGame.jsx',
+                   'pages/CoinFlipGame.jsx', 'pages/QuickMatch.jsx']) {
+    assert.match(fe(...f.split('/')), /from '\.\.\/utils\/topUpRoute\.jsx'/,
+      `${f} imports it without the extension`);
+  }
+});
+
+// ── The currency toggle ─────────────────────────────────────────────────────
+
+test('the coin and diamond buttons are taller on a phone', () => {
+  // One class string shared by all four betting screens, so they cannot drift.
+  let seen = 0;
+  for (const f of ['components/GameLobby.jsx', 'pages/QuickMatch.jsx',
+                   'pages/BlackjackGame.jsx', 'pages/CoinFlipGame.jsx']) {
+    const src = fe(...f.split('/'));
+    const n = (src.match(/px-3 sm:px-4 py-2\.5 sm:py-2 rounded text-xs sm:text-sm font-bold/g) || []).length;
+    assert.equal(n, 2, `${f} should have both currency buttons, found ${n}`);
+    assert.doesNotMatch(src, /px-3 sm:px-4 py-1\.5 sm:py-2 rounded text-xs/,
+      `${f} still has the shorter mobile button`);
+    seen += n;
+  }
+  assert.equal(seen, 8);
+});
+
+// ── The Tower multiplier badge ──────────────────────────────────────────────
+
+test('the multiplier is drawn above the tower, in white', () => {
+  const src = fe('components', 'TowerCanvas.jsx');
+  // Clear of the block that earned it, rather than sitting on the piece just
+  // landed, which is where the eye already is.
+  assert.match(src, /view\.blockPx \* 2\.6/, 'it is not lifted clear of the block');
+  assert.match(src, /ctx\.fillStyle = '#FFFFFF';/);
+  assert.doesNotMatch(src, /#F5C518/, 'the gold version is still there');
+  // Its own style: spaced, haloed rather than outlined, with a rule under it.
+  assert.match(src, /ctx\.letterSpacing = '2px'/);
+  assert.match(src, /ctx\.shadowColor = 'rgba\(0,0,0,0\.75\)'/);
+  assert.match(src, /ctx\.fillRect\(-w \/ 2, 20, w, 1\.5\)/, 'no rule under the number');
+});

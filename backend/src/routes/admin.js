@@ -224,10 +224,18 @@ module.exports = function adminRoutes(supabase, io) {
     const limit  = Math.min(parseInt(req.query.limit) || 50, 200);
     const offset = parseInt(req.query.offset) || 0;
 
-    let q = supabase
-      .from('transactions')
-      .select('*, profiles(username, profile_color, avatar_url)')
-      .order('created_at', { ascending: false });
+    // Demo accounts are excluded, as they are from the leaderboards, search and
+    // the ticker. Their matches move demo coins that are not real money, so
+    // every demo game they play is a row of noise between the transactions that
+    // actually need looking at — and the attention queue is the one list where
+    // that matters most.
+    let q = filterDemos(
+      supabase
+        .from('transactions')
+        .select('*, profiles(username, profile_color, avatar_url)')
+        .order('created_at', { ascending: false }),
+      'user_id',
+    );
 
     if (req.query.needsAttention === '1') {
       q = q.in('status', ATTENTION_STATUSES).limit(200);
