@@ -587,7 +587,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     });
 
     // ── Allowed entry fees for active games ──────────────────────────────────
-    const VALID_COIN_FEES    = new Set([0, 1, 2, 5, 10, 25, 50, 100]);
+    const VALID_COIN_FEES    = new Set([0, 1, 5, 10, 25, 50, 100]);
     const VALID_DIAMOND_FEES = new Set([0, 50, 100, 250, 500, 1000, 5000, 50000]);
     function isValidFee(fee, cur) {
       return cur === 'diamonds' ? VALID_DIAMOND_FEES.has(Number(fee)) : VALID_COIN_FEES.has(Number(fee));

@@ -32,7 +32,7 @@ export const SMALL_BTN =
   'border border-border bg-surface text-white ' +
   'hover:border-primary hover:bg-surfaceLight active:bg-surfaceLight transition-all';
 
-export const COIN_FEES    = [1, 2, 5, 10, 25, 50, 100];
+export const COIN_FEES    = [1, 5, 10, 25, 50, 100];
 export const DIAMOND_FEES = [500, 5000, 50000];
 
 function fmtFee(fee) {
@@ -166,7 +166,7 @@ export default function GameLobby({
       {/* ── Entry Fee ── */}
       <div className="mb-1.5 sm:mb-4 bg-surface border border-border rounded-2xl p-2.5 sm:p-5">
         <div className="flex items-center justify-between mb-1.5 sm:mb-4">
-          <span className="text-base font-bold text-white">Your Bet</span>
+          <span className="text-base font-bold text-white">Entry Fee</span>
           <div className="flex items-center gap-0.5 bg-bg border border-border rounded-lg p-1">
             <button
               onClick={() => switchCurrency('coins')}
