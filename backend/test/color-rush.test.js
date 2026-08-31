@@ -215,14 +215,27 @@ test('obstacles are derived from the index, not from a random stream', () => {
   const at = CANVAS.indexOf('function obstacleAt');
   const body = CANVAS.slice(at, CANVAS.indexOf('\n    }', at));
   assert.doesNotMatch(body, /Math\.random/, 'the course must not use Math.random');
-  for (const field of ['shape', 'dotted', 'dir', 'speed', 'offset']) {
+  // `shape` goes through shapeFor() now, which holds the triangle-ring back
+  // until obstacle 10. Followed into rather than skipped: the derivation still
+  // has to be (seed, index) and nothing else, or the two players' courses part.
+  const picker = CANVAS.slice(CANVAS.indexOf('const rawShape = (k)'),
+                              CANVAS.indexOf('    const obstacles'));
+  assert.match(picker, /rnd01\(seed, k,/, 'the shape must be derived from (seed, index)');
+  assert.doesNotMatch(picker, /Math\.random/, 'the shape picker must not use Math.random');
+  assert.match(CANVAS, /const shape = shapeFor\(i\);/);
+
+  for (const field of ['dotted', 'dir', 'speed', 'offset']) {
     // Sliced to the end of the assignment rather than the end of the LINE —
     // these expressions wrap, and a line-bounded match silently stops checking
     // the moment one of them grows a second line, which is exactly what
     // happened when the spin ramp was added.
     const at2 = body.indexOf(`const ${field}`);
     assert.notEqual(at2, -1, `${field} is gone`);
-    const expr = body.slice(at2, body.indexOf(';', at2));
+    const expr = field === 'speed'
+      // The jitter is what must come from the index here; the ramp beside it is
+      // a pure function of i and is checked by the spin test.
+      ? body.slice(body.indexOf('const ramp'), body.indexOf(';', body.indexOf('const speed')))
+      : body.slice(at2, body.indexOf(';', at2));
     assert.match(expr, /rnd01\(seed, i,/, `${field} must be derived from (seed, index)`);
   }
 });
@@ -237,18 +250,22 @@ test('each obstacle spins faster than the one below it, up to a readable limit',
   const early = num('SPIN_RAMP');
   const late  = num('SPIN_RAMP_LATE');
   const knee  = num('SPIN_RAMP_KNEE');
+  const late2 = num('SPIN_RAMP_LATE2');
+  const knee2 = num('SPIN_RAMP_KNEE2');
   const spinMax = num('SPIN_MAX');
 
   assert.ok(early > 1 && late > 1, 'the spin must speed up, not slow down');
-  assert.ok(late <= early, 'the late rate must ease off, not steepen');
+  assert.ok(late <= early, 'the second rate must ease off, not steepen');
+  assert.ok(late2 <= late, 'the third rate must ease off, not steepen');
+  assert.ok(knee2 > knee, 'the second knee must come after the first');
   assert.ok(early < 1.2, `an early rate of ${early} reaches the cap almost immediately`);
 
   const at = CANVAS.indexOf('function obstacleAt');
   const body = CANVAS.slice(at, CANVAS.indexOf('\n    }', at));
-  const rampExpr = body.slice(body.indexOf('const ramp'), body.indexOf('const speed'));
+  const rampExpr = body.slice(body.indexOf('const atKnee'), body.indexOf('const speed'));
   const expr = body.slice(body.indexOf('const speed'), body.indexOf(';', body.indexOf('const speed')));
   assert.match(rampExpr, /Math\.pow\(SPIN_RAMP, i\)/, 'the early stretch must compound per obstacle');
-  assert.match(rampExpr, /Math\.pow\(SPIN_RAMP_LATE, i - SPIN_RAMP_KNEE\)/,
+  assert.match(rampExpr, /Math\.pow\(SPIN_RAMP_LATE,\s+i - SPIN_RAMP_KNEE\)/,
     'the late stretch must compound from the knee, not from zero');
   assert.match(expr, /Math\.min\(/, 'and it must be capped');
 
@@ -262,11 +279,14 @@ test('each obstacle spins faster than the one below it, up to a readable limit',
   // The multiplier in front of the ramp is read from the source too; if it
   // changes, the ceiling arrives somewhere else.
   const base = Number(expr.match(/Math\.min\(([\d.]+) \* ramp/)[1]);
-  const rampSrc = rampExpr.slice(rampExpr.indexOf('=') + 1).trim().replace(/;\s*$/, '');
+  // The whole block, not just the final expression: the ramp is built from two
+  // intermediate values now (where each stage hands off to the next), and
+  // slicing from `const ramp` alone left those undefined.
   // eslint-disable-next-line no-new-func
-  const rampFn = new Function('i', 'SPIN_RAMP', 'SPIN_RAMP_LATE', 'SPIN_RAMP_KNEE',
-    `return (${rampSrc});`);
-  const speed = (i) => Math.min(base * rampFn(i, early, late, knee), spinMax);
+  const rampFn = new Function(
+    'SPIN_RAMP', 'SPIN_RAMP_LATE', 'SPIN_RAMP_LATE2', 'SPIN_RAMP_KNEE', 'SPIN_RAMP_KNEE2',
+    `return (i) => { ${rampExpr} return ramp; };`)(early, late, late2, knee, knee2);
+  const speed = (i) => Math.min(base * rampFn(i), spinMax);
 
   let worst = 0, worstAt = 0;
   for (let i = 1; i <= 80; i++) {
@@ -279,7 +299,8 @@ test('each obstacle spins faster than the one below it, up to a readable limit',
     `obstacle ${worstAt} jumps x${worst.toFixed(3)}, more than the ${early} early rate — there is a step at the join`);
 
   // The climb must take a real run to arrive.
-  const capAt = knee + Math.log(spinMax / (base * Math.pow(early, knee))) / Math.log(late);
+  const atKnee2 = base * Math.pow(early, knee) * Math.pow(late, knee2 - knee);
+  const capAt = knee2 + Math.log(spinMax / atKnee2) / Math.log(late2);
   assert.ok(capAt >= 14, `the spin hits its ceiling by obstacle ${Math.round(capAt)} — too early to be a climb`);
 
   // The cap is what keeps this a game of reading the spin. A color is present
@@ -785,4 +806,58 @@ test('a nested pair is scaled together, so the lane between them survives', () =
     assert.ok(lane >= 2 * ballR + 20,
       `${name}: only ${lane}u of lane between its rings, and the ball is ${2 * ballR}u across`);
   }
+});
+
+test('the triangle with a ring inside is held back until obstacle 10', () => {
+  // It is the hardest family — the narrowest lane of any shape, and a
+  // triangle's corners give the least warning of where that lane will be.
+  // Meeting one in the first few obstacles ends a run before it starts.
+  //
+  // Keyed on the obstacle INDEX, which is the same number as the score since
+  // there is exactly one diamond per obstacle. Keying on the player's own score
+  // would give the two of them different courses, and the match is a race.
+  assert.match(CANVAS, /const TRI_RING_FROM\s*=\s*10;/);
+  assert.match(CANVAS, /const TRI_RING_FREE\s*=\s*20;/);
+  assert.match(CANVAS, /const TRI_RING_BAND_MAX\s*=\s*2;/);
+  assert.doesNotMatch(CANVAS, /shapeFor\(i,\s*S\.score/, 'the course must not depend on a score');
+
+  // Run the real selector.
+  const cut = (from, to) => CANVAS.slice(CANVAS.indexOf(from), CANVAS.indexOf(to, CANVAS.indexOf(from)));
+  // The REAL values, so the behaviour below is checked at whatever the game is
+  // configured to do rather than at numbers repeated here.
+  // Escaped twice: inside a template literal `\s` is just "s".
+  const cfg = (n) => Number(CANVAS.match(new RegExp(`const ${n}\\s*=\\s*(\\d+);`))[1]);
+  const SHAPES = [...cut('const SHAPES = [', '\n];').matchAll(/name: '(\w+)'/g)].map((m) => ({ name: m[1] }));
+  const make = (seed) => new Function('seed', 'SHAPES',
+    `${cut('function hash32', 'const TAU =')}
+     const TRI_RING_FROM = ${cfg('TRI_RING_FROM')}, TRI_RING_FREE = ${cfg('TRI_RING_FREE')}, TRI_RING_BAND_MAX = ${cfg('TRI_RING_BAND_MAX')};
+     ${cut('const rawShape = (k)', '    const obstacles')}
+     return shapeFor;`)(seed, SHAPES);
+
+  let earliest = Infinity, worstBand = 0;
+  for (let seed = 1; seed <= 300; seed++) {
+    const shapeFor = make(seed);
+    let band = 0;
+    for (let i = 0; i < 60; i++) {
+      if (shapeFor(i).name !== 'triangleCircle') continue;
+      earliest = Math.min(earliest, i);
+      if (i >= 10 && i < 20) band++;
+    }
+    worstBand = Math.max(worstBand, band);
+  }
+  assert.ok(earliest >= 10, `one turned up at obstacle ${earliest}`);
+  assert.ok(worstBand <= 2, `${worstBand} of them landed between 10 and 19`);
+
+  // And the answer cannot depend on the order obstacles are asked for, or the
+  // two clients build different courses depending on how each one scrolled.
+  const shapeFor = make(999);
+  const fwd = [...Array(40).keys()].map((i) => shapeFor(i).name);
+  const back = [];
+  for (let i = 39; i >= 0; i--) back[i] = shapeFor(i).name;
+  assert.deepEqual(fwd, back, 'the course changes with the order it is read in');
+
+  // Two clients, one seed, same course.
+  const a = make(4242), b = make(4242);
+  assert.deepEqual([...Array(60).keys()].map((i) => a(i).name),
+                   [...Array(60).keys()].map((i) => b(i).name));
 });

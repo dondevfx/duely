@@ -92,9 +92,26 @@ const MAX_FRAME = 0.25;
 // already near the ceiling, so the run went from settling in to unreadable
 // inside about twenty seconds. The climb stays at 1.09 while the player is
 // finding their feet, then eases to 1.03 for the long middle of a run.
-const SPIN_RAMP      = 1.09;   // obstacles 0 to SPIN_RAMP_KNEE
-const SPIN_RAMP_LATE = 1.03;   // and every one after
-const SPIN_RAMP_KNEE = 6;
+const SPIN_RAMP       = 1.09;   // obstacles 0 to SPIN_RAMP_KNEE
+const SPIN_RAMP_LATE  = 1.03;   // then to SPIN_RAMP_KNEE2
+const SPIN_RAMP_LATE2 = 1.02;   // and every one after that
+const SPIN_RAMP_KNEE  = 6;
+const SPIN_RAMP_KNEE2 = 10;
+
+// When the triangle-with-a-circle-inside is allowed to turn up.
+//
+// It is the hardest family: the lane between the two rings is the narrowest of
+// any shape, and a triangle's corners give the least warning of where the lane
+// will be. Meeting one in the first few obstacles is what ends a run before it
+// starts.
+//
+// Keyed on the obstacle INDEX, which is the same number as the score — there is
+// exactly one diamond per obstacle — and not on the player's own score, which
+// differs between the two of them. The course has to be identical for both or
+// the match is not a race.
+const TRI_RING_FROM     = 10;   // none at all below this
+const TRI_RING_FREE     = 20;   // no limit at or above it
+const TRI_RING_BAND_MAX = 2;    // at most this many in between
 const SPIN_MAX  = 4.5;   // rad/s — a quarter turn every 0.35s
 
 // How long the start screen waits before letting go of the ball.
@@ -319,11 +336,34 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
     window.addEventListener('orientationchange', onResize);
 
     // ── Obstacle generation (index-hashed — see note 1) ─────────────────────
+    // Which family obstacle i belongs to, holding the triangle-ring back.
+    //
+    // Pure in (seed, i): both clients run this and must agree. The band count
+    // is recomputed by walking the ten indices below rather than remembered, so
+    // it does not matter which order obstacles are asked for — a player who
+    // scrolls back to an earlier one gets the same answer as the first time.
+    const rawShape = (k) => SHAPES[Math.floor(rnd01(seed, k, 1) * SHAPES.length) % SHAPES.length];
+    const TRIANGLE = SHAPES.findIndex((s) => s.name === 'triangle');
+
+    function shapeFor(i) {
+      const s = rawShape(i);
+      if (s.name !== 'triangleCircle') return s;
+      // Too early: fall back to the plain triangle, so the course keeps the
+      // same silhouette in that slot and only loses the inner ring.
+      if (i < TRI_RING_FROM) return SHAPES[TRIANGLE];
+      if (i >= TRI_RING_FREE) return s;
+      let seen = 0;
+      for (let j = TRI_RING_FROM; j < i; j++) {
+        if (rawShape(j).name === 'triangleCircle') seen++;
+      }
+      return seen < TRI_RING_BAND_MAX ? s : SHAPES[TRIANGLE];
+    }
+
     const obstacles = new Map();
     function obstacleAt(i) {
       let o = obstacles.get(i);
       if (o) return o;
-      const shape = SHAPES[Math.floor(rnd01(seed, i, 1) * SHAPES.length) % SHAPES.length];
+      const shape = shapeFor(i);
       const dotted = rnd01(seed, i, 2) < 0.34;
       const dir    = rnd01(seed, i, 3) < 0.5 ? -1 : 1;
       // Each obstacle spins SPIN_RAMP times faster than the one below it, so the
@@ -344,9 +384,13 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
       // Compounded at the early rate up to the knee, then continued from that
       // value at the late one — NOT restarted, so there is no step at the
       // join: obstacle 6 and obstacle 7 differ by 3%, the same as 7 and 8.
-      const ramp = i <= SPIN_RAMP_KNEE
-        ? Math.pow(SPIN_RAMP, i)
-        : Math.pow(SPIN_RAMP, SPIN_RAMP_KNEE) * Math.pow(SPIN_RAMP_LATE, i - SPIN_RAMP_KNEE);
+      // Three stages, each continuing from where the last left off so there is
+      // no step at either join.
+      const atKnee  = Math.pow(SPIN_RAMP, SPIN_RAMP_KNEE);
+      const atKnee2 = atKnee * Math.pow(SPIN_RAMP_LATE, SPIN_RAMP_KNEE2 - SPIN_RAMP_KNEE);
+      const ramp = i <= SPIN_RAMP_KNEE  ? Math.pow(SPIN_RAMP, i)
+                 : i <= SPIN_RAMP_KNEE2 ? atKnee  * Math.pow(SPIN_RAMP_LATE,  i - SPIN_RAMP_KNEE)
+                 :                        atKnee2 * Math.pow(SPIN_RAMP_LATE2, i - SPIN_RAMP_KNEE2);
       const speed  = Math.min(0.85 * ramp * (0.9 + rnd01(seed, i, 4) * 0.25), SPIN_MAX);
       const offset = Math.floor(rnd01(seed, i, 5) * 4);
       o = {
