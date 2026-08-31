@@ -86,7 +86,15 @@ const MAX_FRAME = 0.25;
 
 // How much faster each obstacle spins than the one below it, and the ceiling
 // that keeps the game readable. See the note where they are used.
-const SPIN_RAMP = 1.09;
+//
+// Two rates, not one. A single rate has to be either too steep late or too flat
+// early: at a flat 1.09 the sixth obstacle is comfortable and the fifteenth is
+// already near the ceiling, so the run went from settling in to unreadable
+// inside about twenty seconds. The climb stays at 1.09 while the player is
+// finding their feet, then eases to 1.03 for the long middle of a run.
+const SPIN_RAMP      = 1.09;   // obstacles 0 to SPIN_RAMP_KNEE
+const SPIN_RAMP_LATE = 1.03;   // and every one after
+const SPIN_RAMP_KNEE = 6;
 const SPIN_MAX  = 4.5;   // rad/s — a quarter turn every 0.35s
 
 // How long the start screen waits before letting go of the ball.
@@ -330,13 +338,16 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
       // obstacle past the floor.
       //
       // The ramp was 1.16, which reached the cap around obstacle 11 — the run
-      // was at its hardest before most players had settled into it. At 1.09 the
-      // climb is the same shape but reaches the same ceiling around obstacle 20
-      // instead, so the difficulty arrives over a run rather than in the first
-      // few seconds of one.
-      const speed  = Math.min(
-        0.85 * Math.pow(SPIN_RAMP, i) * (0.9 + rnd01(seed, i, 4) * 0.25),
-        SPIN_MAX);
+      // was at its hardest before most players had settled into it. 1.09 pushed
+      // that to about 20, and easing to 1.03 after the sixth pushes it to about
+      // 45, which is a long run rather than a short one.
+      // Compounded at the early rate up to the knee, then continued from that
+      // value at the late one — NOT restarted, so there is no step at the
+      // join: obstacle 6 and obstacle 7 differ by 3%, the same as 7 and 8.
+      const ramp = i <= SPIN_RAMP_KNEE
+        ? Math.pow(SPIN_RAMP, i)
+        : Math.pow(SPIN_RAMP, SPIN_RAMP_KNEE) * Math.pow(SPIN_RAMP_LATE, i - SPIN_RAMP_KNEE);
+      const speed  = Math.min(0.85 * ramp * (0.9 + rnd01(seed, i, 4) * 0.25), SPIN_MAX);
       const offset = Math.floor(rnd01(seed, i, 5) * 4);
       o = {
         i, y: FIRST_Y + i * OBSTACLE_GAP,

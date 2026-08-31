@@ -228,31 +228,64 @@ test('obstacles are derived from the index, not from a random stream', () => {
 });
 
 test('each obstacle spins faster than the one below it, up to a readable limit', () => {
-  // The ramp itself is a tuning value and is allowed to move; what must hold is
-  // that it compounds, stays above 1, and does not reach the readable ceiling so
-  // early that the run is at its hardest before it has begun. It was 1.16, which
-  // capped out around obstacle 11 — too soon.
-  const ramp = Number(CANVAS.match(/const SPIN_RAMP = ([\d.]+);/)[1]);
-  assert.ok(ramp > 1, 'the spin must speed up, not slow down');
-  assert.ok(ramp < 1.2, `a ramp of ${ramp} reaches the cap almost immediately`);
+  // The rates are tuning values and are allowed to move; what must hold is that
+  // the spin compounds, never slows, has no step where the two rates meet, and
+  // does not reach the readable ceiling so early that the run is at its hardest
+  // before it has begun. A flat 1.16 capped out around obstacle 11 — too soon.
+  // Escaped twice: inside a template literal `\s` is just "s".
+  const num = (n) => Number(CANVAS.match(new RegExp(`const ${n}\\s*=\\s*([\\d.]+)`))[1]);
+  const early = num('SPIN_RAMP');
+  const late  = num('SPIN_RAMP_LATE');
+  const knee  = num('SPIN_RAMP_KNEE');
+  const spinMax = num('SPIN_MAX');
+
+  assert.ok(early > 1 && late > 1, 'the spin must speed up, not slow down');
+  assert.ok(late <= early, 'the late rate must ease off, not steepen');
+  assert.ok(early < 1.2, `an early rate of ${early} reaches the cap almost immediately`);
+
   const at = CANVAS.indexOf('function obstacleAt');
   const body = CANVAS.slice(at, CANVAS.indexOf('\n    }', at));
-  const start = body.indexOf('const speed');
-  const expr = body.slice(start, body.indexOf(';', start));
-  assert.match(expr, /Math\.pow\(SPIN_RAMP, i\)/, 'the ramp must compound per obstacle');
+  const rampExpr = body.slice(body.indexOf('const ramp'), body.indexOf('const speed'));
+  const expr = body.slice(body.indexOf('const speed'), body.indexOf(';', body.indexOf('const speed')));
+  assert.match(rampExpr, /Math\.pow\(SPIN_RAMP, i\)/, 'the early stretch must compound per obstacle');
+  assert.match(rampExpr, /Math\.pow\(SPIN_RAMP_LATE, i - SPIN_RAMP_KNEE\)/,
+    'the late stretch must compound from the knee, not from zero');
   assert.match(expr, /Math\.min\(/, 'and it must be capped');
+
+  // Run the curve THE SOURCE COMPUTES, not a copy of it written here.
+  //
+  // This was reimplemented rather than evaluated, which made it worthless for
+  // the thing it is meant to catch: changing the source formula to restart the
+  // late ramp from zero — a real drop at the join — left every assertion below
+  // passing, because they were measuring the test's own arithmetic.
+  //
+  // The multiplier in front of the ramp is read from the source too; if it
+  // changes, the ceiling arrives somewhere else.
+  const base = Number(expr.match(/Math\.min\(([\d.]+) \* ramp/)[1]);
+  const rampSrc = rampExpr.slice(rampExpr.indexOf('=') + 1).trim().replace(/;\s*$/, '');
+  // eslint-disable-next-line no-new-func
+  const rampFn = new Function('i', 'SPIN_RAMP', 'SPIN_RAMP_LATE', 'SPIN_RAMP_KNEE',
+    `return (${rampSrc});`);
+  const speed = (i) => Math.min(base * rampFn(i, early, late, knee), spinMax);
+
+  let worst = 0, worstAt = 0;
+  for (let i = 1; i <= 80; i++) {
+    assert.ok(speed(i) >= speed(i - 1), `the spin drops between obstacle ${i - 1} and ${i}`);
+    if (speed(i) < spinMax && speed(i) / speed(i - 1) > worst) {
+      worst = speed(i) / speed(i - 1); worstAt = i;
+    }
+  }
+  assert.ok(worst <= early + 1e-9,
+    `obstacle ${worstAt} jumps x${worst.toFixed(3)}, more than the ${early} early rate — there is a step at the join`);
+
+  // The climb must take a real run to arrive.
+  const capAt = knee + Math.log(spinMax / (base * Math.pow(early, knee))) / Math.log(late);
+  assert.ok(capAt >= 14, `the spin hits its ceiling by obstacle ${Math.round(capAt)} — too early to be a climb`);
 
   // The cap is what keeps this a game of reading the spin. A color is present
   // for a quarter turn, so the window to enter or leave is (pi/2)/omega — at
   // the cap that has to stay above what a person can actually react to.
-  const spinMaxOf = () => Number(CANVAS.match(/const SPIN_MAX\s+=\s+([\d.]+)/)[1]);
-  const spinMax = spinMaxOf();
   const window = (Math.PI / 2) / spinMax;
-  // And the climb must take a real run to arrive, not a handful of obstacles.
-  const base = Number(CANVAS.match(/([\d.]+) \* Math\.pow\(SPIN_RAMP, i\)/)[1]);
-  const capAt = Math.log(spinMaxOf() / base) / Math.log(ramp);
-  assert.ok(capAt >= 15, `the spin hits its ceiling by obstacle ${Math.round(capAt)} — too early to be a climb`);
-
   assert.ok(window >= 0.3,
     `at the cap a color is only present for ${window.toFixed(2)}s — too fast to act on`);
 
