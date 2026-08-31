@@ -193,7 +193,7 @@ export default function Navbar() {
               }}
               className="flex items-center gap-1.5 pointer-events-auto"
             >
-              <span className="text-[27px] lg:text-[34px] font-black tracking-tight text-primary" style={{ textShadow: '0 0 22px rgba(18,80,180,0.6)' }}>
+              <span className="text-[1.6875rem] lg:text-[2.125rem] font-black tracking-tight text-primary" style={{ textShadow: '0 0 22px rgba(18,80,180,0.6)' }}>
                 Duely
               </span>
               {/* Dot scales with the wordmark, or it reads as a speck next to it. */}
@@ -273,7 +273,7 @@ export default function Navbar() {
                   <div className="absolute top-full mt-2 right-0 bg-surface border border-border rounded-xl shadow-glow-lg z-[200] overflow-hidden" style={{ minWidth: 'min(300px, calc(100vw - 16px))', right: 0 }}>
                     <div className="px-4 py-3 border-b border-border">
                       <span className="text-sm font-bold text-white flex items-center gap-1.5"><UiIcon name="rakeback" size={15} />Rakeback</span>
-                      <p className="text-[10px] text-muted mt-0.5">Earned from coin wagers only</p>
+                      <p className="text-[0.625rem] text-muted mt-0.5">Earned from coin wagers only</p>
                     </div>
                     {rakebackLoading ? (
                       <div className="px-4 py-4 text-xs text-muted text-center">Loading...</div>
@@ -425,7 +425,7 @@ export default function Navbar() {
                   <div className="absolute top-full mt-2 right-0 bg-surface border border-border rounded-xl shadow-glow-lg z-[200] overflow-hidden" style={{ minWidth: 'min(280px, calc(100vw - 32px))', right: -8 }}>
                     <div className="px-4 py-3 border-b border-border">
                       <span className="text-sm font-bold text-white flex items-center gap-1.5"><UiIcon name="rakeback" size={15} />Rakeback</span>
-                      <p className="text-[10px] text-muted mt-0.5">Earned from coin wagers only</p>
+                      <p className="text-[0.625rem] text-muted mt-0.5">Earned from coin wagers only</p>
                     </div>
                     {rakebackLoading ? (
                       <div className="px-4 py-4 text-xs text-muted text-center">Loading...</div>
@@ -484,7 +484,7 @@ export default function Navbar() {
                       <RankIcon rank={getDisplayRank(profile)} size={15} />
                     </span>
                     {(profile.current_streak ?? 0) >= 1 && (
-                      <span className="absolute -top-0.5 -left-0.5 flex items-center justify-center min-w-[14px] h-[14px] rounded-full text-[8px] font-black leading-none px-0.5"
+                      <span className="absolute -top-0.5 -left-0.5 flex items-center justify-center min-w-[14px] h-[14px] rounded-full text-[0.5rem] font-black leading-none px-0.5"
                         style={{ background: 'rgba(0,0,0,0.85)', color: '#fb923c', border: '1px solid rgba(251,146,60,0.4)', textShadow: '0 0 6px rgba(251,146,60,0.6)' }}>
                         🔥{profile.current_streak}
                       </span>
@@ -561,7 +561,7 @@ export default function Navbar() {
                     <span className="text-xl">{item.game ? <GameIcon game={item.game} size={22} /> : item.icon}</span>
                     <span className="flex-1">{item.label}</span>
                     {count > 0 && (
-                      <span className="text-[10px] bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1">
+                      <span className="text-[0.625rem] bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1">
                         <span className="w-1 h-1 rounded-full bg-primary inline-block" />
                         {count}
                       </span>

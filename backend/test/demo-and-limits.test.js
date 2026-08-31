@@ -506,3 +506,48 @@ test('a document-wide lock is always released, never restored to a captured valu
       `${f} does not release the lock unconditionally`);
   }
 });
+
+// ── Mobile scale ────────────────────────────────────────────────────────────
+
+test('the whole phone layout is scaled up from one value', () => {
+  // The site read small on a phone: tap targets near the 44px floor rather than
+  // comfortably past it, secondary labels at 10 and 11px. Raising the ROOT size
+  // moves type, spacing, gaps, radii and max-widths together, because Tailwind
+  // expresses all of them in rem — several hundred classes would otherwise have
+  // had to move in step, and any one missed would break a proportion.
+  const css = fs.readFileSync(FE('index.css'), 'utf8');
+  assert.match(css, /@media \(max-width: 767\.98px\) \{\s*\n\s*html \{ font-size: 110%; \}/,
+    'the mobile scale is gone');
+  // Phones only — 767.98 is where the site already switches to its mobile nav.
+  assert.doesNotMatch(css, /html \{ font-size: 110%; \}[\s\S]{0,40}\}\s*\n\s*@media \(min-width/,
+    'the scale must not apply to desktop');
+});
+
+test('no label is left in px, where the scale cannot reach it', () => {
+  // The small labels were written as arbitrary px. Left that way they would be
+  // the ONLY thing that did not grow — and they are the hardest to read, which
+  // is the opposite of what is wanted.
+  const bad = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith('.jsx')) {
+        const src = fs.readFileSync(p, 'utf8');
+        for (const m of src.matchAll(/text-\[[0-9.]+px\]/g)) bad.push(`${e.name}: ${m[0]}`);
+      }
+    }
+  };
+  walk(FE());
+  assert.deepEqual(bad, [], `these will not scale with the root size: ${bad.slice(0, 6).join(', ')}`);
+});
+
+test('the leaderboard tabs can shrink instead of running off the row', () => {
+  // A flex child defaults to min-width:auto and refuses to go below its own
+  // content, so five tabs plus their icons pushed past the end of the row on a
+  // narrow phone even though flex-1 said they should share it.
+  const src = fe('pages', 'Leaderboard.jsx');
+  assert.match(src, /flex-1 min-w-0 flex items-center justify-center gap-1 py-2\.5/);
+  assert.match(src, /<span className="truncate">\{\(t\.icon \|\| t\.diamondTab\)/);
+  assert.match(src, /<StatIcon kind="elo" size=\{16\} className="shrink-0" \/>/);
+});

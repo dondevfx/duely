@@ -74,7 +74,7 @@ export default function CreateRoomModal({ open, onClose, gameType, entryFee = 0,
         {/* Online friends — one tap to invite directly */}
         {onlineFriends.length > 0 && (
           <>
-            <p className="text-[11px] text-muted uppercase tracking-wider font-bold mt-5 mb-2">Or invite an online friend</p>
+            <p className="text-[0.6875rem] text-muted uppercase tracking-wider font-bold mt-5 mb-2">Or invite an online friend</p>
             <div className="max-h-56 overflow-y-auto flex flex-col gap-1.5 -mr-1 pr-1">
               {onlineFriends.map(f => {
                 const isOnline = online.includes(f.id);
@@ -88,12 +88,12 @@ export default function CreateRoomModal({ open, onClose, gameType, entryFee = 0,
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-bold text-white truncate">{f.username}</div>
-                      <div className="text-[10px] text-muted">{isOnline ? '🟢 Online' : '⚫ Offline'}</div>
+                      <div className="text-[0.625rem] text-muted">{isOnline ? '🟢 Online' : '⚫ Offline'}</div>
                     </div>
                     <button
                       onClick={() => invite(f.id)}
                       disabled={disabled}
-                      className={`shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all ${
+                      className={`shrink-0 text-[0.6875rem] font-bold px-3 py-1.5 rounded-lg transition-all ${
                         disabled
                           ? 'bg-surfaceLight text-muted cursor-not-allowed opacity-60'
                           : 'bg-primary text-white hover:bg-blue-500'

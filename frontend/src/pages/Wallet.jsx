@@ -79,9 +79,9 @@ function CoinGrid({ coins, selected, onSelect, showMin = false }) {
           }`}
         >
           <div className="text-xs font-black mt-0.5">{c.label}</div>
-          <div className="text-[10px] opacity-60 leading-tight">{c.network}</div>
+          <div className="text-[0.625rem] opacity-60 leading-tight">{c.network}</div>
           {showMin && c.minUsd && (
-            <div className="text-[10px] leading-tight text-success font-semibold">min ${c.minUsd}</div>
+            <div className="text-[0.625rem] leading-tight text-success font-semibold">min ${c.minUsd}</div>
           )}
         </button>
       ))}
@@ -111,7 +111,7 @@ function TxRow({ tx }) {
           <span className="inline-flex items-center gap-0.5">{isDeposit ? '+' : '-'}{fmt(tx.amount_c)} <CoinIcon size="0.8em" /></span>
         </div>
         <div className="flex items-center gap-1.5 justify-end mt-0.5">
-          <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-bold ${
+          <span className={`text-[0.625rem] px-1.5 py-0.5 rounded-full border font-bold ${
             tx.status === 'confirmed'  ? 'bg-success/10 text-success border-success/30' :
             tx.status === 'pending'    ? 'bg-warning/10 text-warning border-warning/30' :
             'bg-muted/10 text-muted border-border'
@@ -521,7 +521,7 @@ export default function Wallet() {
                   placeholder="000000"
                   className="w-full bg-bg border border-surfaceLight rounded-lg px-4 py-3 text-white text-sm font-mono placeholder-muted focus:outline-none focus:border-primary transition-colors"
                 />
-                <p className="text-[10px] text-muted mt-1">Open your authenticator app and enter the current 6-digit code.</p>
+                <p className="text-[0.625rem] text-muted mt-1">Open your authenticator app and enter the current 6-digit code.</p>
               </div>
             )}
 

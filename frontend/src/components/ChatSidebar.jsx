@@ -823,7 +823,7 @@ export default function ChatSidebar({ open, onToggle }) {
                     style={{ cursor: (msg.userId === ADMIN_ID && !isAdmin) ? 'default' : 'pointer' }}
                   >
                     <div
-                      className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black"
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-[0.6875rem] font-black"
                       style={{ backgroundColor: `${msgColor}33`, border: `1.5px solid ${msgColor}`, color: msgColor }}>
                       {msg.isBot ? <BotAvatar size="100%" className="w-full h-full" /> : (msg.avatarUrl
                         ? <img src={msg.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
@@ -844,14 +844,14 @@ export default function ChatSidebar({ open, onToggle }) {
                     style={{ color: msgColor, cursor: (msg.userId === ADMIN_ID && !isAdmin) ? 'default' : 'pointer' }}>
                     {msg.username}
                     {msg.isBot && (
-                      <span className="ml-1 text-[9px] px-1 py-0.5 rounded font-bold"
+                      <span className="ml-1 text-[0.5625rem] px-1 py-0.5 rounded font-bold"
                         style={{ background: `${BOT_COLOR}18`, color: BOT_COLOR }}>BOT</span>
                     )}
                   </span>
                   {isAdmin && !msg.isBot && (
                     <button
                       onClick={() => deleteMessage(msg.id)}
-                      className="opacity-0 group-hover:opacity-100 text-[10px] text-danger/60 hover:text-danger transition-all ml-1"
+                      className="opacity-0 group-hover:opacity-100 text-[0.625rem] text-danger/60 hover:text-danger transition-all ml-1"
                       title="Delete message"
                     >✕</button>
                   )}
@@ -870,7 +870,7 @@ export default function ChatSidebar({ open, onToggle }) {
                 >
                   {renderMessage(msg.message, profile?.username)}
                 </div>
-                <span className="text-[10px] text-muted/40 mt-0.5 px-1">{formatTime(msg.timestamp)}</span>
+                <span className="text-[0.625rem] text-muted/40 mt-0.5 px-1">{formatTime(msg.timestamp)}</span>
               </div>
             );
           })}
@@ -952,7 +952,7 @@ export default function ChatSidebar({ open, onToggle }) {
                       className="relative shrink-0"
                       style={{ cursor: (msg.userId === ADMIN_ID && !isAdmin) ? 'default' : 'pointer' }}
                     >
-                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black"
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-[0.6875rem] font-black"
                         style={{ backgroundColor: `${msgColor}33`, border: `1.5px solid ${msgColor}`, color: msgColor }}>
                         {msg.isBot ? <BotAvatar size="100%" className="w-full h-full" /> : (msg.avatarUrl
                           ? <img src={msg.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
@@ -971,13 +971,13 @@ export default function ChatSidebar({ open, onToggle }) {
                       style={{ color: msgColor, cursor: (msg.userId === ADMIN_ID && !isAdmin) ? 'default' : 'pointer' }}>
                       {msg.username}
                       {msg.isBot && (
-                        <span className="ml-1 text-[9px] px-1 py-0.5 rounded font-bold"
+                        <span className="ml-1 text-[0.5625rem] px-1 py-0.5 rounded font-bold"
                           style={{ background: `${BOT_COLOR}18`, color: BOT_COLOR }}>BOT</span>
                       )}
                     </span>
                     {isAdmin && !msg.isBot && (
                       <button onClick={() => deleteMessage(msg.id)}
-                        className="opacity-0 group-hover:opacity-100 text-[10px] text-danger/60 hover:text-danger transition-all ml-1" title="Delete">✕</button>
+                        className="opacity-0 group-hover:opacity-100 text-[0.625rem] text-danger/60 hover:text-danger transition-all ml-1" title="Delete">✕</button>
                     )}
                   </div>
                   <div
@@ -989,7 +989,7 @@ export default function ChatSidebar({ open, onToggle }) {
                   >
                     {renderMessage(msg.message, profile?.username)}
                   </div>
-                  <span className="text-[10px] text-muted/40 mt-0.5 px-1">{formatTime(msg.timestamp)}</span>
+                  <span className="text-[0.625rem] text-muted/40 mt-0.5 px-1">{formatTime(msg.timestamp)}</span>
                 </div>
               );
             })}

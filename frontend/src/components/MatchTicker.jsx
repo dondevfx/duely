@@ -81,14 +81,14 @@ export default function MatchTicker() {
       }`}
     >
       <GameIcon game={item.game.key} size={26} className="shrink-0" />
-      <span className="text-[8px] sm:text-[8px] lg:text-[9px] text-muted font-medium leading-none w-full text-center truncate px-0.5">
+      <span className="text-[0.5rem] sm:text-[0.5rem] lg:text-[0.5625rem] text-muted font-medium leading-none w-full text-center truncate px-0.5">
         {item.game.name}
       </span>
       {/* whitespace-nowrap, not truncate: six cards on a 375px screen leave
           roughly 45px inside each one, and "+100k 💎" was being clipped to an
           ellipsis. Overflow is hidden by the card, so the text is sized to fit
           instead of being cut. */}
-      <span className="text-[9px] sm:text-[9px] lg:text-[10px] font-bold text-success leading-none w-full text-center whitespace-nowrap px-0">
+      <span className="text-[0.5625rem] sm:text-[0.5625rem] lg:text-[0.625rem] font-bold text-success leading-none w-full text-center whitespace-nowrap px-0">
         {fmtPayout(item.payout, item.diamonds)}
       </span>
     </div>

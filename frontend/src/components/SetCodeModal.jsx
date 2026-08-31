@@ -68,7 +68,7 @@ export default function SetCodeModal({ open, onClose, onSet }) {
         </p>
 
         {clean && !error && (
-          <p className="text-[11px] text-muted mt-2 break-all">
+          <p className="text-[0.6875rem] text-muted mt-2 break-all">
             {window.location.origin}/?ref=<span className="text-primary font-bold">{clean}</span>
           </p>
         )}

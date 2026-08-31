@@ -79,7 +79,7 @@ export default function ShareLinkButton({
       </button>
 
       {state === 'failed' && (
-        <code className="block select-all text-[9px] leading-tight font-mono text-muted break-all bg-bg border border-border rounded-lg px-2 py-1.5 mt-1.5">
+        <code className="block select-all text-[0.5625rem] leading-tight font-mono text-muted break-all bg-bg border border-border rounded-lg px-2 py-1.5 mt-1.5">
           {link}
         </code>
       )}

@@ -959,7 +959,7 @@ export default function BlockBlastGame() {
             {/* My score */}
             <div className="text-center min-w-[72px]">
               <div className="text-xl font-black font-mono text-success">{score.toLocaleString()}</div>
-              <div className="text-[10px] text-muted flex items-center justify-center">
+              <div className="text-[0.625rem] text-muted flex items-center justify-center">
                 <PlayerName username={profile?.username ?? 'You'} avatarUrl={profile?.avatar_url}
                   color={profile?.profile_color} size="w-4 h-4" />
               </div>
@@ -982,7 +982,7 @@ export default function BlockBlastGame() {
               <div className={`text-xl font-black font-mono ${oppScore > score ? 'text-danger' : oppScore < score ? 'text-success' : 'text-accent'}`}>
                 {oppScore.toLocaleString()}
               </div>
-              <div className="text-[10px] text-muted flex items-center justify-center">
+              <div className="text-[0.625rem] text-muted flex items-center justify-center">
                 {/* isSolo here means "against the bot" — the bot is a real
                     opponent in this game and has a score, so it gets a face
                     like anyone else. */}

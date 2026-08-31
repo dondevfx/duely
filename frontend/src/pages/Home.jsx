@@ -129,7 +129,7 @@ export default function Home() {
                 <FitText className="text-sm sm:text-xl md:text-2xl font-black text-white font-mono">
                   {stat.value}
                 </FitText>
-                <div className="text-[10px] sm:text-xs text-muted mt-0.5 sm:mt-1">{stat.label}</div>
+                <div className="text-[0.625rem] sm:text-xs text-muted mt-0.5 sm:mt-1">{stat.label}</div>
               </div>
             ))}
           </div>
@@ -146,7 +146,7 @@ export default function Home() {
             column now sits underneath, giving the grid the full width. */}
         <div className="flex flex-col lg:flex-row gap-8">
           <div className="flex-1 min-w-0">
-            <h2 className="text-xl md:text-2xl font-bold text-white mb-4 md:mb-6">Choose a Game</h2>
+            <h2 className="text-xl md:text-2xl font-bold text-white mb-4 md:mb-6">Games</h2>
             {/* Column counts are chosen from the width this grid ACTUALLY
                 gets — after the 240px left nav, and after the side column
                 from xl — not from the raw viewport:

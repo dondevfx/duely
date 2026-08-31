@@ -251,12 +251,12 @@ export default function GameVideoCard({ slug, title, route, liveCount = 0, avail
             onClick={(e) => e.stopPropagation()}
             className="flex-1 accent-primary"
           />
-          <span className="text-[11px] font-mono text-white w-9 text-right">{debugX}%</span>
+          <span className="text-[0.6875rem] font-mono text-white w-9 text-right">{debugX}%</span>
         </div>
       )}
 
       {liveCount > 0 && (
-        <div className="absolute top-2 right-2 md:top-3 md:right-3 inline-flex items-center gap-1 text-[10px] md:text-xs font-semibold px-1.5 md:px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm text-primary border border-primary/40">
+        <div className="absolute top-2 right-2 md:top-3 md:right-3 inline-flex items-center gap-1 text-[0.625rem] md:text-xs font-semibold px-1.5 md:px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm text-primary border border-primary/40">
           <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" style={{ boxShadow: '0 0 4px #1250B4' }} />
           {liveCount} Live
         </div>

@@ -186,7 +186,7 @@ export default function GameHelp({ gameType, onPauseChange, canPause = false, pl
             <div className="text-xs font-bold uppercase tracking-widest text-primary mb-1.5">How you win</div>
             <p className="text-sm text-white/85 leading-snug mb-4">{info.win}</p>
 
-            <p className="text-[11px] text-muted mb-4">
+            <p className="text-[0.6875rem] text-muted mb-4">
               {canPause
                 ? 'Your game is paused while this is open.'
                 : 'This is a live match — the game is still running.'}

@@ -152,7 +152,7 @@ function MiniGrid({ guesses, label }) {
             {Array(WORD_LENGTH).fill(null).map((__, c) => {
               const cell = row[c];
               return (
-                <div key={c} className="w-7 h-7 rounded flex items-center justify-center text-[11px] font-black text-white"
+                <div key={c} className="w-7 h-7 rounded flex items-center justify-center text-[0.6875rem] font-black text-white"
                   style={{
                     background: cell ? CLR[cell.status] : 'transparent',
                     border: `1.5px solid ${cell ? (CLR.border[cell.status] || '#374151') : 'rgba(255,255,255,0.1)'}`,
@@ -815,7 +815,7 @@ export default function WordleGame() {
           {/* My guess count */}
           <div className="text-center min-w-[72px]">
             <div className="text-xl font-black font-mono text-success">{guessNum}</div>
-            <div className="text-[10px] text-muted flex items-center justify-center">
+            <div className="text-[0.625rem] text-muted flex items-center justify-center">
               <PlayerName username={profile?.username ?? 'You'} avatarUrl={profile?.avatar_url}
                 color={profile?.profile_color} size="w-4 h-4" />
             </div>
@@ -848,7 +848,7 @@ export default function WordleGame() {
               <div className={`text-xl font-black font-mono ${oppCount > guessNum ? 'text-danger' : oppCount < guessNum ? 'text-success' : 'text-accent'}`}>
                 {oppCount}
               </div>
-              <div className="text-[10px] text-muted flex items-center justify-center">
+              <div className="text-[0.625rem] text-muted flex items-center justify-center">
                 <PlayerName username={opponent?.username ?? 'Opponent'} avatarUrl={opponent?.avatarUrl}
                   color={opponent?.profileColor} isBot={!!opponent?.isBot} size="w-4 h-4" />
               </div>

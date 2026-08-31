@@ -196,7 +196,11 @@ export default function Leaderboard() {
             <button
               key={t.id}
               onClick={() => { setActiveTab(t.id); if (t.id !== 'games') setSelectedGame(null); }}
-              className={`flex-1 flex items-center justify-center gap-1 py-2.5 rounded-xl text-[10px] sm:text-sm font-bold transition-all whitespace-nowrap ${
+              // min-w-0 so the label can actually shrink. A flex child defaults
+              // to min-width:auto, which refuses to go below its content — so
+              // five tabs plus their icons pushed past the end of the row on a
+              // narrow phone even though flex-1 said they should share it.
+              className={`flex-1 min-w-0 flex items-center justify-center gap-1 py-2.5 rounded-xl text-[0.625rem] sm:text-sm font-bold transition-all whitespace-nowrap ${
                 activeTab === t.id
                   ? 'bg-primary text-white shadow-glow'
                   : 'text-muted hover:text-white'
@@ -204,10 +208,10 @@ export default function Leaderboard() {
             >
               {t.icon === 'coin'  ? <CoinIcon size="0.9em" />
                 : t.diamondTab    ? <DiamondIcon size="0.9em" />
-                : t.icon === 'elo'   ? <StatIcon kind="elo" size={16} />
-                : t.icon === 'score' ? <StatIcon kind="score" size={16} />
+                : t.icon === 'elo'   ? <StatIcon kind="elo" size={16} className="shrink-0" />
+                : t.icon === 'score' ? <StatIcon kind="score" size={16} className="shrink-0" />
                 : t.icon          ? <span>{t.icon}</span> : null}
-              <span>{(t.icon || t.diamondTab) ? t.label2 || t.label : t.label}</span>
+              <span className="truncate">{(t.icon || t.diamondTab) ? t.label2 || t.label : t.label}</span>
             </button>
           ))}
         </div>

@@ -22,7 +22,7 @@ export default function InAppBrowserNotice() {
       <p className="text-xs font-bold text-warning mb-1">
         You're in {app}'s built-in browser
       </p>
-      <p className="text-[11px] text-muted mb-2.5">
+      <p className="text-[0.6875rem] text-muted mb-2.5">
         Open this in your normal browser so you stay signed in.
       </p>
 
@@ -36,7 +36,7 @@ export default function InAppBrowserNotice() {
       {/* Revealed after the shortcut is tried, because if it had worked the
           user would be gone — still being here means it didn't. */}
       {tried && (
-        <p className="text-[11px] text-muted mt-2">
+        <p className="text-[0.6875rem] text-muted mt-2">
           Still here? {manualEscapeHint(app)}
         </p>
       )}

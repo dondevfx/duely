@@ -82,7 +82,7 @@ export default function VerifyModal({ status = 'unverified', rejectionReason, co
           </p>
         )}
 
-        <p className="text-[11px] text-muted mb-4">
+        <p className="text-[0.6875rem] text-muted mb-4">
           Crypto withdrawals do not need this — only bank transfers do.
         </p>
 

@@ -242,7 +242,7 @@ export default function ResultScreen({
               <div className="text-xs font-bold text-primary mb-1">Placement Matches</div>
               <div className="flex justify-center gap-2 mb-1">
                 {[0,1,2].map(i => (
-                  <div key={i} className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-[9px] font-black transition-all ${
+                  <div key={i} className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-[0.5625rem] font-black transition-all ${
                     i < placement
                       ? 'bg-success border-success text-white'
                       : 'border-muted text-muted'

@@ -145,13 +145,13 @@ export default function ReferralCard({ variant = 'full' }) {
           <div className="flex gap-2 mt-3">
             <div className="flex-1 bg-bg border border-border rounded-xl px-3 py-2.5 text-center">
               <FitText className="text-lg font-black text-white">{qualified}</FitText>
-              <div className="text-[10px] text-muted">Players joined</div>
+              <div className="text-[0.625rem] text-muted">Players joined</div>
             </div>
             <div className="flex-1 bg-bg border border-border rounded-xl px-3 py-2.5 text-center">
               <FitText className="text-lg font-black text-success">
                 <span className="inline-flex items-center gap-1">{collectable} <CoinIcon size="0.75em" /></span>
               </FitText>
-              <div className="text-[10px] text-muted">Ready to collect</div>
+              <div className="text-[0.625rem] text-muted">Ready to collect</div>
             </div>
           </div>
 
@@ -172,7 +172,7 @@ export default function ReferralCard({ variant = 'full' }) {
           </button>
 
           {holding > 0 && (
-            <p className="text-[10px] text-muted mt-2 text-center">
+            <p className="text-[0.625rem] text-muted mt-2 text-center">
               {holding} more clearing — collectable in a few days.
             </p>
           )}

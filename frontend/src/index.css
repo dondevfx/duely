@@ -5,6 +5,31 @@
 @layer base {
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
+
+  /* Everything on a phone, 10% larger.
+     
+     The site was drawn at a desktop-ish scale and then shown on a phone, where
+     it reads small: the tap targets are near the 44px floor rather than
+     comfortably past it, and the secondary labels sit at 10 and 11px. Anyone
+     who set Safari's page zoom to 110% to cope then had a site that looked
+     right — and going back to 100% made it small again.
+     
+     Done on the ROOT SIZE rather than by editing several hundred classes.
+     Tailwind's type, spacing, gaps, radii and max-widths are all rem, so one
+     value moves the whole layout together and keeps every proportion. The
+     arbitrary text-[Npx] labels were converted to rem for the same reason —
+     left in px they would have been the only thing that did not grow, which is
+     the opposite of what is wanted, since they are the hardest to read.
+     
+     Safe by measurement rather than by hope: 10% larger at 375px lays out
+     exactly as 341px does at normal size, and the layout was already checked
+     down to 327px with no overflow and nothing wrapping.
+     
+     Phones only. 767.98px is where the site already switches to its mobile
+     navigation, so this scales the layout that is actually being used. */
+  @media (max-width: 767.98px) {
+    html { font-size: 110%; }
+  }
   body {
     background-color: #000000;
     color: #fff;

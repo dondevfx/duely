@@ -32,7 +32,7 @@ const NAV = [
 ];
 
 function linkCls(isActive) {
-  return `flex items-center gap-3 px-3 py-3.5 rounded-lg text-[15px] font-medium mb-0.5 transition-colors border ${
+  return `flex items-center gap-3 px-3 py-3.5 rounded-lg text-[0.9375rem] font-medium mb-0.5 transition-colors border ${
     isActive
       ? 'bg-primary/15 text-primary border-primary/20'
       : 'text-muted border-transparent hover:text-white hover:bg-surfaceLight'

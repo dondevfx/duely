@@ -35,7 +35,7 @@ function CatchupBanner({ endsAt, target }) {
         <div className="text-danger font-black text-xl tabular-nums leading-none">
           {(left / 1000).toFixed(1)}s
         </div>
-        <div className="text-[10px] text-white/80 font-bold mt-0.5 whitespace-nowrap">
+        <div className="text-[0.625rem] text-white/80 font-bold mt-0.5 whitespace-nowrap">
           BEAT {Number(target).toLocaleString()}
         </div>
       </div>
@@ -390,7 +390,7 @@ export default function TowerGame() {
             board is the thing being looked at. */}
         {opponent && !soloEndless && (
           <div className="pointer-events-none absolute right-3 top-3 z-20 text-right">
-            <div className="text-[10px] uppercase tracking-widest text-white/50 font-bold">
+            <div className="text-[0.625rem] uppercase tracking-widest text-white/50 font-bold">
               {opponent.username}
             </div>
             <div className="text-2xl font-black text-white/90 tabular-nums leading-none">{oppScore}</div>

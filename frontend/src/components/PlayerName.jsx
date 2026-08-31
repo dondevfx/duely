@@ -31,7 +31,7 @@ export default function PlayerName({
       color={color}
       isBot={isBot}
       className={size}
-      textClassName="text-[10px]"
+      textClassName="text-[0.625rem]"
     />
   );
   return (

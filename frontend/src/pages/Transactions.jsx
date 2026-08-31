@@ -103,7 +103,7 @@ function TxRow({ tx }) {
               </span>
             )}
             {tx.tx_hash && (
-              <span className="text-[10px] font-mono text-muted/60 truncate max-w-[120px]">
+              <span className="text-[0.625rem] font-mono text-muted/60 truncate max-w-[120px]">
                 {tx.tx_hash.slice(0, 10)}…
               </span>
             )}
@@ -117,7 +117,7 @@ function TxRow({ tx }) {
           {positive ? '+' : '-'}{amountLabel}
         </div>
         <div className="flex items-center gap-1.5 justify-end mt-1 flex-wrap">
-          <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-bold ${badge.classes}`}>
+          <span className={`text-[0.625rem] px-1.5 py-0.5 rounded-full border font-bold ${badge.classes}`}>
             {badge.label}
           </span>
           <span className="text-xs text-muted whitespace-nowrap">
@@ -223,7 +223,7 @@ export default function Transactions() {
                 aria-label={f.text}
                 aria-pressed={activeFilter === f.key}
                 className={`tx-btn flex-auto flex items-center justify-center px-1 py-1.5
-                            text-[11px] font-bold rounded-xl transition-all whitespace-nowrap ${
+                            text-[0.6875rem] font-bold rounded-xl transition-all whitespace-nowrap ${
                   activeFilter === f.key
                     ? 'bg-primary text-white shadow-glow'
                     : 'text-muted hover:text-white hover:bg-surfaceLight'

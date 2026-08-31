@@ -91,7 +91,7 @@ export default function Support() {
                   className={`rounded-xl px-3 py-2 ${m.is_staff
                     ? 'bg-primary/10 border border-primary/30'
                     : 'bg-bg border border-border'}`}>
-                  <div className="text-[10px] font-bold mb-1"
+                  <div className="text-[0.625rem] font-bold mb-1"
                        style={{ color: m.is_staff ? '#4DA3FF' : '#64748b' }}>
                     {m.is_staff ? 'Duely Support' : 'You'} · {new Date(m.created_at).toLocaleString()}
                   </div>
@@ -144,11 +144,11 @@ export default function Support() {
                       className="w-full text-left bg-surface border border-surfaceLight rounded-xl px-4 py-3 hover:border-primary transition-all">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-bold text-white truncate flex-1">{t.subject}</span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${s.cls}`}>
+                        <span className={`text-[0.625rem] font-bold px-2 py-0.5 rounded-full border shrink-0 ${s.cls}`}>
                           {s.text}
                         </span>
                       </div>
-                      <div className="text-[10px] text-muted mt-0.5">
+                      <div className="text-[0.625rem] text-muted mt-0.5">
                         {new Date(t.updated_at).toLocaleString()}
                       </div>
                     </button>

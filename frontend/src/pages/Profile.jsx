@@ -526,7 +526,7 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
                   </div>
                   <div className="flex flex-col items-center mb-3">
                     <div className="text-sm font-black text-success">+{fmt(affStatus.earnings_c)} coins</div>
-                    <div className="text-[10px] text-muted">Coin earnings</div>
+                    <div className="text-[0.625rem] text-muted">Coin earnings</div>
                   </div>
                   {(affStatus.earnings_c > 0 || affStatus.earnings_diamonds > 0) ? (
                     <button
@@ -537,7 +537,7 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
                       {collectingEarnings ? 'Collecting...' : 'Collect Earnings'}
                     </button>
                   ) : (
-                    <p className="text-[10px] text-muted text-center">No earnings to collect yet</p>
+                    <p className="text-[0.625rem] text-muted text-center">No earnings to collect yet</p>
                   )}
                 </div>
                 <button
@@ -546,7 +546,7 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
                 >
                   Change code
                 </button>
-                <p className="text-[10px] text-muted mt-1">Changing your code deactivates the old one.</p>
+                <p className="text-[0.625rem] text-muted mt-1">Changing your code deactivates the old one.</p>
               </div>
             ) : (
               <div>
@@ -576,7 +576,7 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
                     </button>
                   )}
                 </div>
-                <p className="text-[10px] text-muted mt-1">4–12 letters/numbers, uppercase.</p>
+                <p className="text-[0.625rem] text-muted mt-1">4–12 letters/numbers, uppercase.</p>
               </div>
             )}
             {affMsg && (
@@ -733,7 +733,7 @@ function TwoFactorSection() {
           )}
           {enrollData?.totp?.secret && (
             <div className="bg-bg border border-surfaceLight rounded-lg px-3 py-2 mb-3 text-center">
-              <div className="text-[10px] text-muted mb-0.5">Manual entry key</div>
+              <div className="text-[0.625rem] text-muted mb-0.5">Manual entry key</div>
               <div className="font-mono text-xs text-primary break-all">{enrollData.totp.secret}</div>
             </div>
           )}
@@ -1071,7 +1071,7 @@ function FriendsPanel({ myId, myUsername, myReferralCode, activeGames }) {
       >
         <span>Friend Requests</span>
         {pendingIn.length > 0 && (
-          <span className="w-5 h-5 rounded-full bg-primary text-white text-[9px] flex items-center justify-center font-black leading-none">
+          <span className="w-5 h-5 rounded-full bg-primary text-white text-[0.5625rem] flex items-center justify-center font-black leading-none">
             {pendingIn.length}
           </span>
         )}
@@ -1092,10 +1092,10 @@ function FriendsPanel({ myId, myUsername, myReferralCode, activeGames }) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-bold text-white truncate">{p?.username}</div>
-                  <div className="text-[10px] text-muted">{p?.elo} ELO</div>
+                  <div className="text-[0.625rem] text-muted">{p?.elo} ELO</div>
                 </div>
-                <button onClick={() => accept(f.id)} className="text-[10px] px-2 py-1 bg-success/15 text-success border border-success/30 rounded-lg hover:bg-success/25 transition-all">✓</button>
-                <button onClick={() => remove(f.id)} className="text-[10px] px-2 py-1 bg-danger/15 text-danger border border-danger/30 rounded-lg hover:bg-danger/25 transition-all">✕</button>
+                <button onClick={() => accept(f.id)} className="text-[0.625rem] px-2 py-1 bg-success/15 text-success border border-success/30 rounded-lg hover:bg-success/25 transition-all">✓</button>
+                <button onClick={() => remove(f.id)} className="text-[0.625rem] px-2 py-1 bg-danger/15 text-danger border border-danger/30 rounded-lg hover:bg-danger/25 transition-all">✕</button>
               </div>
             );
           })}
@@ -1127,7 +1127,7 @@ function FriendsPanel({ myId, myUsername, myReferralCode, activeGames }) {
       {/* Friends list */}
       {accepted.length > 0 && (
         <div className="space-y-2">
-          <div className="text-[10px] text-muted font-bold uppercase tracking-wider mb-2">{accepted.length} Friend{accepted.length !== 1 ? 's' : ''}</div>
+          <div className="text-[0.625rem] text-muted font-bold uppercase tracking-wider mb-2">{accepted.length} Friend{accepted.length !== 1 ? 's' : ''}</div>
           {accepted.map(f => {
             const p = getFriend(f);
             const game = findGame(p?.username);
@@ -1148,13 +1148,13 @@ function FriendsPanel({ myId, myUsername, myReferralCode, activeGames }) {
                   onClick={() => setViewingFriend({ id: p?.id, username: p?.username })}
                 >
                   <div className="text-xs font-bold text-white truncate hover:text-primary transition-colors">{p?.username}</div>
-                  <div className="text-[10px] text-muted">{p?.elo} ELO{game ? ' · In game' : ''}</div>
+                  <div className="text-[0.625rem] text-muted">{p?.elo} ELO{game ? ' · In game' : ''}</div>
                 </button>
                 <div className="flex gap-1 items-center">
                   {game && (
                     <button
                       onClick={() => navigate(`/spectate/${game.id}`, { state: { from: '/profile' } })}
-                      className="text-[10px] px-2 py-1 bg-red-500/15 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/25 transition-all font-bold"
+                      className="text-[0.625rem] px-2 py-1 bg-red-500/15 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/25 transition-all font-bold"
                     >
                       ▶ Live
                     </button>
@@ -1183,12 +1183,12 @@ function FriendsPanel({ myId, myUsername, myReferralCode, activeGames }) {
       {/* Sent requests */}
       {pendingOut.length > 0 && (
         <div className="mt-4 pt-4 border-t border-surfaceLight">
-          <div className="text-[10px] text-muted font-bold uppercase tracking-wider mb-2">Sent</div>
+          <div className="text-[0.625rem] text-muted font-bold uppercase tracking-wider mb-2">Sent</div>
           {pendingOut.map(f => (
             <div key={f.id} className="flex items-center gap-2 mb-1.5">
               <div className="text-xs text-muted flex-1 truncate">{f.addressee?.username}</div>
-              <span className="text-[10px] text-muted/50 italic">Pending</span>
-              <button onClick={() => remove(f.id)} className="text-[10px] text-muted hover:text-danger transition-colors">✕</button>
+              <span className="text-[0.625rem] text-muted/50 italic">Pending</span>
+              <button onClick={() => remove(f.id)} className="text-[0.625rem] text-muted hover:text-danger transition-colors">✕</button>
             </div>
           ))}
         </div>
@@ -1535,7 +1535,7 @@ export default function Profile() {
                         ✕ Remove photo
                       </button>
                     )}
-                    {avatarErr && <p className="text-[11px] text-danger px-3 py-2">{avatarErr}</p>}
+                    {avatarErr && <p className="text-[0.6875rem] text-danger px-3 py-2">{avatarErr}</p>}
                   </div>
                 </>
               )}

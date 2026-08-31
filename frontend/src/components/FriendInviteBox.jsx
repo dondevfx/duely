@@ -21,7 +21,7 @@ export default function FriendInviteBox({ username, referralCode }) {
 
   return (
     <div className="mt-4 pt-4 border-t border-surfaceLight">
-      <div className="text-[10px] text-muted font-bold uppercase tracking-wider mb-2">
+      <div className="text-[0.625rem] text-muted font-bold uppercase tracking-wider mb-2">
         Invite Link
       </div>
 
@@ -36,7 +36,7 @@ export default function FriendInviteBox({ username, referralCode }) {
         className="!py-2 !text-xs !rounded-xl"
       />
 
-      <p className="text-[10px] text-muted/70 mt-1.5">
+      <p className="text-[0.625rem] text-muted/70 mt-1.5">
         They're added instantly — no request to accept.
       </p>
     </div>

@@ -116,7 +116,7 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
           {/* Labelled, because the payout now sits directly under the panel
               heading. Unlabelled it read as the heading's value — a big green
               number under the words "Entry Fee" looks like the entry fee. */}
-          <div className="text-[10px] sm:text-xs uppercase tracking-widest text-muted font-bold">You win</div>
+          <div className="text-[0.625rem] sm:text-xs uppercase tracking-widest text-muted font-bold">You win</div>
           <div className="text-4xl sm:text-5xl font-black text-success inline-flex items-center gap-1" style={{ textShadow: '0 0 18px rgba(34,197,94,0.45)' }}>
             <span ref={payoutRef}>{entryFee > 0 ? `+${calcPayout(entryFee, isDiamonds, payoutMult)}` : ''}</span>
             {' '}{currLabel}
@@ -177,12 +177,12 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
           the payout needed naming, because it is the one that sits under the
           heading and would otherwise read as the heading's value. */}
       <div className="flex items-center justify-between gap-1 mt-1.5 sm:mt-3">
-        <span className="text-[11px] sm:text-sm text-muted whitespace-nowrap">Min: {fmtFee(fees[0])} {currLabel}</span>
+        <span className="text-[0.6875rem] sm:text-sm text-muted whitespace-nowrap">Min: {fmtFee(fees[0])} {currLabel}</span>
         <span className="text-2xl sm:text-2xl font-black text-white">
           <span ref={displayRef}>{fmtFee(entryFee)}</span>{' '}
           <span className="text-primary">{currLabel}</span>
         </span>
-        <span className="text-[11px] sm:text-sm text-muted whitespace-nowrap">Max: {fmtFee(fees[fees.length - 1])} {currLabel}</span>
+        <span className="text-[0.6875rem] sm:text-sm text-muted whitespace-nowrap">Max: {fmtFee(fees[fees.length - 1])} {currLabel}</span>
       </div>
     </>
   );

@@ -100,7 +100,7 @@ function AttentionRow({ tx, busy, onResolve }) {
   return (
     <div className="bg-bg border border-border rounded-xl p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${sev.cls}`}>
+        <span className={`text-[0.625rem] font-black px-2 py-0.5 rounded-full border ${sev.cls}`}>
           {sev.label}
         </span>
         <span className="text-sm font-bold text-white">
@@ -118,7 +118,7 @@ function AttentionRow({ tx, busy, onResolve }) {
         </button>
       </div>
 
-      {tx.notes && <p className="text-[11px] text-danger/80 font-mono break-all mt-2">{tx.notes}</p>}
+      {tx.notes && <p className="text-[0.6875rem] text-danger/80 font-mono break-all mt-2">{tx.notes}</p>}
 
       {open && (
         <div className="mt-3 pt-3 border-t border-border">
@@ -144,7 +144,7 @@ function AttentionRow({ tx, busy, onResolve }) {
                 ].map(([k, v]) => (
                   <div key={k} className="bg-surface border border-border rounded-lg px-2 py-1.5">
                     <div className="text-sm font-black text-white">{v}</div>
-                    <div className="text-[9px] text-muted">{k}</div>
+                    <div className="text-[0.5625rem] text-muted">{k}</div>
                   </div>
                 ))}
               </div>
@@ -158,9 +158,9 @@ function AttentionRow({ tx, busy, onResolve }) {
 
               {ctx.related?.length > 0 && (
                 <div className="mb-3 max-h-40 overflow-y-auto">
-                  <div className="text-[10px] text-muted font-bold uppercase mb-1">Their recent activity</div>
+                  <div className="text-[0.625rem] text-muted font-bold uppercase mb-1">Their recent activity</div>
                   {ctx.related.slice(0, 10).map(r => (
-                    <div key={r.id} className="text-[10px] text-muted font-mono flex gap-2 py-0.5">
+                    <div key={r.id} className="text-[0.625rem] text-muted font-mono flex gap-2 py-0.5">
                       <span className="w-32 shrink-0">{new Date(r.created_at).toLocaleString()}</span>
                       <span className="w-24 shrink-0">{r.type}</span>
                       <span className="w-16 shrink-0 text-white">{Number(r.amount_c || 0).toFixed(2)}</span>
@@ -224,7 +224,7 @@ function TicketThread({ ticket, onReply, onClose, busy }) {
       </div>
 
       {ticket.transaction_id && (
-        <p className="text-[10px] text-primary font-mono mb-2">
+        <p className="text-[0.625rem] text-primary font-mono mb-2">
           linked transaction: {ticket.transaction_id}
         </p>
       )}
@@ -233,7 +233,7 @@ function TicketThread({ ticket, onReply, onClose, busy }) {
         {(ticket.messages || []).map(m => (
           <div key={m.id} className={`rounded-lg px-2 py-1.5 ${m.is_staff
             ? 'bg-primary/10 border border-primary/30' : 'bg-surface border border-border'}`}>
-            <div className="text-[9px] text-muted mb-0.5">
+            <div className="text-[0.5625rem] text-muted mb-0.5">
               {m.is_staff ? 'Staff' : 'Player'} · {new Date(m.created_at).toLocaleString()}
             </div>
             <p className="text-xs text-white whitespace-pre-wrap break-words">{m.body}</p>
@@ -689,7 +689,7 @@ export default function Admin() {
             <ul className="text-xs text-danger/80 font-mono space-y-0.5">
               {loadErrors.map(e => <li key={e}>{e}</li>)}
             </ul>
-            <p className="text-[11px] text-muted mt-2">
+            <p className="text-[0.6875rem] text-muted mt-2">
               Everything else below still loaded and is accurate.
             </p>
           </div>
@@ -985,7 +985,7 @@ export default function Admin() {
                               Didit says: <span className="text-white">{k.didit_status || 'no result yet'}</span><br />
                               {[k.city, k.region, k.country].filter(Boolean).join(', ') || 'no address returned'}
                             </div>
-                            <div className="text-[11px] text-muted/70 mt-1.5">
+                            <div className="text-[0.6875rem] text-muted/70 mt-1.5">
                               Balance {Number(k.balance ?? 0).toFixed(2)} · submitted{' '}
                               {new Date(k.submitted_at).toLocaleString()}
                             </div>
@@ -1057,9 +1057,9 @@ export default function Admin() {
                         className="w-full text-left bg-bg border border-border rounded-xl px-3 py-2 hover:border-primary transition-all">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-bold text-white truncate flex-1">{t.subject}</span>
-                          {t.transaction_id && <span className="text-[9px] text-primary shrink-0">has transaction</span>}
+                          {t.transaction_id && <span className="text-[0.5625rem] text-primary shrink-0">has transaction</span>}
                         </div>
-                        <div className="text-[10px] text-muted mt-0.5">
+                        <div className="text-[0.625rem] text-muted mt-0.5">
                           {t.profiles?.username} · {new Date(t.updated_at).toLocaleString()}
                         </div>
                       </button>
@@ -1090,7 +1090,7 @@ export default function Admin() {
                           <tr key={tx.id} className="border-b border-border/50 last:border-0 hover:bg-surfaceLight/30 transition-colors">
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0"
+                                <div className="w-6 h-6 rounded-full flex items-center justify-center text-[0.625rem] font-black shrink-0"
                                   style={{
                                     backgroundColor: `${tx.profiles?.profile_color || '#1250B4'}22`,
                                     border: `1.5px solid ${tx.profiles?.profile_color || '#1250B4'}`,
@@ -1175,7 +1175,7 @@ export default function Admin() {
                               </div>
                               <span className="text-white font-medium">{u.username}</span>
                               {u.banned && (
-                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-danger/15 text-danger border border-danger/40">
+                                <span className="text-[0.625rem] font-bold px-1.5 py-0.5 rounded-full bg-danger/15 text-danger border border-danger/40">
                                   BANNED
                                 </span>
                               )}
@@ -1236,7 +1236,7 @@ export default function Admin() {
                         <div className="flex items-center gap-2">
                           <span className="text-white font-black text-lg">{p.username}</span>
                           {p.banned && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-danger/15 text-danger border border-danger/40">BANNED</span>
+                            <span className="text-[0.625rem] font-bold px-1.5 py-0.5 rounded-full bg-danger/15 text-danger border border-danger/40">BANNED</span>
                           )}
                         </div>
                         <div className="text-xs text-muted">
@@ -1261,7 +1261,7 @@ export default function Admin() {
                     ].map(([label, value]) => (
                       <div key={label} className="bg-bg border border-border rounded-xl p-3 text-center">
                         <div className="text-lg font-black text-white font-mono">{value}</div>
-                        <div className="text-[10px] text-muted mt-0.5 uppercase tracking-wide">{label}</div>
+                        <div className="text-[0.625rem] text-muted mt-0.5 uppercase tracking-wide">{label}</div>
                       </div>
                     ))}
                   </div>
@@ -1348,7 +1348,7 @@ export default function Admin() {
                         {playerReports.map(r => (
                           <div key={r.id} className="border border-border rounded-lg px-3 py-2">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                              <span className={`text-[0.625rem] font-black px-2 py-0.5 rounded-full border ${
                                 r.status === 'open' ? 'text-danger border-danger/50 bg-danger/10'
                                   : r.status === 'actioned' ? 'text-success border-success/40 bg-success/10'
                                   : 'text-muted border-border'
@@ -1358,23 +1358,23 @@ export default function Admin() {
                               <span className="text-xs font-bold text-white">
                                 {r.reason === 'pfp' ? 'Profile picture' : r.reason === 'cheating' ? 'Cheating' : 'Other'}
                               </span>
-                              <span className="text-[11px] text-muted">
+                              <span className="text-[0.6875rem] text-muted">
                                 by {r.reporter?.username ?? 'unknown'} · {fmtDate(r.created_at)}
                               </span>
                               {r.status === 'open' && (
                                 <span className="ml-auto flex gap-1">
                                   <button onClick={() => decideReport(r.id, 'actioned')}
-                                    className="text-[11px] px-2 py-1 rounded border border-success/40 text-success hover:bg-success/10">
+                                    className="text-[0.6875rem] px-2 py-1 rounded border border-success/40 text-success hover:bg-success/10">
                                     Actioned
                                   </button>
                                   <button onClick={() => decideReport(r.id, 'dismissed')}
-                                    className="text-[11px] px-2 py-1 rounded border border-border text-muted hover:text-white">
+                                    className="text-[0.6875rem] px-2 py-1 rounded border border-border text-muted hover:text-white">
                                     Dismiss
                                   </button>
                                 </span>
                               )}
                             </div>
-                            {r.details && <p className="text-[11px] text-muted mt-1 break-words">{r.details}</p>}
+                            {r.details && <p className="text-[0.6875rem] text-muted mt-1 break-words">{r.details}</p>}
                           </div>
                         ))}
                       </div>
@@ -1460,7 +1460,7 @@ export default function Admin() {
                               <div className="flex items-center justify-between gap-2">
                                 <span className={`font-bold shrink-0 ${tone}`}>{fmt(t.amount_c)}</span>
                                 <span className="text-muted shrink-0">{t.crypto_symbol || ''}</span>
-                                <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-full border ${
+                                <span className={`shrink-0 text-[0.625rem] px-1.5 py-0.5 rounded-full border ${
                                   t.status === 'confirmed' ? 'text-success border-success/40'
                                     : t.status === 'pending' || t.status === 'converting' || t.status === 'sending'
                                       ? 'text-warning border-warning/40'
@@ -1469,8 +1469,8 @@ export default function Admin() {
                                   {t.status}
                                 </span>
                               </div>
-                              <div className="text-[10px] text-muted mt-0.5">{fmtDate(t.created_at)}</div>
-                              {t.notes && <div className="text-[10px] text-danger/80 break-all mt-0.5">{t.notes}</div>}
+                              <div className="text-[0.625rem] text-muted mt-0.5">{fmtDate(t.created_at)}</div>
+                              {t.notes && <div className="text-[0.625rem] text-danger/80 break-all mt-0.5">{t.notes}</div>}
                             </div>
                           ))}
                         </div>

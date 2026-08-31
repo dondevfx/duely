@@ -769,7 +769,7 @@ export default function CoinFlipGame() {
                     {/* Mobile sizes only. The sm: values stay where they were
                         tuned to fit the lobby on a 1080p viewport. */}
                     <div className="text-xl sm:text-xl mb-0.5 sm:mb-0.5">{s === 'heads' ? '🔵' : '⚪'}</div>
-                    <div className="capitalize text-[13px] sm:text-sm leading-none">{s}</div>
+                    <div className="capitalize text-[0.8125rem] sm:text-sm leading-none">{s}</div>
                   </button>
                 ))}
               </div>
