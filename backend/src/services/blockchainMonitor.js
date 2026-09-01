@@ -21,6 +21,8 @@ const { swapSolToUsdc }     = require('./jupiterService');
 const { DEPOSIT_COINS }     = require('./coinConfig');
 
 const POLL_INTERVAL_MS      = 45_000;
+// The coins that live at a Solana address, as a Set for the sweep filter below.
+const SOL_COINS = new Set(['sol', 'usdc', 'usdt']);
 const OUR_FEE               = 0.001; // 0.1% platform fee on all deposits
 // The UI shows a $5 min (SOL/USDC) and $10 min (other coins), but we credit
 // generously: any deposit that nets at least MIN_CREDIT_USD in USDC (after the
@@ -885,9 +887,35 @@ async function pollCoin(supabase, coin, list) {
   }
 }
 
+// How many 45s passes between full Solana sweeps once webhooks are carrying
+// the real traffic. 480 passes is six hours.
+//
+// The sweep is not redundancy for its own sake — a webhook can be missed. A
+// deploy mid-delivery, a retry budget running out, this process failing to
+// re-register after someone edits the webhook in the dashboard. Deposits are
+// money, so "usually delivered" is not a guarantee to build on. What changes
+// is the price of the guarantee: four passes a day instead of 1,920 is a
+// rounding error against any plan, where the 45-second version was the entire
+// plan and grew with every signup.
+const SOL_SWEEP_EVERY_PASSES = 480;
+let _passNo = 0;
+
 async function pollOnce(supabase) {
   const addresses = await loadAddresses();
   if (!addresses.length) return;
+
+  // With webhooks live, Solana is heard from rather than asked — except on the
+  // sweep pass. The first pass after boot always sweeps, so a restart re-checks
+  // everything once rather than waiting six hours to find what was missed while
+  // the process was down.
+  let list = addresses;
+  const heliusOn = require('./heliusWebhooks').isEnabled();
+  const sweeping = (_passNo % SOL_SWEEP_EVERY_PASSES) === 0;
+  _passNo++;
+  if (heliusOn && !sweeping) {
+    list = addresses.filter(a => !SOL_COINS.has(String(a.coin).toLowerCase()));
+    if (list.length === 0) return;
+  }
 
   // Coins run in parallel, addresses within a coin stay staggered.
   //
@@ -900,7 +928,7 @@ async function pollOnce(supabase) {
   // Splitting by coin divides the pass by the number of coins at zero cost to
   // any provider's rate limit, since each group talks to a different one.
   const byCoin = new Map();
-  for (const a of addresses) {
+  for (const a of list) {
     if (!byCoin.has(a.coin)) byCoin.set(a.coin, []);
     byCoin.get(a.coin).push(a);
   }
@@ -914,7 +942,7 @@ async function pollOnce(supabase) {
   // per-provider limits, not the loop shape, are the ceiling beyond this point.
   const took = Date.now() - startedAt;
   if (took > POLL_INTERVAL_MS) {
-    console.warn(`[monitor] poll pass took ${(took / 1000).toFixed(1)}s across ${addresses.length} addresses — exceeds the ${POLL_INTERVAL_MS / 1000}s interval`);
+    console.warn(`[monitor] poll pass took ${(took / 1000).toFixed(1)}s across ${list.length} addresses — exceeds the ${POLL_INTERVAL_MS / 1000}s interval`);
   }
 }
 
@@ -982,4 +1010,9 @@ function init(supabase) {
   setTimeout(loop, 10_000);
 }
 
-module.exports = { init, claimDeposit, sweepStrandedUsdc };
+// processDeposit is exported for the Helius webhook route, which finds the
+// same deposits by being told rather than by asking. Everything downstream —
+// the idempotency check, the gas reserve, the swap, the credit — is identical
+// whichever way the deposit was noticed, and must stay that way: two paths
+// into money with two sets of rules is how a deposit gets credited twice.
+module.exports = { init, claimDeposit, sweepStrandedUsdc, processDeposit };

@@ -147,6 +147,17 @@ async function getOrCreateAddress(userId, coin, supabase) {
     .from('deposit_addresses')
     .upsert({ user_id: userId, coin: coin.toLowerCase(), address }, { onConflict: 'user_id,coin' });
 
+  // Tell Helius to watch it, if webhooks are configured. Required lazily so
+  // this module stays usable without the service — address derivation is pure
+  // and is used in places that have no business booting a webhook client.
+  //
+  // Coalesced rather than immediate: opening the deposit page creates one
+  // address per coin back to back, and all three derive to the same Solana
+  // account, so an immediate re-register would be three identical writes.
+  try {
+    require('./heliusWebhooks').scheduleSync(supabase);
+  } catch { /* an unregistered address falls to the polling backstop */ }
+
   return { address, memo, coin: coin.toLowerCase() };
 }
 

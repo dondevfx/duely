@@ -26,6 +26,7 @@ const { apiLimiter, authLimiter } = require('./middleware/rateLimit');
 const registerSocketHandlers = require('./socket/handlers');
 const swapPoller        = require('./services/swapPoller');
 const blockchainMonitor = require('./services/blockchainMonitor');
+const heliusWebhooks    = require('./services/heliusWebhooks');
 const tickerService     = require('./services/tickerService');
 
 const app = express();
@@ -122,6 +123,10 @@ app.use((err, _req, res, _next) => {
 // Start background services
 swapPoller.init(supabase);
 blockchainMonitor.init(supabase);
+// Registers our Solana deposit addresses with Helius so deposits are pushed
+// rather than polled for. No-ops with a line in the log if it is not
+// configured, and the monitor above keeps polling either way.
+heliusWebhooks.init(supabase);
 tickerService.init(io, supabase);
 require('./services/alertService').init(supabase);
 

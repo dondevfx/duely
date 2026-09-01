@@ -4,7 +4,10 @@ const { verifyWebhook, createPayout, COINS } = require('../services/cryptomusSer
 const { createDepositSwap } = require('../services/simpleSwapService');
 const { creditCoins, recordDeposit } = require('../services/walletService');
 const { watch } = require('../services/swapPoller');
+const { USDC_MINT, USDT_MINT } = require('../services/chainSend');
 const didit = require('../services/diditService');
+const helius = require('../services/heliusWebhooks');
+const { processDeposit } = require('../services/blockchainMonitor');
 
 // Our USDC SPL wallet address — SimpleSwap sends converted funds here
 const OUR_USDC_ADDRESS = process.env.USDC_SPL_ADDRESS;
@@ -318,6 +321,117 @@ module.exports = function webhookRoutes(supabase) {
       console.error('[didit webhook] processing failed:', e.message);
     }
   });
+
+  // ── Helius: a Solana deposit, pushed ──────────────────────────────────
+  //
+  // The polling monitor asks every address ever issued whether anything has
+  // arrived, every 45 seconds, forever. This is the same information arriving
+  // the other way round: Helius watches the addresses and calls us when one
+  // receives something, so an idle address costs nothing and a real deposit is
+  // seen immediately instead of up to 45 seconds later.
+  //
+  // Deliberately thin. Everything downstream — idempotency, the gas reserve,
+  // the swap, the credit — is processDeposit, exactly as the poller uses it.
+  // Two paths into money with two sets of rules is how a deposit gets credited
+  // twice; this one only decides WHICH deposit, never what happens to it.
+  router.post('/helius', express.json({ limit: '2mb' }), async (req, res) => {
+    // Constant-time-ish comparison is overkill for a bearer token compared
+    // against a fixed-length secret, but the check itself is not optional: the
+    // URL is the only other thing protecting an endpoint that credits money,
+    // and a URL is not a secret.
+    const auth = req.get('authorization') || '';
+    const expected = helius.secret();
+    if (!expected || auth !== expected) {
+      // 401 without detail. A caller who guessed the URL learns nothing about
+      // whether the secret is set, wrong, or merely malformed.
+      return res.status(401).json({ error: 'unauthorized' });
+    }
+
+    // Acknowledge first, work after.
+    //
+    // Helius retries on a non-2xx, and processing a deposit means a swap and
+    // an on-chain forward — far longer than any delivery timeout. Holding the
+    // response open would earn a retry for a deposit already being handled.
+    // Duplicate delivery is safe regardless (processDeposit dedupes on the tx
+    // hash), but not inviting it is better than relying on that.
+    res.json({ ok: true });
+
+    const events = Array.isArray(req.body) ? req.body : [req.body];
+    for (const ev of events) {
+      try {
+        await handleHeliusEvent(ev);
+      } catch (e) {
+        console.error('[helius webhook] event failed:', e.message);
+      }
+    }
+  });
+
+  // Mints, as base58 strings — the webhook payload carries a string, and
+  // chainSend holds these as PublicKey objects.
+  const MINT_TO_COIN = {
+    [USDC_MINT.toBase58()]: 'usdc',
+    [USDT_MINT.toBase58()]: 'usdt',
+  };
+
+  async function handleHeliusEvent(ev) {
+    const signature = ev?.signature;
+    if (!signature) return;
+
+    // Every credit this event describes, as { address, coin, amount }. Read
+    // from the enriched payload rather than the raw transaction, which is the
+    // point of using the enhanced webhook type — the alternative is parsing
+    // instructions here, a second copy of what the poller already does.
+    const credits = [];
+
+    for (const t of ev.nativeTransfers || []) {
+      // lamports. A transfer TO one of our addresses only; the same event also
+      // describes the sender's side, and the sweep we make afterwards.
+      if (!t?.toUserAccount || !(t.amount > 0)) continue;
+      credits.push({ address: t.toUserAccount, coin: 'sol', amount: t.amount / 1e9 });
+    }
+
+    for (const t of ev.tokenTransfers || []) {
+      const coin = MINT_TO_COIN[t?.mint];
+      if (!coin || !t?.toUserAccount) continue;
+      // toUserAccount is the OWNER wallet, not the associated token account,
+      // which is why registering the wallet address covers SPL as well as SOL.
+      const amount = Number(t.tokenAmount);
+      if (!(amount > 0)) continue;
+      credits.push({ address: t.toUserAccount, coin, amount });
+    }
+
+    if (credits.length === 0) return;
+
+    // One lookup for the addresses this event actually touched, rather than
+    // per credit — a single transaction can carry several.
+    const wanted = [...new Set(credits.map(c => c.address))];
+    const { data: rows, error } = await supabase
+      .from('deposit_addresses')
+      .select('user_id, coin, address')
+      .in('address', wanted);
+    if (error) {
+      // Thrown, not swallowed: a lookup failure means we do not know whether
+      // this was a deposit, and the polling backstop is what catches it.
+      throw new Error(`address lookup failed: ${error.message}`);
+    }
+
+    const owners = new Map();
+    for (const r of rows || []) owners.set(r.address, r.user_id);
+
+    for (const c of credits) {
+      const userId = owners.get(c.address);
+      // Not one of ours. Helius reports the whole transaction, so this is the
+      // normal case for the other side of any transfer.
+      if (!userId) continue;
+      await processDeposit(supabase, {
+        userId,
+        coin:    c.coin,
+        address: c.address,
+        txHash:  signature,
+        amount:  c.amount,
+      });
+    }
+  }
 
   return router;
 };
