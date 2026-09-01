@@ -907,19 +907,24 @@ export default function ChatSidebar({ open, onToggle }) {
 
       {/* Mobile chat handle — home screen only.
           A tab against the right edge rather than a labelled pill floating
-          above the page. The pill sat over the last row of game cards and was
-          wide enough to cover one of them; a handle takes about a fifth of the
-          width and reads as something to pull, which is what it does.
-          The chevron points left, towards where the panel comes from. */}
+          above the page: the pill sat over the last row of game cards and was
+          wide enough to cover one of them.
+          Sized to intrude as little as possible — how far it reaches back into
+          the page IS its width, so that is the number kept small. A message
+          bubble rather than a chevron, because an arrow says which direction
+          something moves while this has to say what it opens. */}
       {!mobileOpen && isHome && (
         <button
           onClick={() => setMobileOpen(true)}
           aria-label="Open World Chat"
-          className="lg:hidden fixed bottom-5 right-0 z-40 flex items-center justify-center w-9 h-12 rounded-l-xl bg-surface border border-r-0 border-primary/40 hover:border-primary text-white shadow-lg transition-all"
+          className="lg:hidden fixed bottom-5 right-0 z-40 flex items-center justify-center w-6 h-9 rounded-l-lg bg-surface border border-r-0 border-primary/40 hover:border-primary text-white shadow-lg transition-all"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M15 5l-7 7 7 7" />
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            {/* A rounded bubble with a tail, and the two lines of text that
+                make it read as a message at 13px rather than a plain blob. */}
+            <path d="M20.5 11.5a7.5 7.5 0 0 1-7.5 7.5H9l-4.5 3v-4.2A7.5 7.5 0 0 1 13 4a7.5 7.5 0 0 1 7.5 7.5z" />
+            <path d="M9.5 10.5h7M9.5 13.5h4.5" />
           </svg>
         </button>
       )}
