@@ -931,9 +931,16 @@ export default function ChatSidebar({ open, onToggle }) {
 
       {/* Mobile chat overlay */}
       {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-[55] flex flex-col bg-surface">
+        // Grey, not black. Full-screen on a phone, this panel was #0D0D0D from
+        // edge to edge, and with only a few messages in it the result is a black
+        // rectangle — the header and the composer float in nothing, and the
+        // whole screen reads as unloaded rather than empty. The conversation
+        // sits on a slightly lifted ground now, so the bar above and the bar
+        // below it read as bars, and the message area reads as a surface with
+        // room on it.
+        <div className="lg:hidden fixed inset-0 z-[55] flex flex-col" style={{ background: '#191919' }}>
           {/* Header */}
-          <div className="px-4 py-3 border-b border-border flex items-center gap-2 shrink-0 pt-safe" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
+          <div className="px-4 py-3 border-b border-border flex items-center gap-2 shrink-0 pt-safe bg-surface" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
             <div className="w-2 h-2 rounded-full bg-success animate-pulse shrink-0" />
             <span className="text-sm font-bold text-white flex-1">World Chat</span>
             <button
@@ -997,8 +1004,10 @@ export default function ChatSidebar({ open, onToggle }) {
                     onClick={() => openPopup(msg)}
                     className={`px-3 py-2 rounded-2xl max-w-[85%] break-words text-xs leading-relaxed transition-opacity
                       ${(msg.userId === ADMIN_ID && !isAdmin) ? '' : 'cursor-pointer hover:opacity-80'}
-                      ${isOwn ? 'text-white' : `bg-surfaceLight text-white ${isMentioned ? 'border border-warning/60 bg-warning/10' : ''}`}`}
-                    style={isOwn ? { backgroundColor: `${msgColor}33`, border: `1px solid ${msgColor}44` } : {}}
+                      ${isOwn ? 'text-white' : `text-white ${isMentioned ? 'border border-warning/60 bg-warning/10' : ''}`}`}
+                    style={isOwn
+                      ? { backgroundColor: `${msgColor}33`, border: `1px solid ${msgColor}44` }
+                      : (isMentioned ? {} : { backgroundColor: '#2B2B2B' })}
                   >
                     {renderMessage(msg.message, profile?.username)}
                   </div>
@@ -1010,7 +1019,7 @@ export default function ChatSidebar({ open, onToggle }) {
           </div>
 
           {/* Input */}
-          <div className="p-3 border-t border-border shrink-0 pb-safe" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+          <div className="p-3 border-t border-border shrink-0 pb-safe bg-surface" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
             {authenticated ? (
               <div className="flex gap-2">
                 <input ref={mobileInputRef} value={input} onChange={e => setInput(e.target.value)}
