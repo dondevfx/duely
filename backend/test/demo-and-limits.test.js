@@ -568,8 +568,12 @@ test('the phone Home is one switch, not a sprinkling of classes', () => {
   assert.deepEqual(strays.map((m) => m[0]), [],
     'a section is hidden by a literal class instead of the switch');
 
-  // The seven pieces that come off the phone.
-  assert.equal((src.match(/\$\{PHONE_HIDE\}/g) || []).length, 6, 'expected six PHONE_HIDE wrappers');
+  // The pieces that come off the phone. The "Games" heading is deliberately
+  // NOT among them — with the hero stripped back it sits under the title and
+  // labels the grid.
+  assert.equal((src.match(/\$\{PHONE_HIDE\}/g) || []).length, 5, 'expected five PHONE_HIDE wrappers');
+  assert.match(src, /<h2 className="text-xl md:text-2xl font-bold text-white mb-4 md:mb-6">Games<\/h2>/,
+    'the Games heading must show on phones as well');
   assert.match(src, /<div className=\{PHONE_HIDE\}>/, 'the diamond bonus wrapper');
   assert.equal((src.match(/\$\{PHONE_HIDE_FLEX\}/g) || []).length, 1, 'the hero button row');
 

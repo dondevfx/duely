@@ -169,7 +169,11 @@ export default function Home() {
             column now sits underneath, giving the grid the full width. */}
         <div className="flex flex-col lg:flex-row gap-8">
           <div className="flex-1 min-w-0">
-            <h2 className={`${PHONE_HIDE} text-xl md:text-2xl font-bold text-white mb-4 md:mb-6`}>Games</h2>
+            {/* Shown on phones too. With the hero stripped back, this sits
+                directly under the 1v1 Duels title and labels the grid — which
+                is the one piece of the old page that still had a job to do
+                once everything between the title and the cards had gone. */}
+            <h2 className="text-xl md:text-2xl font-bold text-white mb-4 md:mb-6">Games</h2>
             {/* Column counts are chosen from the width this grid ACTUALLY
                 gets — after the 240px left nav, and after the side column
                 from xl — not from the raw viewport:
