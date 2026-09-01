@@ -14,6 +14,29 @@ import { GAMES } from '../data/games';
 import { LockIcon } from '../components/UiIcon';
 import FitText from '../components/FitText';
 
+// The stripped-back phone Home.
+//
+// Phones get the title, the game cards and How It Works, and nothing else: no
+// description, no Play Now/Wallet pair, no ticker, no stats strip, no invite
+// card, no daily spin, no diamond bonus, no "Games" heading. Everything else
+// is unchanged.
+//
+// Kept as ONE switch rather than a `hidden sm:block` sprinkled through the
+// file, because this is a trial — flipping PHONE_MINIMAL to false restores the
+// old phone layout exactly, with nothing to hunt for.
+//
+// The cut is at sm (640px), NOT at the md (768px) the mobile navigation uses.
+// An iPad mini is 744px across in portrait, which is below md — at that
+// breakpoint a tablet would have been given the phone layout, and tablets are
+// meant to stay as they are.
+const PHONE_MINIMAL = true;
+
+// Hidden on phones, normal from 640px up. `block` and `flex` variants because
+// the wrappers are not all the same display type and collapsing a flex row to
+// block would reflow it.
+const PHONE_HIDE      = PHONE_MINIMAL ? 'hidden sm:block' : '';
+const PHONE_HIDE_FLEX = PHONE_MINIMAL ? 'hidden sm:flex'  : 'flex';
+
 function DailySpinWidget({ profile }) {
   return profile ? (
     <SpinWheel />
@@ -55,12 +78,12 @@ export default function Home() {
                   Duels
                 </span>
               </h1>
-              <p className="text-lg md:text-xl text-muted max-w-2xl mx-auto md:mx-0 mb-5 md:mb-10">
+              <p className={`${PHONE_HIDE} text-lg md:text-xl text-muted max-w-2xl mx-auto md:mx-0 mb-5 md:mb-10`}>
                 Challenge opponents in real-time player vs player games. Wager{' '}
                 <span className="text-primary font-semibold whitespace-nowrap"><CoinIcon size="1em" /> Coins</span>, climb the leaderboard,
                 and prove you're the best.
               </p>
-              <div className="flex flex-wrap md:flex-nowrap items-center justify-center md:justify-start gap-4">
+              <div className={`${PHONE_HIDE_FLEX} flex-wrap md:flex-nowrap items-center justify-center md:justify-start gap-4`}>
                 {/* min-w-[175px] on both so they match.
                     The padding, text size and height were already identical —
                     the only difference was the word: "Wallet" is shorter than
@@ -100,7 +123,7 @@ export default function Home() {
       </section>
 
       {/* Live match ticker */}
-      <section className="border-y border-surfaceLight bg-surface/40 py-3 md:py-5 mt-0 mb-5 md:mb-8">
+      <section className={`${PHONE_HIDE} border-y border-surfaceLight bg-surface/40 py-3 md:py-5 mt-0 mb-5 md:mb-8`}>
         <div className="max-w-7xl mx-auto px-4">
           <MatchTicker />
         </div>
@@ -108,7 +131,7 @@ export default function Home() {
 
       {/* Stats bar */}
       {profile && (
-        <section className="max-w-7xl mx-auto px-4 mb-6 md:mb-10">
+        <section className={`${PHONE_HIDE} max-w-7xl mx-auto px-4 mb-6 md:mb-10`}>
           {/* Always 4 across, mobile included — these read as one strip of
               stats, not two rows of two. Mobile gets tighter padding/gap and
               a smaller number so four columns actually have room; md+ steps
@@ -146,7 +169,7 @@ export default function Home() {
             column now sits underneath, giving the grid the full width. */}
         <div className="flex flex-col lg:flex-row gap-8">
           <div className="flex-1 min-w-0">
-            <h2 className="text-xl md:text-2xl font-bold text-white mb-4 md:mb-6">Games</h2>
+            <h2 className={`${PHONE_HIDE} text-xl md:text-2xl font-bold text-white mb-4 md:mb-6`}>Games</h2>
             {/* Column counts are chosen from the width this grid ACTUALLY
                 gets — after the 240px left nav, and after the side column
                 from xl — not from the raw viewport:
@@ -183,17 +206,20 @@ export default function Home() {
             {/* Invite — mobile only, above the daily spin. The desktop copy lives
                 in the sidebar below How It Works; the two are complementary so
                 exactly one renders at any width. */}
-            <div className="lg:hidden mt-5 max-w-sm mx-auto sm:mx-0 sm:max-w-none">
+            <div className={`${PHONE_HIDE} lg:hidden mt-5 max-w-sm mx-auto sm:mx-0 sm:max-w-none`}>
               <ReferralCard variant="compact" />
             </div>
 
             {/* Daily spin — mobile/tablet only; desktop shows it in the hero instead */}
-            <div className="lg:hidden mt-5 max-w-sm mx-auto sm:mx-0 sm:max-w-none">
+            <div className={`${PHONE_HIDE} lg:hidden mt-5 max-w-sm mx-auto sm:mx-0 sm:max-w-none`}>
               <DailySpinWidget profile={profile} />
             </div>
           </div>
 
           <div className="lg:w-72 flex flex-col gap-5 lg:pt-[3.5rem]">
+            {/* Wrapped rather than the column hidden — How It Works sits in this
+                same column and stays on phones. */}
+            <div className={PHONE_HIDE}>
             {profile ? (
               <DailyBonus />
             ) : (
@@ -209,6 +235,7 @@ export default function Home() {
                 </Link>
               </div>
             )}
+            </div>
             <div className="bg-surface border border-surfaceLight rounded-2xl p-5">
               <h3 className="font-bold text-white mb-3">How It Works</h3>
               <ul className="text-sm text-muted space-y-2">

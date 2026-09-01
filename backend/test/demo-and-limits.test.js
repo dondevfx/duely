@@ -551,3 +551,45 @@ test('the leaderboard tabs can shrink instead of running off the row', () => {
   assert.match(src, /<span className="truncate">\{\(t\.icon \|\| t\.diamondTab\)/);
   assert.match(src, /<StatIcon kind="elo" size=\{16\} className="shrink-0" \/>/);
 });
+
+// ── The stripped-back phone Home ────────────────────────────────────────────
+
+test('the phone Home is one switch, not a sprinkling of classes', () => {
+  // This is a trial the owner may want reversed, so flipping PHONE_MINIMAL to
+  // false has to restore the old layout exactly, with nothing left to hunt for.
+  const src = fe('pages', 'Home.jsx');
+  assert.match(src, /const PHONE_MINIMAL = true;/);
+  assert.match(src, /const PHONE_HIDE\s+= PHONE_MINIMAL \? 'hidden sm:block' : '';/);
+  assert.match(src, /const PHONE_HIDE_FLEX = PHONE_MINIMAL \? 'hidden sm:flex'  : 'flex';/);
+
+  // Everything that goes must go through the switch — a literal `hidden sm:`
+  // anywhere in this file would survive the flag being turned off.
+  const strays = [...src.matchAll(/className="[^"]*\bhidden sm:(block|flex)\b[^"]*"/g)];
+  assert.deepEqual(strays.map((m) => m[0]), [],
+    'a section is hidden by a literal class instead of the switch');
+
+  // The seven pieces that come off the phone.
+  assert.equal((src.match(/\$\{PHONE_HIDE\}/g) || []).length, 6, 'expected six PHONE_HIDE wrappers');
+  assert.match(src, /<div className=\{PHONE_HIDE\}>/, 'the diamond bonus wrapper');
+  assert.equal((src.match(/\$\{PHONE_HIDE_FLEX\}/g) || []).length, 1, 'the hero button row');
+
+  // How It Works stays, so it must NOT be inside a hidden wrapper.
+  const how = src.indexOf('How It Works');
+  const before = src.slice(Math.max(0, how - 400), how);
+  assert.doesNotMatch(before, /PHONE_HIDE/, 'How It Works was hidden along with the rest');
+});
+
+test('the cut is at sm, so tablets keep the full Home', () => {
+  // An iPad mini is 744px across in portrait, which is BELOW the md breakpoint
+  // the mobile navigation uses — cutting there would have stripped a tablet.
+  const src = fe('pages', 'Home.jsx');
+  assert.match(src, /'hidden sm:block'/);
+  assert.doesNotMatch(src, /'hidden md:block'/, 'md would catch an iPad mini');
+
+  // The Games tab leaves the phone drawer only. The desktop sidebar is
+  // hidden md:flex and is not touched.
+  const nav = fe('components', 'Navbar.jsx');
+  assert.match(nav, /NAV_LINKS\.filter\(item => item\.to !== '\/games'\)\.map/);
+  assert.match(fe('components', 'LeftSidebar.jsx'), /route: '\/games'/,
+    'the desktop sidebar must keep its Games tab');
+});

@@ -529,7 +529,13 @@ export default function Navbar() {
             {/* Nav section */}
             <div>
               <p className="text-xs text-muted uppercase tracking-widest font-semibold px-2 mb-2">Menu</p>
-              {NAV_LINKS.map(item => (
+              {/* Games is dropped from the phone drawer while the stripped-back
+                  Home is being tried — the games are listed further down this
+                  same drawer and on Home itself, so the tab was a third route
+                  to the same place. Paired with PHONE_MINIMAL in Home.jsx; both
+                  come back together. This drawer is only ever rendered below
+                  md, so no other size is affected. */}
+              {NAV_LINKS.filter(item => item.to !== '/games').map(item => (
                 <NavLink key={item.to} to={item.to} end={item.to === '/'}
                   onClick={() => setMobileMenuOpen(false)}
                   className={({ isActive }) =>
