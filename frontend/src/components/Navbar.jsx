@@ -16,8 +16,8 @@ import Avatar from './Avatar';
 const NAV_LINKS = [
   { ui: 'home',        label: 'Home',        to: '/' },
   { ui: 'games',       label: 'Games',       to: '/games' },
-  { ui: 'rewards',     label: 'Rewards',     to: '/rewards' },
   { ui: 'profile',     label: 'Profile',     to: '/profile' },
+  { ui: 'rewards',     label: 'Rewards',     to: '/rewards' },
   { ui: 'leaderboard', label: 'Leaderboard', to: '/leaderboard' },
   { ui: 'wallet',      label: 'Wallet',      to: '/wallet' },
   { ui: 'tip',         label: 'Tip',         to: '/tip' },

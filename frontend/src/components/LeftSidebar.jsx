@@ -24,8 +24,8 @@ const GAMES = [
 const NAV = [
   { ui: 'home',        label: 'Home',        route: '/' },
   { ui: 'games',       label: 'Games',       route: '/games' },
-  { ui: 'rewards',     label: 'Rewards',     route: '/rewards' },
   { ui: 'profile',     label: 'Profile',     route: '/profile' },
+  { ui: 'rewards',     label: 'Rewards',     route: '/rewards' },
   { ui: 'leaderboard', label: 'Leaderboard', route: '/leaderboard' },
   { ui: 'wallet',      label: 'Wallet',      route: '/wallet' },
   { ui: 'tip',         label: 'Tip',         route: '/tip' },
