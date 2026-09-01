@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
 import { supabase } from '../utils/supabase';
 import VerifyModal from '../components/VerifyModal';
+import VerifyEmailModal from '../components/VerifyEmailModal';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
@@ -129,6 +130,7 @@ export default function Wallet() {
   const navigate = useNavigate();
   // Shown only when a bank withdrawal is refused for want of verification.
   const [verifyPrompt, setVerifyPrompt] = useState(null);
+  const [emailPrompt, setEmailPrompt]   = useState(false);
   const { profile, session, refreshProfile, verifyMfaStepUp } = useAuth();
 
   // Deposit state
@@ -273,6 +275,14 @@ export default function Wallet() {
       // Only bank withdrawals can return this. An unverified player is not
       // being told "no" — they are being told what to do, so the flow opens
       // right here rather than sending them off to find a page.
+      // Same treatment as kycRequired below: a withdrawal screen is the wrong
+      // place to print "verify your email" and stop, because the link the
+      // player needs next is not on this page and they have no reason to know
+      // where it is. Open the fix instead.
+      if (err.data?.emailVerificationRequired) {
+        setEmailPrompt(true);
+        return;
+      }
       if (err.data?.kycRequired) {
         api.get('/kyc/status')
           .then(k => setVerifyPrompt({ status: k.status, rejectionReason: k.rejectionReason, configured: k.configured }))
@@ -301,6 +311,7 @@ export default function Wallet() {
   return (
     <div className="min-h-screen bg-bg pt-16" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}>
       <div className="max-w-2xl mx-auto px-4 py-12">
+        {emailPrompt && <VerifyEmailModal onClose={() => setEmailPrompt(false)} />}
         {verifyPrompt && (
           <VerifyModal
             status={verifyPrompt.status}

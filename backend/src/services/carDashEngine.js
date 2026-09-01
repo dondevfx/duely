@@ -538,14 +538,14 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
     // A free run still counts toward the record — see the note in
     // blackjackEngine. Only the rating is gated on `ranked`.
     if (!winner.isBot) {
-      if (ranked) { try { await applyEloUpdate(supabase, winner.userId, newWinnerElo, true); } catch {} }
+      if (ranked) { try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch {} }
       try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch {}
       // Streaks are PvP-only — applyMatchStreaks no-ops on bot matches.
       try { await applyMatchStreaks(supabase, winner, loser); } catch {}
     }
 
     if (!loser.isBot) {
-      if (ranked) { try { await applyEloUpdate(supabase, loser.userId, newLoserElo, true); } catch {} }
+      if (ranked) { try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch {} }
       try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch {}
     }
     // Highscore is stored in seconds survived

@@ -386,7 +386,16 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
           : await freshRatings(supabase, BOT, player);
         humanNewElo = humanWon ? newWinnerElo : newLoserElo;
         humanEloBefore = humanWon ? winnerBefore : loserBefore;
-        try { await supabase.from('profiles').update({ elo: humanNewElo }).eq('id', player.userId); } catch (e) { console.error('[blockBlastEngine] elo update:', e.message); }
+        // Through applyEloUpdate so the placement guard applies here too. A
+        // raw update skips it, which is how a brand-new account's rating moved
+        // on a bot match while every screen still called it Unranked. When the
+        // guard holds the write back, the reported rating is reset to the one
+        // already stored — otherwise the card announces a swing the database
+        // never took.
+        try {
+          const r = await applyEloUpdate(supabase, player.userId, humanNewElo);
+          if (!r?.applied) humanNewElo = humanEloBefore;
+        } catch (e) { console.error('[blockBlastEngine] elo update:', e.message); }
         try { await supabase.rpc(humanWon ? 'increment_win' : 'increment_loss', { uid: player.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
         // Beating a bot no longer builds a streak — streaks are a PvP record.
         if (false) {
@@ -525,7 +534,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
     // blackjackEngine. Only the rating is gated on the entry fee.
     if (supabase && !winner.isBot) {
       if (!isFree) {
-        try { await applyEloUpdate(supabase, winner.userId, newWinnerElo, true); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
+        try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
       }
       try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
       // Streaks are PvP-only — applyMatchStreaks no-ops on bot matches.
@@ -534,7 +543,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
 
     if (supabase && !loser.isBot) {
       if (!isFree) {
-        try { await applyEloUpdate(supabase, loser.userId, newLoserElo, true); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
+        try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
       }
       try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
     }

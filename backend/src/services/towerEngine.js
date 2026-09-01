@@ -367,7 +367,16 @@ async function handleTowerComplete(io, supabase, roomId, socketId, score = 0, ta
       eloBefore = humanWon ? r.winnerBefore : r.loserBefore;
       const { newWinnerElo, newLoserElo } = r;
       humanNewElo = humanWon ? newWinnerElo : newLoserElo;
-      try { await supabase.from('profiles').update({ elo: humanNewElo }).eq('id', player.userId); } catch (e) { console.error('[tower] elo:', e.message); }
+      // Through applyEloUpdate so the placement guard applies here too. A
+      // raw update skips it, which is how a brand-new account's rating moved
+      // on a bot match while every screen still called it Unranked. When the
+      // guard holds the write back, the reported rating is reset to the one
+      // already stored — otherwise the card announces a swing the database
+      // never took.
+      try {
+        const r = await applyEloUpdate(supabase, player.userId, humanNewElo);
+        if (!r?.applied) humanNewElo = eloBefore;
+      } catch (e) { console.error('[tower] elo:', e.message); }
       try { await supabase.rpc(humanWon ? 'increment_win' : 'increment_loss', { uid: player.userId }); } catch (e) { console.error('[tower] rpc:', e.message); }
       try {
         await supabase.from('matches').insert({
@@ -515,14 +524,14 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
     // the stake.
     if (!winner.isBot) {
       if (!isFree) {
-        try { await applyEloUpdate(supabase, winner.userId, newWinnerElo, true); } catch {}
+        try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch {}
       }
       try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch {}
       // Streaks already applied above, before the emit.
     }
     if (!loser.isBot) {
       if (!isFree) {
-        try { await applyEloUpdate(supabase, loser.userId, newLoserElo, true); } catch {}
+        try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch {}
       }
       try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch {}
     }

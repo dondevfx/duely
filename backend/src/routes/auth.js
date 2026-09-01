@@ -321,14 +321,50 @@ module.exports = function authRoutes(supabase) {
 
   // ── Friends ─────────────────────────────────────────────────────────
 
+  // ── Age + Terms acceptance, per account ───────────────────────────
+  // Run in Supabase SQL editor (PENDING_SQL section 20):
+  //   ALTER TABLE profiles ADD COLUMN IF NOT EXISTS tos_accepted_at timestamptz;
+  //
+  // This used to live in localStorage under a single key, which made it a
+  // property of the BROWSER rather than of the person agreeing. A second
+  // account signing up on a device that had already accepted was never asked,
+  // so there was no record that they agreed to anything — and the same person
+  // on a new phone was asked again. An agreement to terms belongs to the
+  // account that made it.
+
+  router.get('/tos-status', requireAuth, async (req, res) => {
+    const { data, error } = await supabase
+      .from('profiles').select('tos_accepted_at').eq('id', req.user.id).single();
+    // 'unknown', not 'false'. Until the migration is run this errors, and
+    // answering false would show the modal to everyone with no way to dismiss
+    // it — the accept below would fail on the same missing column. The client
+    // falls back to its old local flag when it hears unknown, so a pending
+    // migration leaves behaviour exactly as it was.
+    if (error) return res.json({ accepted: null });
+    res.json({ accepted: !!data.tos_accepted_at, acceptedAt: data.tos_accepted_at || null });
+  });
+
+  router.post('/tos-accept', requireAuth, async (req, res) => {
+    // First acceptance wins — .is(null) keeps the original timestamp rather
+    // than moving it every time the endpoint is called. When it matters what
+    // someone agreed to, it matters WHEN they agreed to it.
+    const { error } = await supabase
+      .from('profiles')
+      .update({ tos_accepted_at: new Date().toISOString() })
+      .eq('id', req.user.id)
+      .is('tos_accepted_at', null);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  });
+
   router.get('/friends', requireAuth, async (req, res) => {
     const myId = req.user.id;
     const { data, error } = await supabase
       .from('friends')
       .select(`
         id, status, created_at,
-        requester:requester_id(id, username, elo, profile_color, current_streak),
-        addressee:addressee_id(id, username, elo, profile_color, current_streak)
+        requester:requester_id(id, username, elo, wins, losses, avatar_url, profile_color, current_streak),
+        addressee:addressee_id(id, username, elo, wins, losses, avatar_url, profile_color, current_streak)
       `)
       .or(`requester_id.eq.${myId},addressee_id.eq.${myId}`)
       .order('created_at', { ascending: false });

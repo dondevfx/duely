@@ -7,11 +7,12 @@ import { fmtCoins, fmtExact } from '../utils/format';
 import { supabase } from '../utils/supabase';
 import QRCode from 'react-qr-code';
 import GlowButton from '../components/GlowButton';
-import { getRank } from '../utils/ranks';
+import { getDisplayRank, isRanked, placementMatches } from '../utils/ranks';
 import { usePageReady } from '../hooks/usePageReady';
 import CoinIcon from '../components/CoinIcon';
 import GameIcon from '../components/GameIcon';
 import RankIcon from '../components/RankIcon';
+import Avatar from '../components/Avatar';
 import UiIcon, { LockIcon } from '../components/UiIcon';
 import DiamondIcon from '../components/DiamondIcon';
 import { ProfilePopup } from '../components/ChatSidebar';
@@ -1086,13 +1087,11 @@ function FriendsPanel({ myId, myUsername, myReferralCode, activeGames }) {
             const p = f.requester;
             return (
               <div key={f.id} className="flex items-center gap-2 mb-2 last:mb-0">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0"
-                  style={{ backgroundColor: `${p?.profile_color || '#1250B4'}22`, border: `1.5px solid ${p?.profile_color || '#1250B4'}`, color: p?.profile_color || '#1250B4' }}>
-                  {(p?.username || '?')[0].toUpperCase()}
-                </div>
+                <Avatar username={p?.username} avatarUrl={p?.avatar_url}
+                  color={p?.profile_color || '#1250B4'} className="w-8 h-8 shrink-0" textClassName="text-xs" />
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-bold text-white truncate">{p?.username}</div>
-                  <div className="text-[0.625rem] text-muted">{p?.elo} ELO</div>
+                  <div className="text-[0.625rem] text-muted">{isRanked(p) ? `${p?.elo} ELO` : 'Unranked'}</div>
                 </div>
                 <button onClick={() => accept(f.id)} className="text-[0.625rem] px-2 py-1 bg-success/15 text-success border border-success/30 rounded-lg hover:bg-success/25 transition-all">✓</button>
                 <button onClick={() => remove(f.id)} className="text-[0.625rem] px-2 py-1 bg-danger/15 text-danger border border-danger/30 rounded-lg hover:bg-danger/25 transition-all">✕</button>
@@ -1137,10 +1136,9 @@ function FriendsPanel({ myId, myUsername, myReferralCode, activeGames }) {
                   className="relative shrink-0 cursor-pointer"
                   onClick={() => setViewingFriend({ id: p?.id, username: p?.username })}
                 >
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-black hover:ring-2 hover:ring-primary/50 transition-all"
-                    style={{ backgroundColor: `${p?.profile_color || '#1250B4'}22`, border: `1.5px solid ${p?.profile_color || '#1250B4'}`, color: p?.profile_color || '#1250B4' }}>
-                    {(p?.username || '?')[0].toUpperCase()}
-                  </div>
+                  <Avatar username={p?.username} avatarUrl={p?.avatar_url}
+                    color={p?.profile_color || '#1250B4'} className="w-9 h-9 hover:ring-2 hover:ring-primary/50 transition-all"
+                    textClassName="text-xs" />
                   {game && <div className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-red-500 animate-pulse border border-bg" />}
                 </button>
                 <button
@@ -1148,7 +1146,7 @@ function FriendsPanel({ myId, myUsername, myReferralCode, activeGames }) {
                   onClick={() => setViewingFriend({ id: p?.id, username: p?.username })}
                 >
                   <div className="text-xs font-bold text-white truncate hover:text-primary transition-colors">{p?.username}</div>
-                  <div className="text-[0.625rem] text-muted">{p?.elo} ELO{game ? ' · In game' : ''}</div>
+                  <div className="text-[0.625rem] text-muted">{isRanked(p) ? `${p?.elo} ELO` : 'Unranked'}{game ? ' · In game' : ''}</div>
                 </button>
                 <div className="flex gap-1 items-center">
                   {game && (
@@ -1513,8 +1511,8 @@ export default function Profile() {
                 className="hidden"
               />
               <span className="absolute -bottom-1 -right-1 text-2xl leading-none drop-shadow-lg pointer-events-none"
-                title={getRank(profile.elo).name}>
-                <RankIcon rank={getRank(profile.elo)} size={26} />
+                title={getDisplayRank(profile).name}>
+                <RankIcon rank={getDisplayRank(profile)} size={26} />
               </span>
               {(profile.current_streak ?? 0) >= 1 && (
                 <span
@@ -1624,8 +1622,8 @@ export default function Profile() {
                 </div>
               )}
               {error && <p className="text-danger text-sm mt-1">{error}</p>}
-              <p className="text-sm font-bold mt-0.5" style={{ color: getRank(profile.elo).color }}>
-                <RankIcon rank={getRank(profile.elo)} size={18} /> {getRank(profile.elo).name}
+              <p className="text-sm font-bold mt-0.5" style={{ color: getDisplayRank(profile).color }}>
+                <RankIcon rank={getDisplayRank(profile)} size={18} /> {getDisplayRank(profile).name}
               </p>
               <p className="text-muted text-xs mt-0.5">
                 Member since {new Date(profile.created_at).toLocaleDateString()}
@@ -1684,14 +1682,20 @@ export default function Profile() {
             </div>
 
             <div className="bg-bg rounded-xl p-3 text-center overflow-hidden"
-              style={{ boxShadow: `inset 0 0 20px ${getRank(profile.elo).glow}` }}>
+              style={{ boxShadow: `inset 0 0 20px ${getDisplayRank(profile).glow}` }}>
               {/* Smaller than the other cards' text on purpose: this is the
                   only value that is a WORD, and "Champion" at text-xl does
                   not fit a half-width cell. truncate is the backstop. */}
-              <FitText className="text-base sm:text-xl font-black" style={{ color: getRank(profile.elo).color }}>
-                <RankIcon rank={getRank(profile.elo)} size={18} /> {getRank(profile.elo).name}
+              <FitText className="text-base sm:text-xl font-black" style={{ color: getDisplayRank(profile).color }}>
+                <RankIcon rank={getDisplayRank(profile)} size={18} /> {getDisplayRank(profile).name}
               </FitText>
-              <div className="text-xs text-muted mt-0.5">{profile.elo} ELO</div>
+              {/* No rating until there is a rank to attach it to. A new
+                  account showed "1000 ELO" under an Unranked badge, which
+                  reads as a rating the player has — the placement count is
+                  the honest thing to show while it is still being earned. */}
+              <div className="text-xs text-muted mt-0.5">
+                {isRanked(profile) ? `${profile.elo} ELO` : `${placementMatches(profile)}/3 placement`}
+              </div>
             </div>
 
             {[

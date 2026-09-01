@@ -92,7 +92,12 @@ function getInitialChatOpen() {
 
 function Shell() {
   const { session, showSaveLogin, setShowSaveLogin, mfaPending, loading } = useAuth();
-  const [tosAccepted, setTosAccepted] = useState(useTosAccepted());
+  // Acceptance is the account's, so it is fetched rather than read locally,
+  // and starts as null (not known yet). The local override is what an accept
+  // in this session sets, so the modal closes without waiting for a re-fetch.
+  const tosServer = useTosAccepted(session);
+  const [tosAcceptedNow, setTosAcceptedNow] = useState(false);
+  const tosAccepted = tosAcceptedNow || tosServer === true;
   const [chatOpen, setChatOpen] = useState(getInitialChatOpen);
   const navigate = useNavigate();
   const location = useLocation();
@@ -130,7 +135,9 @@ function Shell() {
     try { localStorage.setItem('worldChatOpen', String(next)); } catch {}
   }
 
-  const tosPending = session && !tosAccepted;
+  // Nothing shows while the answer is unknown. Defaulting to "pending" would
+  // flash a full-screen legal modal at every returning player on every load.
+  const tosPending = !!session && tosServer !== null && !tosAccepted;
   // Block nav whenever MFA is pending (session may be null during saved-login MFA)
   const navBlocked = tosPending || mfaPending;
 
@@ -195,11 +202,15 @@ function Shell() {
       <ForfeitToast />
       <InviteToasts />
       <ReconnectOverlay />
-      {tosPending && <AgeToSModal onAccept={() => setTosAccepted(true)} />}
+      {tosPending && <AgeToSModal onAccept={() => setTosAcceptedNow(true)} />}
       {/* After the ToS, never beside it. Both are z-50 full-screen modals, so
           without this gate a new account would get the gift painted over the
-          age check — and the gift is the one that can wait. */}
-      {!tosPending && <SignupRewardModal />}
+          age check — and the gift is the one that can wait.
+          Gated on ACCEPTED rather than on "not pending": acceptance is now
+          fetched, and it is briefly neither accepted nor pending while that
+          request is in flight — which is exactly when a new account would have
+          slipped the gift in ahead of the age check. */}
+      {tosAccepted && <SignupRewardModal />}
       {showSaveLogin && <SaveLoginPrompt onDone={() => setShowSaveLogin(false)} />}
     </div>
   );

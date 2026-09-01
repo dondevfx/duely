@@ -53,7 +53,12 @@ test('Word VS writes a rating only when it has one', () => {
   // hide a change that still happened.
   const src = read('wordleEngine.js');
   for (const [who, col] of [['newWinnerElo', 'winner'], ['newLoserElo', 'loser']]) {
-    const at = src.indexOf(`update({ elo: ${who} })`);
+    // Through applyEloUpdate now, not a raw update on the column. This engine
+    // was the only one writing elo directly, which also made it the only one
+    // exempt from the placement guard that lives in there — see
+    // new-account-flow.test.js. The rule this test protects is unchanged: the
+    // write must be gated on the rating existing.
+    const at = src.indexOf(`applyEloUpdate(supabase, ${col}.userId, ${who})`);
     assert.ok(at > 0, `${who} update not found`);
     const before = src.slice(Math.max(0, at - 220), at);
     assert.match(before, new RegExp(`if \\(${who} != null\\)`),

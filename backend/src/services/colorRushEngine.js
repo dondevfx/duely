@@ -515,12 +515,12 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
   Promise.resolve().then(async () => {
     if (!supabase) return;
     if (!winner.isBot) {
-      if (ranked) { try { await applyEloUpdate(supabase, winner.userId, newWinnerElo, true); } catch {} }
+      if (ranked) { try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch {} }
       try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch {}
       try { await applyMatchStreaks(supabase, winner, loser); } catch {}
     }
     if (!loser.isBot) {
-      if (ranked) { try { await applyEloUpdate(supabase, loser.userId, newLoserElo, true); } catch {} }
+      if (ranked) { try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch {} }
       try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch {}
     }
     if (!winner.isBot) await updateHighscore(supabase, winner.userId, 'colorRush', winnerScore).catch(() => {});

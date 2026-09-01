@@ -263,7 +263,14 @@ module.exports = function walletRoutes(supabase, io) {
       return { status: 403, body: { error: 'Demo accounts cannot withdraw.' } };
     }
     if (!req.user.email_confirmed_at) {
-      return { status: 403, body: { error: 'Please verify your email before withdrawing.' } };
+      // Flagged, the same way kycRequired is, so the page can open the fix
+      // instead of printing a sentence. Being told to verify an email is
+      // useless without a way to send the link — and the player has no reason
+      // to know where that lives.
+      return {
+        status: 403,
+        body: { error: 'Please verify your email before withdrawing.', emailVerificationRequired: true },
+      };
     }
 
     // Belt-and-suspenders on top of the socket-level ban gate: that gate
@@ -1002,11 +1009,28 @@ module.exports = function walletRoutes(supabase, io) {
           { user_id: recipient.id,  type: 'tip_received', amount_c: tipAmount, status: 'confirmed' },
         ]).then().catch(e => console.error('[tx] coin tip insert failed:', e.message));
       }
-      // Notify recipient in real time if they're connected
+      // Notify recipient in real time if they're connected.
+      //
+      // The sender's picture and colour ride along so the toast can show a
+      // face beside the name, the same way the friend-request and game-invite
+      // toasts already do. Looked up rather than taken from req.user: that is
+      // the auth user, which carries no profile picture. Failing the lookup
+      // costs the avatar, never the notification — the money already moved.
       if (io) {
+        let fromName = req.user.username || 'Someone';
+        let fromAvatar = null, fromColor = null;
+        try {
+          const { data: sender } = await supabase.from('profiles')
+            .select('username, avatar_url, profile_color').eq('id', req.user.id).single();
+          if (sender) {
+            fromName   = sender.username || fromName;
+            fromAvatar = sender.avatar_url ?? null;
+            fromColor  = sender.profile_color ?? null;
+          }
+        } catch { /* the toast still says who, just without a face */ }
         for (const [, sock] of io.sockets.sockets) {
           if (sock._authenticatedUserId === recipient.id) {
-            sock.emit('tip_received', { amount: tipAmount, currency, from: req.user.username || 'Someone' });
+            sock.emit('tip_received', { amount: tipAmount, currency, from: fromName, fromAvatar, fromColor });
             break;
           }
         }

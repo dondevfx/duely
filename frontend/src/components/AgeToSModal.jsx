@@ -1,11 +1,51 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import GlowButton from './GlowButton';
+import { api } from '../utils/api';
 
 const TOS_KEY = 'tos_v1_accepted';
 
-export function useTosAccepted() {
-  return localStorage.getItem(TOS_KEY) === 'true';
+/**
+ * Has THIS ACCOUNT agreed to the age check and the terms?
+ *
+ * It used to be one localStorage key, which made acceptance a property of the
+ * browser rather than of the person agreeing. A second account signing up on a
+ * device that had already accepted was never asked — so there was no record
+ * that they agreed to anything — and the same person on a new phone was asked
+ * twice. The answer now comes from the account's own row.
+ *
+ * Three states, not two. `null` means not known yet, and the caller must show
+ * nothing while it holds: defaulting to "not accepted" flashes a full-screen
+ * legal modal at every returning player on every page load, and defaulting to
+ * "accepted" lets a new account through without ever being asked.
+ *
+ * The local key survives as the fallback for exactly one case — the server
+ * answering `accepted: null`, which is what it says while PENDING_SQL section
+ * 20 has not been run. Behaviour then is what it was before this change.
+ */
+export function useTosAccepted(session) {
+  const [accepted, setAccepted] = useState(null);
+
+  useEffect(() => {
+    if (!session) { setAccepted(null); return undefined; }
+    let alive = true;
+    api.get('/auth/tos-status')
+      .then(d => {
+        if (!alive) return;
+        if (d?.accepted === null || d?.accepted === undefined) {
+          setAccepted(localStorage.getItem(TOS_KEY) === 'true');
+        } else {
+          setAccepted(!!d.accepted);
+        }
+      })
+      // A failed check must not lock someone out of the site behind a modal
+      // whose accept button would fail the same way. Fall back to the local
+      // flag, same as an un-migrated server.
+      .catch(() => { if (alive) setAccepted(localStorage.getItem(TOS_KEY) === 'true'); });
+    return () => { alive = false; };
+  }, [session]);
+
+  return accepted;
 }
 
 export default function AgeToSModal({ onAccept }) {
@@ -14,7 +54,12 @@ export default function AgeToSModal({ onAccept }) {
 
   function accept() {
     if (!age || !tos) return;
+    // Optimistic: the modal closes on the click. A slow or failed write must
+    // not leave someone staring at a legal wall they already agreed to — the
+    // status check runs again next load, so an unrecorded acceptance costs one
+    // repeat of this dialog rather than a locked-out account.
     localStorage.setItem(TOS_KEY, 'true');
+    api.post('/auth/tos-accept').catch(() => {});
     onAccept();
   }
 

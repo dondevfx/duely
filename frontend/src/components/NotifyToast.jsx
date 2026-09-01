@@ -3,6 +3,7 @@ import DiamondIcon from './DiamondIcon';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import CoinIcon from './CoinIcon';
+import Avatar from './Avatar';
 import { playTip, playDeposit } from '../utils/sound';
 
 function fmt(n) {
@@ -29,9 +30,9 @@ export default function NotifyToast() {
   useEffect(() => {
     if (!socket) return;
 
-    const onTip = ({ amount, currency, from }) => {
+    const onTip = ({ amount, currency, from, fromAvatar, fromColor }) => {
       playTip();
-      push({ kind: 'tip', amount, currency: currency || 'coins', from });
+      push({ kind: 'tip', amount, currency: currency || 'coins', from, fromAvatar, fromColor });
       refreshProfile();
       setTimeout(refreshProfile, 1500);
     };
@@ -65,10 +66,28 @@ export default function NotifyToast() {
             onClick={() => dismiss(t.id)}
             className="pointer-events-auto cursor-pointer animate-slide-down bg-surface border border-success/40 rounded-xl px-4 py-3 shadow-glow min-w-[220px] max-w-[300px]"
           >
-            <div className="text-sm font-black text-white">
-              {t.kind === 'deposit' ? '💰 Deposit received' : `💸 Tip from ${t.from || 'Someone'}`}
-            </div>
-            <div className="text-success font-bold text-base mt-0.5">+{amountEl}</div>
+            {/* A tip comes FROM someone, so it shows their face — the same
+                treatment the friend-request and game-invite toasts already
+                give a sender. A deposit comes from nobody, so it keeps its
+                single line. */}
+            {t.kind === 'deposit' ? (
+              <>
+                <div className="text-sm font-black text-white">💰 Deposit received</div>
+                <div className="text-success font-bold text-base mt-0.5">+{amountEl}</div>
+              </>
+            ) : (
+              <div className="flex items-center gap-2.5">
+                <Avatar
+                  username={t.from} avatarUrl={t.fromAvatar}
+                  color={t.fromColor || '#1250B4'}
+                  className="w-9 h-9 shrink-0" textClassName="text-sm"
+                />
+                <div className="min-w-0">
+                  <div className="text-sm font-black text-white truncate">Tip from {t.from || 'Someone'}</div>
+                  <div className="text-success font-bold text-base mt-0.5">+{amountEl}</div>
+                </div>
+              </div>
+            )}
           </div>
         );
       })}

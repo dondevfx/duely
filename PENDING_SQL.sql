@@ -881,3 +881,29 @@ UPDATE profiles
 --     FROM profiles;
 --   SELECT count(*), sum(crypto_amount) FROM transactions
 --    WHERE type = 'diamond_bonus' AND crypto_amount = 5000;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 20. Age + Terms acceptance, per account
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Acceptance used to live in localStorage under one key, which made it a
+-- property of the BROWSER rather than of the person agreeing. A second account
+-- signing up on a device that had already accepted was never asked — so there
+-- was no record they agreed to anything — and the same person on a new phone
+-- was asked again. An agreement to terms belongs to the account that made it.
+
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS tos_accepted_at timestamptz;
+
+-- NO backfill here, and that is the difference from section 19. Stamping
+-- existing accounts would be recording an agreement they never made, on the
+-- one column where the record is the entire point. Everyone is asked once,
+-- which is the correct outcome: nobody has agreed as an ACCOUNT yet.
+
+-- Until this section is run, /api/auth/tos-status answers "unknown" and the
+-- client falls back to the old localStorage flag, so behaviour is unchanged
+-- rather than broken. Nothing else selects the column.
+
+-- Check:
+--   SELECT count(*) FILTER (WHERE tos_accepted_at IS NULL) AS not_yet,
+--          count(*) FILTER (WHERE tos_accepted_at IS NOT NULL) AS accepted
+--     FROM profiles;

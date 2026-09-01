@@ -22,9 +22,8 @@ import { GiftIcon } from './UiIcon';
 export default function SignupRewardModal() {
   const { session, refreshProfile } = useAuth();
 
-  const [amount, setAmount]   = useState(null);   // null = nothing to show
+  const [amount, setAmount]     = useState(null);   // null = nothing to show
   const [claiming, setClaiming] = useState(false);
-  const [claimed, setClaimed]   = useState(false);
   const [error, setError]       = useState(null);
   const [closed, setClosed]     = useState(false);
 
@@ -44,9 +43,12 @@ export default function SignupRewardModal() {
     setClaiming(true);
     setError(null);
     try {
-      const res = await api.post('/bonus/signup-claim');
-      setAmount(res.credited ?? amount);
-      setClaimed(true);
+      await api.post('/bonus/signup-claim');
+      // Straight to the site. There was a second panel here confirming the
+      // claim, and it was a step for its own sake — the balance in the navbar
+      // updates behind this the moment it closes, which says the same thing
+      // without another button to press.
+      setClosed(true);
       refreshProfile();
     } catch (e) {
       setError(e.message || 'Could not claim. Please try again.');
@@ -63,36 +65,21 @@ export default function SignupRewardModal() {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
       <div className="w-full max-w-sm bg-surface border border-border rounded-2xl p-7 shadow-2xl text-center animate-scale-in">
         <div className="flex justify-center mb-4">
-          <GiftIcon size={76} className={claimed ? '' : 'animate-gift-bob'} />
+          <GiftIcon size={76} className="animate-gift-bob" />
         </div>
 
-        {!claimed ? (
-          <>
-            <h2 className="text-2xl font-black text-white mb-2">Thank You for Signing Up</h2>
-            <p className="text-muted text-sm mb-6">
-              Here is a welcome gift to get you started.
-            </p>
-            <div className="flex items-center justify-center gap-2 text-3xl font-black text-white mb-6">
-              <DiamondIcon size="0.9em" />
-              {amount.toLocaleString()}
-            </div>
-            <GlowButton onClick={claim} variant="primary" size="lg" className="w-full" disabled={claiming}>
-              {claiming ? 'Claiming…' : 'Claim'}
-            </GlowButton>
-            {error && <p className="text-danger text-sm mt-3">{error}</p>}
-          </>
-        ) : (
-          <>
-            <h2 className="text-2xl font-black text-white mb-2">Claimed</h2>
-            <p className="text-muted text-sm mb-6">
-              <span className="text-white font-bold">{amount.toLocaleString()}</span> diamonds
-              are in your balance. Spend them on any game.
-            </p>
-            <GlowButton onClick={() => setClosed(true)} variant="primary" size="lg" className="w-full">
-              Let's Play
-            </GlowButton>
-          </>
-        )}
+        <h2 className="text-2xl font-black text-white mb-2">Thank You for Signing Up</h2>
+        <p className="text-muted text-sm mb-6">
+          Here is a welcome gift to get you started.
+        </p>
+        <div className="flex items-center justify-center gap-2 text-3xl font-black text-white mb-6">
+          <DiamondIcon size="0.9em" />
+          {amount.toLocaleString()}
+        </div>
+        <GlowButton onClick={claim} variant="primary" size="lg" className="w-full" disabled={claiming}>
+          {claiming ? 'Claiming…' : 'Claim'}
+        </GlowButton>
+        {error && <p className="text-danger text-sm mt-3">{error}</p>}
       </div>
     </div>
   );

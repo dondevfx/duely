@@ -1908,9 +1908,14 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         const { data: prof } = await supabase.from('profiles').select('elo').eq('id', userId).single();
         const currentElo = prof?.elo ?? 1000;
         eloBefore = currentElo;
-        const { eloGain, eloLoss } = require('../services/eloService');
+        const { eloGain, eloLoss, applyEloUpdate } = require('../services/eloService');
         newElo = solved ? currentElo + eloGain() : Math.max(0, currentElo - eloLoss());
-        await supabase.from('profiles').update({ elo: newElo }).eq('id', userId);
+        // Same placement guard as every match settlement. Solo Word VS wrote
+        // the column directly and so was exempt from it — a new account's
+        // rating moved here while it was still Unranked everywhere else. If
+        // the guard holds, report the rating that is actually stored.
+        const r = await applyEloUpdate(supabase, userId, newElo);
+        if (!r?.applied) newElo = currentElo;
         await supabase.rpc(solved ? 'increment_win' : 'increment_loss', { uid: userId }).catch(() => {});
       } catch (e) {
         console.error('[wordle_solo] ELO update failed:', e.message);

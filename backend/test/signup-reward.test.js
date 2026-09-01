@@ -105,7 +105,21 @@ test('the modal shows nothing until the server says there is a gift', () => {
 test('the gift waits behind the age and ToS check', () => {
   // Both are z-50 full-screen modals. Without the gate the gift paints over
   // the age confirmation, and the gift is the one that can wait.
-  assert.match(APP, /\{!tosPending && <SignupRewardModal \/>\}/);
+  //
+  // On ACCEPTED, not on "not pending". Acceptance is fetched from the account
+  // now, and while that request is in flight it is neither accepted nor
+  // pending — the window a new account would have used to slip the gift in
+  // ahead of the age check.
+  assert.match(APP, /\{tosAccepted && <SignupRewardModal \/>\}/);
+  assert.ok(!/!tosPending && <SignupRewardModal/.test(APP));
+});
+
+test('the claim closes the popup rather than opening a second one', () => {
+  // The confirmation panel was a step for its own sake — the balance in the
+  // navbar updates behind it the moment it closes.
+  assert.match(MODAL, /setClosed\(true\)/);
+  assert.ok(!/setClaimed|Let's Play/.test(MODAL),
+    'claiming should return the player to the site, not to another button');
 });
 
 test('the present is a drawn icon, not an emoji', () => {

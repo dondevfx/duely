@@ -136,19 +136,24 @@ async function updateElo(supabase, winnerId, loserId, winnerElo, loserElo) {
 /**
  * Apply ELO update only after a player has completed placement (3+ total matches).
  * ELO updates happen BEFORE wins/losses are incremented, so compare against current total.
- * Pass force=true to skip the placement guard (e.g. paid matches).
+ *
+ * There is no force flag any more, and that is the point. It existed so a PAID
+ * match would move a rating even during placement, and four of the seven
+ * engines passed it — so a new account watched its rating swing while every
+ * screen correctly called it Unranked. Either placement gates the rating or it
+ * does not; a rating that moves before a player is ranked is a rating for a
+ * rank they do not have. Removing the parameter rather than defaulting it
+ * means no call site can quietly opt out again.
  */
-async function applyEloUpdate(supabase, userId, newElo, force = false) {
+async function applyEloUpdate(supabase, userId, newElo) {
   try {
-    if (!force) {
-      const { data } = await supabase
-        .from('profiles').select('wins, losses').eq('id', userId).single();
-      const total = (data?.wins ?? 0) + (data?.losses ?? 0);
-      // Still in placement — no ELO change. Reported so the caller can tell
-      // the player nothing moved, instead of showing a swing that was
-      // computed and then silently discarded.
-      if (total < 3) return { applied: false, placement: true };
-    }
+    const { data } = await supabase
+      .from('profiles').select('wins, losses').eq('id', userId).single();
+    const total = (data?.wins ?? 0) + (data?.losses ?? 0);
+    // Still in placement — no ELO change. Reported so the caller can tell
+    // the player nothing moved, instead of showing a swing that was
+    // computed and then silently discarded.
+    if (total < 3) return { applied: false, placement: true };
     await supabase.from('profiles').update({ elo: newElo }).eq('id', userId);
     return { applied: true };
   } catch (e) {
@@ -172,7 +177,7 @@ async function applyEloUpdate(supabase, userId, newElo, force = false) {
  * now stored and what was stored a moment ago — not a prediction. A skipped
  * placement write therefore reports 0, which is the truth.
  */
-async function applyEloAndMeasure(supabase, userId, newElo, force = false) {
+async function applyEloAndMeasure(supabase, userId, newElo) {
   if (!supabase || !userId) return { before: null, after: null, delta: null };
 
   const readElo = async () => {
@@ -183,7 +188,7 @@ async function applyEloAndMeasure(supabase, userId, newElo, force = false) {
   };
 
   const before = await readElo();
-  const res = await applyEloUpdate(supabase, userId, newElo, force);
+  const res = await applyEloUpdate(supabase, userId, newElo);
   if (!res?.applied) return { before, after: before, delta: 0, placement: !!res?.placement };
 
   const after = await readElo();

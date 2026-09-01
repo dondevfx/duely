@@ -434,8 +434,14 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
       if (!winner.isBot) {
         // Gated on the rating existing, so what the card reports and what the
         // database records can never disagree.
+        //
+        // Through applyEloUpdate, not a raw update. This was the one engine
+        // writing the column directly, which meant it also skipped the
+        // placement guard living in there — a brand-new account's rating moved
+        // on its first Word VS match while every screen still called it
+        // Unranked.
         if (newWinnerElo != null) {
-          await supabase.from('profiles').update({ elo: newWinnerElo }).eq('id', winner.userId).catch(() => {});
+          try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch {}
         }
         await supabase.rpc('increment_win', { uid: winner.userId }).catch(() => {});
         try {
@@ -447,7 +453,7 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
       }
       if (!loser.isBot) {
         if (newLoserElo != null) {
-          await supabase.from('profiles').update({ elo: newLoserElo }).eq('id', loser.userId).catch(() => {});
+          try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch {}
         }
         await supabase.rpc('increment_loss', { uid: loser.userId }).catch(() => {});
       }
