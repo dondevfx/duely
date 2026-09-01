@@ -241,7 +241,7 @@ export default function Home() {
             )}
             </div>
             <div className="bg-surface border border-surfaceLight rounded-2xl p-5">
-              <h3 className="font-bold text-white mb-3">How It Works</h3>
+              <h3 className="font-bold text-white mb-3">How Duely Works</h3>
               <ul className="text-sm text-muted space-y-2">
                 <li className="flex items-start gap-2">
                   <span className="text-primary">•</span>

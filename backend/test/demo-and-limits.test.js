@@ -583,10 +583,10 @@ test('the phone Home is one switch, not a sprinkling of classes', () => {
   assert.match(src, /<div className=\{PHONE_HIDE\}>/, 'the diamond bonus wrapper');
   assert.equal((src.match(/\$\{PHONE_HIDE_FLEX\}/g) || []).length, 1, 'the hero button row');
 
-  // How It Works stays, so it must NOT be inside a hidden wrapper.
-  const how = src.indexOf('How It Works');
+  // The How Duely Works card stays, so it must NOT be inside a hidden wrapper.
+  const how = src.indexOf('How Duely Works');
   const before = src.slice(Math.max(0, how - 400), how);
-  assert.doesNotMatch(before, /PHONE_HIDE/, 'How It Works was hidden along with the rest');
+  assert.doesNotMatch(before, /PHONE_HIDE/, 'How Duely Works was hidden along with the rest');
 });
 
 test('the cut is at sm, so tablets keep the full Home', () => {

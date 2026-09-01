@@ -905,14 +905,22 @@ export default function ChatSidebar({ open, onToggle }) {
         </button>
       )}
 
-      {/* Mobile floating chat button — home screen only */}
+      {/* Mobile chat handle — home screen only.
+          A tab against the right edge rather than a labelled pill floating
+          above the page. The pill sat over the last row of game cards and was
+          wide enough to cover one of them; a handle takes about a fifth of the
+          width and reads as something to pull, which is what it does.
+          The chevron points left, towards where the panel comes from. */}
       {!mobileOpen && isHome && (
         <button
           onClick={() => setMobileOpen(true)}
-          className="lg:hidden fixed bottom-5 right-4 z-40 flex items-center gap-2 bg-surface border border-primary/40 hover:border-primary rounded-full px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition-all"
+          aria-label="Open World Chat"
+          className="lg:hidden fixed bottom-5 right-0 z-40 flex items-center justify-center w-9 h-12 rounded-l-xl bg-surface border border-r-0 border-primary/40 hover:border-primary text-white shadow-lg transition-all"
         >
-          <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
-          World Chat
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M15 5l-7 7 7 7" />
+          </svg>
         </button>
       )}
 
