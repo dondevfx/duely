@@ -42,6 +42,7 @@ export default {
         'slide-up':   'slideUp 0.4s ease-out',
         'scale-in':   'scaleIn 0.2s ease-out',
         'slide-in-right': 'slideInRight 0.3s ease-out',
+        'gift-bob':   'giftBob 2.4s ease-in-out infinite',
       },
       keyframes: {
         pulseGlow: {
@@ -52,6 +53,9 @@ export default {
         slideUp:       { from: { transform: 'translateY(20px)', opacity: 0 }, to: { transform: 'translateY(0)', opacity: 1 } },
         scaleIn:       { from: { transform: 'scale(0.95)', opacity: 0 }, to: { transform: 'scale(1)', opacity: 1 } },
         slideInRight:  { from: { transform: 'translateX(20px)', opacity: 0 }, to: { transform: 'translateX(0)', opacity: 1 } },
+        // Small on purpose. The present is the only thing moving on a modal
+        // that covers the whole screen, so a big bounce reads as a toy.
+        giftBob:       { '0%,100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-5px)' } },
       },
     },
   },

@@ -65,6 +65,7 @@ import ForfeitToast from './components/ForfeitToast';
 import NotifyToast from './components/NotifyToast';
 import ReconnectOverlay from './components/ReconnectOverlay';
 import AgeToSModal, { useTosAccepted } from './components/AgeToSModal';
+import SignupRewardModal from './components/SignupRewardModal';
 import SaveLoginPrompt from './components/SaveLoginPrompt';
 import ErrorBoundary from './components/ErrorBoundary';
 import InviteToasts from './components/InviteToasts';
@@ -195,6 +196,10 @@ function Shell() {
       <InviteToasts />
       <ReconnectOverlay />
       {tosPending && <AgeToSModal onAccept={() => setTosAccepted(true)} />}
+      {/* After the ToS, never beside it. Both are z-50 full-screen modals, so
+          without this gate a new account would get the gift painted over the
+          age check — and the gift is the one that can wait. */}
+      {!tosPending && <SignupRewardModal />}
       {showSaveLogin && <SaveLoginPrompt onDone={() => setShowSaveLogin(false)} />}
     </div>
   );

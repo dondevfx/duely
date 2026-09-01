@@ -417,6 +417,48 @@ const BJ = {
   ) },
 };
 
+// The signup reward present. Drawn rather than 🎁 for the same reason every
+// other icon here is: the emoji renders as a different object on every
+// platform and cannot take the brand palette. Brand blue box, gold ribbon —
+// the same gold the lock and the coin already use, so a reward reads as a
+// reward across the site.
+export function GiftIcon({ size = 24, className = '' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" role="img"
+      aria-label="gift" focusable="false"
+      className={`inline-block shrink-0 ${className}`}>
+      <defs>
+        {/* Lit from the upper left, so the box reads as a box and not a
+            rectangle. Unique id per size would be overkill — the gradient is
+            identical wherever it is used, so a collision is a no-op. */}
+        <linearGradient id="giftBox" x1="0" y1="0" x2="0.6" y2="1">
+          <stop offset="0%" stopColor="#2E76E8" />
+          <stop offset="100%" stopColor="#0B3F91" />
+        </linearGradient>
+        <linearGradient id="giftLid" x1="0" y1="0" x2="0.6" y2="1">
+          <stop offset="0%" stopColor="#4A90FF" />
+          <stop offset="100%" stopColor="#1250B4" />
+        </linearGradient>
+      </defs>
+      {/* body, then lid — the lid overhangs on both sides, which is what makes
+          the shape read as a wrapped box at small sizes */}
+      <rect x="4" y="10.5" width="16" height="10" rx="1.4" fill="url(#giftBox)" />
+      <rect x="2.6" y="7" width="18.8" height="4.2" rx="1.3" fill="url(#giftLid)" />
+      {/* ribbon down the front and across the lid */}
+      <rect x="10.6" y="7" width="2.8" height="13.5" fill="#F5C518" />
+      <rect x="2.6" y="8.4" width="18.8" height="1.5" fill="#F5C518" opacity="0.9" />
+      {/* the bow: two loops and a knot */}
+      <path d="M12 7C10.6 7 8.2 6.4 8.2 4.8 8.2 3.7 9.1 3 10.1 3c1.4 0 1.9 2 1.9 4z"
+        fill="#FFD84D" stroke="#C99A0E" strokeWidth="0.7" strokeLinejoin="round" />
+      <path d="M12 7c1.4 0 3.8-.6 3.8-2.2 0-1.1-.9-1.8-1.9-1.8-1.4 0-1.9 2-1.9 4z"
+        fill="#FFD84D" stroke="#C99A0E" strokeWidth="0.7" strokeLinejoin="round" />
+      <circle cx="12" cy="6.6" r="1.25" fill="#F5C518" stroke="#C99A0E" strokeWidth="0.7" />
+      {/* highlight along the top edge of the lid */}
+      <path d="M4 8.1h16" stroke="#BBD8FF" strokeWidth="0.8" opacity="0.45" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function BjIcon({ kind, size = 16, className = '' }) {
   const o = BJ[kind];
   if (!o) return null;

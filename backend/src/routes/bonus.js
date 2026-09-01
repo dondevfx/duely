@@ -7,6 +7,11 @@ const COIN_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const DIAMOND_BONUS       = 500;
 const DIAMOND_COOLDOWN_MS = 1 * 60 * 1000;
 
+// One-off welcome grant, claimed from a popup the first time a new account
+// loads the site. No cooldown — profiles.signup_bonus_claimed_at is null
+// exactly once per account, which is the whole guard.
+const SIGNUP_BONUS = 5000;
+
 const SPIN_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const SPIN_PRIZES = [
   { prize: 1000,  weight: 59 },
@@ -111,6 +116,65 @@ module.exports = function bonusRoutes(supabase) {
     }).then().catch(e => console.error('[tx] diamond bonus insert failed:', e.message));
     const { data: updated } = await supabase.from('profiles').select('diamonds').eq('id', req.user.id).single();
     res.json({ success: true, credited: DIAMOND_BONUS, diamonds: updated?.diamonds });
+  });
+
+  // ── One-time signup reward ────────────────────────────────────────
+  // Run in Supabase SQL editor:
+  //   ALTER TABLE profiles ADD COLUMN IF NOT EXISTS signup_bonus_claimed_at timestamptz;
+  //   UPDATE profiles SET signup_bonus_claimed_at = now()
+  //     WHERE signup_bonus_claimed_at IS NULL AND created_at < now();
+  //
+  // That second statement matters. Without it the column is null for every
+  // account that already exists, so shipping this would pop a 5,000 diamond
+  // gift in front of the entire userbase at once — a welcome bonus handed to
+  // people who have been here for months. Backfilling marks them claimed, and
+  // only accounts created after the migration see the popup.
+
+  router.get('/signup-status', requireAuth, async (req, res) => {
+    const { data, error } = await supabase
+      .from('profiles').select('signup_bonus_claimed_at').eq('id', req.user.id).single();
+    if (error) return res.status(404).json({ error: 'Profile not found' });
+    res.json({
+      canClaim:    !data.signup_bonus_claimed_at,
+      bonusAmount: SIGNUP_BONUS,
+    });
+  });
+
+  router.post('/signup-claim', requireAuth, async (req, res) => {
+    // Same atomic shape as every other claim here: the conditional UPDATE is
+    // the guard, not a preceding SELECT. .is(null) plus the row lock means two
+    // simultaneous requests serialize and exactly one comes back with a row —
+    // the loser sees a stamped column and is turned away, so the grant cannot
+    // be taken twice however fast the button is pressed.
+    const { data: claimed, error: stampErr } = await supabase
+      .from('profiles')
+      .update({ signup_bonus_claimed_at: new Date().toISOString() })
+      .eq('id', req.user.id)
+      .is('signup_bonus_claimed_at', null)
+      .select('id');
+    if (stampErr) return res.status(500).json({ error: stampErr.message });
+    if (!claimed || claimed.length === 0) {
+      return res.status(400).json({ error: 'Already claimed' });
+    }
+
+    const { error: credErr } = await supabase.rpc('credit_diamonds', {
+      user_id: req.user.id, amount: SIGNUP_BONUS,
+    });
+    if (credErr) {
+      // Clear the stamp — they got nothing, so they must be able to try again.
+      // Fails closed the same way the diamond and spin claims do.
+      await supabase.from('profiles')
+        .update({ signup_bonus_claimed_at: null }).eq('id', req.user.id).then().catch(() => {});
+      return res.status(500).json({ error: 'Could not credit diamonds. Please try again.' });
+    }
+
+    supabase.from('transactions').insert({
+      user_id: req.user.id, type: 'diamond_bonus', amount_c: 0,
+      crypto_amount: SIGNUP_BONUS, crypto_symbol: 'diamonds', status: 'confirmed',
+    }).then().catch(e => console.error('[tx] signup bonus insert failed:', e.message));
+
+    const { data: updated } = await supabase.from('profiles').select('diamonds').eq('id', req.user.id).single();
+    res.json({ success: true, credited: SIGNUP_BONUS, diamonds: updated?.diamonds });
   });
 
   // ── Daily spin wheel ──────────────────────────────────────────────

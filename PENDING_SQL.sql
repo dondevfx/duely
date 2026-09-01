@@ -848,3 +848,36 @@ ALTER TABLE player_reports ENABLE ROW LEVEL SECURITY;
 -- Check:
 --   SELECT reason, status, count(*) FROM player_reports GROUP BY 1,2;
 --   SELECT count(*) FROM profiles WHERE avatar_url IS NOT NULL;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 19. Signup reward — one welcome grant per account
+-- ═══════════════════════════════════════════════════════════════════════════
+-- A new account gets a popup on its first load offering 5,000 diamonds. The
+-- column IS the guard: it is null exactly once per account, and POST
+-- /api/bonus/signup-claim stamps it with a conditional UPDATE, so two
+-- simultaneous requests serialize at the row lock and only one is credited.
+-- No separate ledger table, and no cooldown to reason about.
+
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS signup_bonus_claimed_at timestamptz;
+
+-- Run this. Without it the column is null for every account that already
+-- exists, so the popup offers a welcome gift to the entire userbase at once —
+-- people who signed up months ago, all credited 5,000 diamonds the moment
+-- they next load the site. Stamping them marks the grant as spent, and only
+-- accounts created after this migration ever see the popup.
+UPDATE profiles
+   SET signup_bonus_claimed_at = now()
+ WHERE signup_bonus_claimed_at IS NULL;
+
+-- Until this section is run, /api/bonus/signup-status returns an error and
+-- the modal shows nothing at all — it swallows a failed status check on
+-- purpose, so a pending migration means no popup rather than a broken page.
+-- Nothing else selects this column, so nothing else can be taken down by it.
+
+-- Check:
+--   SELECT count(*) FILTER (WHERE signup_bonus_claimed_at IS NULL) AS unclaimed,
+--          count(*) FILTER (WHERE signup_bonus_claimed_at IS NOT NULL) AS claimed
+--     FROM profiles;
+--   SELECT count(*), sum(crypto_amount) FROM transactions
+--    WHERE type = 'diamond_bonus' AND crypto_amount = 5000;
