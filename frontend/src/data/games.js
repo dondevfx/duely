@@ -46,13 +46,13 @@ export const GAMES = [
     title:    'Color Rush',
     route:    '/game/color-rush',
     countKey: 'color-rush',
-    // The poster is a full 1284x2778 phone screenshot while the clip is a
-    // near-square 480x476 recording. In a square card, object-cover shows only
-    // the middle 46% of a frame that tall, which lands below the obstacles
-    // entirely — the still would show empty black and then snap to the game
-    // the moment the video started. Anchoring to the top keeps the rings and
-    // the ball, which sit in the upper third of that screenshot.
-    clipPosition: 'center top',
+    // No clipPosition, and deliberately so. This used to anchor to the top to
+    // rescue a poster that was a raw 1284x2778 phone screenshot against a
+    // near-square 480x476 clip — two different framings, which is why this
+    // card alone opened on a half-empty frame and then snapped when the video
+    // took over. The poster is now an extracted frame of the clip at its own
+    // dimensions, the same as every other game here, so there is nothing left
+    // to correct for.
   },
   {
     slug:     'tower',

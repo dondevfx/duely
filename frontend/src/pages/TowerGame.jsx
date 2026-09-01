@@ -457,10 +457,9 @@ export default function TowerGame() {
       <GameLobby
         title="Tower"
         description={
-          'Stack the blocks as high as you can. Each block slides in on its own — tap to drop it, ' +
+          'Stack the blocks as high as you can. Each block slides in on its own — tap anywhere or press space to drop it, ' +
           'and anything hanging over the edge is sliced off. Land it dead center and you keep the full width.'
         }
-        controls="Tap the screen or press SPACE to drop · Perfect drops keep your tower wide"
         betCurrency={betCurrency} setBetCurrency={setBetCurrency}
         entryFee={entryFee} setEntryFee={setEntryFee}
         balance={balance}

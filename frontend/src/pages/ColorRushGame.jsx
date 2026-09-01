@@ -547,8 +547,7 @@ export default function ColorRushGame() {
     >
       <GameLobby
         title="Color Rush"
-        description="Tap to climb through the spinning rings — you can only pass through your own color. Both players get the exact same course."
-        controls="Tap anywhere or press space to fly · collect the white diamonds"
+        description="Tap anywhere or press space to climb through the spinning rings — you can only pass through your own color. Collect the white diamonds on the way up. Both players get the exact same course."
         betCurrency={betCurrency} setBetCurrency={setBetCurrency}
         entryFee={entryFee} setEntryFee={setEntryFee}
         balance={balance}

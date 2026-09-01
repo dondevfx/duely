@@ -60,7 +60,6 @@ const inviteTypeFor = (queueKey) => INVITE_GAME_TYPE[queueKey] || queueKey;
 export default function GameLobby({
   title,
   description,
-  controls,
   betCurrency,
   setBetCurrency,
   entryFee,
@@ -221,8 +220,11 @@ export default function GameLobby({
 
       </div>
 
-      {/* ── Controls / extras ── */}
-      {controls && <div className="mb-2 sm:mb-4">{controls}</div>}
+      {/* No controls slot. Every game used to print a second line of how-to
+          between the bet and the buttons, which put the rules in two places on
+          one short screen and pushed the buttons down. The controls are part of
+          what the game IS, so they read better as one sentence in the
+          description above than as a footnote below the stake. */}
 
       {/* ── Action Buttons ── */}
       <div className="flex flex-col gap-2 sm:gap-3">

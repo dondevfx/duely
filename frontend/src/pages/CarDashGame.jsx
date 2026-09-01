@@ -544,8 +544,7 @@ export default function CarDashGame() {
     >
       <GameLobby
         title="Rush Hour"
-        description="Weave through traffic at full speed. Both players get the exact same road — whoever survives the longest wins."
-        controls="← → or A/D to change lanes · swipe or tap the sides on mobile"
+        description="Swipe, tap the sides of the screen, or use the arrow keys to change lanes and weave through traffic at full speed. Both players get the exact same road — whoever survives the longest wins."
         betCurrency={betCurrency} setBetCurrency={setBetCurrency}
         entryFee={entryFee} setEntryFee={setEntryFee}
         balance={balance}
