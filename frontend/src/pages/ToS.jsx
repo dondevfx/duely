@@ -1,4 +1,5 @@
 ﻿import { usePageReady } from '../hooks/usePageReady';
+import { TOS_SECTIONS } from '../data/legal';
 
 export default function ToS() {
   const ready = usePageReady();
@@ -8,68 +9,7 @@ export default function ToS() {
         <h1 className="text-4xl font-black text-white mb-2">Terms of Service</h1>
         <p className="text-muted text-sm mb-10">Last updated: {new Date().getFullYear()}</p>
 
-        {[
-          {
-            title: '1. Eligibility',
-            body: 'You must be at least 18 years of age to use this platform. By creating an account you confirm that you meet this requirement and that real-money wagering is legal in your jurisdiction. We reserve the right to close accounts that do not meet eligibility requirements.',
-          },
-          {
-            title: '2. Real-Money Wagering',
-            body: 'This platform facilitates skill-based 1v1 wagering using platform currency (Coins and Diamonds). Coin matches carry a 5% platform fee deducted from the prize pool. Diamond matches pay out in full. All wagers are final — there are no refunds once a match has started, except in the case of a mutual disconnect (both players disconnected) where no coins are deducted.',
-          },
-          {
-            title: '3. Deposits & Withdrawals',
-            body: 'Deposits and withdrawals are made in cryptocurrency on supported networks. We do not accept payment cards, bank transfers, or any other payment method. Withdrawals require a minimum of 5 coins. The platform is not responsible for losses due to incorrect wallet addresses provided by the user. Withdrawal processing times vary by network.',
-          },
-          {
-            title: '4. Fair Play',
-            body: 'Use of bots, scripts, exploits, or any automated tools to gain an unfair advantage is strictly prohibited and will result in permanent account termination and forfeiture of balance. All game outcomes are determined server-side and are final.',
-          },
-          {
-            title: '5. Account Security',
-            body: 'You are responsible for maintaining the security of your account credentials. We strongly recommend enabling email verification. The platform will never ask for your password. Report any suspicious activity immediately.',
-          },
-          {
-            title: '6. Platform Fees',
-            body: 'The platform retains 5% of the prize pool on all coin-wagered matches. This fee is clearly displayed before entering any match. Diamond wagered matches have no platform fee.',
-          },
-          {
-            title: '7. Prohibited Conduct',
-            body: 'The following are prohibited: collusion between players, money laundering, reversing or disputing a completed deposit, abusive behavior in chat, impersonation of other users or staff, and exploiting bugs without reporting them. Violations may result in account suspension or permanent ban.',
-          },
-          {
-            title: '8. Responsible Gaming',
-            body: 'We encourage responsible gaming. If you feel you are developing a gambling problem, please seek help. You may request account closure at any time by contacting support. We do not offer self-exclusion tools at this time but plan to add them.',
-          },
-          {
-            title: '9. Custody of Funds',
-            body: 'Balances shown in your account represent an obligation owed to you by the platform. They are not a bank deposit, are not insured by any government or private deposit insurance scheme, and are not held in a segregated trust account for your individual benefit unless we state otherwise in writing. Digital assets are held in wallets controlled by the platform. You acknowledge that holding digital assets carries risk, including the risk of total loss.',
-          },
-          {
-            title: '10. Security Incidents and Loss of Funds',
-            body: 'You use the platform at your own risk and accept the risk of loss of funds. To the fullest extent permitted by law, we are not liable for any loss of funds, digital assets, balance, or data resulting from: compromise of your own account, device, email, or wallet; credentials you disclose to a third party; transactions you authorise, including transfers to an incorrect or fraudulent address; failure, congestion, fork, or reorganisation of any blockchain network; the acts, insolvency, or compromise of any third-party exchange, custodian, or infrastructure provider we rely on; unauthorised access to our systems by any third party; theft, hacking, phishing, malware, or social engineering directed at you or at us; loss or compromise of private keys or wallet credentials; downtime, data loss, or misconfiguration of any hosting, database, or authentication provider; or any other event outside our reasonable control. This applies whether the loss is direct or indirect and however it arises. Where a loss results from a security incident affecting the platform itself, our liability is limited as set out in Section 11. You acknowledge that we do not guarantee the security of any system, that no system can be made completely secure, and that we give no warranty that funds held on the platform will be recoverable in the event of a security incident. Nothing in these Terms limits our liability for our own gross negligence, fraud, or wilful misconduct, or for any liability that cannot lawfully be excluded.',
-          },
-          {
-            title: '11. Limitation of Liability',
-            body: 'The platform is provided "as is" and "as available," without warranties of any kind to the fullest extent permitted by law. We are not liable for indirect, incidental, consequential, special, or punitive damages, or for lost profits, lost opportunity, or the value of anticipated winnings. Our total aggregate liability to you for all claims arising out of or relating to these Terms or your use of the platform is limited to the lesser of (a) the balance credited to your account at the time the claim arose, or (b) the total platform fees you paid in the twelve months preceding the claim. This limit does not apply to liability for our own gross negligence, fraud, or wilful misconduct, or to any liability that cannot lawfully be excluded or limited.',
-          },
-          {
-            title: '12. Severability',
-            body: 'If any provision of these Terms is held to be unenforceable or invalid, that provision will be modified to the minimum extent necessary to make it enforceable, or severed if it cannot be. The remaining provisions will continue in full force. In particular, if any limitation of liability is held unenforceable in your jurisdiction, the remaining limitations continue to apply to the fullest extent permitted.',
-          },
-          {
-            title: '13. Governing Law',
-            body: 'These Terms and any dispute arising out of or relating to them or to your use of the platform are governed by the laws of the State of Oregon, United States, without regard to its conflict-of-laws rules. Subject to the arbitration agreement in Section 14, you and we agree that the state and federal courts located in Oregon have exclusive jurisdiction, and you consent to personal jurisdiction and venue there. If you are a consumer resident in a jurisdiction whose law grants you rights that cannot be waived by agreement, nothing in this section removes those rights.',
-          },
-          {
-            title: '14. Dispute Resolution and Arbitration',
-            body: 'Please read this section carefully — it affects how disputes between you and us are resolved, and it limits the ways you can bring a claim. (a) Informal resolution first: before starting arbitration, you agree to contact us through support and give us 30 days to resolve the matter. Most disputes are settled this way. (b) Binding arbitration: if we cannot resolve it, any dispute arising out of or relating to these Terms or the platform will be resolved by final and binding individual arbitration administered by the American Arbitration Association under its Consumer Arbitration Rules, rather than in court. The arbitrator, and not any court, decides all questions of arbitrability. (c) Class action waiver: you and we each agree to bring claims only in an individual capacity, and not as a plaintiff or class member in any class, collective, consolidated, or representative proceeding. The arbitrator may not consolidate claims or preside over any form of representative proceeding. If this waiver is held unenforceable as to a particular claim, that claim — and only that claim — must proceed in court, and the rest of this section still applies. (d) Jury trial waiver: you and we each waive any right to a jury trial for disputes covered by this section. (e) Small claims exception: either of us may instead bring an individual claim in small claims court if it qualifies. (f) Costs: for claims under $10,000 that you bring in good faith, we will pay the arbitration filing and administrative fees, and the arbitration may be conducted by telephone, video, or written submission, or in the county where you live, at your choice. (g) Your right to opt out: you may reject this arbitration agreement by emailing us within 30 days of first accepting these Terms, stating your username and that you opt out of arbitration. Opting out does not affect any other part of these Terms, and it will not affect your account. (h) Survival: this section survives termination of your account and of these Terms.',
-          },
-          {
-            title: '15. Changes to Terms',
-            body: 'We reserve the right to update these terms at any time. Continued use of the platform after changes constitutes acceptance of the updated terms. Major changes will be communicated via the platform.',
-          },
-        ].map(({ title, body }) => (
+        {TOS_SECTIONS.map(({ title, body }) => (
           <div key={title} className="mb-8">
             <h2 className="text-lg font-bold text-white mb-2">{title}</h2>
             <p className="text-muted text-sm leading-relaxed">{body}</p>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import GlowButton from './GlowButton';
 import { api } from '../utils/api';
+import { TOS_SECTIONS, PRIVACY_SECTIONS } from '../data/legal';
 
 const TOS_KEY = 'tos_v1_accepted';
 
@@ -51,6 +51,8 @@ export function useTosAccepted(session) {
 export default function AgeToSModal({ onAccept }) {
   const [age, setAge]   = useState(false);
   const [tos, setTos]   = useState(false);
+  // null, 'tos' or 'privacy' — which document is open over the top.
+  const [doc, setDoc]   = useState(null);
 
   function accept() {
     if (!age || !tos) return;
@@ -61,6 +63,57 @@ export default function AgeToSModal({ onAccept }) {
     localStorage.setItem(TOS_KEY, 'true');
     api.post('/auth/tos-accept').catch(() => {});
     onAccept();
+  }
+
+  // The document, read in place.
+  //
+  // These used to be <Link target="_blank"> to /tos and /privacy, and on a
+  // phone they opened nothing — a new tab from inside a full-screen gate that
+  // blocks navigation, in a webview that may not have tabs at all. So the one
+  // thing someone is being asked to agree to was the one thing they could not
+  // read. It is shown here instead, scrollable, over the top of this modal.
+  //
+  // The text comes from data/legal, the same source the /tos and /privacy
+  // pages render. Two copies of a legal document is one that quietly stops
+  // matching what people actually agreed to.
+  if (doc) {
+    const [title, sections] = doc === 'tos'
+      ? ['Terms of Service', TOS_SECTIONS]
+      : ['Privacy Policy', PRIVACY_SECTIONS];
+    return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4 py-6">
+        <div className="w-full max-w-md bg-surface border border-border rounded-2xl shadow-2xl flex flex-col max-h-full">
+          {/* Header and footer are shrink-0 so the middle is the only thing
+              that scrolls — on a short phone in landscape the whole panel
+              would otherwise scroll the Back button off the bottom. */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+            <h2 className="text-lg font-black text-white">{title}</h2>
+            <button
+              onClick={() => setDoc(null)}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-muted hover:text-white hover:bg-surfaceLight transition-colors"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="overflow-y-auto px-5 py-4 min-h-0" style={{ WebkitOverflowScrolling: 'touch' }}>
+            {sections.map(({ title: t, body }) => (
+              <div key={t} className="mb-5 last:mb-0">
+                <h3 className="text-sm font-bold text-white mb-1.5">{t}</h3>
+                <p className="text-muted text-xs leading-relaxed">{body}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="px-5 py-4 border-t border-border shrink-0">
+            <GlowButton onClick={() => setDoc(null)} variant="primary" size="lg" className="w-full">
+              Back
+            </GlowButton>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -87,9 +140,9 @@ export default function AgeToSModal({ onAccept }) {
 
           {/* The text sits OUTSIDE the label on purpose.
               A click on any descendant of a <label> activates its control, so
-              the two links were unreachable: tapping "Terms of Service" just
-              toggled the checkbox. The label now wraps only the checkbox, and
-              the sentence is a sibling — so the links are ordinary links and
+              the two buttons would be unreachable: tapping "Terms of Service"
+              would just toggle the checkbox. The label now wraps only the
+              checkbox, and the sentence is a sibling — so the buttons work and
               the box is still hit-target sized. */}
           <div className="flex items-start gap-3">
             <label className="cursor-pointer shrink-0 p-1 -m-1">
@@ -102,9 +155,11 @@ export default function AgeToSModal({ onAccept }) {
             </label>
             <span className="text-sm text-white leading-relaxed">
               I agree to the{' '}
-              <Link to="/tos" target="_blank" rel="noopener noreferrer" className="font-bold text-primary underline underline-offset-2">Terms of Service</Link>
+              <button type="button" onClick={() => setDoc('tos')}
+                className="font-bold text-primary underline underline-offset-2">Terms of Service</button>
               {' '}and{' '}
-              <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="font-bold text-primary underline underline-offset-2">Privacy Policy</Link>
+              <button type="button" onClick={() => setDoc('privacy')}
+                className="font-bold text-primary underline underline-offset-2">Privacy Policy</button>
               , and understand that all wagers are final and there are no chargebacks.
             </span>
           </div>
@@ -121,7 +176,7 @@ export default function AgeToSModal({ onAccept }) {
         </GlowButton>
 
         <p className="text-center text-xs text-muted mt-4">
-          By continuing you accept all terms. This confirmation is saved on this device.
+          By continuing you accept all terms.
         </p>
       </div>
     </div>

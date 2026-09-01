@@ -34,7 +34,16 @@ test('nothing uses a component it has not imported or defined', () => {
   const bad = [];
   for (const file of walk(FE())) {
     const src = fs.readFileSync(file, 'utf8');
-    const used = new Set([...src.matchAll(/<([A-Z]\w+)[\s/>]/g)].map(m => m[1]));
+    // Comments stripped before scanning. A note explaining that a component
+    // USED to be here is not a use of it, and reporting one is a false alarm
+    // that pushes people toward deleting the explanation instead of keeping
+    // it. The import check below still reads the unstripped lines, so a name
+    // mentioned only in a comment cannot pass for an import either.
+    const code = src
+      .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    const used = new Set([...code.matchAll(/<([A-Z]\w+)[\s/>]/g)].map(m => m[1]));
     for (const c of used) {
       // Defined in this file counts too — plenty of pages declare small
       // components locally.

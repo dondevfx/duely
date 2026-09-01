@@ -47,6 +47,27 @@ import TowerGame from './pages/TowerGame';
 import TowerCanvas from './components/TowerCanvas';
 // Dev-only: lets the game be looked at before the lobby and engine exist.
 // Stripped from production builds by the import.meta.env.DEV guard below.
+// Dev-only, same convention as the canvas previews above: the age/terms gate
+// only ever appears for a signed-in account that has not accepted, which makes
+// it the hardest thing in the app to look at while working on it — and it is a
+// full-screen legal wall, so "hard to look at" is how a broken one ships.
+function TosPreview() { return <AgeToSModal onAccept={() => {}} />; }
+// The result card at its tallest: an unplaced account, so the placement row is
+// showing, which is the only combination that ever overflowed a phone.
+function ResultPreview() {
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <ResultScreen
+        isWinner winnerUsername="you" loserUsername="them"
+        newWinnerElo={1020} winnerBefore={1000}
+        balanceChange={1.9} currency="coins" entryFee={1}
+        winnerStreak={2}
+        profile={{ wins: 1, losses: 0, elo: 1020 }}
+        onPlayAgain={() => {}} onBackToLobby={() => {}}
+      />
+    </div>
+  );
+}
 function TowerPreview() { return <div style={{position:'fixed',inset:0}}><TowerCanvas running /></div>; }
 function ColorRushPreview() {
   return <div style={{position:'fixed',inset:0}}><ColorRushCanvas seed={12345} onProgress={() => {}} onDeath={() => {}} /></div>;
@@ -65,6 +86,7 @@ import ForfeitToast from './components/ForfeitToast';
 import NotifyToast from './components/NotifyToast';
 import ReconnectOverlay from './components/ReconnectOverlay';
 import AgeToSModal, { useTosAccepted } from './components/AgeToSModal';
+import ResultScreen from './components/ResultScreen';
 import SignupRewardModal from './components/SignupRewardModal';
 import SaveLoginPrompt from './components/SaveLoginPrompt';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -178,6 +200,8 @@ function Shell() {
           <Route path="/game/car-dash"      element={<CarDashGame />} />
           <Route path="/game/color-rush"    element={<ColorRushGame />} />
           <Route path="/game/tower"         element={<TowerGame />} />
+          {import.meta.env.DEV && <Route path="/__tos-preview" element={<TosPreview />} />}
+          {import.meta.env.DEV && <Route path="/__result-preview" element={<ResultPreview />} />}
           {import.meta.env.DEV && <Route path="/__tower-preview" element={<TowerPreview />} />}
           {import.meta.env.DEV && <Route path="/__color-rush-preview" element={<ColorRushPreview />} />}
           <Route path="/game/word-vs"       element={<WordleGame />} />

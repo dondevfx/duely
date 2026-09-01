@@ -26,10 +26,10 @@ function ResultTimer({ seconds = 10, onTimeout }) {
 
   const flashing = remaining <= 5;
   return (
-    <div className="text-center mt-4">
+    <div className="text-center mt-2 sm:mt-4">
       <div
         key={remaining}
-        className={`text-5xl font-black font-mono ${flashing ? 'animate-pulse' : ''}`}
+        className={`text-4xl sm:text-5xl font-black font-mono ${flashing ? 'animate-pulse' : ''}`}
         style={{ color: remaining <= 3 ? '#ef4444' : flashing ? '#f97316' : '#64748b' }}
       >
         {remaining}
@@ -211,9 +211,14 @@ export default function ResultScreen({
       onMouseEnter={() => {}} // timer continues — intentional
     >
       <div className="bg-surface border border-surfaceLight rounded-2xl overflow-hidden shadow-2xl">
-        <div className="p-7">
+        {/* Tighter on a phone, unchanged above sm.
+            The card has to fit a 667px screen — an iPhone SE or an 8 — with a
+            navbar above it, and on the first three matches of an account it is
+            also carrying the placement row. Every reduction here is padding or
+            a gap; nothing is removed, and nothing shrinks on a desktop. */}
+        <div className="p-4 sm:p-7">
           {/* Win / Loss / Draw header */}
-          <div className="text-center mb-5">
+          <div className="text-center mb-3 sm:mb-5">
             <div className="mb-2 flex justify-center">
               <OutcomeIcon kind={isDraw ? 'draw' : isWinner ? 'win' : 'loss'} size={54} />
             </div>
@@ -237,12 +242,23 @@ export default function ResultScreen({
 
           {/* Placement progress (first 3 matches). A solo run does not count
               toward placement, so showing the tracker here would imply it does. */}
+          {/* One row on a phone, three on a desktop.
+              Stacked — a label, then the dots, then a caption — this was three
+              lines plus its own padding, and it only ever appears on a card
+              that is already at its tallest: the first three matches an account
+              plays. On a phone that pushed the bottom of the result card off
+              the screen, so the thing it was reporting on could not be read.
+              Same information, laid out along the short axis instead of the
+              long one, and only the caption gives anything up. */}
           {!solo && !ranked && (
-            <div className="mb-4 p-3 rounded-xl bg-primary/10 border border-primary/30 text-center">
-              <div className="text-xs font-bold text-primary mb-1">Placement Matches</div>
-              <div className="flex justify-center gap-2 mb-1">
+            <div className="mb-2 sm:mb-4 px-3 py-1.5 sm:p-3 rounded-xl bg-primary/10 border border-primary/30
+                            flex items-center justify-center gap-2 sm:flex-col sm:gap-1 sm:text-center">
+              <div className="text-[0.625rem] sm:text-xs font-bold text-primary whitespace-nowrap">
+                Placement<span className="hidden sm:inline"> Matches</span>
+              </div>
+              <div className="flex justify-center gap-1.5 sm:gap-2">
                 {[0,1,2].map(i => (
-                  <div key={i} className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-[0.5625rem] font-black transition-all ${
+                  <div key={i} className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center text-[0.5rem] sm:text-[0.5625rem] font-black transition-all ${
                     i < placement
                       ? 'bg-success border-success text-white'
                       : 'border-muted text-muted'
@@ -251,12 +267,14 @@ export default function ResultScreen({
                   </div>
                 ))}
               </div>
-              <div className="text-xs text-muted">{placement}/3 — {3 - placement} match{3 - placement !== 1 ? 'es' : ''} to unlock ranked</div>
+              <div className="text-[0.625rem] sm:text-xs text-muted whitespace-nowrap">
+                {placement}/3<span className="hidden sm:inline"> — {3 - placement} match{3 - placement !== 1 ? 'es' : ''} to unlock ranked</span>
+              </div>
             </div>
           )}
 
           {/* Stats */}
-          <div className="bg-bg rounded-xl p-4 mb-4 space-y-2 text-sm">
+          <div className="bg-bg rounded-xl p-3 sm:p-4 mb-3 sm:mb-4 space-y-1.5 sm:space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted min-w-0 flex items-center gap-1.5 overflow-hidden">
                 {solo ? (
@@ -352,7 +370,7 @@ export default function ResultScreen({
           <ResultTimer seconds={10} onTimeout={goBack} />
 
           {/* Buttons */}
-          <div className="flex gap-3 mt-4">
+          <div className="flex gap-3 mt-3 sm:mt-4">
             {onRematch && (
               <button
                 onClick={onRematch}
