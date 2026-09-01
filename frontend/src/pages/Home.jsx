@@ -245,7 +245,7 @@ export default function Home() {
               <ul className="text-sm text-muted space-y-2">
                 <li className="flex items-start gap-2">
                   <span className="text-primary">•</span>
-                  <span className="inline-flex items-center gap-1">1 <CoinIcon size="1em" /> = $1 USD</span>
+                  <span className="inline-flex items-center gap-1 flex-wrap">1 <CoinIcon size="1em" /> = $1 USD — deposit on the Wallet page</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary">•</span>

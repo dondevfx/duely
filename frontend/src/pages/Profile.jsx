@@ -1235,7 +1235,14 @@ function FriendsPanel({ myId, myUsername, myReferralCode, activeGames }) {
 
 export default function Profile() {
   const ready = usePageReady();
-  const { profile, session, refreshProfile, updateProfile } = useAuth();
+  const { profile, session, refreshProfile, updateProfile, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  async function handleSignOut() {
+    await signOut();
+    navigate('/');
+  }
+
   const { socket, activeGames } = useSocket();
   const [matches, setMatches] = useState([]);
   const [editing, setEditing] = useState(false);
@@ -1469,6 +1476,16 @@ export default function Profile() {
         <div>
         {/* Profile header */}
         <div className="bg-surface border border-surfaceLight rounded-2xl p-6 mb-6 relative">
+
+          {/* Sign out — phones only. On desktop it lives in the navbar's
+              account dropdown, which does not exist at this width. Absolutely
+              positioned so it cannot push the avatar row around. */}
+          <button
+            onClick={handleSignOut}
+            className="sm:hidden absolute top-3 right-3 z-10 px-3 py-1.5 rounded-lg border border-surfaceLight text-xs font-bold text-muted hover:text-white hover:border-danger transition-colors"
+          >
+            Sign Out
+          </button>
 
           <div className="flex items-center gap-5 mb-6">
             <div className="relative">
@@ -1788,19 +1805,26 @@ export default function Profile() {
         </div>
 
         {/* Match history — collapsible */}
-        <div className="bg-surface border border-surfaceLight rounded-2xl p-6">
+        <div className="bg-surface border border-surfaceLight rounded-2xl p-4 sm:p-6">
           <button
             onClick={() => setMatchesExpanded(v => !v)}
             className="w-full flex items-center justify-between"
           >
-            <h2 className="text-lg font-bold text-white">Recent Matches</h2>
-            <div className="flex items-center gap-3">
+            {/* whitespace-nowrap, and the controls beside it shrink instead.
+                "Recent Matches" was wrapping to two lines on a phone, which
+                made the header two rows tall and the card the wrong size —
+                the row had no room left after the link and the Show pill. */}
+            <h2 className="text-lg font-bold text-white whitespace-nowrap">Recent Matches</h2>
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <Link
                 to="/transactions"
                 onClick={e => e.stopPropagation()}
-                className="text-xs text-primary hover:underline"
+                className="text-xs text-primary hover:underline whitespace-nowrap"
               >
-                All transactions →
+                {/* The word that has to go on a narrow screen is the one the
+                    arrow already implies. */}
+                <span className="sm:hidden">All →</span>
+                <span className="hidden sm:inline">All transactions →</span>
               </Link>
               <span className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${
                 matchesExpanded
