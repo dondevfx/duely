@@ -253,19 +253,34 @@ export default function Home() {
                       flex CHILD of the li — items-start pinned it to the top of
                       the line and vertical-align does not apply inside flex, so
                       it floated above the sentence instead of sitting in it. */}
-                  <span><DiamondIcon /> Diamonds are free — claim 500 every 1 min</span>
+                  <span><DiamondIcon /> Diamonds are free — claim 500 every 1 min on the Rewards page</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary">•</span>
                   <span>Bet <span className="inline-flex items-center gap-1 align-middle"><CoinIcon size="1em" /></span> Coins or <DiamondIcon /> Diamonds on any game</span>
                 </li>
               </ul>
-              <Link
-                to="/wallet"
-                className="mt-4 block text-center text-sm text-primary hover:text-accent transition-colors font-medium"
-              >
-                Open Wallet →
-              </Link>
+              {/* Two destinations, because the card names two currencies and
+                  they are topped up in different places — coins on the wallet,
+                  diamonds on rewards. A single "Open Wallet" link left the
+                  diamond line with nowhere to go.
+
+                  Equal halves of one row: neither is the primary action, and
+                  sizing one larger would have said otherwise. */}
+              <div className="mt-4 flex gap-2">
+                <Link
+                  to="/wallet"
+                  className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-blue-500 text-white text-sm font-bold text-center transition-all"
+                >
+                  Wallet
+                </Link>
+                <Link
+                  to="/rewards"
+                  className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-blue-500 text-white text-sm font-bold text-center transition-all"
+                >
+                  Rewards
+                </Link>
+              </div>
             </div>
 
             {/* Fills the empty space below How It Works. Desktop only — on
