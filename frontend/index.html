@@ -21,6 +21,43 @@
     <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
+    <script>
+      // Get the game-card posters moving before the app bundle does.
+      //
+      // The cards are React, so nothing on them is discoverable until a 1.2MB
+      // module bundle has been fetched, parsed and run. Only then does the
+      // browser learn a poster exists and go ask for it — which is the second
+      // of icon-only cards you see on a cold load. The clips themselves are
+      // fine: they are all faststart, so the first frame plays without the
+      // whole file, and each card already holds its poster up until its clip
+      // can play without stalling. The gap was never the video, it was that
+      // the still had not arrived either.
+      //
+      // Every poster together is about a tenth of the bundle, and these go out
+      // in parallel with it rather than after it, so the cards paint at first
+      // render instead of a beat later.
+      //
+      // Only on the two pages that have cards. A cold load straight to the
+      // wallet or a game should not spend a phone's bandwidth on posters it
+      // will not show — and this being an inline script rather than static
+      // <link> tags is what buys that choice. It still runs long before the
+      // module bundle, which is deferred by definition.
+      (function () {
+        var p = location.pathname.replace(/\/+$/, '');
+        if (p !== '' && p !== '/games') return;
+        // Card order on Home, so the ones above the fold are requested first.
+        var slugs = ['quick-match', 'block-blast', 'car-dash', 'coin-flip',
+                     'color-rush', 'tower', 'scrabble', 'blackjack'];
+        for (var i = 0; i < slugs.length; i++) {
+          var l = document.createElement('link');
+          l.rel = 'preload';
+          l.as = 'image';
+          l.href = '/game-clips/' + slugs[i] + '.jpg';
+          if (i < 4) l.fetchPriority = 'high';
+          document.head.appendChild(l);
+        }
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
