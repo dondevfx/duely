@@ -92,9 +92,6 @@ export function useGameScrollLock(active, pinOn) {
     const main = document.querySelector('main');
     if (!main) return;
 
-    const prevOverflow   = main.style.overflowY;
-    const prevOverscroll = document.body.style.overscrollBehavior;
-
     // Start at the top: a match should open on the board, not wherever the
     // lobby was left. Unconditional — this half is always right.
     //
@@ -134,6 +131,21 @@ export function useGameScrollLock(active, pinOn) {
     // hand the page back.
     const apply = () => {
       if (main.style.overflowY !== 'hidden') main.style.overflowY = 'hidden';
+      // touch-action is what actually stops a FINGER.
+      //
+      // overflow:hidden stops the wheel and stops scrollTop being set, and on a
+      // desktop browser that is the whole story — which is why this looked
+      // fixed. A touch drag is handled before any of that: the browser pans the
+      // nearest scrollable ancestor as a gesture, and an overflow:hidden box is
+      // still a scrollable box to that code path. So the board could be dragged
+      // out of place on a phone while being perfectly locked on a laptop, which
+      // is exactly what kept being reported.
+      //
+      // 'none' tells the browser to perform no panning or zooming here at all.
+      // Taps and pointer events are untouched, so every game's input still
+      // works — the canvases already set touch-none on themselves for the same
+      // reason.
+      if (main.style.touchAction !== 'none') main.style.touchAction = 'none';
     };
     apply();
 
@@ -151,9 +163,16 @@ export function useGameScrollLock(active, pinOn) {
     // scroller still locked and nothing able to move — which reads as a frozen
     // or blank app that only a reload clears. Releasing on pagehide means the
     // worst case is an unlocked page, never a stuck one.
+    // Released to the UNLOCKED values, not to whatever was captured on the way
+    // in. Rush Hour and Color Rush run their own document lock over the top of
+    // this one, so the value captured here can already BE the locked value —
+    // and restoring that leaves the page locked for good, with nothing able to
+    // move until a reload. Same mistake those two pages had, same fix: these
+    // properties are only ever set by a lock, so there is nothing to preserve.
     const release = () => {
-      main.style.overflowY = prevOverflow;
-      document.body.style.overscrollBehavior = prevOverscroll;
+      main.style.overflowY = '';
+      main.style.touchAction = '';
+      document.body.style.overscrollBehavior = '';
     };
     const onHide = () => release();
     const onShow = () => {

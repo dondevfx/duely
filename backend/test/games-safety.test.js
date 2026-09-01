@@ -318,6 +318,21 @@ test('the lock re-pins on a phase change, not only when it arms', () => {
   assert.match(src, /const snapBack = \(\) => \{ if \(main\.scrollTop !== 0\) main\.scrollTop = 0; \};/);
   assert.match(src, /if \(main\.style\.overflowY !== 'hidden'\) main\.style\.overflowY = 'hidden';/,
     'the scrollbar must go unconditionally');
+
+  // touch-action is what stops a FINGER, and it is the piece that was missing.
+  // overflow:hidden stops the wheel and stops scrollTop being assigned, which
+  // is the whole story on a laptop — so the lock looked complete while a phone
+  // could still drag the board out of place. A touch pan is handled before any
+  // of that, and an overflow:hidden box is still pannable to that code path.
+  assert.match(src, /if \(main\.style\.touchAction !== 'none'\) main\.style\.touchAction = 'none';/,
+    'nothing stops a touch drag');
+
+  // Released to the unlocked values, never to captured ones: Rush Hour and
+  // Color Rush lock the same properties over the top of this, so what is
+  // captured here can already be the locked value — restoring that leaves the
+  // page stuck until a reload.
+  assert.match(src, /main\.style\.overflowY = '';\s*\n\s*main\.style\.touchAction = '';/);
+  assert.doesNotMatch(src, /const prevOverflow/, 'it is capturing values to restore again');
   assert.doesNotMatch(src, /const fits =/, 'the conditional lock is back');
   for (const ev of ['scroll', 'touchend', 'touchcancel']) {
     // Escaped twice: inside a template literal `\(` is just a paren.
