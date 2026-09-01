@@ -242,3 +242,63 @@ test('the webhook is found by its delivery URL, not a stored id', () => {
   // deletes the webhook in the dashboard. The URL is what makes it ours.
   assert.match(SERVICE, /\.find\(w => w\.webhookURL === url\)/);
 });
+
+// ── Registration survives being unable to register ────────────────────────
+
+test('a failed sync is retried, with backoff', async () => {
+  // The failure that actually happened: the account was out of RPC credits, so
+  // REGISTERING the webhook failed too. One attempt 15 seconds after boot and
+  // nothing afterwards means the feature stays off after credits return, until
+  // something restarts the server — silently unregistered while every log line
+  // says it started.
+  const SERVICE_SRC = read('src', 'services', 'heliusWebhooks.js');
+  assert.match(SERVICE_SRC, /function syncWithRetry\(supabase, attempt = 0\)/);
+  assert.match(SERVICE_SRC, /RETRY_BASE_MS \* 2 \*\* attempt/, 'backoff, not a fixed interval');
+  assert.match(SERVICE_SRC, /Math\.min\([^)]*RETRY_MAX_MS\)/, 'and a ceiling on the wait');
+  assert.match(SERVICE_SRC, /const t = setTimeout\(\(\) => syncWithRetry\(supabase\), 15_000\)/,
+    'init must go through the retrying path, not a bare sync');
+});
+
+test('the retry actually fires, and backs off between attempts', async () => {
+  // Behaviour, not shape: the shape assertions above cannot tell a retry that
+  // runs from one that was written and never wired up.
+  const svc = require('../src/services/heliusWebhooks');
+  const prev = { k: process.env.HELIUS_API_KEY, u: process.env.PUBLIC_API_URL, s: process.env.HELIUS_WEBHOOK_SECRET };
+  process.env.HELIUS_API_KEY = 'k';
+  process.env.PUBLIC_API_URL = 'https://unreachable.invalid';
+  process.env.HELIUS_WEBHOOK_SECRET = 's';
+
+  const waits = [];
+  const realTimeout = global.setTimeout;
+  // Collapse the waits so the test does not sit through a minute of backoff,
+  // recording what the real delays would have been.
+  global.setTimeout = (fn, ms) => {
+    if (ms >= 60_000) { waits.push(ms); if (waits.length > 3) return { unref() {} }; ms = 1; }
+    return realTimeout(fn, ms);
+  };
+
+  // Every attempt throws — the address query fails before any network call.
+  const db = { from: () => ({ select: () => ({ in: async () => ({ error: { message: 'down' } }) }) }) };
+  try {
+    svc.syncWithRetry(db);
+    await new Promise(r => realTimeout(r, 200));
+  } finally {
+    global.setTimeout = realTimeout;
+    process.env.HELIUS_API_KEY = prev.k ?? '';
+    if (prev.u === undefined) delete process.env.PUBLIC_API_URL; else process.env.PUBLIC_API_URL = prev.u;
+    process.env.HELIUS_WEBHOOK_SECRET = prev.s ?? '';
+  }
+
+  assert.ok(waits.length >= 3, `expected repeated retries, saw ${waits.length}`);
+  assert.equal(waits[0], 60_000);
+  assert.ok(waits[1] > waits[0] && waits[2] > waits[1],
+    `each wait must grow: ${waits.slice(0, 3).join(', ')}`);
+});
+
+test('having no addresses yet is not a failure to retry against', () => {
+  // A fresh deployment has none. scheduleSync fires when the first is issued,
+  // so a timer here would just burn requests asking about an empty table.
+  const SERVICE_SRC = read('src', 'services', 'heliusWebhooks.js');
+  assert.match(SERVICE_SRC, /if \(addresses\.length === 0\) return \{ addresses: 0 \}/);
+  assert.match(SERVICE_SRC, /will register when one is issued/);
+});

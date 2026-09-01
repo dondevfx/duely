@@ -185,6 +185,49 @@ function scheduleSync(supabase) {
   if (_pending.unref) _pending.unref();
 }
 
+/**
+ * Keep trying until the address list is actually registered.
+ *
+ * The first attempt used to be the only attempt: one sync 15 seconds after
+ * boot, and if it failed, nothing ever tried again. That is exactly the wrong
+ * shape for the failure that actually happened — the account was out of RPC
+ * credits, so REGISTERING the webhook failed too, and the feature would have
+ * stayed off after credits returned until something restarted the server or a
+ * player happened to open the deposit page. Silently unregistered while every
+ * log line says it started is the worst of both.
+ *
+ * Backs off rather than hammering: a provider answering 429 is asking for
+ * fewer requests, and retrying a registration hard would spend the credits it
+ * is waiting for. Capped at an hour, and it keeps going indefinitely, because
+ * the thing it is waiting for is a monthly cycle rolling over.
+ *
+ * Polling covers the gap throughout — a webhook that has not registered is a
+ * cost problem, never a correctness one.
+ */
+const RETRY_BASE_MS = 60_000;
+const RETRY_MAX_MS  = 60 * 60 * 1000;
+let _retryTimer = null;
+
+function syncWithRetry(supabase, attempt = 0) {
+  sync(supabase)
+    .then(r => {
+      _retryTimer = null;
+      if (r?.unchanged) console.log(`[helius] webhook already covers ${r.addresses} address(es)`);
+      else if (r?.addresses === 0) {
+        // No addresses yet on a fresh deployment. Not a failure, and not
+        // something to retry on a timer — scheduleSync fires when the first
+        // one is issued.
+        console.log('[helius] no Solana deposit addresses yet — will register when one is issued');
+      }
+    })
+    .catch(e => {
+      const wait = Math.min(RETRY_BASE_MS * 2 ** attempt, RETRY_MAX_MS);
+      console.error(`[helius] sync failed (attempt ${attempt + 1}), retrying in ${Math.round(wait / 1000)}s:`, e.message);
+      _retryTimer = setTimeout(() => syncWithRetry(supabase, attempt + 1), wait);
+      if (_retryTimer.unref) _retryTimer.unref();
+    });
+}
+
 function init(supabase) {
   if (!isEnabled()) {
     const missing = [
@@ -197,12 +240,8 @@ function init(supabase) {
   }
   // After boot, not during it: this is a network round trip and nothing about
   // it needs to delay the server accepting requests.
-  const t = setTimeout(() => {
-    sync(supabase)
-      .then(r => { if (r?.unchanged) console.log(`[helius] webhook already covers ${r.addresses} address(es)`); })
-      .catch(e => console.error('[helius] initial sync failed:', e.message));
-  }, 15_000);
+  const t = setTimeout(() => syncWithRetry(supabase), 15_000);
   if (t.unref) t.unref();
 }
 
-module.exports = { init, sync, scheduleSync, isEnabled, publicUrl, secret, SOL_COINS };
+module.exports = { init, sync, syncWithRetry, scheduleSync, isEnabled, publicUrl, secret, SOL_COINS };
