@@ -23,6 +23,7 @@ import { usePageReady } from '../hooks/usePageReady';
 import { useLeaveGuard } from '../hooks/useLeaveGuard';
 import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import CoinIcon from '../components/CoinIcon';
+import CoinFaceIcon from '../components/CoinFaceIcon';
 import { usePrivateRematch } from '../hooks/usePrivateRematch';
 
 function fmtFee(fee) {
@@ -210,7 +211,7 @@ export default function CoinFlipGame() {
   const [phase, setPhase] = useState('lobby');
   // Pin the page for the countdown and the match itself: start at the top,
   // and no scrolling the board off-screen while it is being played.
-  useGameScrollLock(phase === 'countdown' || phase === 'flipping');
+  useGameScrollLock(phase === 'queue' || phase === 'countdown' || phase === 'flipping', phase);
   const [countdown, setCountdown] = useState(0);
   const [side, setSide] = useState('heads');
   const [privateCode, setPrivateCode] = useState('');
@@ -656,8 +657,8 @@ export default function CoinFlipGame() {
               profile={profile}
               gameLabel="Coin Flip"
               extraRows={[
-                { label: 'Your Pick', value: side === 'heads' ? '🔵 Heads' : '⚪ Tails' },
-                { label: 'Landed On', value: resultData.result === 'heads' ? '🔵 Heads' : '⚪ Tails' },
+                { label: 'Your Pick', value: <span className="inline-flex items-center gap-1.5"><CoinFaceIcon side={side} size="1.1em" /> {side === 'heads' ? 'Heads' : 'Tails'}</span> },
+                { label: 'Landed On', value: <span className="inline-flex items-center gap-1.5"><CoinFaceIcon side={resultData.result} size="1.1em" /> {resultData.result === 'heads' ? 'Heads' : 'Tails'}</span> },
               ]}
               isPrivate={privateRematch.isPrivate}
               rematchState={privateRematch.rematchState}
@@ -711,7 +712,7 @@ export default function CoinFlipGame() {
                 className="text-3xl font-black text-white capitalize mt-8"
                 style={{ textShadow: '0 0 20px rgba(18,80,180,0.9)', animation: 'none' }}
               >
-                {flipResult === 'heads' ? '🔵' : '⚪'} {flipResult.toUpperCase()}!
+                <CoinFaceIcon side={flipResult} size="1em" /> {flipResult.toUpperCase()}!
               </div>
             )}
             {!resultLanded && (
@@ -768,7 +769,7 @@ export default function CoinFlipGame() {
                     }`}>
                     {/* Mobile sizes only. The sm: values stay where they were
                         tuned to fit the lobby on a 1080p viewport. */}
-                    <div className="text-xl sm:text-xl mb-0.5 sm:mb-0.5">{s === 'heads' ? '🔵' : '⚪'}</div>
+                    <div className="mb-0.5 sm:mb-0.5 flex justify-center"><CoinFaceIcon side={s} size={26} /></div>
                     <div className="capitalize text-[0.8125rem] sm:text-sm leading-none">{s}</div>
                   </button>
                 ))}
@@ -784,7 +785,7 @@ export default function CoinFlipGame() {
               <>
               <GlowButton onClick={insufficient ? () => setShortfall(true) : joinQueue} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent" disabled={session && !authenticated}>
                 {!session ? <><LockIcon /> Login to Play</>
-                  : `Find Opponent (${side === 'heads' ? '🔵 Heads' : '⚪ Tails'})`}
+                  : <span className="inline-flex items-center gap-1.5">Find Opponent (<CoinFaceIcon side={side} size="1.1em" /> {side === 'heads' ? 'Heads' : 'Tails'})</span>}
               </GlowButton>
               <>
                   {/* Secondary options — small buttons, still visible but not competing.

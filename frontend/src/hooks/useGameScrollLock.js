@@ -20,9 +20,39 @@ import { useEffect } from 'react';
  * overflow means there is nothing to scroll in the first place, which gets the
  * same result without taking input away from the game.
  *
- * @param {boolean} active  true while counting down or playing
+ * @param {boolean} active  true while queued, counting down or playing
+ * @param {*} pinOn  re-pins to the top whenever this value changes. Pass the
+ *                   phase: arming the lock is not enough on its own, because
+ *                   the lock stays armed ACROSS the queue -> countdown -> play
+ *                   transitions, so its one-time pin fires at the start of the
+ *                   queue and never again. A player who scrolled while waiting
+ *                   then dropped into a board that was already scrolled — which
+ *                   is the bug, and it is invisible from inside this hook.
  */
-export function useGameScrollLock(active) {
+export function useGameScrollLock(active, pinOn) {
+  // Back to the top on every phase change while the lock is on.
+  //
+  // Separate from the lock effect below so it can re-run without tearing the
+  // lock down and putting it back, which would drop the overflow style for a
+  // frame and let the page jump.
+  useEffect(() => {
+    if (!active) return undefined;
+    const main = document.querySelector('main');
+    if (!main) return undefined;
+    // Same three-frame assertion as the lock: the previous screen is still
+    // mounted on the frame the next one begins, and the browser restores the
+    // old scroll position once the taller screen is swapped for the shorter.
+    let frames = 3;
+    let raf = 0;
+    const toTop = () => {
+      main.scrollTop = 0;
+      if (--frames > 0) raf = requestAnimationFrame(toTop);
+    };
+    main.scrollTop = 0;
+    raf = requestAnimationFrame(toTop);
+    return () => cancelAnimationFrame(raf);
+  }, [active, pinOn]);
+
   useEffect(() => {
     if (!active) return;
 

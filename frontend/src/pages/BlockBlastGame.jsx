@@ -172,7 +172,7 @@ export default function BlockBlastGame() {
   const [phase, _setPhase]             = useState(location.state?.autoQueue ? 'queue' : 'lobby');
   // Pin the page for the countdown and the match itself: start at the top,
   // and no scrolling the board off-screen while it is being played.
-  useGameScrollLock(phase === 'countdown' || phase === 'active');
+  useGameScrollLock(phase === 'queue' || phase === 'countdown' || phase === 'active', phase);
   const { displayCurrency: betCurrency, setDisplayCurrency: setBetCurrency } = useCurrency();
   useEffect(() => { if (location.state?.betCurrency) setBetCurrency(location.state.betCurrency); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [entryFee, setEntryFee]       = useState(() => location.state?.entryFee ?? (betCurrency === 'diamonds' ? DIAMOND_FEES[0] : COIN_FEES[0]));
@@ -868,7 +868,6 @@ export default function BlockBlastGame() {
         <GameLobby
           title="Block Burst"
           description="Drag blocks onto the grid to fill rows and columns and clear them for points. Fill the energy bar to unlock Blast Mode — tap any row to clear it instantly."
-          controls="Drag blocks from tray onto the grid · Fill full rows/columns to clear them"
           betCurrency={betCurrency} setBetCurrency={setBetCurrency}
           entryFee={entryFee} setEntryFee={setEntryFee}
           balance={balance}

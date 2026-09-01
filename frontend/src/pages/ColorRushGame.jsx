@@ -70,7 +70,7 @@ export default function ColorRushGame() {
   // a player who had scrolled the lobby began the countdown — and then the
   // match — looking at the middle of the board, with the top of the track off
   // the screen.
-  useGameScrollLock(countdown > 0 || phase === 'playing');
+  useGameScrollLock(phase === 'queue' || countdown > 0 || phase === 'playing', `${phase}:${countdown > 0}`);
   const [opponent, setOpponent] = useState(null);
   const [seed, setSeed] = useState(null);
   const [roomId, setRoomId] = useState(null);

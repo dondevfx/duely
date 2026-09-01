@@ -86,7 +86,7 @@ export default function TowerGame() {
   useResumeMatch(socket, () => phaseRef.current === 'active');
   // Pin the page for the countdown and the run — a tap that scrolled the board
   // instead of dropping a block would cost a real match.
-  useGameScrollLock(phase === 'countdown' || phase === 'active');
+  useGameScrollLock(phase === 'queue' || phase === 'countdown' || phase === 'active', phase);
 
   useEffect(() => { if (location.state?.betCurrency) setBetCurrency(location.state.betCurrency); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

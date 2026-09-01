@@ -190,9 +190,19 @@ test('Tower does not reuse another game\'s emoji', () => {
   assert.equal(new Set(icons).size, icons.length, `duplicate icon in the pool: ${icons}`);
 });
 
-test('the page pins the screen while playing', () => {
-  // A tap that scrolled instead of dropping would cost a real match.
-  assert.match(fe('pages', 'TowerGame.jsx'), /useGameScrollLock\(phase === 'countdown' \|\| phase === 'active'\)/);
+test('the page pins the screen from the queue through the last drop', () => {
+  // A tap that scrolled instead of dropping would cost a real match — and the
+  // queue screen counts, because whatever you scrolled to while waiting was
+  // still there when the board arrived.
+  //
+  // Matched on the parts rather than the whole call: the exact expression is
+  // tuning and moved once already, but the queue must be covered and the phase
+  // must be handed over as the re-pin key.
+  const call = fe('pages', 'TowerGame.jsx').match(/useGameScrollLock\(([^;]*)\);/);
+  assert.ok(call, 'Tower has no scroll lock');
+  assert.match(call[1], /phase === 'queue'/, 'the queue screen must be locked too');
+  assert.match(call[1], /phase === 'active'/);
+  assert.match(call[1], /,\s*phase\s*$/, 'the phase must be passed so it re-pins on a change');
 });
 
 test('the page forfeits on leaving, like the others', () => {

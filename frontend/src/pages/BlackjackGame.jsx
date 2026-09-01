@@ -253,7 +253,7 @@ function BlackjackGame() {
   // and no scrolling the board off-screen while it is being played.
   // Placed after `countdown` is declared — referencing it above would hit
   // the temporal dead zone and throw on mount.
-  useGameScrollLock(countdown > 0 || phase === 'playing' || phase === 'reveal');
+  useGameScrollLock(phase === 'queue' || countdown > 0 || phase === 'playing' || phase === 'reveal', `${phase}:${countdown > 0}`);
 
   const [opponentUsername, setOpponentUsername] = useState('');
   // The whole opponent as the server described them, for their picture. The

@@ -264,3 +264,40 @@ test('the slider is grabbed by a bigger box than the bar it draws', () => {
   assert.match(fn, /track\.getBoundingClientRect\(\)/);
   assert.doesNotMatch(fn, /hit\.getBoundingClientRect\(\)/);
 });
+
+// ── Starting the match at the top of the screen ─────────────────────────────
+
+test('every game locks the queue screen as well as the countdown', () => {
+  // The lock used to arm at the countdown, so the queue screen was free to
+  // scroll — and whatever you scrolled to was still there when the board
+  // arrived.
+  const FE2 = (...p) => path.join(__dirname, '..', '..', 'frontend', 'src', ...p);
+  const pages = ['BlockBlastGame', 'TowerGame', 'WordleGame', 'BlackjackGame',
+                 'CoinFlipGame', 'CarDashGame', 'ColorRushGame'];
+  const bad = [];
+  for (const p of pages) {
+    const src = fs.readFileSync(FE2('pages', `${p}.jsx`), 'utf8');
+    const call = src.match(/useGameScrollLock\(([^;]*)\);/);
+    if (!call) { bad.push(`${p}: no scroll lock at all`); continue; }
+    if (!/phase === 'queue'/.test(call[1])) bad.push(`${p}: the queue screen is not locked`);
+    // And the phase must be passed as the pin key, or the lock stays armed
+    // across queue -> countdown -> play and never re-pins.
+    if (!/,\s*(phase|`)/.test(call[1])) bad.push(`${p}: nothing tells it to re-pin on a phase change`);
+  }
+  assert.deepEqual(bad, [], bad.join('\n'));
+});
+
+test('the lock re-pins on a phase change, not only when it arms', () => {
+  // This is the actual bug: `active` stays true the whole way from queue to
+  // play, so an effect keyed on it alone fires once, at the START of the queue.
+  // Scroll after that and the board opens exactly where you left it.
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'src', 'hooks', 'useGameScrollLock.js'), 'utf8');
+  assert.match(src, /export function useGameScrollLock\(active, pinOn\)/);
+  assert.match(src, /\}, \[active, pinOn\]\);/, 'the re-pin must depend on the phase too');
+  assert.match(src, /\}, \[active\]\);/, 'the lock itself still keys on active alone');
+  // Separate effects: re-running the lock would drop the overflow style for a
+  // frame and let the page jump.
+  assert.ok(src.indexOf('}, [active, pinOn]);') < src.indexOf('}, [active]);'),
+    'the re-pin should be its own effect, before the lock');
+});

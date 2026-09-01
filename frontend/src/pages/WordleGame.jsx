@@ -190,7 +190,7 @@ export default function WordleGame() {
   const [phase,       setPhase]       = useState('lobby');
   // Pin the page for the countdown and the match itself: start at the top,
   // and no scrolling the board off-screen while it is being played.
-  useGameScrollLock(phase === 'countdown' || phase === 'playing');
+  useGameScrollLock(phase === 'queue' || phase === 'countdown' || phase === 'playing', phase);
   const [entryFee,    setEntryFee]    = useState(() => location.state?.entryFee ?? (betCurrency === 'diamonds' ? DIAMOND_FEES[0] : COIN_FEES[0]));
   const [roomId,      setRoomId]      = useState(null);
   const [opponent,    setOpponent]    = useState(null);
