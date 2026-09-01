@@ -65,3 +65,19 @@ test('a quota message is reported as a quota message', () => {
   assert.ok(!/await (res|sigRes|r|txRes|txR)\.json\(\)/.test(CODE),
     'every response body must go through readJson so a non-JSON reply is legible');
 });
+
+test('the stranded sweep stops when the provider is rate limited', () => {
+  // web3.js retries a 429 internally four times with its own backoff and
+  // prints an untagged line for each, so an account out of credits turned one
+  // hourly cleanup into a hundred log lines about a provider that will say no
+  // to every one of them. Nothing here can succeed until the quota resets, and
+  // the job has no deadline — everything it would have moved is still there
+  // next hour.
+  const sweep = CODE.slice(CODE.indexOf('async function sweepStrandedUsdc'));
+  assert.match(sweep, /429\|rate\.\?limit\|max usage/i);
+  const guard = sweep.indexOf('max usage');
+  const brk = sweep.indexOf('break;', guard);
+  const perAddrLog = sweep.indexOf('stranded sweep failed for user');
+  assert.ok(brk > 0 && brk < perAddrLog,
+    'the rate-limit branch must break out, not fall through to the per-address log');
+});

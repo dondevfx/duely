@@ -983,6 +983,19 @@ async function sweepStrandedUsdc(supabase) {
       const res = await sweepSplToken(privKey, row.coin);
       if (res) { swept++; total[row.coin] = (total[row.coin] || 0) + res.amount; }
     } catch (e) {
+      // Rate limited: stop the whole run rather than working through the rest.
+      //
+      // web3.js retries a 429 internally four times with its own backoff, and
+      // prints an untagged line for each, so an account out of credits turned
+      // one hourly cleanup into a hundred log lines about a provider that is
+      // going to say no to every one of them. The answer is not to sweep
+      // quieter, it is to not sweep: nothing here can succeed until the quota
+      // resets, and this job has no deadline — everything it would have moved
+      // is still there next hour.
+      if (/429|rate.?limit|max usage/i.test(e.message || '')) {
+        console.warn('[monitor] stranded sweep stopped early — RPC rate limited, retrying next hour');
+        break;
+      }
       console.error(`[monitor] stranded sweep failed for user ${row.user_id} (${row.coin}):`, e.message);
     }
   }
