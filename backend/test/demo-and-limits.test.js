@@ -568,17 +568,18 @@ test('the phone Home is one switch, not a sprinkling of classes', () => {
   assert.deepEqual(strays.map((m) => m[0]), [],
     'a section is hidden by a literal class instead of the switch');
 
-  // The pieces that come off the phone. The "Games" heading is deliberately
-  // NOT among them — with the hero stripped back it sits under the title and
-  // labels the grid.
-  assert.equal((src.match(/\$\{PHONE_HIDE\}/g) || []).length, 5, 'expected five PHONE_HIDE wrappers');
-  // Matched on the two things that matter — no PHONE_HIDE, and centred on a
-  // phone — rather than on the whole class string, which pinned every unrelated
-  // styling tweak to this test.
-  const heading = src.match(/<h2 className="([^"]*)">Games<\/h2>/);
-  assert.ok(heading, 'the Games heading is gone');
-  assert.doesNotMatch(heading[1], /PHONE_HIDE/, 'the Games heading is hidden on phones again');
-  assert.match(heading[1], /text-center sm:text-left/, 'it should be centred on phones only');
+  // The pieces that come off the phone, the Games heading among them: with the
+  // hero stripped back the cards sit directly under the title and the label was
+  // just a word in the way.
+  assert.equal((src.match(/\$\{PHONE_HIDE\}/g) || []).length, 6, 'expected six PHONE_HIDE wrappers');
+  assert.match(src, /<h2 className=\{`\$\{PHONE_HIDE\} text-xl md:text-2xl[^`]*`\}>Games<\/h2>/,
+    'the Games heading must be hidden on phones');
+
+  // And the gap it left has to be closed, or the cards float below a blank
+  // stretch where the heading used to be. On a phone the hero's bottom padding
+  // is now the ENTIRE distance between the title and the first card.
+  assert.match(src, /pt-3 md:pt-14 pb-2 md:pb-10 px-4/,
+    'the hero still has its old bottom padding, so the cards sit too far down');
   assert.match(src, /<div className=\{PHONE_HIDE\}>/, 'the diamond bonus wrapper');
   assert.equal((src.match(/\$\{PHONE_HIDE_FLEX\}/g) || []).length, 1, 'the hero button row');
 

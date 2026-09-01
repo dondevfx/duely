@@ -68,7 +68,11 @@ export default function Home() {
     <div className="min-h-screen bg-bg pt-2 md:pt-16">
       {/* Hero — a little breathing room on mobile (~40px), roomy on desktop
           (was ~120px of stacked top padding on every screen size) */}
-      <section className="relative pt-3 md:pt-14 pb-6 md:pb-10 px-4 overflow-hidden">
+      {/* pb-2 on phones: with the description, the buttons and the Games
+          heading all gone, this padding is the entire gap between the title and
+          the first card, and pb-6 left them looking unrelated. Desktop keeps
+          md:pb-10, where the hero still has content under the title. */}
+      <section className="relative pt-3 md:pt-14 pb-2 md:pb-10 px-4 overflow-hidden">
         <div className="relative max-w-7xl mx-auto">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6 md:gap-12">
             <div className="flex-1 text-center md:text-left">
@@ -169,11 +173,7 @@ export default function Home() {
             column now sits underneath, giving the grid the full width. */}
         <div className="flex flex-col lg:flex-row gap-8">
           <div className="flex-1 min-w-0">
-            {/* Shown on phones too. With the hero stripped back, this sits
-                directly under the 1v1 Duels title and labels the grid — which
-                is the one piece of the old page that still had a job to do
-                once everything between the title and the cards had gone. */}
-            <h2 className="text-center sm:text-left text-xl md:text-2xl font-bold text-white mb-4 md:mb-6">Games</h2>
+            <h2 className={`${PHONE_HIDE} text-xl md:text-2xl font-bold text-white mb-4 md:mb-6`}>Games</h2>
             {/* Column counts are chosen from the width this grid ACTUALLY
                 gets — after the 240px left nav, and after the side column
                 from xl — not from the raw viewport:
