@@ -311,3 +311,28 @@ test('having no addresses yet is not a failure to retry against', () => {
   assert.match(SERVICE_SRC, /if \(addresses\.length === 0\) return \{ addresses: 0 \}/);
   assert.match(SERVICE_SRC, /will register when one is issued/);
 });
+
+// ── A rejected delivery is not silent ─────────────────────────────────────
+
+test('a rejected delivery says why, once a minute', async () => {
+  // The dangerous failure is not an attacker, it is the secret here
+  // disagreeing with the one in the Helius dashboard: every deposit
+  // notification bounces, nothing is logged, and the only symptom is deposits
+  // arriving six hours late via the sweep.
+  process.env.HELIUS_WEBHOOK_SECRET = 'right';
+  const realWarn = console.warn;
+  const lines = [];
+  console.warn = (...a) => lines.push(a.join(' '));
+  try {
+    await withRouter([], async ({ port }) => {
+      await post(port, [], { authorization: 'wrong' });
+      await post(port, [], {});
+    });
+  } finally {
+    console.warn = realWarn;
+  }
+  assert.equal(lines.length, 1, 'throttled: an endpoint anyone can reach must not be a lever on the log');
+  assert.match(lines[0], /rejected a delivery/);
+  assert.match(lines[0], /does not match HELIUS_WEBHOOK_SECRET/,
+    'and it must name the cause — that is the whole point of logging it');
+});

@@ -24,6 +24,10 @@ function toCoinId(currency, network) {
   return currency.toLowerCase();
 }
 
+// Last time a rejected Helius delivery was logged — see the note at the
+// rejection itself for why this is throttled rather than logged every time.
+let _lastRejectLog = 0;
+
 module.exports = function webhookRoutes(supabase) {
   const router = Router();
 
@@ -342,8 +346,30 @@ module.exports = function webhookRoutes(supabase) {
     const auth = req.get('authorization') || '';
     const expected = helius.secret();
     if (!expected || auth !== expected) {
-      // 401 without detail. A caller who guessed the URL learns nothing about
-      // whether the secret is set, wrong, or merely malformed.
+      // Say something, at most once a minute.
+      //
+      // A rejected delivery is either someone probing the endpoint or the
+      // secret here disagreeing with the one in the Helius dashboard — and the
+      // second is the dangerous one, because it is completely silent: every
+      // deposit notification bounces, nothing is logged, and the only symptom
+      // is deposits arriving six hours late via the sweep. That is a very
+      // expensive thing to have to guess at.
+      //
+      // Throttled because the alternative is an endpoint anyone can use to
+      // fill the log by holding down a request. One line a minute is enough to
+      // notice a misconfiguration and not enough to be a lever.
+      const now = Date.now();
+      if (now - _lastRejectLog > 60_000) {
+        _lastRejectLog = now;
+        console.warn(
+          `[helius webhook] rejected a delivery — ${
+            !expected ? 'HELIUS_WEBHOOK_SECRET is not set' :
+            !auth     ? 'no Authorization header' :
+                        'Authorization header does not match HELIUS_WEBHOOK_SECRET'
+          }`);
+      }
+      // The response itself stays bare: a caller who guessed the URL learns
+      // nothing about whether the secret is set, wrong, or merely malformed.
       return res.status(401).json({ error: 'unauthorized' });
     }
 
