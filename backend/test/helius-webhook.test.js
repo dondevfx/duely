@@ -206,10 +206,12 @@ test('the webhook path credits through the same function the poller does', () =>
 test('polling stays on as the backstop', () => {
   // A webhook can be missed: a deploy mid-delivery, a retry budget running
   // out, a re-registration that failed. Deposits are money.
-  assert.match(MONITOR, /SOL_SWEEP_EVERY_PASSES = 480/);
-  assert.match(MONITOR, /_passNo % SOL_SWEEP_EVERY_PASSES\) === 0/);
-  assert.match(MONITOR, /if \(heliusOn && !sweeping\)/,
-    'Solana is only skipped when webhooks are actually enabled');
+  // Renamed from SOL_SWEEP_EVERY_PASSES when the same sweep became the
+  // backstop for every chain, not only Solana — see hot-polling.test.js.
+  assert.match(MONITOR, /SWEEP_EVERY_PASSES = 480/);
+  assert.match(MONITOR, /_passNo % SWEEP_EVERY_PASSES\) === 0/);
+  assert.match(MONITOR, /if \(heliusOn && SOL_COINS\.has\(String\(a\.coin\)\.toLowerCase\(\)\)\) return false/,
+    'Solana is only left to the webhook when webhooks are actually enabled');
 });
 
 test('the first pass after a restart sweeps everything', () => {
@@ -281,7 +283,14 @@ test('the retry actually fires, and backs off between attempts', async () => {
   const db = { from: () => ({ select: () => ({ in: async () => ({ error: { message: 'down' } }) }) }) };
   try {
     svc.syncWithRetry(db);
-    await new Promise(r => realTimeout(r, 200));
+    // Wait for the third retry to be scheduled rather than for a fixed slice
+    // of wall clock. A 200ms allowance passed alone and failed inside the full
+    // suite on a busy machine — a test that depends on how loaded the box is
+    // reports flakiness as a bug and trains you to ignore it.
+    const deadline = Date.now() + 5000;
+    while (waits.length < 3 && Date.now() < deadline) {
+      await new Promise(r => realTimeout(r, 5));
+    }
   } finally {
     global.setTimeout = realTimeout;
     process.env.HELIUS_API_KEY = prev.k ?? '';

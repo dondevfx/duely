@@ -897,23 +897,79 @@ async function pollCoin(supabase, coin, list) {
 // is the price of the guarantee: four passes a day instead of 1,920 is a
 // rounding error against any plan, where the 45-second version was the entire
 // plan and grew with every signup.
-const SOL_SWEEP_EVERY_PASSES = 480;
+const SWEEP_EVERY_PASSES = 480;
 let _passNo = 0;
+
+// ── Who is actually depositing right now ─────────────────────────────────────
+//
+// Solana got webhooks, so an idle Solana address costs nothing. The other five
+// chains have no equivalent here — BlockCypher, Etherscan and TronGrid are
+// asked, never told — so they need the other answer to the same problem: poll
+// on intent rather than on a timer.
+//
+// Nobody announces a deposit, but they do announce the INTENT to make one. An
+// address is only ever handed out by /wallet/get-address, which happens when a
+// player picks a coin on the deposit page. That is the moment a deposit
+// becomes likely, and it is the only signal there is. From then the address is
+// polled every pass, as before; the rest of the time it is only swept.
+//
+// Two hours, not thirty minutes. A withdrawal from an exchange can sit pending
+// for an hour before it is even broadcast, and the cost of being generous here
+// is a handful of requests for one address, while the cost of being tight is a
+// player watching a confirmed transaction go unnoticed.
+const HOT_MS = 2 * 60 * 60 * 1000;
+const HOT_MAX = 10_000;
+const _hot = new Map();
+const hotKey = (userId, coin) => `${userId}:${String(coin).toLowerCase()}`;
+
+/** Called when an address is handed to a player — see the note above. */
+function markActive(userId, coin) {
+  if (!userId || !coin) return;
+  // Bounded. Expired entries are normally dropped on read, but an address that
+  // is never polled again is never read, so a long-running process would hold
+  // every key it had ever seen.
+  if (_hot.size >= HOT_MAX) {
+    const now = Date.now();
+    for (const [k, exp] of _hot) if (exp < now) _hot.delete(k);
+    // Still full means every entry is live, which at this size is a real
+    // surge rather than a leak. Drop the oldest and carry on.
+    if (_hot.size >= HOT_MAX) _hot.delete(_hot.keys().next().value);
+  }
+  _hot.set(hotKey(userId, coin), Date.now() + HOT_MS);
+}
+
+function isHot(userId, coin) {
+  const exp = _hot.get(hotKey(userId, coin));
+  if (!exp) return false;
+  if (exp < Date.now()) { _hot.delete(hotKey(userId, coin)); return false; }
+  return true;
+}
 
 async function pollOnce(supabase) {
   const addresses = await loadAddresses();
   if (!addresses.length) return;
 
-  // With webhooks live, Solana is heard from rather than asked — except on the
-  // sweep pass. The first pass after boot always sweeps, so a restart re-checks
-  // everything once rather than waiting six hours to find what was missed while
-  // the process was down.
+  // Every pass polls the addresses a deposit is expected at. Every 480th pass
+  // — six hours — polls all of them.
+  //
+  // The sweep is the backstop for everything the intent signal cannot see: a
+  // player who saved their address weeks ago and sent to it without opening
+  // the page, and, on Solana, a webhook delivery that was missed. The first
+  // pass after boot always sweeps, so a restart re-checks everything once
+  // instead of waiting six hours to find what arrived while it was down.
   let list = addresses;
   const heliusOn = require('./heliusWebhooks').isEnabled();
-  const sweeping = (_passNo % SOL_SWEEP_EVERY_PASSES) === 0;
+  const sweeping = (_passNo % SWEEP_EVERY_PASSES) === 0;
   _passNo++;
-  if (heliusOn && !sweeping) {
-    list = addresses.filter(a => !SOL_COINS.has(String(a.coin).toLowerCase()));
+  if (!sweeping) {
+    list = addresses.filter(a => {
+      // Solana is heard from rather than asked, and a webhook is both faster
+      // than a 45-second poll and free. Polling it during the hot window would
+      // buy nothing and cost credits. With webhooks off it is an ordinary
+      // chain again and follows the same rule as the rest.
+      if (heliusOn && SOL_COINS.has(String(a.coin).toLowerCase())) return false;
+      return isHot(a.user_id, a.coin);
+    });
     if (list.length === 0) return;
   }
 
@@ -1028,4 +1084,6 @@ function init(supabase) {
 // the idempotency check, the gas reserve, the swap, the credit — is identical
 // whichever way the deposit was noticed, and must stay that way: two paths
 // into money with two sets of rules is how a deposit gets credited twice.
-module.exports = { init, claimDeposit, sweepStrandedUsdc, processDeposit };
+// hotSize is exported for the ceiling test — the only way to tell a bound
+// that holds from one that was written and then disabled.
+module.exports = { init, claimDeposit, sweepStrandedUsdc, processDeposit, markActive, isHot, hotSize: () => _hot.size };

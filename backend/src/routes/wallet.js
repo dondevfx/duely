@@ -157,6 +157,14 @@ module.exports = function walletRoutes(supabase, io) {
     }
     try {
       const result = await getOrCreateAddress(req.user.id, coin.toLowerCase(), supabase);
+      // A player asking for an address is the only warning we get that a
+      // deposit is coming — nobody tells us one happened. The monitor polls
+      // this address every 45 seconds for the next two hours on the strength
+      // of it, and only sweeps it the rest of the time. See the note on
+      // markActive in blockchainMonitor.
+      try {
+        require('../services/blockchainMonitor').markActive(req.user.id, coin.toLowerCase());
+      } catch { /* the sweep still finds it, just later */ }
       res.json({
         address:  result.address,
         memo:     result.memo || null,
