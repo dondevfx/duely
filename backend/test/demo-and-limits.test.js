@@ -572,8 +572,13 @@ test('the phone Home is one switch, not a sprinkling of classes', () => {
   // NOT among them — with the hero stripped back it sits under the title and
   // labels the grid.
   assert.equal((src.match(/\$\{PHONE_HIDE\}/g) || []).length, 5, 'expected five PHONE_HIDE wrappers');
-  assert.match(src, /<h2 className="text-xl md:text-2xl font-bold text-white mb-4 md:mb-6">Games<\/h2>/,
-    'the Games heading must show on phones as well');
+  // Matched on the two things that matter — no PHONE_HIDE, and centred on a
+  // phone — rather than on the whole class string, which pinned every unrelated
+  // styling tweak to this test.
+  const heading = src.match(/<h2 className="([^"]*)">Games<\/h2>/);
+  assert.ok(heading, 'the Games heading is gone');
+  assert.doesNotMatch(heading[1], /PHONE_HIDE/, 'the Games heading is hidden on phones again');
+  assert.match(heading[1], /text-center sm:text-left/, 'it should be centred on phones only');
   assert.match(src, /<div className=\{PHONE_HIDE\}>/, 'the diamond bonus wrapper');
   assert.equal((src.match(/\$\{PHONE_HIDE_FLEX\}/g) || []).length, 1, 'the hero button row');
 

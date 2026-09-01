@@ -162,7 +162,7 @@ export default function Navbar() {
               tap registers immediately rather than after the browser has
               decided it was not a gesture. */}
           <button
-            className="md:hidden relative z-10 p-2 rounded-lg text-muted hover:text-white hover:bg-surfaceLight transition-colors shrink-0 w-9 h-9 flex items-center justify-center"
+            className="md:hidden relative z-10 p-2 rounded-lg text-white hover:bg-surfaceLight transition-colors shrink-0 w-9 h-9 flex items-center justify-center"
             style={{ touchAction: 'manipulation' }}
             onClick={() => setMobileMenuOpen(o => !o)}
             aria-expanded={mobileMenuOpen}

@@ -173,7 +173,7 @@ export default function Home() {
                 directly under the 1v1 Duels title and labels the grid — which
                 is the one piece of the old page that still had a job to do
                 once everything between the title and the cards had gone. */}
-            <h2 className="text-xl md:text-2xl font-bold text-white mb-4 md:mb-6">Games</h2>
+            <h2 className="text-center sm:text-left text-xl md:text-2xl font-bold text-white mb-4 md:mb-6">Games</h2>
             {/* Column counts are chosen from the width this grid ACTUALLY
                 gets — after the 240px left nav, and after the side column
                 from xl — not from the raw viewport:
