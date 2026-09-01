@@ -394,7 +394,9 @@ module.exports = function webhookRoutes(supabase) {
       const coin = MINT_TO_COIN[t?.mint];
       if (!coin || !t?.toUserAccount) continue;
       // toUserAccount is the OWNER wallet, not the associated token account,
-      // which is why registering the wallet address covers SPL as well as SOL.
+      // so this matches the address we registered without having to derive the
+      // ATA. Note the USDC wallet is a DIFFERENT address from the SOL one —
+      // addressService derives per coin — so all three are registered.
       const amount = Number(t.tokenAmount);
       if (!(amount > 0)) continue;
       credits.push({ address: t.toUserAccount, coin, amount });

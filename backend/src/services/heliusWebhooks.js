@@ -31,10 +31,15 @@ const fetch = require('node-fetch');
 
 const API = 'https://api.helius.xyz/v0/webhooks';
 
-// The three coins that live at a Solana address. USDC and USDT arrive as SPL
-// token transfers to the same wallet, so one registered address covers all
-// three — Helius reports the OWNER account for a token transfer, not the
-// associated token account.
+// The three coins that live on Solana. Each derives to its OWN address —
+// addressService hashes `${userId}:${coin}`, so a player's SOL, USDC and USDT
+// addresses are three different wallets, not one wallet holding three things.
+// All three must therefore be registered.
+//
+// What is shared is the shape: a stablecoin arrives as an SPL token transfer
+// whose toUserAccount is the OWNER wallet, not the associated token account,
+// which is why registering the wallet address is enough and the ATA does not
+// need deriving.
 const SOL_COINS = ['sol', 'usdc', 'usdt'];
 
 function apiKey() {
@@ -97,9 +102,11 @@ async function solanaAddresses(supabase) {
     .select('address, coin')
     .in('coin', SOL_COINS);
   if (error) throw new Error(`deposit_addresses query failed: ${error.message}`);
-  // One entry per address. A player has a row per coin and all three derive to
-  // the same Solana address, so the raw list is three times longer than the
-  // number of accounts Helius needs to watch.
+  // Deduplicated defensively rather than because duplicates are expected: one
+  // row per user per coin, each a distinct address. A repeated address would
+  // mean two accounts derived to one wallet, which is a much larger problem
+  // than a wasted slot — but sending Helius a list with repeats in it would
+  // not help anyone diagnose that.
   return [...new Set((data || []).map(r => r.address).filter(Boolean))];
 }
 
@@ -159,10 +166,11 @@ async function sync(supabase) {
 /**
  * Re-sync, coalesced.
  *
- * Called whenever an address is issued, and addresses are issued in bursts —
- * a player opening the deposit page creates one per coin back to back. Sending
- * a full list rewrite for each would be three identical writes, so the work is
- * deferred and collapsed into one.
+ * Called whenever an address is issued, and addresses are issued in bursts — a
+ * player opening the deposit page creates one per coin back to back, nine of
+ * them, three of which are Solana. Sending a full list rewrite for each would
+ * be nine writes for one player, so the work is deferred and collapsed into
+ * one that covers them all.
  */
 let _pending = null;
 const COALESCE_MS = 10_000;
