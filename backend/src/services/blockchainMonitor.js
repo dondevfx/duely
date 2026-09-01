@@ -50,7 +50,7 @@ async function getPriceUsd(coin) {
     try {
       const ids = Object.values(COINGECKO_IDS).join(',');
       const r   = await fetchWithTimeout(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`);
-      const d   = await r.json();
+      const d   = await readJson(r);
       _prices = {};
       for (const [coin, id] of Object.entries(COINGECKO_IDS)) {
         _prices[coin] = d[id]?.usd || 0;
@@ -80,6 +80,79 @@ async function fetchWithTimeout(url, opts = {}, ms = 12_000) {
   }
 }
 
+// A confirmed Solana transaction never changes, so it is fetched at most once.
+//
+// This is what burned through an entire month of RPC credits. Both Solana
+// pollers ask for the last 10 signatures on an address and then call
+// getTransaction on ALL TEN, every pass, forever — nothing remembered that
+// nine of them were the same nine as 45 seconds ago. Eight addresses at
+// 1 + 10 calls each, every 45 seconds, is about 169,000 calls a day and over
+// five million a month, of which almost all are re-downloads of transactions
+// already parsed. The provider answered "max usage reached" and deposits
+// stopped being detected.
+//
+// Memoising getTransaction by signature makes steady state one call per
+// address per pass — the signature list itself — which is roughly a 90%
+// reduction and a rounding error against any plan's quota. Safe precisely
+// because the key is a signature: a confirmed transaction is immutable, so a
+// hit can never be stale. Only successful fetches are stored, so a timeout or
+// an error is retried on the next pass rather than cached as "nothing here".
+//
+// Bounded, and evicting oldest-first. Ten signatures per address across a
+// growing address book is small, but "small" without a ceiling is how a
+// long-running process leaks.
+// A provider that is out of quota, rate-limited, or behind a proxy error page
+// does not answer with JSON. Helius replies with the bare words "max usage
+// reached", so .json() threw and every address logged "Unexpected token 'm'" —
+// a parse error, which reads like a bug in the parsing rather than a bill to
+// pay. Say what actually happened, and include the status and the first of the
+// body so the next one is diagnosable at a glance.
+//
+// Used for EVERY upstream in this file, not only the Solana RPC. CoinGecko,
+// Blockstream, Etherscan, TronGrid and BlockCypher can all answer this way,
+// and each would produce the same illegible message.
+async function readJson(res) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    const body = text.trim().slice(0, 120);
+    throw new Error(`upstream returned non-JSON (HTTP ${res.status}): ${body || '<empty>'}`);
+  }
+}
+
+const TX_CACHE_MAX = 4000;
+const _txCache = new Map();
+
+async function getSolanaTx(rpc, signature) {
+  const hit = _txCache.get(signature);
+  if (hit !== undefined) return hit;
+
+  const res = await fetchWithTimeout(rpc, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0', id: 1,
+      method: 'getTransaction',
+      params: [signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0 }],
+    }),
+  });
+  const data = await readJson(res);
+  const tx = data.result;
+  // A null result means the node has not caught up to this signature yet, or
+  // it fell outside the node's history. Either way it is not a permanent
+  // answer, so it is NOT cached — caching it would make a deposit invisible
+  // for as long as this process runs.
+  if (!tx) return null;
+
+  if (_txCache.size >= TX_CACHE_MAX) {
+    // Map iterates in insertion order, so the first key is the oldest.
+    _txCache.delete(_txCache.keys().next().value);
+  }
+  _txCache.set(signature, tx);
+  return tx;
+}
+
 // Returns array of { txHash, amount (in coin units), confirmed }
 //
 // Two providers, because this is the ONLY way a BTC deposit is noticed. It read
@@ -98,7 +171,7 @@ async function fetchWithTimeout(url, opts = {}, ms = 12_000) {
 async function fetchBtcTxs(address) {
   try {
     const r = await fetchWithTimeout(`https://blockstream.info/api/address/${address}/txs`);
-    const txs = await r.json();
+    const txs = await readJson(r);
     if (Array.isArray(txs)) {
       return txs.map(tx => {
         const out = tx.vout?.find(o => o.scriptpubkey_address === address);
@@ -178,7 +251,7 @@ async function fetchEvmTxs(coin, address) {
     `https://api.etherscan.io/v2/api?chainid=${chainId}` +
     `&module=account&action=txlist&address=${address}&sort=desc&apikey=${key}`
   );
-  const d = await r.json();
+  const d = await readJson(r);
   if (d.status !== '1') { explorerMiss(coin, address, d); return []; }
   if (!Array.isArray(d.result)) { explorerMiss(coin, address, d); return []; }
 
@@ -225,24 +298,14 @@ async function fetchSplTxs(walletAddress, coin = 'usdc') {
       params: [tokenAccountStr, { limit: 10 }],
     }),
   });
-  const sigData = await sigRes.json();
+  const sigData = await readJson(sigRes);
   const sigs = sigData.result || [];
 
   const results = [];
   for (const sig of sigs) {
     if (sig.err) continue;
     try {
-      const txRes = await fetchWithTimeout(rpc, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0', id: 1,
-          method: 'getTransaction',
-          params: [sig.signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0 }],
-        }),
-      });
-      const txData = await txRes.json();
-      const tx = txData.result;
+      const tx = await getSolanaTx(rpc, sig.signature);
       if (!tx) continue;
 
       // Parse all instructions (including inner) for USDC transfer to our token account
@@ -277,24 +340,14 @@ async function fetchSolTxs(address) {
       params:  [address, { limit: 10 }],
     }),
   });
-  const d = await r.json();
+  const d = await readJson(r);
   const sigs = d.result || [];
 
   const results = [];
   for (const sig of sigs) {
     if (sig.err) continue;
     try {
-      const txR = await fetchWithTimeout(rpc, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0', id: 1,
-          method:  'getTransaction',
-          params:  [sig.signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0 }],
-        }),
-      });
-      const txD = await txR.json();
-      const tx  = txD.result;
+      const tx = await getSolanaTx(rpc, sig.signature);
       if (!tx) continue;
 
       // Find balance change for our address
@@ -321,7 +374,7 @@ async function fetchTrxTxs(address) {
   const r = await fetchWithTimeout(
     `https://api.trongrid.io/v1/accounts/${address}/transactions?only_confirmed=true&limit=20&direction=in`
   );
-  const d = await r.json();
+  const d = await readJson(r);
   if (!d.data) return [];
   return d.data
     .filter(tx => {
@@ -345,7 +398,7 @@ async function fetchUsdtTrc20Txs(address) {
   const r = await fetchWithTimeout(
     `https://api.trongrid.io/v1/accounts/${address}/transactions/trc20?only_confirmed=true&limit=20&contract_address=${usdtContract}`
   );
-  const d = await r.json();
+  const d = await readJson(r);
   if (!d.data) return [];
   return d.data
     .filter(tx => tx.to === address && parseFloat(tx.value) > 0)
@@ -361,7 +414,7 @@ async function fetchBlockcypherTxs(coin, address) {
   const chain  = chains[coin];
   const token  = process.env.BLOCKCYPHER_TOKEN ? `?token=${process.env.BLOCKCYPHER_TOKEN}` : '';
   const r = await fetchWithTimeout(`https://api.blockcypher.com/v1/${chain}/addrs/${address}/full?limit=5${token}`);
-  const d = await r.json();
+  const d = await readJson(r);
   if (!d.txs) return [];
   return d.txs.map(tx => {
     const out = tx.outputs?.find(o => o.addresses?.includes(address));
