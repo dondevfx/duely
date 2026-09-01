@@ -1,5 +1,17 @@
 import { useEffect } from 'react';
 
+// How much a locked screen may overhang its viewport and still be snapped back
+// to the top.
+//
+// A game screen typically runs a little past the fold — a controls line, a help
+// button, a few pixels of padding. Scrolling can only ever hide that sliver, so
+// snapping back costs the player nothing.
+//
+// Past this, the overhang is a real row of controls rather than decoration, and
+// the page is left scrollable: refusing to let someone reach HIT or STAND is a
+// worse bug than a board that sits 40px low.
+const SLIVER_PX = 140;
+
 /**
  * Pins the page while a match is counting down or in progress.
  *
@@ -50,7 +62,42 @@ export function useGameScrollLock(active, pinOn) {
     };
     main.scrollTop = 0;
     raf = requestAnimationFrame(toTop);
-    return () => cancelAnimationFrame(raf);
+
+    // Three frames is about 50ms, and that is not enough on its own.
+    //
+    // A player can hold a drag through the whole countdown. The pin above fires
+    // the moment play begins, their finger is still down, and the scroll
+    // resumes immediately after — so the board opens scrolled anyway, with the
+    // score line cut off behind the navbar. That is the reported bug, and it
+    // survived the pin because the pin only covers an instant.
+    //
+    // So the scroller is watched for as long as the lock is on. Anything that
+    // scrolls it goes straight back to the top.
+    //
+    // Bounded by how much there is to scroll, NOT by a timer. A game screen
+    // overhangs its viewport by a sliver — a controls line, a help button — and
+    // hiding a sliver is exactly what must not happen. A screen that overhangs
+    // by more than that has a real row down there (HIT/STAND, the keyboard, the
+    // tray) and the player has to be able to reach it, so those are left alone.
+    // This is the same trade the overflow rule below makes, at a threshold that
+    // admits the sliver.
+    const snapBack = () => {
+      const overhang = main.scrollHeight - main.clientHeight;
+      if (overhang <= SLIVER_PX && main.scrollTop !== 0) main.scrollTop = 0;
+    };
+    main.addEventListener('scroll', snapBack, { passive: true });
+    // A held drag reports no scroll event until it moves again, so the release
+    // is its own signal — without this, holding still at the bottom and lifting
+    // leaves the page exactly where the finger left it.
+    window.addEventListener('touchend', snapBack, { passive: true });
+    window.addEventListener('touchcancel', snapBack, { passive: true });
+
+    return () => {
+      cancelAnimationFrame(raf);
+      main.removeEventListener('scroll', snapBack);
+      window.removeEventListener('touchend', snapBack);
+      window.removeEventListener('touchcancel', snapBack);
+    };
   }, [active, pinOn]);
 
   useEffect(() => {

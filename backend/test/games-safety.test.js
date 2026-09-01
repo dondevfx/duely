@@ -300,4 +300,22 @@ test('the lock re-pins on a phase change, not only when it arms', () => {
   // frame and let the page jump.
   assert.ok(src.indexOf('}, [active, pinOn]);') < src.indexOf('}, [active]);'),
     'the re-pin should be its own effect, before the lock');
+
+  // Three frames is ~50ms, and a player can hold a drag through the whole
+  // countdown: the pin fires as play begins, the finger is still down, and the
+  // scroll resumes right after. So the scroller is watched for as long as the
+  // lock is on, not just for an instant.
+  assert.match(src, /const SLIVER_PX = \d+;/, 'no bound on how much may be snapped away');
+  assert.match(src, /main\.addEventListener\('scroll', snapBack/, 'nothing watches the scroller');
+  // A held drag emits no scroll event until it moves again, so the release is
+  // its own signal.
+  assert.match(src, /window\.addEventListener\('touchend', snapBack/, 'a held drag would survive');
+  assert.match(src, /window\.addEventListener\('touchcancel', snapBack/);
+  // Bounded by overhang, never by a timer: hiding a controls line is fine,
+  // hiding HIT/STAND is not.
+  assert.match(src, /overhang <= SLIVER_PX && main\.scrollTop !== 0/);
+  for (const ev of ['scroll', 'touchend', 'touchcancel']) {
+    // Escaped twice: inside a template literal `\(` is just a paren.
+    assert.match(src, new RegExp(`removeEventListener\\('${ev}', snapBack`), `${ev} is never unbound`);
+  }
 });
