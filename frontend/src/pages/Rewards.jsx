@@ -582,7 +582,7 @@ export default function Rewards() {
   useEffect(() => { if (session) fetchStatus(); }, [elo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="min-h-[calc(100vh-56px)] px-4 py-8">
+    <div className="min-h-[calc(100vh-3.5rem)] px-4 py-8">
       <div className="max-w-6xl mx-auto flex flex-col gap-8">
 
         {/* Referral offer — first thing on the page, on every screen size. */}

@@ -1838,7 +1838,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     <div
       className="relative w-full bg-bg flex justify-center overflow-hidden select-none"
       style={{
-        height: 'calc(100dvh - 56px)',
+        height: 'calc(100dvh - 3.5rem)',
         userSelect: 'none',
         WebkitUserSelect: 'none',
         WebkitTouchCallout: 'none',
@@ -1864,7 +1864,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       <canvas
         ref={canvasRef}
         className="relative h-full block touch-none select-none w-full"
-        style={{ cursor: 'pointer', maxWidth: 'calc((100dvh - 56px) * 0.50)' }}
+        style={{ cursor: 'pointer', maxWidth: 'calc((100dvh - 3.5rem) * 0.50)' }}
       />
     </div>
   );

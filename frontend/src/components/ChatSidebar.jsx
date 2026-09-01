@@ -786,7 +786,7 @@ export default function ChatSidebar({ open, onToggle }) {
         />
       )}
 
-      <aside className={`hidden lg:flex fixed right-0 top-14 h-[calc(100vh-56px)] w-80 bg-surface border-l border-border flex-col z-30 transition-transform duration-300 ${
+      <aside className={`hidden lg:flex fixed right-0 top-14 h-[calc(100vh-3.5rem)] w-80 bg-surface border-l border-border flex-col z-30 transition-transform duration-300 ${
         open ? 'translate-x-0' : 'translate-x-full'
       }`}>
         {/* Header */}

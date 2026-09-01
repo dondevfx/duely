@@ -288,7 +288,7 @@ export default function Wallet() {
   function copyText(text) { navigator.clipboard.writeText(text).catch(() => {}); }
 
   if (!session) return (
-    <div className="min-h-[calc(100vh-56px)] bg-bg flex items-center justify-center px-4">
+    <div className="min-h-[calc(100vh-3.5rem)] bg-bg flex items-center justify-center px-4">
       <div className="text-center">
         <div className="mb-4 flex justify-center text-primary"><UiIcon name="wallet" size={52} /></div>
         <h2 className="text-2xl font-black text-white mb-2">Wallet</h2>

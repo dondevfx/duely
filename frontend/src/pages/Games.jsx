@@ -9,7 +9,7 @@ export default function Games() {
 
   return (
     <div
-      className="min-h-[calc(100dvh-56px)] bg-bg px-4 py-10"
+      className="min-h-[calc(100dvh-3.5rem)] bg-bg px-4 py-10"
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}
     >
       <div className="max-w-5xl mx-auto">

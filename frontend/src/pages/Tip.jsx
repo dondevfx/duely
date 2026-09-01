@@ -90,7 +90,7 @@ export default function Tip() {
     : (tipAmount > 0 ? <span className="inline-flex items-center gap-1">Send {amountLabel}</span> : 'Send');
 
   if (!session) return (
-    <div className="min-h-[calc(100vh-56px)] bg-bg flex items-center justify-center px-4">
+    <div className="min-h-[calc(100vh-3.5rem)] bg-bg flex items-center justify-center px-4">
       <div className="text-center">
         <div className="mb-4 flex justify-center text-primary"><UiIcon name="tip" size={52} /></div>
         <h2 className="text-2xl font-black text-white mb-2">Tip a Player</h2>
@@ -101,7 +101,7 @@ export default function Tip() {
   );
 
   return (
-    <div className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-4" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}>
+    <div className="min-h-[calc(100vh-3.5rem)] bg-bg flex flex-col items-center justify-center px-4" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}>
       <div className="w-full max-w-md animate-slide-up">
         <h1 className="text-4xl font-black text-white text-center mb-2">
           {demoSetter ? 'Set Balance' : 'Send Tip'}

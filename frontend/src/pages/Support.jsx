@@ -64,14 +64,14 @@ export default function Support() {
 
   if (!session) {
     return (
-      <div className="min-h-[calc(100vh-56px)] flex items-center justify-center px-4">
+      <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center px-4">
         <p className="text-muted">Sign in to contact support.</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-[calc(100vh-56px)] bg-bg px-4 py-8"
+    <div className="min-h-[calc(100vh-3.5rem)] bg-bg px-4 py-8"
          style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}>
       <div className="max-w-2xl mx-auto">
         <h1 className="text-3xl font-black text-white mb-1">Support</h1>

@@ -1,16 +1,5 @@
 import { useEffect } from 'react';
 
-// How much a locked screen may overhang its viewport and still be snapped back
-// to the top.
-//
-// A game screen typically runs a little past the fold — a controls line, a help
-// button, a few pixels of padding. Scrolling can only ever hide that sliver, so
-// snapping back costs the player nothing.
-//
-// Past this, the overhang is a real row of controls rather than decoration, and
-// the page is left scrollable: refusing to let someone reach HIT or STAND is a
-// worse bug than a board that sits 40px low.
-const SLIVER_PX = 140;
 
 /**
  * Pins the page while a match is counting down or in progress.
@@ -81,10 +70,7 @@ export function useGameScrollLock(active, pinOn) {
     // tray) and the player has to be able to reach it, so those are left alone.
     // This is the same trade the overflow rule below makes, at a threshold that
     // admits the sliver.
-    const snapBack = () => {
-      const overhang = main.scrollHeight - main.clientHeight;
-      if (overhang <= SLIVER_PX && main.scrollTop !== 0) main.scrollTop = 0;
-    };
+    const snapBack = () => { if (main.scrollTop !== 0) main.scrollTop = 0; };
     main.addEventListener('scroll', snapBack, { passive: true });
     // A held drag reports no scroll event until it moves again, so the release
     // is its own signal — without this, holding still at the bottom and lifting
@@ -131,18 +117,23 @@ export function useGameScrollLock(active, pinOn) {
     // the navbar out of view mid-match and springs back.
     document.body.style.overscrollBehavior = 'none';
 
-    // Only take the scrollbar away when everything already fits.
+    // The scrollbar goes, unconditionally.
     //
-    // Hiding the overflow on a page taller than its container stops the user
-    // reaching the rest of it — and the part that falls off the bottom of a
-    // short phone is the action row: HIT/STAND, the keyboard, the tray. Locking
-    // there would trade "can scroll the board away" for "cannot play at all",
-    // which is much worse. Re-checked on resize because rotating a phone or
-    // opening the keyboard changes the answer mid-match.
+    // This used to be conditional on the content already fitting, and that
+    // condition was the bug. Every one of these screens is built on min-h,
+    // which is "at least the viewport" — so a controls line, a help button or
+    // a few pixels of padding makes the page taller than the fold, the
+    // condition reads false, and the screen stays scrollable for the whole
+    // match. Queue, countdown and board alike.
+    //
+    // The trade this gives up: anything below the fold on a locked screen can
+    // no longer be reached. That is the intended behaviour here — these three
+    // screens are built to fit, and the overhang is decoration rather than
+    // controls. If a screen ever does need more room than the viewport, the
+    // answer is to give that screen's own content a scroll container, not to
+    // hand the page back.
     const apply = () => {
-      const fits = main.scrollHeight <= main.clientHeight + 1;
-      const want = fits ? 'hidden' : prevOverflow;
-      if (main.style.overflowY !== want) main.style.overflowY = want;
+      if (main.style.overflowY !== 'hidden') main.style.overflowY = 'hidden';
     };
     apply();
 

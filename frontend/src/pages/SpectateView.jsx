@@ -176,7 +176,7 @@ export default function SpectateView() {
 
   return (
     <div
-      className="min-h-[calc(100vh-56px)] bg-bg flex flex-col items-center justify-center px-4 py-6"
+      className="min-h-[calc(100vh-3.5rem)] bg-bg flex flex-col items-center justify-center px-4 py-6"
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}
     >
       {!snapshot ? (

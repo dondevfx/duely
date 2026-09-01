@@ -630,7 +630,7 @@ export default function WordleGame() {
     const paidPayout = soloResult?.payout   ?? 0;
     const newElo     = soloResult?.newElo   ?? null;
     return (
-      <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-3 sm:px-4 py-0 sm:py-8">
+      <div className="min-h-[calc(100dvh-3.5rem)] bg-bg flex items-center justify-center px-3 sm:px-4 py-0 sm:py-8">
         <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
         <ResultScreen
           opponent={opponent}
@@ -669,7 +669,7 @@ export default function WordleGame() {
   // ── Result screen (PvP) ───────────────────────────────────────────────────
   if (phase === 'result' && result) {
     return (
-      <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-3 sm:px-4 py-0 sm:py-8">
+      <div className="min-h-[calc(100dvh-3.5rem)] bg-bg flex items-center justify-center px-3 sm:px-4 py-0 sm:py-8">
         <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
         <ResultScreen
           vsBot={!!result.vsBot}
@@ -711,7 +711,7 @@ export default function WordleGame() {
   // ── Lobby ─────────────────────────────────────────────────────────────────
   if (phase === 'lobby') {
     return (
-      <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4 py-8">
+      <div className="min-h-[calc(100dvh-3.5rem)] bg-bg flex flex-col items-center justify-center px-4 py-8">
         <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
         <GameLobby
           title="Word VS"
@@ -737,7 +737,7 @@ export default function WordleGame() {
   // ── Queue ─────────────────────────────────────────────────────────────────
   if (phase === 'queue') {
     return (
-      <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
+      <div className="min-h-[calc(100dvh-3.5rem)] bg-bg flex flex-col items-center justify-center px-4">
         <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
         <div className="text-center animate-fade-in">
           <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-6" />
@@ -763,7 +763,7 @@ export default function WordleGame() {
   // ── Countdown ─────────────────────────────────────────────────────────────
   if (phase === 'countdown') {
     return (
-      <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
+      <div className="min-h-[calc(100dvh-3.5rem)] bg-bg flex flex-col items-center justify-center px-4">
         <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
         <div className="text-center animate-fade-in">
           <div className="text-8xl font-black text-primary mb-4" style={{ textShadow: '0 0 40px #1250B4' }}>
@@ -792,7 +792,7 @@ export default function WordleGame() {
   const guessNum = guesses.length;
 
   return (
-    <div className="relative min-h-[calc(100dvh-56px)] bg-bg flex flex-col select-none overflow-hidden"
+    <div className="relative min-h-[calc(100dvh-3.5rem)] bg-bg flex flex-col select-none overflow-hidden"
       style={{ touchAction: 'manipulation' }}>
       <style dangerouslySetInnerHTML={{ __html: WORDLE_CSS }} />
 

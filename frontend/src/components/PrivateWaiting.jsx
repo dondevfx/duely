@@ -47,7 +47,7 @@ export default function PrivateWaiting({
 
   if (inline) return card;
   return (
-    <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
+    <div className="min-h-[calc(100dvh-3.5rem)] bg-bg flex flex-col items-center justify-center px-4">
       {card}
     </div>
   );

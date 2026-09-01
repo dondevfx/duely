@@ -813,7 +813,7 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
     <div
       className="relative w-full bg-bg flex justify-center overflow-hidden select-none"
       style={{
-        height: 'calc(100dvh - 56px)',
+        height: 'calc(100dvh - 3.5rem)',
         userSelect: 'none',
         WebkitUserSelect: 'none',
         WebkitTouchCallout: 'none',
@@ -826,7 +826,7 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
         className="relative h-full block touch-none select-none w-full"
         style={{
           cursor: 'pointer',
-          maxWidth: 'calc((100dvh - 56px) * 0.62)',
+          maxWidth: 'calc((100dvh - 3.5rem) * 0.62)',
           userSelect: 'none',
           WebkitUserSelect: 'none',
           WebkitTouchCallout: 'none',

@@ -401,7 +401,7 @@ export default function CarDashGame() {
   // Shows what you actually did: how long you lasted and what you scored.
   if (phase === 'result' && result?.soloRun) {
     return (
-      <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-4">
+      <div className="min-h-[calc(100dvh-3.5rem)] bg-bg flex items-center justify-center px-4">
         <ResultScreen
           opponent={opponent}
           solo
@@ -429,7 +429,7 @@ export default function CarDashGame() {
   if (phase === 'result' && result) {
     const isWinner = result.winnerId === profile?.id;
     return (
-      <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-4">
+      <div className="min-h-[calc(100dvh-3.5rem)] bg-bg flex items-center justify-center px-4">
         <ResultScreen
           vsBot={!!result.vsBot}
           opponent={opponent}
@@ -502,7 +502,7 @@ export default function CarDashGame() {
   if (phase === 'queue') {
     if (countdown > 0) {
       return (
-        <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
+        <div className="min-h-[calc(100dvh-3.5rem)] bg-bg flex flex-col items-center justify-center px-4">
           <div className="text-center animate-fade-in">
             <div className="text-8xl font-black text-primary mb-4" style={{ textShadow: '0 0 40px #1250B4' }}>{countdown}</div>
             <p className="text-muted">Get ready...</p>
@@ -526,7 +526,7 @@ export default function CarDashGame() {
       );
     }
     return (
-      <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
+      <div className="min-h-[calc(100dvh-3.5rem)] bg-bg flex flex-col items-center justify-center px-4">
         <div className="text-center animate-fade-in">
           <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-6" />
           <h2 className="text-2xl font-bold text-white mb-6">Searching...</h2>
@@ -539,7 +539,7 @@ export default function CarDashGame() {
   // ── Lobby (identical UI to every other game) ──
   return (
     <div
-      className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-3 sm:px-4 py-0 sm:py-8"
+      className="min-h-[calc(100dvh-3.5rem)] bg-bg flex items-center justify-center px-3 sm:px-4 py-0 sm:py-8"
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}
     >
       <GameLobby

@@ -623,7 +623,7 @@ export default function CoinFlipGame() {
   }
 
   return (
-    <div className="relative min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-3 sm:px-4 py-0 sm:py-4"
+    <div className="relative min-h-[calc(100dvh-3.5rem)] bg-bg flex flex-col items-center justify-center px-3 sm:px-4 py-0 sm:py-4"
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
 
       {/* The help button belongs to the PAGE, not to the flipping block. Nested
@@ -635,7 +635,7 @@ export default function CoinFlipGame() {
       {phase === 'result' && resultData && (() => {
         const isWinner = resultData.winnerId === profile?.id;
         return (
-          <div className="w-full flex items-center justify-center" style={{ minHeight: 'calc(100vh - 56px)' }}>
+          <div className="w-full flex items-center justify-center" style={{ minHeight: 'calc(100vh - 3.5rem)' }}>
             <ResultScreen
               vsBot={!!resultData?.vsBot}
               opponent={opponent}

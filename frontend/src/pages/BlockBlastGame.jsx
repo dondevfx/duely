@@ -768,14 +768,14 @@ export default function BlockBlastGame() {
   }, [socket, authenticated, location.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-3 sm:px-4" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+    <div className="min-h-[calc(100dvh-3.5rem)] bg-bg flex flex-col items-center justify-center px-3 sm:px-4" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
 
       {/* ── RESULT ── */}
       {/* Result screens sit BELOW the navbar, like every other game's. These were
           `fixed inset-0 z-50`, which covered the top bar so the player could not
           see their balance or navigate away from the result. */}
       {phase === 'result' && result && !result.isSolo && (
-        <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center overflow-y-auto py-2 w-full">
+        <div className="min-h-[calc(100dvh-3.5rem)] bg-bg flex items-center justify-center overflow-y-auto py-2 w-full">
           <ResultScreen
             vsBot={!!result.vsBot}
             opponent={opponent}
@@ -809,7 +809,7 @@ export default function BlockBlastGame() {
         </div>
       )}
       {phase === 'result' && result && result.isSolo && result.humanWon !== null && (
-        <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center overflow-y-auto py-2 w-full">
+        <div className="min-h-[calc(100dvh-3.5rem)] bg-bg flex items-center justify-center overflow-y-auto py-2 w-full">
           <ResultScreen
             opponent={opponent}
             // Solo means a bot opponent, so no streak was ever at stake.
@@ -843,7 +843,7 @@ export default function BlockBlastGame() {
         </div>
       )}
       {phase === 'result' && result && result.isSolo && result.humanWon === null && (
-        <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center overflow-y-auto py-2 w-full">
+        <div className="min-h-[calc(100dvh-3.5rem)] bg-bg flex items-center justify-center overflow-y-auto py-2 w-full">
           <ResultScreen
             opponent={opponent}
             solo

@@ -57,7 +57,7 @@ export default function LeftSidebar() {
   const ranked = profile ? isRanked(profile) : false;
 
   return (
-    <aside className="hidden md:flex fixed left-0 top-14 h-[calc(100vh-56px)] w-60 bg-surface border-r border-border flex-col z-30 overflow-y-auto">
+    <aside className="hidden md:flex fixed left-0 top-14 h-[calc(100vh-3.5rem)] w-60 bg-surface border-r border-border flex-col z-30 overflow-y-auto">
       {/* Navigation */}
       <div className="px-3 pt-4 pb-2">
         <p className="text-xs text-muted uppercase tracking-widest px-2 mb-2 font-semibold">Menu</p>

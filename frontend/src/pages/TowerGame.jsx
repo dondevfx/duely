@@ -310,7 +310,7 @@ export default function TowerGame() {
     const isWinner = result.isSolo ? !!result.humanWon : result.winnerId === profile?.id;
     const freeSolo = result.isSolo && !(result.entryFee > 0);
     return (
-      <div className="min-h-[calc(100dvh-56px)] bg-bg flex items-center justify-center px-4">
+      <div className="min-h-[calc(100dvh-3.5rem)] bg-bg flex items-center justify-center px-4">
         <ResultScreen
           isWinner={isWinner}
           vsBot={!!result.vsBot}
@@ -360,7 +360,7 @@ export default function TowerGame() {
       <div
         className="relative select-none"
         style={{
-          height: 'calc(100dvh - 56px)',
+          height: 'calc(100dvh - 3.5rem)',
           background: '#000',
           userSelect: 'none',
           WebkitUserSelect: 'none',
@@ -438,7 +438,7 @@ export default function TowerGame() {
   // product the moment you pressed Find Opponent.
   if (phase === 'queue') {
     return (
-      <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
+      <div className="min-h-[calc(100dvh-3.5rem)] bg-bg flex flex-col items-center justify-center px-4">
         <div className="text-center animate-fade-in">
           <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-6" />
           <h2 className="text-2xl font-bold text-white mb-6">Searching...</h2>
@@ -451,7 +451,7 @@ export default function TowerGame() {
   // ── lobby ──
   return (
     <div
-      className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-3 sm:px-4"
+      className="min-h-[calc(100dvh-3.5rem)] bg-bg flex flex-col items-center justify-center px-3 sm:px-4"
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}
     >
       <GameLobby

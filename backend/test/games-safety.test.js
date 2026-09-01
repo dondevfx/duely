@@ -305,17 +305,56 @@ test('the lock re-pins on a phase change, not only when it arms', () => {
   // countdown: the pin fires as play begins, the finger is still down, and the
   // scroll resumes right after. So the scroller is watched for as long as the
   // lock is on, not just for an instant.
-  assert.match(src, /const SLIVER_PX = \d+;/, 'no bound on how much may be snapped away');
   assert.match(src, /main\.addEventListener\('scroll', snapBack/, 'nothing watches the scroller');
   // A held drag emits no scroll event until it moves again, so the release is
   // its own signal.
   assert.match(src, /window\.addEventListener\('touchend', snapBack/, 'a held drag would survive');
   assert.match(src, /window\.addEventListener\('touchcancel', snapBack/);
-  // Bounded by overhang, never by a timer: hiding a controls line is fine,
-  // hiding HIT/STAND is not.
-  assert.match(src, /overhang <= SLIVER_PX && main\.scrollTop !== 0/);
+  // Unconditional now. It used to snap back only while the overhang was small,
+  // and to hide the scrollbar only when the content already fitted — and that
+  // condition was the whole bug: every game screen is min-h, so a few pixels of
+  // overhang read as "does not fit" and left the page scrollable for the entire
+  // match, queue and countdown included.
+  assert.match(src, /const snapBack = \(\) => \{ if \(main\.scrollTop !== 0\) main\.scrollTop = 0; \};/);
+  assert.match(src, /if \(main\.style\.overflowY !== 'hidden'\) main\.style\.overflowY = 'hidden';/,
+    'the scrollbar must go unconditionally');
+  assert.doesNotMatch(src, /const fits =/, 'the conditional lock is back');
   for (const ev of ['scroll', 'touchend', 'touchcancel']) {
     // Escaped twice: inside a template literal `\(` is just a paren.
     assert.match(src, new RegExp(`removeEventListener\\('${ev}', snapBack`), `${ev} is never unbound`);
   }
+});
+
+test('a screen that subtracts the navbar uses the navbar\'s own unit', () => {
+  // The cause of the whole scrolling-during-a-match family, and it was self
+  // inflicted: the navbar is h-14 and main starts at top-14, both 3.5rem. When
+  // the phone root size went to 110% those became 61.6px — but every game
+  // screen still subtracted a hard-coded 56px, so each one came out 6px taller
+  // than the box holding it. Six pixels is enough to make a page scrollable,
+  // and every game inherited it at once.
+  //
+  // A rem offset tracks the navbar whatever the root size is.
+  const FE2 = path.join(__dirname, '..', '..', 'frontend', 'src');
+  const bad = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) { walk(p); continue; }
+      if (!/\.(jsx|css)$/.test(e.name)) continue;
+      const src = fs.readFileSync(p, 'utf8');
+      // Any viewport calc that hard-codes the navbar in pixels.
+      for (const m of src.matchAll(/calc\(\s*100d?vh\s*-\s*56px\s*\)|100d?vh-56px/g)) {
+        bad.push(`${e.name}: ${m[0]}`);
+      }
+    }
+  };
+  walk(FE2);
+  assert.deepEqual(bad, [],
+    `these subtract a fixed 56px for a navbar that is 3.5rem: ${bad.slice(0, 5).join(', ')}`);
+
+  // And the navbar really is 3.5rem, so the offset above is the right one.
+  const nav = fs.readFileSync(path.join(FE2, 'components', 'Navbar.jsx'), 'utf8');
+  assert.match(nav, /fixed top-0 inset-x-0 z-50 h-14/, 'the navbar is no longer h-14');
+  assert.match(fs.readFileSync(path.join(FE2, 'App.jsx'), 'utf8'), /<main className={`absolute top-14/,
+    'main no longer starts at top-14');
 });

@@ -23,7 +23,7 @@ export default class GameErrorBoundary extends React.Component {
     if (this.state.error) {
       return (
         <div style={{
-          minHeight: 'calc(100dvh - 56px)',
+          minHeight: 'calc(100dvh - 3.5rem)',
           display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center',
           padding: 24, textAlign: 'center', gap: 16,

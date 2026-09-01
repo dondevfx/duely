@@ -520,9 +520,13 @@ test('the run sits in the page like every other game', () => {
   assert.doesNotMatch(branch, /fixed inset-0/,
     'a full-bleed run hides the header, sidebar and chat');
   assert.match(branch, /className="relative"/, 'same wrapper as the other games');
-  // And the canvas has to leave room for the header rather than sitting under it.
-  assert.match(CANVAS, /height: 'calc\(100dvh - 56px\)'/);
-  assert.match(CANVAS, /maxWidth: 'calc\(\(100dvh - 56px\) \* 0\.62\)'/);
+  // And the canvas has to leave room for the header rather than sitting under
+  // it — in the header's OWN unit. The navbar is h-14, which is 3.5rem and
+  // therefore 61.6px once the phone root size is scaled; a hard-coded 56px
+  // made the canvas 6px taller than its container and the page scrollable for
+  // the whole run.
+  assert.match(CANVAS, /height: 'calc\(100dvh - 3\.5rem\)'/);
+  assert.match(CANVAS, /maxWidth: 'calc\(\(100dvh - 3\.5rem\) \* 0\.62\)'/);
 });
 
 test('the death burst is the ball colour, and on screen', () => {

@@ -1442,7 +1442,7 @@ export default function Profile() {
 
   if (!profile) {
     return (
-      <div className="min-h-[calc(100vh-56px)] bg-bg flex items-center justify-center px-4">
+      <div className="min-h-[calc(100vh-3.5rem)] bg-bg flex items-center justify-center px-4">
         <div className="text-center">
           <div className="mb-4 flex justify-center text-primary"><UiIcon name="profile" size={52} /></div>
           <h2 className="text-2xl font-black text-white mb-2">Your Profile</h2>

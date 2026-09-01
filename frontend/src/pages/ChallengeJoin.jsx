@@ -91,7 +91,7 @@ export default function ChallengeJoin() {
   );
 
   return (
-    <div className="min-h-[calc(100dvh-56px)] bg-bg flex flex-col items-center justify-center px-4">
+    <div className="min-h-[calc(100dvh-3.5rem)] bg-bg flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm bg-surface border border-border rounded-2xl p-6 text-center animate-slide-up">
 
         <InAppBrowserNotice />
