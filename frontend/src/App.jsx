@@ -52,6 +52,32 @@ import TowerCanvas from './components/TowerCanvas';
 // it the hardest thing in the app to look at while working on it — and it is a
 // full-screen legal wall, so "hard to look at" is how a broken one ships.
 function TosPreview() { return <AgeToSModal onAccept={() => {}} />; }
+// The admin charts, with a synthetic series: a quiet stretch, a spike, and a
+// zero day. The admin page itself needs a real admin account to reach, which
+// makes the one drawing on it the hardest thing here to look at.
+function ChartPreview() {
+  const pts = Array.from({ length: 30 }, (_, i) => ({
+    t: `2026-03-${String(i + 1).padStart(2, '0')}`,
+    matches: i === 12 ? 480 : i === 20 ? 0 : 40 + Math.round(Math.sin(i) * 25) + i * 3,
+    active_players: i === 20 ? 0 : 12 + Math.round(Math.cos(i) * 6) + i,
+  }));
+  return (
+    <div className="p-8 grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-4xl">
+      <div className="bg-surface border border-border rounded-2xl p-4">
+        <h3 className="text-sm font-bold text-white mb-2">Matches (bar)</h3>
+        <AdminChart points={pts} metric="matches" color="#00BFFF" />
+      </div>
+      <div className="bg-surface border border-border rounded-2xl p-4">
+        <h3 className="text-sm font-bold text-white mb-2">Active Players (line)</h3>
+        <AdminChart points={pts} metric="active_players" color="#ec4899" kind="line" />
+      </div>
+      <div className="bg-surface border border-border rounded-2xl p-4">
+        <h3 className="text-sm font-bold text-white mb-2">Empty range</h3>
+        <AdminChart points={[]} metric="matches" />
+      </div>
+    </div>
+  );
+}
 // The result card at its tallest: an unplaced account, so the placement row is
 // showing, which is the only combination that ever overflowed a phone.
 function ResultPreview() {
@@ -98,6 +124,7 @@ import NotifyToast from './components/NotifyToast';
 import ReconnectOverlay from './components/ReconnectOverlay';
 import AgeToSModal, { useTosAccepted } from './components/AgeToSModal';
 import ResultScreen from './components/ResultScreen';
+import AdminChart from './components/AdminChart';
 import { ProfilePopupPreview } from './components/ChatSidebar';
 import SignupRewardModal from './components/SignupRewardModal';
 import SaveLoginPrompt from './components/SaveLoginPrompt';
@@ -213,6 +240,7 @@ function Shell() {
           <Route path="/game/color-rush"    element={<ColorRushGame />} />
           <Route path="/game/tower"         element={<TowerGame />} />
           {import.meta.env.DEV && <Route path="/__tos-preview" element={<TosPreview />} />}
+          {import.meta.env.DEV && <Route path="/__chart-preview" element={<ChartPreview />} />}
           {import.meta.env.DEV && <Route path="/__popup-preview" element={<PopupPreview />} />}
           {import.meta.env.DEV && <Route path="/__result-preview" element={<ResultPreview />} />}
           {import.meta.env.DEV && <Route path="/__tower-preview" element={<TowerPreview />} />}

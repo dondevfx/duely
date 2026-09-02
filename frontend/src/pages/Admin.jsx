@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import AdminChart from '../components/AdminChart';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
 import { usePageReady } from '../hooks/usePageReady';
@@ -18,6 +19,20 @@ function fmtDate(ts) {
 // blackjackEngine/towerEngine/carDashEngine directly. Tower and Rush Hour
 // were missing entirely; their match counts were real in the database the
 // whole time, just never rendered.
+// The left-hand nav. Counts come from the loaded data so a queue with work in
+// it says so without being opened — the old horizontal tabs did this too, and
+// it is the one thing about them worth keeping.
+const SECTIONS = [
+  { key: 'analytics',    label: 'Analytics' },
+  { key: 'overview',     label: 'Overview' },
+  { key: 'attention',    label: 'Needs Attention', urgent: true, count: d => d.attention.length },
+  { key: 'kyc',          label: 'KYC',          count: d => d.kycQueue.length },
+  { key: 'support',      label: 'Support',      count: d => d.tickets.length },
+  { key: 'transactions', label: 'Transactions', count: d => d.txs.length },
+  { key: 'users',        label: 'Users',        count: d => d.users.length },
+  { key: 'tools',        label: 'Tools' },
+];
+
 const GAME_LABELS = [
   { key: 'blockBlast', label: 'Block Burst' },
   { key: 'scrabble',   label: 'Word VS' },
@@ -252,6 +267,168 @@ function TicketThread({ ticket, onReply, onClose, busy }) {
   );
 }
 
+/* ── Analytics ─────────────────────────────────────────────────────────────
+ *
+ * The dashboard could only answer "what is true right now" over windows
+ * somebody chose in advance — today, 7 days, 30 days, all time. Every question
+ * that starts "how did last March compare to…" had no way to be asked.
+ *
+ * Presets for the answers wanted most often, and an explicit from/to for
+ * everything else. The bucket follows the span unless overridden, because a
+ * year of daily bars is unreadable and a week of monthly bars is one column.
+ */
+
+const PRESETS = [
+  { key: '7d',   label: 'Last 7 days',   days: 7 },
+  { key: '30d',  label: 'Last 30 days',  days: 30 },
+  { key: '90d',  label: 'Last 90 days',  days: 90 },
+  { key: '12m',  label: 'Last 12 months', days: 365 },
+  { key: 'ytd',  label: 'Year to date',  ytd: true },
+];
+
+const iso = (d) => new Date(d).toISOString().slice(0, 10);
+
+function rangeFor(preset) {
+  const to = new Date();
+  if (preset.ytd) return { from: iso(new Date(Date.UTC(to.getUTCFullYear(), 0, 1))), to: iso(to) };
+  return { from: iso(to.getTime() - preset.days * 86400000), to: iso(to) };
+}
+
+// The metrics worth a chart, in the order they get looked at. Money first,
+// then the people, then the platform's own take.
+const METRICS = [
+  { key: 'wagered',        label: 'Wagered',        color: '#22c55e', money: true },
+  { key: 'deposits',       label: 'Deposits',       color: '#1250B4', money: true },
+  { key: 'withdrawals',    label: 'Withdrawals',    color: '#f97316', money: true },
+  { key: 'fees',           label: 'Fees Collected', color: '#eab308', money: true },
+  { key: 'matches',        label: 'Matches',        color: '#00BFFF' },
+  { key: 'new_users',      label: 'New Users',      color: '#a855f7' },
+  { key: 'active_players', label: 'Active Players', color: '#ec4899', kind: 'line',
+    note: 'unique per bucket — the total is unique across the whole range, not the sum' },
+];
+
+function AnalyticsPanel() {
+  const [preset, setPreset]   = useState('30d');
+  const [custom, setCustom]   = useState(() => rangeFor(PRESETS[1]));
+  const [bucket, setBucket]   = useState('auto');
+  const [data, setData]       = useState(null);
+  const [busy, setBusy]       = useState(true);
+  const [err, setErr]         = useState('');
+
+  const range = preset === 'custom' ? custom : rangeFor(PRESETS.find(p => p.key === preset));
+
+  useEffect(() => {
+    let alive = true;
+    setBusy(true); setErr('');
+    const q = new URLSearchParams({ from: range.from, to: `${range.to}T23:59:59.999Z` });
+    if (bucket !== 'auto') q.set('bucket', bucket);
+    api.get(`/admin/analytics?${q}`)
+      .then(d => { if (alive) { setData(d); setBusy(false); } })
+      .catch(e => { if (alive) { setErr(e.message || 'Could not load analytics'); setBusy(false); } });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range.from, range.to, bucket]);
+
+  const t = data?.totals;
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Range picker */}
+      <div className="bg-surface border border-border rounded-2xl p-4 flex flex-wrap items-center gap-2">
+        {PRESETS.map(p => (
+          <button key={p.key} onClick={() => setPreset(p.key)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              preset === p.key ? 'bg-primary text-white' : 'text-muted border border-border hover:text-white hover:border-primary'
+            }`}>
+            {p.label}
+          </button>
+        ))}
+        <div className="w-px h-6 bg-border mx-1" />
+        {/* Dating back to any point is the whole reason this exists — the
+            presets are a shortcut, not the feature. */}
+        <input type="date" value={range.from} max={range.to}
+          onChange={e => { setCustom(c => ({ ...c, from: e.target.value })); setPreset('custom'); }}
+          className="bg-bg border border-border rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-primary" />
+        <span className="text-muted text-xs">→</span>
+        <input type="date" value={range.to} min={range.from} max={iso(Date.now())}
+          onChange={e => { setCustom(c => ({ ...c, to: e.target.value })); setPreset('custom'); }}
+          className="bg-bg border border-border rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-primary" />
+        <div className="w-px h-6 bg-border mx-1" />
+        <select value={bucket} onChange={e => setBucket(e.target.value)}
+          className="bg-bg border border-border rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-primary">
+          <option value="auto">Auto</option>
+          <option value="day">Daily</option>
+          <option value="week">Weekly</option>
+          <option value="month">Monthly</option>
+        </select>
+        {data && <span className="text-[0.6875rem] text-muted ml-auto">{data.points.length} × {data.bucket}</span>}
+      </div>
+
+      {err && (
+        <div className="rounded-xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">{err}</div>
+      )}
+
+      {/* A capped range looks exactly like a quiet one. */}
+      {data?.truncated?.length > 0 && (
+        <div className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-xs text-warning">
+          Too many rows to read in full ({data.truncated.join(', ')}) — these numbers are a floor, not a total.
+          Narrow the range for an exact answer.
+        </div>
+      )}
+
+      {busy ? (
+        <div className="flex justify-center py-16">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : (
+        <>
+          {/* Headline totals for the window */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {METRICS.map(m => (
+              <div key={m.key} className="bg-surface border border-border rounded-xl p-4">
+                <div className="text-xs text-muted">{m.label}</div>
+                <div className="text-2xl font-black mt-1" style={{ color: m.color }}>
+                  {m.money ? fmt(t?.[m.key] ?? 0) : (t?.[m.key] ?? 0).toLocaleString()}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* One chart per metric */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {METRICS.map(m => (
+              <div key={m.key} className="bg-surface border border-border rounded-2xl p-4">
+                <div className="flex items-baseline justify-between mb-2">
+                  <h3 className="text-sm font-bold text-white">{m.label}</h3>
+                  <span className="text-sm font-black" style={{ color: m.color }}>
+                    {m.money ? fmt(t?.[m.key] ?? 0) : (t?.[m.key] ?? 0).toLocaleString()}
+                  </span>
+                </div>
+                <AdminChart points={data?.points ?? []} metric={m.key} color={m.color}
+                  kind={m.kind || 'bar'} />
+                {m.note && <p className="text-[0.6875rem] text-muted mt-1">{m.note}</p>}
+              </div>
+            ))}
+          </div>
+
+          {/* Which games carried the window */}
+          <div className="bg-surface border border-border rounded-2xl p-5">
+            <h3 className="text-white font-bold text-sm mb-3">Matches by Game — this range</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {GAME_LABELS.map(({ key, label }) => (
+                <div key={key} className="bg-bg border border-border rounded-xl p-3 text-center">
+                  <div className="text-xl font-black text-white">{(data?.by_game?.[key] ?? 0).toLocaleString()}</div>
+                  <div className="text-[0.6875rem] text-muted mt-0.5">{label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function Admin() {
   const ready = usePageReady();
   const { profile, refreshProfile } = useAuth();
@@ -265,7 +442,10 @@ export default function Admin() {
   const [openTicket, setOpenTicket] = useState(null);
   const [users, setUsers]           = useState([]);
   const [userSearch, setUserSearch] = useState('');
-  const [tab, setTab]               = useState('overview');
+  // Which section is showing. Replaces the old `tab`, which only ever covered
+  // the five queues at the bottom — the stat grids and the tools above them
+  // were always rendered and always scrolled past.
+  const [section, setSection]       = useState('analytics');
   const [kycQueue, setKycQueue]     = useState([]);
   // Which sections failed to load, so a partial dashboard says so instead of
   // rendering empty panels that look like real zeroes.
@@ -700,7 +880,43 @@ export default function Admin() {
             <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (
-          <>
+          /* Sections down the left, one panel on the right.
+             Everything that used to be on this page is still here — it was a
+             single scroll of stat grids, then tools, then a row of tabs, so
+             finding anything meant knowing how far down it lived. The sections
+             are the same content, addressed instead of scrolled to. */
+          <div className="flex flex-col lg:flex-row gap-6 items-start">
+            <nav className="w-full lg:w-52 shrink-0 flex lg:flex-col gap-1 overflow-x-auto lg:overflow-visible pb-1 lg:pb-0">
+              {SECTIONS.map(sec => {
+                const count = sec.count ? sec.count({ attention, kycQueue, tickets, txs, users }) : null;
+                const active = section === sec.key;
+                const urgent = sec.urgent && count > 0;
+                return (
+                  <button
+                    key={sec.key}
+                    onClick={() => setSection(sec.key)}
+                    aria-current={active ? 'page' : undefined}
+                    className={`shrink-0 lg:w-full text-left px-3 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-between gap-2 ${
+                      active ? 'bg-primary text-white'
+                        : urgent ? 'text-danger border border-danger/40 hover:bg-danger/10'
+                        : 'text-muted hover:text-white hover:bg-surface border border-transparent'
+                    }`}
+                  >
+                    <span className="whitespace-nowrap">{sec.label}</span>
+                    {count != null && (
+                      <span className={`text-[0.6875rem] font-mono px-1.5 rounded ${
+                        active ? 'bg-black/25' : urgent ? 'bg-danger/20' : 'bg-surfaceLight'
+                      }`}>{count}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+
+            <div className="flex-1 min-w-0 w-full">
+            {section === 'analytics' && <AnalyticsPanel />}
+
+            {section === 'overview' && (<>
             {/* Stats grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
               <StatCard label="Total Users"      value={stats?.total_users?.toLocaleString() ?? '—'}  color="text-accent" />
@@ -764,6 +980,9 @@ export default function Admin() {
               </button>
             </div>
 
+            </>)}
+
+            {section === 'tools' && (<>
             {/* Admin Tools */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
               {/* Collect Fees */}
@@ -942,29 +1161,12 @@ export default function Admin() {
               </div>
             </div>
 
-            {/* Tabs */}
-            <div className="flex gap-2 mb-6">
-              {['attention', 'kyc', 'support', 'transactions', 'users'].map(t => (
-                <button key={t} onClick={() => setTab(t)}
-                  className={`px-4 py-2 rounded-xl text-sm font-semibold capitalize transition-all ${
-                    tab === t ? 'bg-primary text-white'
-                      : t === 'attention' && attention.length > 0
-                        ? 'text-danger border border-danger/50 hover:bg-danger/10'
-                        : 'text-muted border border-border hover:border-primary hover:text-white'
-                  }`}>
-                  {t === 'attention'    ? `⚠ Needs Attention (${attention.length})`
-                    : t === 'kyc'          ? `KYC (${kycQueue.length})`
-                    : t === 'support'      ? `Support (${tickets.length})`
-                    : t === 'transactions' ? `Transactions (${txs.length})`
-                    : `Users (${users.length})`}
-                </button>
-              ))}
-            </div>
+            </>)}
 
             {/* KYC review queue.
                 Approval is a human decision and stays one — this is the last
                 check before somebody is allowed to take money off the platform. */}
-            {tab === 'kyc' && (
+            {section === 'kyc' && (
               <div className="bg-surface border border-border rounded-2xl p-4">
                 {kycQueue.length === 0 ? (
                   <p className="text-muted text-sm text-center py-8">Nothing waiting for review.</p>
@@ -1021,7 +1223,7 @@ export default function Admin() {
             )}
 
             {/* Needs-attention queue */}
-            {tab === 'attention' && (
+            {section === 'attention' && (
               <div className="bg-surface border border-border rounded-2xl p-4">
                 {attention.length === 0 ? (
                   <p className="text-sm text-muted text-center py-8">
@@ -1039,7 +1241,7 @@ export default function Admin() {
             )}
 
             {/* Support inbox */}
-            {tab === 'support' && (
+            {section === 'support' && (
               <div className="bg-surface border border-border rounded-2xl p-4">
                 {openTicket ? (
                   <>
@@ -1070,7 +1272,7 @@ export default function Admin() {
             )}
 
             {/* Transactions table */}
-            {tab === 'transactions' && (
+            {section === 'transactions' && (
               <div className="bg-surface border border-border rounded-2xl overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -1132,7 +1334,7 @@ export default function Admin() {
             )}
 
             {/* Users table */}
-            {tab === 'users' && (
+            {section === 'users' && (
               <div className="bg-surface border border-border rounded-2xl overflow-hidden">
                 <div className="p-4 border-b border-border">
                   <input
@@ -1200,7 +1402,8 @@ export default function Admin() {
                 </div>
               </div>
             )}
-          </>
+            </div>
+          </div>
         )}
       </div>
 

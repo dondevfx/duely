@@ -220,6 +220,180 @@ module.exports = function adminRoutes(supabase, io) {
   // watcher that has stopped running.
   const SENDING_STALE_MS = 5 * 24 * 60 * 60 * 1000;
 
+  // ── Analytics over an arbitrary window ────────────────────────────────
+  //
+  // /stats answers "what is true right now" with a fixed set of windows —
+  // today, 7d, 30d, all time. This answers "what happened between these two
+  // dates, broken into buckets", which is the question a dashboard exists for
+  // and the one the old page could not ask at all.
+  //
+  // Bucketed in JS rather than in SQL. Doing it in Postgres would be faster and
+  // is where this belongs eventually, but it needs a migration and a function
+  // per metric, and at these volumes pulling timestamps and counting them is
+  // honest work rather than a shortcut. The row cap is what stops that being a
+  // lie at ten times the size — see `truncated` in the response.
+  const MAX_ROWS = 50000;
+
+  // Buckets follow the span rather than being a required parameter: a year of
+  // daily points is 365 unreadable bars, and a week of monthly points is one.
+  // The client may override it; the default is the one that reads.
+  function bucketFor(fromMs, toMs) {
+    const days = (toMs - fromMs) / 86400000;
+    if (days <= 62) return 'day';
+    if (days <= 400) return 'week';
+    return 'month';
+  }
+
+  // UTC throughout. A dashboard on the SERVER's timezone shifts every boundary
+  // when the host moves, and "matches on the 3rd" quietly starts meaning
+  // something different from what it meant last month.
+  function bucketKey(d, bucket) {
+    const dt = new Date(d);
+    if (bucket === 'month') {
+      return dt.getUTCFullYear() + '-' + String(dt.getUTCMonth() + 1).padStart(2, '0') + '-01';
+    }
+    if (bucket === 'week') {
+      // Weeks start Monday, matching the leaderboard reset.
+      const day = (dt.getUTCDay() + 6) % 7;
+      const monday = new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate() - day));
+      return monday.toISOString().slice(0, 10);
+    }
+    return dt.toISOString().slice(0, 10);
+  }
+
+  // Every bucket in the range, including the empty ones. Without this a quiet
+  // week is drawn as a straight line between the days either side of it, which
+  // reads as steady activity rather than as none.
+  function emptyBuckets(fromMs, toMs, bucket) {
+    const keys = [];
+    const cur = new Date(bucketKey(fromMs, bucket));
+    const end = new Date(bucketKey(toMs, bucket));
+    let guard = 0;
+    while (cur <= end && guard++ < 2000) {
+      keys.push(cur.toISOString().slice(0, 10));
+      if (bucket === 'month') cur.setUTCMonth(cur.getUTCMonth() + 1);
+      else if (bucket === 'week') cur.setUTCDate(cur.getUTCDate() + 7);
+      else cur.setUTCDate(cur.getUTCDate() + 1);
+    }
+    return keys;
+  }
+
+  async function fetchRange(table, tsCol, fromIso, toIso, cols) {
+    const { data, error } = await supabase
+      .from(table).select(cols)
+      .gte(tsCol, fromIso).lte(tsCol, toIso)
+      .order(tsCol, { ascending: true })
+      .limit(MAX_ROWS);
+    if (error) throw new Error(table + ': ' + error.message);
+    return data || [];
+  }
+
+  router.get('/analytics', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const toMs   = req.query.to   ? Date.parse(req.query.to)   : Date.now();
+      const fromMs = req.query.from ? Date.parse(req.query.from) : toMs - 30 * 86400000;
+      if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || fromMs >= toMs) {
+        return res.status(400).json({ error: 'Invalid from/to' });
+      }
+      const bucket = ['day', 'week', 'month'].includes(req.query.bucket)
+        ? req.query.bucket
+        : bucketFor(fromMs, toMs);
+      const fromIso = new Date(fromMs).toISOString();
+      const toIso   = new Date(toMs).toISOString();
+
+      const [users, matches, txs] = await Promise.all([
+        fetchRange('profiles', 'created_at', fromIso, toIso, 'created_at'),
+        fetchRange('matches', 'played_at', fromIso, toIso,
+          'played_at, entry_fee_c, prize_pool_c, player1_id, player2_id, game_type'),
+        fetchRange('transactions', 'created_at', fromIso, toIso,
+          'created_at, type, amount_c, status'),
+      ]);
+
+      const blank = () => ({
+        new_users: 0, matches: 0, wagered: 0, fees: 0,
+        deposits: 0, withdrawals: 0, players: new Set(),
+      });
+      const series = new Map();
+      for (const k of emptyBuckets(fromMs, toMs, bucket)) series.set(k, blank());
+      const at = (ts) => {
+        const k = bucketKey(ts, bucket);
+        if (!series.has(k)) series.set(k, blank());
+        return series.get(k);
+      };
+
+      for (const u of users) at(u.created_at).new_users++;
+
+      for (const m of matches) {
+        const b = at(m.played_at);
+        b.matches++;
+        // prize_pool_c is what both sides staked; entry_fee_c is one player's
+        // half. The fallback keeps rows written before prize_pool_c existed
+        // from reading as free matches.
+        b.wagered += Number(m.prize_pool_c) || (Number(m.entry_fee_c) || 0) * 2;
+        if (m.player1_id) b.players.add(m.player1_id);
+        if (m.player2_id) b.players.add(m.player2_id);
+      }
+
+      for (const t of txs) {
+        const b = at(t.created_at);
+        const amt = Number(t.amount_c) || 0;
+        if (t.type === 'fee_collection') b.fees += amt;
+        else if (t.type === 'deposit' && t.status === 'confirmed') b.deposits += amt;
+        else if (t.type === 'withdrawal' && t.status === 'confirmed') b.withdrawals += Math.abs(amt);
+      }
+
+      const points = [...series.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([t, v]) => ({
+          t,
+          new_users: v.new_users,
+          matches: v.matches,
+          wagered: Number(v.wagered.toFixed(2)),
+          fees: Number(v.fees.toFixed(4)),
+          deposits: Number(v.deposits.toFixed(2)),
+          withdrawals: Number(v.withdrawals.toFixed(2)),
+          active_players: v.players.size,
+        }));
+
+      const sum = (k) => points.reduce((a, p) => a + p[k], 0);
+
+      // Active players is the one total that is NOT the sum of its buckets:
+      // somebody who played Monday and Tuesday is one player, not two.
+      const allPlayers = new Set();
+      const byGame = {};
+      for (const m of matches) {
+        if (m.player1_id) allPlayers.add(m.player1_id);
+        if (m.player2_id) allPlayers.add(m.player2_id);
+        const g = m.game_type || 'unknown';
+        byGame[g] = (byGame[g] || 0) + 1;
+      }
+
+      res.json({
+        from: fromIso, to: toIso, bucket, points,
+        totals: {
+          new_users:      sum('new_users'),
+          matches:        sum('matches'),
+          wagered:        Number(sum('wagered').toFixed(2)),
+          fees:           Number(sum('fees').toFixed(4)),
+          deposits:       Number(sum('deposits').toFixed(2)),
+          withdrawals:    Number(sum('withdrawals').toFixed(2)),
+          active_players: allPlayers.size,
+        },
+        by_game: byGame,
+        // Said out loud rather than quietly under-reported. A capped range
+        // looks exactly like a quiet one otherwise, and the difference matters
+        // when the number is being used to decide something.
+        truncated: [
+          users.length   >= MAX_ROWS ? 'profiles' : null,
+          matches.length >= MAX_ROWS ? 'matches' : null,
+          txs.length     >= MAX_ROWS ? 'transactions' : null,
+        ].filter(Boolean),
+      });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   router.get('/transactions', requireAuth, requireAdmin, async (req, res) => {
     const limit  = Math.min(parseInt(req.query.limit) || 50, 200);
     const offset = parseInt(req.query.offset) || 0;
