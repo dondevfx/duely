@@ -55,19 +55,48 @@ test('the extra ways to play are collapsed on load, on every betting screen', ()
   }
 });
 
-test('the toggle is an arrow, a third of the width, that flips when open', () => {
+test('the toggle is a wide chevron on a short bar, that flips when open', () => {
   const mw = fe('components', 'MoreWays.jsx');
-  // A label would be another thing to read on a screen whose whole problem was
-  // having too much on it — and naming what is hidden defeats hiding it.
-  assert.match(mw, /w-1\/3 mx-auto/);
-  assert.match(mw, /<LongArrow up=\{open\} \/>/);
-  assert.match(mw, /transform: up \? 'rotate\(180deg\)' : 'none'/,
-    'the same arrow rotated — a glyph that changes shape reads as a second control');
-  // A shaft and a head, not a bare chevron.
-  assert.match(mw, /d="M12 4\.5v12\.5"/);
+  // Full width, short. It reads as a lid on the group below rather than as
+  // another button competing with the two above it.
+  assert.match(mw, /w-full flex items-center justify-center px-4 py-1 rounded-lg/);
+  assert.ok(!/w-1\/3/.test(mw), 'the bar spans the card now, not a third of it');
+  // preserveAspectRatio="none" is what stretches the chevron across that
+  // width instead of leaving a small glyph in the middle; non-scaling-stroke
+  // is what stops the stretch thickening the horizontal run and thinning the
+  // ends. Neither works without the other.
+  assert.match(mw, /preserveAspectRatio="none"/);
+  assert.match(mw, /vectorEffect="non-scaling-stroke"/);
+  // One shape, rotated — a glyph that changes shape reads as a second control.
+  assert.match(mw, /transform: up \? 'rotate\(180deg\)' : 'none'/);
+  assert.match(mw, /<WideChevron up=\{open\} \/>/);
+  // No shaft: at this height there is no room for one, and a chevron spanning
+  // the whole control already says which way it goes.
+  assert.equal((mw.match(/<path/g) || []).length, 1);
   // Still reachable without sight of the arrow.
   assert.match(mw, /aria-expanded=\{open\}/);
   assert.match(mw, /aria-label=\{open \? 'Fewer ways to play' : 'More ways to play'\}/);
+});
+
+test('Coin Flip fits on a 360px screen with the panel open', () => {
+  // Measured in the browser at 360x780: 723px of content against 724px of
+  // space with diamonds selected, which is the tallest this screen gets — it
+  // carries a heads/tails picker on top of everything the others have. Every
+  // saving is padding, a gap, or one type step on a phone; nothing is removed
+  // and nothing changes above sm.
+  const cf = strip(fe('pages', 'CoinFlipGame.jsx'));
+  for (const cls of [
+    'text-3xl sm:text-6xl',        // title
+    'py-2 sm:py-3 rounded-xl',     // heads/tails
+    'p-1.5 sm:p-3',                // the picker card
+    'gap-1.5 sm:gap-3',            // the action column
+    'gap-1.5 sm:gap-2',            // inside the panel
+  ]) {
+    assert.ok(cf.includes(cls), `Coin Flip is missing "${cls}"`);
+  }
+  // The shared small button is shorter on a phone too — four of them stack
+  // here once the panel is open.
+  assert.match(fe('components', 'GameLobby.jsx'), /py-3 sm:py-4 rounded-xl text-base font-bold/);
 });
 
 test('nothing on Coin Flip can outgrow its row', () => {

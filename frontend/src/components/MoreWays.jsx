@@ -16,22 +16,31 @@
  * copy is how the two drift apart.
  */
 
-// One long arrow, rotated rather than swapped for a second drawing — the
-// control is one thing in two states, and a glyph that changes shape reads as
-// two different controls.
-function LongArrow({ up }) {
+// One wide chevron, stretched the full width of the button and rotated for
+// the open state.
+//
+// preserveAspectRatio="none" is what does the stretching: the viewBox is a
+// long flat box and the SVG is told not to letterbox it, so the stroke spans
+// whatever width the button has instead of sitting as a small glyph in the
+// middle. vectorEffect keeps the line the same weight while that happens —
+// without it, stretching an 80-wide box to 340px would thicken the horizontal
+// run and leave the ends hairline-thin.
+//
+// The shaft is gone. At this height there is no room for one, and a chevron
+// spanning the whole control already says which way it goes — the shaft was
+// carrying no information the shape did not.
+function WideChevron({ up }) {
   return (
     <svg
-      width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"
-      className="transition-transform duration-200"
+      viewBox="0 0 80 10" preserveAspectRatio="none" aria-hidden="true"
+      className="w-full h-2.5 transition-transform duration-200"
       style={{ transform: up ? 'rotate(180deg)' : 'none' }}
     >
-      {/* Shaft first, then the head — a long arrow rather than a bare chevron,
-          which at this size reads as a direction instead of a decoration. */}
-      <path d="M12 4.5v12.5" fill="none" stroke="currentColor"
-        strokeWidth="2.2" strokeLinecap="round" />
-      <path d="M6.8 12.2 12 17.8l5.2-5.6" fill="none" stroke="currentColor"
-        strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M2 2.5 L40 8 L78 2.5" fill="none" stroke="currentColor"
+        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
     </svg>
   );
 }
@@ -45,15 +54,16 @@ export function MoreWaysToggle({ open, onToggle, className = '' }) {
       // Named for a screen reader, since the face of it is only an arrow.
       aria-label={open ? 'Fewer ways to play' : 'More ways to play'}
       title={open ? 'Fewer ways to play' : 'More ways to play'}
-      // A third of the width, centred. Wide enough to be an easy tap target on
-      // a phone, narrow enough that it reads as a handle rather than as a
-      // fourth button competing with the three above it.
-      className={`w-1/3 mx-auto flex items-center justify-center py-2.5 rounded-xl
+      // Full width, and about a third of the height of a normal button. It
+      // reads as a lid on the group below rather than as another button
+      // competing with the two above it — which is what a full-height row
+      // with a label did.
+      className={`w-full flex items-center justify-center px-4 py-1 rounded-lg
                   border border-border bg-surface text-white/70
                   hover:border-primary hover:text-white active:bg-surfaceLight
                   transition-all ${className}`}
     >
-      <LongArrow up={open} />
+      <WideChevron up={open} />
     </button>
   );
 }

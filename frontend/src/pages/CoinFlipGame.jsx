@@ -684,8 +684,8 @@ export default function CoinFlipGame() {
       <div className="w-full max-w-md animate-slide-up">
 
         {phase === 'lobby' && (
-          <div className="text-center mb-1 sm:mb-6">
-            <h1 className="text-4xl sm:text-6xl font-black text-white mb-0.5 sm:mb-2 leading-tight flex items-center justify-center gap-3"><GameIcon game="coin-flip" size={48} className="w-9 h-9 sm:w-14 sm:h-14" />Coin Flip</h1>
+          <div className="text-center mb-0.5 sm:mb-6">
+            <h1 className="text-3xl sm:text-6xl font-black text-white mb-0.5 sm:mb-2 leading-tight flex items-center justify-center gap-3"><GameIcon game="coin-flip" size={48} className="w-9 h-9 sm:w-14 sm:h-14" />Coin Flip</h1>
             <p className="text-center text-muted text-sm sm:text-base leading-snug sm:leading-relaxed px-2">Pick heads or tails — you get matched with someone on the opposite side. One flip decides it.</p>
           </div>
         )}
@@ -770,12 +770,12 @@ export default function CoinFlipGame() {
             {/* Desktop values are trimmed so the whole betting screen clears a
                 1080p viewport without scrolling. Only the sm: side moves —
                 mobile spacing is unchanged. */}
-            <div className="mb-1.5 sm:mb-3 bg-surface border border-border rounded-2xl p-2 sm:p-3">
+            <div className="mb-1.5 sm:mb-3 bg-surface border border-border rounded-2xl p-1.5 sm:p-3">
               <p className="hidden sm:block text-sm font-bold text-white mb-2">Pick Your Side</p>
               <div className="grid grid-cols-2 gap-1.5 sm:gap-2.5">
                 {['heads', 'tails'].map(s => (
                   <button key={s} onClick={() => setSide(s)}
-                    className={`py-4 sm:py-3 rounded-xl text-center font-black border-2 transition-all ${
+                    className={`py-2 sm:py-3 rounded-xl text-center font-black border-2 transition-all ${
                       side === s ? 'border-primary bg-primary/20 text-white' : 'border-border text-muted hover:border-primary/50 hover:text-white'
                     }`}>
                     {/* Mobile sizes only. The sm: values stay where they were
@@ -787,7 +787,7 @@ export default function CoinFlipGame() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 sm:gap-3">
+            <div className="flex flex-col gap-1.5 sm:gap-3">
               {!session ? (
                 <GlowButton onClick={() => navigate('/login')} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent">
                   <LockIcon /> Login to Play
@@ -829,7 +829,7 @@ export default function CoinFlipGame() {
                         {/* min-w-0 on both, so two labels side by side shrink instead of
                             pushing the row wider than the card. SMALL_BTN is flex-1, which
                             alone does not stop a flex child growing past its basis. */}
-                        <div className="flex gap-2">
+                        <div className="flex gap-1.5 sm:gap-2">
                           <button onClick={() => playVsBot(true)} disabled={!authenticated} className={`${SMALL_BTN} min-w-0`}>
                             Play vs Bot
                           </button>

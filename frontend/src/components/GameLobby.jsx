@@ -28,8 +28,13 @@ import InsufficientModal from './InsufficientModal';
 // whitespace-nowrap is load-bearing: two of these share a row, and the longest
 // label ("Bet vs Bot — 50,000 💎") has to stay on one line or the row grows a
 // second line and the buttons stop matching each other.
+// py-3 on a phone, py-4 from sm up. Four of these stack under the stake on
+// Coin Flip once the panel is open — the tallest bet screen there is, because
+// it also carries a heads/tails picker — and at py-4 that overflowed a 360px
+// screen by 60px. A shorter button on a phone is the cheapest 24px available
+// and costs nothing above sm.
 export const SMALL_BTN =
-  'flex-1 px-3 sm:px-4 py-4 rounded-xl text-base font-bold whitespace-nowrap ' +
+  'flex-1 px-3 sm:px-4 py-3 sm:py-4 rounded-xl text-base font-bold whitespace-nowrap ' +
   'border border-border bg-surface text-white ' +
   'hover:border-primary hover:bg-surfaceLight active:bg-surfaceLight transition-all';
 
