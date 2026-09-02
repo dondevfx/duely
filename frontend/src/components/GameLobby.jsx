@@ -10,6 +10,7 @@ import GameIcon from './GameIcon';
 import CreateRoomModal from './CreateRoomModal';
 import JoinRoomModal from './JoinRoomModal';
 import { LockIcon } from './UiIcon';
+import { MoreWaysToggle } from './MoreWays';
 import InsufficientModal from './InsufficientModal';
 
 // The secondary lobby actions: Challenge a Friend, Bet vs Bot, Play vs Bot,
@@ -307,22 +308,7 @@ export default function GameLobby({
                 — this is about what the screen looks like when it LOADS. */}
             {(onBot || onBotFree || onCreatePrivate) && (
               <>
-                <button
-                  type="button"
-                  onClick={() => setMoreOpen(o => !o)}
-                  aria-expanded={moreOpen}
-                  className={`${SMALL_BTN} flex items-center justify-center gap-1.5`}
-                >
-                  {moreOpen ? 'Fewer Options' : 'More Ways to Play'}
-                  {/* Rotates rather than swapping glyph, so the control reads
-                      as one thing in two states. */}
-                  <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"
-                    className="transition-transform duration-200 shrink-0"
-                    style={{ transform: moreOpen ? 'rotate(180deg)' : 'none' }}>
-                    <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor"
-                      strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
+                <MoreWaysToggle open={moreOpen} onToggle={() => setMoreOpen(o => !o)} />
 
                 {moreOpen && (
                   <div className="flex flex-col gap-2 animate-fade-in">

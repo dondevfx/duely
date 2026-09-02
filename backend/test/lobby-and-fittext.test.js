@@ -35,12 +35,51 @@ test('scaled text is anchored to the left edge, not its own centre', () => {
 
 // ── The bet screen ────────────────────────────────────────────────────────
 
-test('the extra ways to play are collapsed on load', () => {
-  const code = strip(LOBBY);
-  assert.match(code, /const \[moreOpen, setMoreOpen\] = useState\(false\)/,
-    'the page must open collapsed — this is about what it looks like when it LOADS');
-  assert.match(code, /moreOpen \? 'Fewer Options' : 'More Ways to Play'/);
-  assert.match(code, /aria-expanded=\{moreOpen\}/);
+// Every betting screen. GameLobby covers five games; Coin Flip and Blackjack
+// build their own lobbies and need the identical control, which is why the
+// toggle lives in its own file rather than inside GameLobby.
+const BET_SCREENS = [
+  ['components', 'GameLobby.jsx'],
+  ['pages', 'CoinFlipGame.jsx'],
+  ['pages', 'BlackjackGame.jsx'],
+];
+
+test('the extra ways to play are collapsed on load, on every betting screen', () => {
+  for (const parts of BET_SCREENS) {
+    const code = strip(fe(...parts));
+    assert.match(code, /const \[moreOpen, setMoreOpen\] = useState\(false\)/,
+      `${parts[1]} must open collapsed — this is about what it looks like when it LOADS`);
+    assert.match(code, /<MoreWaysToggle open=\{moreOpen\} onToggle=\{\(\) => setMoreOpen\(o => !o\)\} \/>/,
+      `${parts[1]} does not use the shared toggle`);
+    assert.match(code, /\{moreOpen && \(/, `${parts[1]} does not gate the panel on it`);
+  }
+});
+
+test('the toggle is an arrow, a third of the width, that flips when open', () => {
+  const mw = fe('components', 'MoreWays.jsx');
+  // A label would be another thing to read on a screen whose whole problem was
+  // having too much on it — and naming what is hidden defeats hiding it.
+  assert.match(mw, /w-1\/3 mx-auto/);
+  assert.match(mw, /<LongArrow up=\{open\} \/>/);
+  assert.match(mw, /transform: up \? 'rotate\(180deg\)' : 'none'/,
+    'the same arrow rotated — a glyph that changes shape reads as a second control');
+  // A shaft and a head, not a bare chevron.
+  assert.match(mw, /d="M12 4\.5v12\.5"/);
+  // Still reachable without sight of the arrow.
+  assert.match(mw, /aria-expanded=\{open\}/);
+  assert.match(mw, /aria-label=\{open \? 'Fewer ways to play' : 'More ways to play'\}/);
+});
+
+test('nothing on Coin Flip can outgrow its row', () => {
+  // Two labels side by side on a 360px phone. SMALL_BTN is flex-1, which on
+  // its own does not stop a flex child growing past its basis — min-w-0 is
+  // what lets it shrink instead of pushing the row wider than the card.
+  for (const page of ['CoinFlipGame.jsx', 'BlackjackGame.jsx']) {
+    const code = strip(fe('pages', page));
+    const row = code.slice(code.indexOf('Play vs Bot') - 400, code.indexOf('Join Game') + 200);
+    assert.equal((row.match(/\$\{SMALL_BTN\} min-w-0/g) || []).length, 2,
+      `${page}: both buttons in the two-across row need min-w-0`);
+  }
 });
 
 test('nothing is removed, only folded away', () => {

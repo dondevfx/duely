@@ -6,6 +6,7 @@ import { useSocket } from '../context/SocketContext';
 import { playMatchFound, playCard, playCountdown } from '../utils/sound';
 import { useCurrency } from '../context/CurrencyContext';
 import { COIN_FEES, DIAMOND_FEES, SMALL_BTN } from '../components/GameLobby';
+import { MoreWaysToggle } from '../components/MoreWays';
 import BetSlider from '../components/BetSlider';
 import ResultScreen from '../components/ResultScreen';
 import GameHelp from '../components/GameHelp';
@@ -200,7 +201,15 @@ function BlackjackGame() {
   const ready = usePageReady();
   const navigate = useNavigate();
   const location = useLocation();
-  const { profile, session, refreshProfile, updateProfile } = useAuth();
+  const { profile, session: realSession, refreshProfile, updateProfile } = useAuth();
+  // ?previewauth=1, DEV only — the signed-in half of this lobby cannot be
+  // looked at without an account. Same affordance as GameLobby's. The DEV
+  // guard comes first so the bundler drops the whole expression.
+  const session = realSession || (import.meta.env.DEV
+    && typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('previewauth') === '1'
+      ? { user: { id: 'preview' } } : null);
+
   const { socket, authenticated, playerCounts, betCounts } = useSocket();
   // Rematch for invite/code matches — same two players, no new code.
   // See usePrivateRematch: the server marks the match private, and both
@@ -241,6 +250,8 @@ function BlackjackGame() {
     return () => clearTimeout(t);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [privateCode, setPrivateCode] = useState('');
+  // Collapsed on load — see MoreWays.
+  const [moreOpen, setMoreOpen] = useState(false);
   const [privateMode, setPrivateMode] = useState(null);
   const [shortfall, setShortfall] = useState(false);
   const [invitedFriend, setInvitedFriend] = useState(null); // waiting on a friend invite
@@ -1205,24 +1216,35 @@ function BlackjackGame() {
               >
                 {'Challenge a Friend'}
               </button>
-              {/* Diamond bet-vs-bot gets its own full-width row — too long to share */}
-              {isDiamonds && (
-                <button
-                  onClick={insufficient ? () => setShortfall(true) : () => playVsBot(false)}
-                  disabled={!authenticated}
-                  className={SMALL_BTN}
-                >
-                  <span className="inline-flex items-center gap-1">Bet vs Bot — {fmtFee(entryFee)} <DiamondIcon /></span>
-                </button>
+              {/* Folded away behind the arrow, same as every other bet screen — see
+                  MoreWays. The page opens on the stake and the two ways to start a real
+                  match; a bot game and a join code are one tap from here. */}
+              <MoreWaysToggle open={moreOpen} onToggle={() => setMoreOpen(o => !o)} />
+              {moreOpen && (
+                <div className="flex flex-col gap-2 animate-fade-in">
+                  {/* Diamond bet-vs-bot gets its own full-width row — too long to share */}
+                  {isDiamonds && (
+                    <button
+                      onClick={insufficient ? () => setShortfall(true) : () => playVsBot(false)}
+                      disabled={!authenticated}
+                      className={SMALL_BTN}
+                    >
+                      <span className="inline-flex items-center gap-1">Bet vs Bot — {fmtFee(entryFee)} <DiamondIcon /></span>
+                    </button>
+                  )}
+                  {/* min-w-0 on both, so two labels side by side shrink instead of
+                      pushing the row wider than the card. SMALL_BTN is flex-1, which
+                      alone does not stop a flex child growing past its basis. */}
+                  <div className="flex gap-2">
+                    <button onClick={() => playVsBot(true)} disabled={!authenticated} className={`${SMALL_BTN} min-w-0`}>
+                      Play vs Bot
+                    </button>
+                    <button onClick={() => setPrivateMode('join')} className={`${SMALL_BTN} min-w-0`}>
+                      Join Game
+                    </button>
+                  </div>
+                </div>
               )}
-              <div className="flex gap-2">
-                <button onClick={() => playVsBot(true)} disabled={!authenticated} className={SMALL_BTN}>
-                  Play vs Bot
-                </button>
-                <button onClick={() => setPrivateMode('join')} className={SMALL_BTN}>
-                  Join Game
-                </button>
-              </div>
             </div>
           )}
       <InsufficientModal currency={betCurrency} open={shortfall} onClose={() => setShortfall(false)} />
