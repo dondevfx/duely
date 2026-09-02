@@ -77,12 +77,22 @@ export default function GameLobby({
   liveCount,
   gameType,
 }) {
+  const [moreOpen, setMoreOpen] = useState(false);
   const [privateMode, setPrivateMode] = useState(null);
   const [shortfall, setShortfall] = useState(false);
   const [joinCode, setJoinCode]       = useState('');
 
   const { betCounts } = useSocket() || {};
-  const { session } = useAuth();
+  const { session: realSession } = useAuth();
+  // ?previewauth=1, DEV only. The signed-in half of this screen — the button
+  // group, the collapsed options — cannot be looked at without an account,
+  // which makes the layout of the thing hardest to get right also the hardest
+  // to see. Same idea as ?cropdebug=1 on the game cards. Stripped from any
+  // production build by the DEV guard.
+  const session = realSession || (import.meta.env.DEV
+    && typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('previewauth') === '1'
+      ? { user: { id: 'preview' } } : null);
   const navigate = useNavigate();
 
   function guardedAction(fn) {
@@ -282,35 +292,70 @@ export default function GameLobby({
                 onClick={insufficient ? () => setShortfall(true) : () => setPrivateMode('create')}
                 className={SMALL_BTN}
               >
-                🎮 Challenge a Friend
+                Challenge a Friend
               </button>
             )}
-            {/* Diamond bet-vs-bot gets its own full-width row — the label is too
-                long to share a row with the other two. */}
-            {/* Never disabled for balance. A dead button tells the player
-                nothing — it looks broken, and they cannot find out why. It
-                stays clickable and takes them where the currency is topped up,
-                the same as the main action above. */}
-            {onBot && isDiamonds && entryFee > 0 && (
-              <button
-                onClick={insufficient ? () => setShortfall(true) : commit(onBot)}
-                className={SMALL_BTN}
-              >
-                <span className="inline-flex items-center gap-1">Bet vs Bot — {fmtFee(entryFee)} <DiamondIcon /></span>
-              </button>
+
+            {/* Everything else folds away behind one row.
+                
+                Four buttons stacked under the stake made the lobby the tallest
+                screen in the app, and three of them are things almost nobody
+                reaches for: a bot match, a solo run, joining someone's code.
+                They are still one tap away, but the page now opens on the bet
+                and the two ways to start a real match, which is what it is
+                for. Collapsed by default rather than remembering a preference
+                — this is about what the screen looks like when it LOADS. */}
+            {(onBot || onBotFree || onCreatePrivate) && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setMoreOpen(o => !o)}
+                  aria-expanded={moreOpen}
+                  className={`${SMALL_BTN} flex items-center justify-center gap-1.5`}
+                >
+                  {moreOpen ? 'Fewer Options' : 'More Ways to Play'}
+                  {/* Rotates rather than swapping glyph, so the control reads
+                      as one thing in two states. */}
+                  <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"
+                    className="transition-transform duration-200 shrink-0"
+                    style={{ transform: moreOpen ? 'rotate(180deg)' : 'none' }}>
+                    <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor"
+                      strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+
+                {moreOpen && (
+                  <div className="flex flex-col gap-2 animate-fade-in">
+                    {/* Diamond bet-vs-bot gets its own full-width row — the
+                        label is too long to share a row with the other two. */}
+                    {/* Never disabled for balance. A dead button tells the
+                        player nothing — it looks broken, and they cannot find
+                        out why. It stays clickable and takes them where the
+                        currency is topped up, the same as the main action. */}
+                    {onBot && isDiamonds && entryFee > 0 && (
+                      <button
+                        onClick={insufficient ? () => setShortfall(true) : commit(onBot)}
+                        className={SMALL_BTN}
+                      >
+                        <span className="inline-flex items-center gap-1">Bet vs Bot — {fmtFee(entryFee)} <DiamondIcon /></span>
+                      </button>
+                    )}
+                    <div className="flex gap-2 sm:gap-2">
+                      {onBotFree && (
+                        <button onClick={commit(onBotFree)} className={SMALL_BTN}>
+                          {botLabel || 'Play vs Bot'}
+                        </button>
+                      )}
+                      {onCreatePrivate && (
+                        <button onClick={() => setPrivateMode('join')} className={SMALL_BTN}>
+                          Join Game
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
-            <div className="flex gap-2 sm:gap-2">
-              {onBotFree && (
-                <button onClick={commit(onBotFree)} className={SMALL_BTN}>
-                  {botLabel || 'Play vs Bot'}
-                </button>
-              )}
-              {onCreatePrivate && (
-                <button onClick={() => setPrivateMode('join')} className={SMALL_BTN}>
-                  Join Game
-                </button>
-              )}
-            </div>
           </div>
         )}
 

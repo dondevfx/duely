@@ -410,7 +410,7 @@ export default function CarDashGame() {
           isWinner
           winnerUsername={profile?.username ?? 'You'}
           profile={profile}
-          gameLabel="🎮 Solo Endless"
+          gameLabel="Solo Endless"
           extraRows={[
             { label: 'Survived', value: fmtTime(result.ms) },
             { label: 'Score',    value: (result.score ?? 0).toLocaleString() },
@@ -552,7 +552,7 @@ export default function CarDashGame() {
         onQueue={joinQueue}
         onBot={playVsBot}
         onBotFree={playVsBotFree}
-        botLabel="🎮 Solo Endless"
+        botLabel="Solo Endless"
         onCreatePrivate={createPrivate}
         onJoinPrivate={joinPrivate}
         statusMsg={statusMsg}

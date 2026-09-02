@@ -417,6 +417,28 @@ const BJ = {
   ) },
 };
 
+// Joining a friend's game by code. Replaces the 🔗 that headed the join
+// dialog — a paperclip on some platforms, a chain on others, and never the
+// brand's blue. Two links of a chain, which is what a shared code is.
+export function JoinCodeIcon({ size = 20, className = '' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" role="img"
+      aria-label="join a game" focusable="false"
+      // ICON_ALIGN, like every other icon here: align-middle centres on the
+      // x-height midline, about 0.1em below where text reads as centred, so
+      // an icon set that way hangs low beside its label.
+      className={`inline-block shrink-0 ${className}`} style={ICON_ALIGN}>
+      {/* Two rounded capsules on a diagonal, overlapping at the centre, with
+          the bar between them — a link reads at 20px where a knot does not. */}
+      <path d="M9.6 14.4 14.4 9.6" stroke="#4A90FF" strokeWidth="2.2" strokeLinecap="round" />
+      <path d="M13.1 16.9 11 19a4.3 4.3 0 0 1-6.1-6.1L7 10.8"
+        fill="none" stroke="#1250B4" strokeWidth="2.2" strokeLinecap="round" />
+      <path d="M10.9 7.1 13 5a4.3 4.3 0 0 1 6.1 6.1L17 13.2"
+        fill="none" stroke="#1250B4" strokeWidth="2.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 // The signup reward present. Drawn rather than 🎁 for the same reason every
 // other icon here is: the emoji renders as a different object on every
 // platform and cannot take the brand palette. Brand blue box, gold ribbon —

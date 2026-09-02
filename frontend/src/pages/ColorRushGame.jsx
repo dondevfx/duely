@@ -418,7 +418,7 @@ export default function ColorRushGame() {
           isWinner
           winnerUsername={profile?.username ?? 'You'}
           profile={profile}
-          gameLabel="🎮 Solo Endless"
+          gameLabel="Solo Endless"
           extraRows={[
             { label: 'Diamonds', value: (result.score ?? 0).toLocaleString() },
           ]}
@@ -555,7 +555,7 @@ export default function ColorRushGame() {
         onQueue={joinQueue}
         onBot={playVsBot}
         onBotFree={playVsBotFree}
-        botLabel="🎮 Solo Endless"
+        botLabel="Solo Endless"
         onCreatePrivate={createPrivate}
         onJoinPrivate={joinPrivate}
         statusMsg={statusMsg}

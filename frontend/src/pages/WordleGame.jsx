@@ -723,7 +723,7 @@ export default function WordleGame() {
           onQueue={joinQueue}
           onBot={startSoloPaid}
           onBotFree={startSolo}
-          botLabel="🎮 Solo Mode"
+          botLabel="Solo Mode"
           onCreatePrivate={createPrivate}
           onJoinPrivate={joinPrivate}
           statusMsg={statusMsg}

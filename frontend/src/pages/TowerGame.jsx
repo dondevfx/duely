@@ -332,7 +332,7 @@ export default function TowerGame() {
           entryFee={result.entryFee ?? entryFee}
           disconnected={result.disconnected}
           profile={profile}
-          gameLabel={freeSolo ? '🎮 Solo Endless' : 'Tower'}
+          gameLabel={freeSolo ? 'Solo Endless' : 'Tower'}
           extraRows={result.isSolo
             ? (freeSolo
                 ? [{ label: 'Blocks', value: (result.playerScore ?? 0).toLocaleString() }]
@@ -467,7 +467,7 @@ export default function TowerGame() {
         onQueue={joinQueue}
         onBot={playVsBot}
         onBotFree={playVsBotFree}
-        botLabel="🎮 Solo Endless"
+        botLabel="Solo Endless"
         onCreatePrivate={createPrivate}
         onJoinPrivate={joinPrivate}
         statusMsg={statusMsg}

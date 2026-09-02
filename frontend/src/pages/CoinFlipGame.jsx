@@ -797,7 +797,7 @@ export default function CoinFlipGame() {
                       onClick={insufficient ? () => setShortfall(true) : () => setPrivateMode('create')}
                       className={SMALL_BTN}
                     >
-                      {'🎮 Challenge a Friend'}
+                      {'Challenge a Friend'}
                     </button>
                     {/* Diamond bet-vs-bot gets its own full-width row — too long to share */}
                     {isDiamonds && (

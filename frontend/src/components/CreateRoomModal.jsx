@@ -60,7 +60,7 @@ export default function CreateRoomModal({ open, onClose, gameType, entryFee = 0,
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="bg-surface border border-border rounded-2xl p-5 w-full max-w-sm animate-slide-up" onClick={e => e.stopPropagation()}>
-        <div className="text-lg font-black text-white mb-1">🎮 Challenge a Friend</div>
+        <div className="text-lg font-black text-white mb-1">Challenge a Friend</div>
         <p className="text-xs text-muted mb-4">Get a link to send anyone — they tap it and join your game.</p>
 
         {err && <p className="text-danger text-xs mb-2 font-medium">{err}</p>}

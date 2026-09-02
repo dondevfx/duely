@@ -3,6 +3,7 @@ import DiamondIcon from './DiamondIcon';
 import GlowButton from './GlowButton';
 import CoinIcon from './CoinIcon';
 import GameIcon from './GameIcon';
+import { JoinCodeIcon } from './UiIcon';
 import { useSocket } from '../context/SocketContext';
 
 const GAME_NAMES = {
@@ -125,7 +126,9 @@ export default function JoinRoomModal({ open, onClose, onJoin, authenticated = t
           </div>
         ) : (
           <>
-            <div className="text-lg font-black text-white mb-1">🔗 Join a Game</div>
+            <div className="text-lg font-black text-white mb-1 flex items-center gap-2">
+              <JoinCodeIcon size={20} /> Join a Game
+            </div>
             <p className="text-xs text-muted mb-4">Enter the 6-character code your friend shared.</p>
             <input
               value={code}

@@ -63,7 +63,23 @@ export default function FitText({
     <div ref={boxRef} className={`overflow-hidden ${className}`} style={style}>
       <span
         ref={innerRef}
-        className="inline-block whitespace-nowrap origin-center will-change-transform"
+        // origin-LEFT, not centre, and this is the whole correctness of the
+        // component.
+        //
+        // A transform scales about the element's own natural box, and the
+        // natural box here is the OVERSIZED one — that is the only case where
+        // any scaling happens. Scaling 83px of text about its own centre
+        // inside a 53px container leaves it centred on 83px, which sits 15px
+        // to the right of where the container is, so the right-hand end fell
+        // outside and the container's own overflow-hidden cut it off. That is
+        // how "Champion" became "Champio" AFTER being shrunk to fit: it did
+        // fit, it was just in the wrong place.
+        //
+        // From the left it lands correctly by construction. The scale is
+        // exactly avail/need, so the scaled width is exactly the container
+        // width — starting at the left edge means ending at the right edge,
+        // and a box filled edge to edge needs no centring.
+        className="inline-block whitespace-nowrap origin-left will-change-transform"
         // The full value is always reachable even at the smallest scale.
         title={title}
         data-fit-scaled={scaled ? 'true' : undefined}
