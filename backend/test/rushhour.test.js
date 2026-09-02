@@ -119,8 +119,16 @@ test('under 25 seconds the bot takes it', () => {
   const elseBranch = fn.slice(fn.indexOf('} else {'), fn.indexOf('} else {') + 400);
   // Both must move, because score decides and time only breaks a tie — pinning
   // one would let a short run with a big combo still win.
-  assert.match(elseBranch, /room\.times\[_botKey\(room\)\]\s*=\s*hT \+ /);
-  assert.match(elseBranch, /room\.scores\[_botKey\(room\)\]\s*=\s*hS \+ /);
+  //
+  // Asserted as "strictly ahead of the human" rather than as a literal
+  // expression: the margin is drawn per match now instead of being a constant,
+  // so the old `hT + 1_000` / `hS + 100` no longer appear. The rule is
+  // unchanged; only the arithmetic that satisfies it moved.
+  assert.match(elseBranch, /const bT = hT \+ Math\.floor\(rand\(/,
+    'the bot must survive longer than the player');
+  assert.match(elseBranch, /room\.times\[_botKey\(room\)\]\s*=\s*bT;/);
+  assert.match(elseBranch, /room\.scores\[_botKey\(room\)\]\s*=\s*Math\.max\(hS \+ 1,/,
+    'and outscore them, since score is what decides');
 });
 
 test('demo accounts still win regardless', () => {

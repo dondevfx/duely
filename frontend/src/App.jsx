@@ -68,6 +68,17 @@ function ResultPreview() {
     </div>
   );
 }
+// The player-profile popup, at its widest values: a four-digit rating in the
+// longest rank name, and eight-figure wagered totals. That combination is the
+// one that overflowed, and it needs a chat message to reach normally.
+function PopupPreview() {
+  const data = {
+    id: 'x', username: 'CEO', rank: 1, elo: 3453, wins: 159, losses: 53,
+    total_wagered: 3393, total_wagered_diamonds: 1100000,
+    profile_color: '#22c55e', avatar_url: null, current_streak: 0,
+  };
+  return <ProfilePopupPreview data={data} />;
+}
 function TowerPreview() { return <div style={{position:'fixed',inset:0}}><TowerCanvas running /></div>; }
 function ColorRushPreview() {
   return <div style={{position:'fixed',inset:0}}><ColorRushCanvas seed={12345} onProgress={() => {}} onDeath={() => {}} /></div>;
@@ -87,6 +98,7 @@ import NotifyToast from './components/NotifyToast';
 import ReconnectOverlay from './components/ReconnectOverlay';
 import AgeToSModal, { useTosAccepted } from './components/AgeToSModal';
 import ResultScreen from './components/ResultScreen';
+import { ProfilePopupPreview } from './components/ChatSidebar';
 import SignupRewardModal from './components/SignupRewardModal';
 import SaveLoginPrompt from './components/SaveLoginPrompt';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -201,6 +213,7 @@ function Shell() {
           <Route path="/game/color-rush"    element={<ColorRushGame />} />
           <Route path="/game/tower"         element={<TowerGame />} />
           {import.meta.env.DEV && <Route path="/__tos-preview" element={<TosPreview />} />}
+          {import.meta.env.DEV && <Route path="/__popup-preview" element={<PopupPreview />} />}
           {import.meta.env.DEV && <Route path="/__result-preview" element={<ResultPreview />} />}
           {import.meta.env.DEV && <Route path="/__tower-preview" element={<TowerPreview />} />}
           {import.meta.env.DEV && <Route path="/__color-rush-preview" element={<ColorRushPreview />} />}

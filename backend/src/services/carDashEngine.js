@@ -423,14 +423,39 @@ async function _resolveFromTimes(io, supabase, roomId) {
       const hT = room.times[human.socketId] ?? room.progress[human.socketId] ?? 0;
       const hS = room.scores[human.socketId] ?? 0;
       const cleared = room.demoWin || hT >= BOT_WIN_MIN_MS;
+
+      // The margin varies, and the score is derived from the bot's own time.
+      //
+      // It used to be exactly 0.85x on both, which reads as manufactured the
+      // moment anyone looks: survive 28 seconds and the opponent always died
+      // at 24, every single match, with a score in the same fixed ratio. A
+      // real opponent's run is not a scaled copy of yours.
+      //
+      // So the gap is drawn per match, and the bot's score comes from its own
+      // survival time at the game's own rate — the same ms-to-points relation
+      // used to fill in a missing bot score above — with a little noise for
+      // the combos a real run picks up. What is rigged is only WHO wins; the
+      // numbers either side of that now look like two separate runs.
+      const rand = (lo, hi) => lo + Math.random() * (hi - lo);
+      const scoreFromMs = (ms) => Math.max(0, Math.floor((ms / 1000) * 50 * rand(0.9, 1.12)));
+
       if (cleared) {
-        room.times[_botKey(room)]  = Math.max(0, Math.floor(hT * 0.85) - 200);
-        room.scores[_botKey(room)] = Math.max(0, Math.floor(hS * 0.85) - 10);
+        // Loses by anywhere from a hair to a wide margin, never by a constant.
+        // Floored at 1.2s behind so a near-tie cannot round into a draw, and
+        // at 2s absolute so the bot never posts an implausible sub-second run.
+        const gap = Math.max(1_200, Math.floor(hT * rand(0.08, 0.42)));
+        const bT  = Math.max(2_000, hT - gap);
+        room.times[_botKey(room)]  = bT;
+        // Kept strictly under the human's, since score is what decides. A
+        // generous roll on a close time could otherwise hand the bot the win
+        // the demo exists to prevent.
+        room.scores[_botKey(room)] = Math.max(0, Math.min(scoreFromMs(bT), Math.max(0, hS - 1)));
       } else {
         // Pinned ahead on both, since score decides and time breaks a tie —
         // setting only one would let a short run with a high combo still win.
-        room.times[_botKey(room)]  = hT + 1_000;
-        room.scores[_botKey(room)] = hS + 100;
+        const bT = hT + Math.floor(rand(1_500, 9_000));
+        room.times[_botKey(room)]  = bT;
+        room.scores[_botKey(room)] = Math.max(hS + 1, scoreFromMs(bT));
       }
     }
   }

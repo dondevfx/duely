@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import DiamondIcon from './DiamondIcon';
 import RankIcon from './RankIcon';
+import FitText from './FitText';
 import { BotAvatar } from './UiIcon';
-import { getRank } from '../utils/ranks';
+import { getDisplayRank } from '../utils/ranks';
 import CoinIcon from './CoinIcon';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
@@ -252,13 +253,18 @@ function LineChart({ data }) {
 // you are browsing rankings, not moderating or befriending from a table of 500
 // names — and it is one prop rather than a second copy of this card that would
 // drift out of step with this one.
-function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBanned, isBot, viewOnly = false }) {
+// previewData seeds the card without a fetch, for the dev-only preview route.
+// The bot card already worked this way (BOT_PROFILE below); this is the same
+// door, opened for a fixture with the widest values a real card can hold —
+// which is the combination that overflowed on a phone and needs a chat message
+// from the right player to reach any other way.
+function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBanned, isBot, viewOnly = false, previewData = null }) {
   const { profile: myProfile, refreshProfile } = useAuth();
   const { activeGames } = useSocket();
   const navigate = useNavigate();
-  const [data, setData]           = useState(isBot ? BOT_PROFILE : null);
+  const [data, setData]           = useState(previewData || (isBot ? BOT_PROFILE : null));
   const [history, setHistory]     = useState(isBot ? BOT_HISTORY : null);
-  const [loading, setLoading]     = useState(!isBot);
+  const [loading, setLoading]     = useState(!isBot && !previewData);
   const [tipAmount, setTipAmount] = useState('');
   const [tipCurrency, setTipCurrency] = useState('coins');
   const [tipSending, setTipSending]   = useState(false);
@@ -291,7 +297,7 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
   }
 
   useEffect(() => {
-    if (isBot) return;
+    if (isBot || previewData) return;
     Promise.all([
       api.get(`/auth/public/${userId}`),
       api.get(`/auth/coin-history/${userId}`).catch(() => null),
@@ -407,22 +413,33 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
                   // ELO carries its rank the same way the profile page does —
                   // the badge, the rank's name and the rank's colour. A bare
                   // number said nothing about where the player actually sits.
+                  // getDisplayRank, not getRank: an account that has not
+                  // completed placement is Unranked, and getRank on a raw
+                  // rating calls a new player Bronze.
                   { label: 'ELO', value: (data.elo ?? 0).toLocaleString(),
-                    color: getRank(data.elo ?? 0).color, rank: getRank(data.elo ?? 0) },
+                    color: getDisplayRank(data).color, rank: getDisplayRank(data) },
                   { label: 'Wins',   value: (data.wins ?? 0).toLocaleString(),   cls: 'text-success' },
                   { label: 'Losses', value: (data.losses ?? 0).toLocaleString(), cls: 'text-danger'  },
                 ].map(s => (
-                  <div key={s.label} className="bg-bg rounded-xl p-4 text-center overflow-hidden"
+                  // FitText rather than truncate, and p-3 rather than p-4 on a
+                  // phone. These are ~90px cells at 375px wide: a four-digit
+                  // rating at text-2xl filled one edge to edge, and the rank
+                  // line clipped its own badge and cut "Champion" to "Champio"
+                  // — truncate on a flex row shortens the text AND squeezes
+                  // the icon, so the two things that say what the rank IS were
+                  // the two things that went missing. Scaling keeps both whole.
+                  <div key={s.label} className="bg-bg rounded-xl p-3 sm:p-4 text-center overflow-hidden"
                     style={s.rank ? { boxShadow: `inset 0 0 20px ${s.rank.glow}` } : undefined}>
-                    <div className={`text-2xl font-black ${s.cls || ''}`}
-                      style={s.color ? { color: s.color } : undefined}>{s.value}</div>
+                    <FitText className={`text-xl sm:text-2xl font-black ${s.cls || ''}`}
+                      style={s.color ? { color: s.color } : undefined}>{s.value}</FitText>
                     {s.rank ? (
-                      <div className="text-xs font-bold mt-1 flex items-center justify-center gap-1 truncate"
-                        style={{ color: s.rank.color }}>
-                        <RankIcon rank={s.rank} size={13} />{s.rank.name}
-                      </div>
+                      <FitText className="text-xs font-bold mt-1" style={{ color: s.rank.color }}>
+                        <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                          <RankIcon rank={s.rank} size={13} />{s.rank.name}
+                        </span>
+                      </FitText>
                     ) : (
-                      <div className="text-sm text-muted mt-1">{s.label}</div>
+                      <div className="text-xs sm:text-sm text-muted mt-1">{s.label}</div>
                     )}
                   </div>
                 ))}
@@ -441,8 +458,8 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
                     whitespace-nowrap on the value: the diamond emoji was
                     loose text after the number, so it wrapped onto its own
                     line and made the cell 56px tall instead of 28px. */}
-                <div className="bg-bg rounded-xl px-3 py-4 overflow-hidden">
-                  <div className="text-sm text-muted mb-1">Coins Wagered</div>
+                <div className="bg-bg rounded-xl px-3 py-3 sm:py-4 overflow-hidden">
+                  <FitText className="text-xs sm:text-sm text-muted mb-1">Coins Wagered</FitText>
                   <div
                     className="text-xl font-black text-white inline-flex items-center gap-1 whitespace-nowrap max-w-full"
                     title={`${fmtExact(data.total_wagered)} coins wagered`}
@@ -451,8 +468,8 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
                     <CoinIcon size="0.85em" />
                   </div>
                 </div>
-                <div className="bg-bg rounded-xl px-3 py-4 overflow-hidden">
-                  <div className="text-sm text-muted mb-1">Diamonds Wagered</div>
+                <div className="bg-bg rounded-xl px-3 py-3 sm:py-4 overflow-hidden">
+                  <FitText className="text-xs sm:text-sm text-muted mb-1">Diamonds Wagered</FitText>
                   <div
                     className="text-xl font-black text-white inline-flex items-center gap-1 whitespace-nowrap max-w-full"
                     title={`${Number(data.total_wagered_diamonds ?? 0).toLocaleString()} diamonds wagered`}
@@ -1041,4 +1058,9 @@ export default function ChatSidebar({ open, onToggle }) {
       )}
     </>
   );
+}
+
+// Dev-only: the popup with a fixture instead of a fetch. See previewData.
+export function ProfilePopupPreview({ data }) {
+  return <ProfilePopup userId={data.id} username={data.username} previewData={data} viewOnly onClose={() => {}} />;
 }

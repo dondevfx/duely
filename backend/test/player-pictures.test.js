@@ -158,7 +158,10 @@ test('the whole row opens the profile, not only the name', () => {
 
 test('the profile card shows ELO the way the profile page does', () => {
   const src = fe('components', 'ChatSidebar.jsx');
-  assert.match(src, /getRank\(data\.elo \?\? 0\)/, 'ELO must carry its rank');
+  // getDisplayRank, not getRank: same rule, but an account that has not
+  // completed placement is Unranked rather than Bronze — getRank on a raw
+  // rating cannot know the player has never played.
+  assert.match(src, /getDisplayRank\(data\)/, 'ELO must carry its rank');
   assert.match(src, /<RankIcon rank=\{s\.rank\}/, 'with the badge');
   assert.match(src, /color: s\.rank\.color/, "and the rank's own colour");
 });

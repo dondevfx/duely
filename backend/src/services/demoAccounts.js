@@ -26,9 +26,55 @@ const FUNNY_NAMES = [
   'Slipstream', 'ttv_Kobe', 'ghostmode', 'Ardyn', 'Nyx', 'Cardinal',
   'Dez', 'frostbyte', 'AceOfSpvdes', 'Loop', 'Kestrel', 'winterborn',
   'Tycho', 'Rook', 'sable', 'NVR', 'Halfstep', 'Mako',
+  // Same shapes, more of them. The bag below runs the whole list before it
+  // repeats, so the length of this array IS how long a player can play before
+  // they can possibly see a name twice.
+  'Jules', 'k1ng', 'Brannon', 'sunsetkid', 'Roan', 'DVX',
+  'notyourdad', 'Marek', 'Fenn', 'CtrlAltDel', 'Sable_9', 'oz',
+  'Teddy', 'grimlock', 'Kova', 'S1lva', 'quietstorm', 'Arlo',
+  'BigTuna', 'Vesper', 'nate_dg', 'Corso', 'HALVES', 'thirty3',
+  'Emory', 'wispr', 'Draven', 'JMoney', 'lorenzo', 'Skye',
+  'Bishop', 'twelve', 'Onyx_', 'Rhett', 'malachi', 'Zeph',
+  'Cass', 'no0dle', 'Tobin', 'saintjude', 'Wilder', 'Kenji',
+  'blueMoon', 'Otto', 'ripcord', 'Sol', 'Marlowe', 'dashi',
 ];
 
-const randomFunnyName = () => FUNNY_NAMES[Math.floor(Math.random() * FUNNY_NAMES.length)];
+// Drawn from a shuffled bag, not picked at random each time.
+//
+// Independent random draws were already varied — but with this many names a
+// repeat inside a dozen matches is ordinary, not unlucky (two duplicates in a
+// sample of twelve, measured). Seeing the same opponent name twice in one
+// sitting is exactly the tell the realistic names exist to remove: a real
+// lobby does not hand you the same stranger twice in ten minutes.
+//
+// A bag makes that impossible. Every name is used once before any is used
+// again, and the reshuffle carries the last name forward so the join between
+// two bags cannot repeat either — the one seam a naive bag leaves open.
+let _bag = [];
+let _lastName = null;
+
+function _refill() {
+  _bag = FUNNY_NAMES.slice();
+  for (let i = _bag.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [_bag[i], _bag[j]] = [_bag[j], _bag[i]];
+  }
+  // Names come off the END of the bag, so the seam is the LAST element, not
+  // the first. Guarding _bag[0] looked right and did nothing: it protected the
+  // name that would be drawn ninetieth, while the one drawn next was left
+  // free to repeat. Caught by the test that draws across forty bags rather
+  // than one — a single pass never reaches the join.
+  if (_bag[_bag.length - 1] === _lastName && _bag.length > 1) {
+    const i = _bag.length - 1;
+    [_bag[i], _bag[0]] = [_bag[0], _bag[i]];
+  }
+}
+
+const randomFunnyName = () => {
+  if (_bag.length === 0) _refill();
+  _lastName = _bag.pop();
+  return _lastName;
+};
 
 // The colours a real player picks from (see Profile.jsx). Kept here because
 // anyone shown under a fake name has to look like an ordinary player, and an
