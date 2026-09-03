@@ -32,7 +32,7 @@ export default function ChallengeLinkBox({ code, gameType }) {
 
       <ShareLinkButton
         link={link}
-        noun="Challenge Link"
+        noun="Invite Link"
         title={game ? `Duely — ${game}` : 'Duely'}
         text={game ? `1v1 me on ${game} 🎮` : '1v1 me on Duely 🎮'}
         className="mb-4"

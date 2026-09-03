@@ -120,10 +120,11 @@ test('nothing is removed, only folded away', () => {
   for (const label of ['botLabel || \'Play vs Bot\'', 'Join Game', 'Bet vs Bot']) {
     assert.ok(panel.includes(label), `${label} must still be reachable`);
   }
-  // Challenge a Friend stays OUT of the panel: it is a way of starting a real
-  // match, not a curiosity, so it keeps its place next to Find Opponent.
+  // Invite (was "Challenge a Friend") stays OUT of the panel: it is a way of
+  // starting a real match, not a curiosity, so it keeps its place next to
+  // Play (was "Find Opponent").
   const before = code.slice(0, code.indexOf('{moreOpen && ('));
-  assert.match(before, /Challenge a Friend/);
+  assert.match(before, /Invite/);
 });
 
 // ── Emoji ─────────────────────────────────────────────────────────────────

@@ -25,17 +25,30 @@ import FitText from '../components/FitText';
 // file, because this is a trial — flipping PHONE_MINIMAL to false restores the
 // old phone layout exactly, with nothing to hunt for.
 //
-// The cut is at sm (640px), NOT at the md (768px) the mobile navigation uses.
-// An iPad mini is 744px across in portrait, which is below md — at that
-// breakpoint a tablet would have been given the phone layout, and tablets are
-// meant to stay as they are.
+// The stripped-back Home is now the Home, at every width.
+//
+// It started as a phone-only layout behind a breakpoint, because cutting six
+// sections is a large change to make everywhere at once. Having lived with it,
+// the answer to "does a desktop need the extra sections" turned out to be no —
+// so the breakpoint goes rather than being widened. A layout that is right on
+// one screen and merely tolerated on another is two layouts to keep working.
+//
+// The constants stay as the switch that turns the cut sections back on, which
+// is why they are not deleted along with the breakpoint: PHONE_MINIMAL = false
+// restores every one of them.
 const PHONE_MINIMAL = true;
 
-// Hidden on phones, normal from 640px up. `block` and `flex` variants because
-// the wrappers are not all the same display type and collapsing a flex row to
-// block would reflow it.
-const PHONE_HIDE      = PHONE_MINIMAL ? 'hidden sm:block' : '';
-const PHONE_HIDE_FLEX = PHONE_MINIMAL ? 'hidden sm:flex'  : 'flex';
+// `hidden` outright, not `hidden sm:block` — there is no width at which these
+// come back now. Two variants because the wrappers are not all the same
+// display type, and a flex row collapsed to block would reflow rather than
+// reappear.
+const PHONE_HIDE      = PHONE_MINIMAL ? 'hidden' : '';
+const PHONE_HIDE_FLEX = PHONE_MINIMAL ? 'hidden' : 'flex';
+// For the two blocks that were already desktop-only on their own (`hidden
+// lg:block`) rather than through the switch. They survived the cut precisely
+// because they were never wired to it — which is the argument for having one
+// switch rather than a breakpoint per section.
+const PHONE_HIDE_LG   = PHONE_MINIMAL ? 'hidden' : 'hidden lg:block';
 
 function DailySpinWidget({ profile }) {
   return profile ? (
@@ -65,17 +78,20 @@ export default function Home() {
   const { playerCounts } = useSocket();
 
   return (
-    <div className="min-h-screen bg-bg pt-2 md:pt-16">
+    <div className="min-h-screen bg-bg pt-2">
       {/* Hero — a little breathing room on mobile (~40px), roomy on desktop
           (was ~120px of stacked top padding on every screen size) */}
-      {/* pb-2 on phones: with the description, the buttons and the Games
-          heading all gone, this padding is the entire gap between the title and
-          the first card, and pb-6 left them looking unrelated. Desktop keeps
-          md:pb-10, where the hero still has content under the title. */}
-      <section className="relative pt-3 md:pt-14 pb-2 md:pb-10 px-4 overflow-hidden">
+      {/* One set of numbers, not two. The description, the buttons and the
+          Games heading are gone at every width now, so this padding is the
+          whole gap between the title and the first card everywhere — and the
+          desktop values were chosen for a hero that still had content under
+          the title. Keeping md:pt-14 md:pb-10 would leave a wide screen
+          padding an empty space. */}
+      <section className="relative pt-3 pb-2 px-4 overflow-hidden">
         <div className="relative max-w-7xl mx-auto">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6 md:gap-12">
-            <div className="flex-1 text-center md:text-left">
+          <div className="flex flex-col items-center justify-between gap-6">
+            {/* Centred at every width: there is nothing beside it to align against. */}
+            <div className="flex-1 text-center">
               <h1 className="text-5xl md:text-7xl font-black text-white mb-3 md:mb-6 leading-tight">
                 1v1{' '}
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-primary">
@@ -119,7 +135,7 @@ export default function Home() {
                 down the page instead (see Game cards section). Gated on lg,
                 not md, to match the copy below: at md they would both render
                 and the page would show two spin wheels. */}
-            <div className="hidden lg:block w-full max-w-sm lg:w-96 shrink-0">
+            <div className={`${PHONE_HIDE_LG} w-full max-w-sm lg:w-96 shrink-0`}>
               <DailySpinWidget profile={profile} />
             </div>
           </div>
@@ -285,7 +301,7 @@ export default function Home() {
 
             {/* Fills the empty space below How It Works. Desktop only — on
                 mobile the copy above the daily spin is shown instead. */}
-            <div className="hidden lg:block">
+            <div className={PHONE_HIDE_LG}>
               <ReferralCard variant="compact" />
             </div>
           </div>

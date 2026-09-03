@@ -559,12 +559,18 @@ test('the phone Home is one switch, not a sprinkling of classes', () => {
   // false has to restore the old layout exactly, with nothing left to hunt for.
   const src = fe('pages', 'Home.jsx');
   assert.match(src, /const PHONE_MINIMAL = true;/);
-  assert.match(src, /const PHONE_HIDE\s+= PHONE_MINIMAL \? 'hidden sm:block' : '';/);
-  assert.match(src, /const PHONE_HIDE_FLEX = PHONE_MINIMAL \? 'hidden sm:flex'  : 'flex';/);
+  // No breakpoint in these any more: the cut applies at every width, so
+  // 'hidden' outright is the correct value and 'hidden sm:block' would mean
+  // the desktop had been left on the old layout.
+  assert.match(src, /const PHONE_HIDE\s+= PHONE_MINIMAL \? 'hidden' : '';/);
+  assert.match(src, /const PHONE_HIDE_FLEX = PHONE_MINIMAL \? 'hidden' : 'flex';/);
+  assert.match(src, /const PHONE_HIDE_LG\s+= PHONE_MINIMAL \? 'hidden' : 'hidden lg:block';/);
 
-  // Everything that goes must go through the switch — a literal `hidden sm:`
-  // anywhere in this file would survive the flag being turned off.
-  const strays = [...src.matchAll(/className="[^"]*\bhidden sm:(block|flex)\b[^"]*"/g)];
+  // Everything that goes must go through the switch — a literal breakpoint
+  // class anywhere in this file would survive the flag being turned off.
+  // `hidden lg:block` is in the pattern because two sections were hidden that
+  // way and so were NOT reached when the cut was extended to every width.
+  const strays = [...src.matchAll(/className="[^"]*\bhidden (sm:block|sm:flex|lg:block)\b[^"]*"/g)];
   assert.deepEqual(strays.map((m) => m[0]), [],
     'a section is hidden by a literal class instead of the switch');
 
@@ -576,10 +582,20 @@ test('the phone Home is one switch, not a sprinkling of classes', () => {
     'the Games heading must be hidden on phones');
 
   // And the gap it left has to be closed, or the cards float below a blank
-  // stretch where the heading used to be. On a phone the hero's bottom padding
-  // is now the ENTIRE distance between the title and the first card.
-  assert.match(src, /pt-3 md:pt-14 pb-2 md:pb-10 px-4/,
+  // stretch where the heading used to be. The hero's bottom padding is now the
+  // ENTIRE distance between the title and the first card — at every width, not
+  // just on a phone, which is why the md: values are gone rather than kept.
+  // They were chosen for a hero that still had content under the title.
+  assert.match(src, /pt-3 pb-2 px-4/,
     'the hero still has its old bottom padding, so the cards sit too far down');
+  // Comments stripped: the note above that padding explains why md:pt-14 and
+  // md:pb-10 were removed and therefore names both. This is the third time a
+  // check in this suite has matched its own explanation — prose is not code,
+  // and a test that reads it passes when someone deletes the code and keeps
+  // the note.
+  const homeCode = src.replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/^\s*\/\/.*$/gm, '');
+  assert.doesNotMatch(homeCode, /md:pt-14|md:pb-10/,
+    'a desktop-only padding pads an empty space now');
   assert.match(src, /<div className=\{PHONE_HIDE\}>/, 'the diamond bonus wrapper');
   assert.equal((src.match(/\$\{PHONE_HIDE_FLEX\}/g) || []).length, 1, 'the hero button row');
 
@@ -589,17 +605,19 @@ test('the phone Home is one switch, not a sprinkling of classes', () => {
   assert.doesNotMatch(before, /PHONE_HIDE/, 'How Duely Works was hidden along with the rest');
 });
 
-test('the cut is at sm, so tablets keep the full Home', () => {
-  // An iPad mini is 744px across in portrait, which is BELOW the md breakpoint
-  // the mobile navigation uses — cutting there would have stripped a tablet.
+test('the Home cut applies at every width, and Games is gone from the nav', () => {
+  // This used to assert the opposite: the stripped-back layout was phone-only,
+  // cut at sm so an iPad mini (744px, below md) kept the full page. Having
+  // lived with it, the answer to "does a desktop need the extra sections" was
+  // no — so the breakpoint went rather than being widened, because a layout
+  // that is right on one screen and merely tolerated on another is two
+  // layouts to keep working.
   const src = fe('pages', 'Home.jsx');
-  assert.match(src, /'hidden sm:block'/);
-  assert.doesNotMatch(src, /'hidden md:block'/, 'md would catch an iPad mini');
+  assert.match(src, /PHONE_MINIMAL \? 'hidden' : ''/);
+  assert.doesNotMatch(src, /'hidden sm:block'/, 'a breakpoint leaves the desktop on the old layout');
 
-  // The Games tab leaves the phone drawer only. The desktop sidebar is
-  // hidden md:flex and is not touched.
-  const nav = fe('components', 'Navbar.jsx');
-  assert.match(nav, /NAV_LINKS\.filter\(item => item\.to !== '\/games'\)\.map/);
-  assert.match(fe('components', 'LeftSidebar.jsx'), /route: '\/games'/,
-    'the desktop sidebar must keep its Games tab');
+  // Games leaves BOTH navigations now — Home is the games list, so a Games
+  // page was the same screen reached a second way. The route still exists.
+  assert.doesNotMatch(fe('components', 'Navbar.jsx'), /label: 'Games'/);
+  assert.doesNotMatch(fe('components', 'LeftSidebar.jsx'), /label: 'Games'/);
 });

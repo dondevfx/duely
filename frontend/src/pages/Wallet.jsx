@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useCurrency } from '../context/CurrencyContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
@@ -132,6 +133,7 @@ export default function Wallet() {
   const [verifyPrompt, setVerifyPrompt] = useState(null);
   const [emailPrompt, setEmailPrompt]   = useState(false);
   const { profile, session, refreshProfile, verifyMfaStepUp } = useAuth();
+  const { setDisplayCurrency } = useCurrency();
 
   // Deposit state
   const [depCoin, setDepCoin]       = useState(COINS[0]);
@@ -297,6 +299,16 @@ export default function Wallet() {
 
   function copyText(text) { navigator.clipboard.writeText(text).catch(() => {}); }
 
+  // The wallet is a coins page — deposits, withdrawals and the USD value are
+  // all in coins, and diamonds cannot be withdrawn at all. Arriving here with
+  // the bar still showing diamonds means the only balance on screen is the
+  // one the page cannot act on.
+  //
+  // Set on arrival and left alone afterwards: this is the shared display
+  // currency, so restoring the old value on the way out would fight the bet
+  // screens, which set it deliberately and expect it to stick.
+  useEffect(() => { setDisplayCurrency('coins'); }, [setDisplayCurrency]);
+
   if (!session) return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-bg flex items-center justify-center px-4">
       <div className="text-center">
@@ -323,17 +335,13 @@ export default function Wallet() {
         <h1 className="text-4xl font-black text-white mb-2">Wallet</h1>
         <p className="text-muted mb-8">Manage your Coins — 1 <CoinIcon size="0.85em" /> = $1 USD</p>
 
-        {/* ── Balance card ────────────────────────────────────────────── */}
-        <div className="bg-gradient-to-br from-primary/20 to-accent/10 border border-primary/30 rounded-2xl p-6 mb-6">
-          <div className="text-sm text-muted mb-1">Coin Balance</div>
-          <div className="text-4xl sm:text-5xl font-black text-white font-mono mb-1 overflow-hidden">
-            <span className="flex items-center gap-2 max-w-full" title={`${fmtExact(profile?.c_coins)} coins`}>
-              <span className="truncate min-w-0">{fmtCoins(profile?.c_coins)}</span>
-              <CoinIcon size="1.1em" />
-            </span>
-          </div>
-          <div className="text-sm text-muted truncate">≈ ${fmtCoins(profile?.c_coins)} USD</div>
-        </div>
+        {/* No balance card. The navbar already shows a balance on every
+            screen, and a second copy of the same number, larger, immediately
+            under it is the page telling you something you can already see —
+            it also pushed Deposit below the fold on a phone.
+            What the page does instead is switch the navbar to coins on
+            arrival (see the effect above), so the number in the bar is the
+            one this page is about. */}
 
         {/* ── Deposit ──────────────────────────────────────────────────── */}
         <div className="bg-surface border border-surfaceLight rounded-2xl p-6 mb-6">

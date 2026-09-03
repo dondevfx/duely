@@ -23,7 +23,10 @@ const GAMES = [
 
 const NAV = [
   { ui: 'home',        label: 'Home',        route: '/' },
-  { ui: 'games',       label: 'Games',       route: '/games' },
+  // No Games entry. Home is the games list now — the stripped-back layout is
+  // a title and the grid of cards, so a separate Games page was the same
+  // screen reached a second way. /games still exists and still works; it is
+  // simply not somewhere the navigation sends you.
   { ui: 'profile',     label: 'Profile',     route: '/profile' },
   { ui: 'rewards',     label: 'Rewards',     route: '/rewards' },
   { ui: 'leaderboard', label: 'Leaderboard', route: '/leaderboard' },

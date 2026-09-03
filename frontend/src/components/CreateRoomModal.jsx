@@ -60,21 +60,32 @@ export default function CreateRoomModal({ open, onClose, gameType, entryFee = 0,
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="bg-surface border border-border rounded-2xl p-5 w-full max-w-sm animate-slide-up" onClick={e => e.stopPropagation()}>
-        <div className="text-lg font-black text-white mb-1">Challenge a Friend</div>
-        <p className="text-xs text-muted mb-4">Get a link to send anyone — they tap it and join your game.</p>
+        {/* A title, the link, and the friends who can take it. The sentence
+            that used to sit under the title explained what a link is, which
+            the button below it already says — and on a dialog this short an
+            explanation is most of the dialog. */}
+        <div className="text-lg font-black text-white mb-4">Invite</div>
 
         {err && <p className="text-danger text-xs mb-2 font-medium">{err}</p>}
 
         <GlowButton variant="primary" className="w-full" onClick={() => { onCreateCode?.(); onClose(); }}>
           <span className="inline-flex items-center justify-center gap-2 whitespace-nowrap">
-            <UiIcon name="share" size={18} />Get Challenge Link
+            <UiIcon name="share" size={18} />Invite Link
           </span>
         </GlowButton>
+
+        {/* Said out loud rather than left as a gap. With no heading and no
+            list, an empty space under the button reads as something that
+            failed to load — "no friends online" is a state, and states are
+            worth naming. */}
+        {onlineFriends.length === 0 && (
+          <p className="text-xs text-muted text-center mt-4">No friends online</p>
+        )}
 
         {/* Online friends — one tap to invite directly */}
         {onlineFriends.length > 0 && (
           <>
-            <p className="text-[0.6875rem] text-muted uppercase tracking-wider font-bold mt-5 mb-2">Or invite an online friend</p>
+            <div className="mt-5 mb-2" />
             <div className="max-h-56 overflow-y-auto flex flex-col gap-1.5 -mr-1 pr-1">
               {onlineFriends.map(f => {
                 const isOnline = online.includes(f.id);

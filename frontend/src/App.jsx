@@ -52,6 +52,12 @@ import TowerCanvas from './components/TowerCanvas';
 // it the hardest thing in the app to look at while working on it — and it is a
 // full-screen legal wall, so "hard to look at" is how a broken one ships.
 function TosPreview() { return <AgeToSModal onAccept={() => {}} />; }
+// The invite dialog with nobody online, which is the state that has to say so
+// rather than leaving a gap. Reaching it for real needs a funded account and
+// a friends list.
+function InvitePreview() {
+  return <CreateRoomModal open onClose={() => {}} gameType="tower" entryFee={1} currency="coins" onCreateCode={() => {}} />;
+}
 // The admin charts, with a synthetic series: a quiet stretch, a spike, and a
 // zero day. The admin page itself needs a real admin account to reach, which
 // makes the one drawing on it the hardest thing here to look at.
@@ -124,6 +130,7 @@ import NotifyToast from './components/NotifyToast';
 import ReconnectOverlay from './components/ReconnectOverlay';
 import AgeToSModal, { useTosAccepted } from './components/AgeToSModal';
 import ResultScreen from './components/ResultScreen';
+import CreateRoomModal from './components/CreateRoomModal';
 import AdminChart from './components/AdminChart';
 import { ProfilePopupPreview } from './components/ChatSidebar';
 import SignupRewardModal from './components/SignupRewardModal';
@@ -240,6 +247,7 @@ function Shell() {
           <Route path="/game/color-rush"    element={<ColorRushGame />} />
           <Route path="/game/tower"         element={<TowerGame />} />
           {import.meta.env.DEV && <Route path="/__tos-preview" element={<TosPreview />} />}
+          {import.meta.env.DEV && <Route path="/__invite-preview" element={<InvitePreview />} />}
           {import.meta.env.DEV && <Route path="/__chart-preview" element={<ChartPreview />} />}
           {import.meta.env.DEV && <Route path="/__popup-preview" element={<PopupPreview />} />}
           {import.meta.env.DEV && <Route path="/__result-preview" element={<ResultPreview />} />}

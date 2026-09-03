@@ -274,7 +274,7 @@ export default function GameLobby({
           className="w-full text-lg py-4 border border-transparent"
           disabled={session && !authenticated}
         >
-          {!session ? <><LockIcon /> Login to Play</> : 'Find Opponent'}
+          {!session ? <><LockIcon /> Login to Play</> : 'Play'}
         </GlowButton>
 
         {/* Secondary options — small buttons, still visible but not competing
@@ -298,7 +298,7 @@ export default function GameLobby({
                 onClick={insufficient ? () => setShortfall(true) : () => setPrivateMode('create')}
                 className={SMALL_BTN}
               >
-                Challenge a Friend
+                Invite
               </button>
             )}
 

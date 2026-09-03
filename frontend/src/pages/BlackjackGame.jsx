@@ -1194,13 +1194,13 @@ function BlackjackGame() {
           <>
           {!isDiamonds && (
             <GlowButton onClick={!session ? () => navigate('/login') : insufficient ? () => setShortfall(true) : joinQueue} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent" disabled={session && !authenticated}>
-              {!session ? <><LockIcon /> Login to Play</> : 'Find Opponent'}
+              {!session ? <><LockIcon /> Login to Play</> : 'Play'}
             </GlowButton>
           )}
 
           {isDiamonds && (
             <GlowButton onClick={!session ? () => navigate('/login') : insufficient ? () => setShortfall(true) : joinQueue} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent" disabled={session && !authenticated}>
-              {!session ? <><LockIcon /> Login to Play</> : 'Find Opponent'}
+              {!session ? <><LockIcon /> Login to Play</> : 'Play'}
             </GlowButton>
           )}
 
@@ -1214,7 +1214,7 @@ function BlackjackGame() {
                 onClick={insufficient ? () => setShortfall(true) : () => setPrivateMode('create')}
                 className={SMALL_BTN}
               >
-                {'Challenge a Friend'}
+                {'Invite'}
               </button>
               {/* Folded away behind the arrow, same as every other bet screen — see
                   MoreWays. The page opens on the stake and the two ways to start a real

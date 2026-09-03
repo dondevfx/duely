@@ -796,7 +796,7 @@ export default function CoinFlipGame() {
               <>
               <GlowButton onClick={insufficient ? () => setShortfall(true) : joinQueue} variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent" disabled={session && !authenticated}>
                 {!session ? <><LockIcon /> Login to Play</>
-                  : <span className="inline-flex items-center gap-1.5">Find Opponent (<CoinFaceIcon side={side} size="1.1em" /> {side === 'heads' ? 'Heads' : 'Tails'})</span>}
+                  : <span className="inline-flex items-center gap-1.5">Play (<CoinFaceIcon side={side} size="1.1em" /> {side === 'heads' ? 'Heads' : 'Tails'})</span>}
               </GlowButton>
               <>
                   {/* Secondary options — small buttons, still visible but not competing.
@@ -808,7 +808,7 @@ export default function CoinFlipGame() {
                       onClick={insufficient ? () => setShortfall(true) : () => setPrivateMode('create')}
                       className={SMALL_BTN}
                     >
-                      {'Challenge a Friend'}
+                      {'Invite'}
                     </button>
                     {/* Folded away behind the arrow, same as every other bet screen — see
                         MoreWays. The page opens on the stake and the two ways to start a real

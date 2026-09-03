@@ -15,7 +15,10 @@ import Avatar from './Avatar';
 
 const NAV_LINKS = [
   { ui: 'home',        label: 'Home',        to: '/' },
-  { ui: 'games',       label: 'Games',       to: '/games' },
+  // No Games entry. Home is the games list now — the stripped-back layout is
+  // a title and the grid of cards, so a separate Games page was the same
+  // screen reached a second way. /games still exists and still works; it is
+  // simply not somewhere the navigation sends you.
   { ui: 'profile',     label: 'Profile',     to: '/profile' },
   { ui: 'rewards',     label: 'Rewards',     to: '/rewards' },
   { ui: 'leaderboard', label: 'Leaderboard', to: '/leaderboard' },
@@ -535,7 +538,9 @@ export default function Navbar() {
                   to the same place. Paired with PHONE_MINIMAL in Home.jsx; both
                   come back together. This drawer is only ever rendered below
                   md, so no other size is affected. */}
-              {NAV_LINKS.filter(item => item.to !== '/games').map(item => (
+              {/* No filter any more — /games is not in NAV_LINKS at all, so
+                  removing it here as well would be removing it twice. */}
+              {NAV_LINKS.map(item => (
                 <NavLink key={item.to} to={item.to} end={item.to === '/'}
                   onClick={() => setMobileMenuOpen(false)}
                   className={({ isActive }) =>
