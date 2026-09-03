@@ -1,10 +1,10 @@
 // Whether a deposit has to be played before it can be withdrawn.
 //
-// Turned off at the owner's instruction: money just deposited can be taken
-// straight back out. What the rule was for is worth stating rather than
-// forgetting — deposit in, withdraw out, no play, is the textbook laundering
-// pattern, and it also makes deposits and withdrawals a free transfer between
-// accounts. It is a switch, not a deletion.
+// ON by default: 100% of a deposit must be wagered before it can be withdrawn.
+// Deposit in, withdraw out, no play, is the textbook laundering pattern and the
+// usual reason a payment processor drops a platform like this; it also makes a
+// deposit and a withdrawal a free transfer between accounts. Winnings above the
+// deposit were never locked.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -41,54 +41,95 @@ function load() {
   return require(SERVICE);
 }
 
-test('a deposit that has not been played is withdrawable', async () => {
+test('an unwagered deposit cannot be withdrawn', async () => {
   delete process.env.WITHDRAW_PLAYTHROUGH;
   const { getWithdrawable } = load();
   const w = await getWithdrawable(db({ coins: 50, deposited: 50 }), 'u1');
-  assert.equal(w.withdrawable, 50, 'the whole balance, including the fresh deposit');
-  assert.equal(w.playthroughRequired, false);
+  assert.equal(w.withdrawable, 0, 'the whole deposit is locked until it is wagered');
+  assert.equal(w.playthroughRequired, true, 'on by default');
 });
 
-test('the unplayed figure is still reported when it no longer blocks', async () => {
-  // The admin panel and /wallet/withdrawable keep showing how much of a
-  // balance is unplayed — turning the rule off must not make the number
-  // disappear, only stop it being a gate.
+test('wagering the deposit unlocks the whole balance, winnings included', async () => {
+  // 50 in, 50 wagered, 80 on the books: the 30 above the deposit is winnings,
+  // and 100% playthrough means everything is free once the deposit is played.
   delete process.env.WITHDRAW_PLAYTHROUGH;
   const { getWithdrawable } = load();
-  const w = await getWithdrawable(db({ coins: 50, deposited: 50 }), 'u1');
-  assert.equal(w.unplayedDeposits, 50);
-  assert.equal(w.lifetimeDeposited, 50);
+  const w = await getWithdrawable(db({ coins: 80, wins: 1, deposited: 50, wagered: 50 }), 'u1');
+  assert.equal(w.withdrawable, 80);
+  assert.equal(w.unplayedDeposits, 0);
 });
 
-test('setting the switch restores the old behaviour exactly', async () => {
-  process.env.WITHDRAW_PLAYTHROUGH = 'true';
+test('the switch still turns it off', async () => {
+  process.env.WITHDRAW_PLAYTHROUGH = 'false';
   try {
     const { getWithdrawable } = load();
     const w = await getWithdrawable(db({ coins: 50, deposited: 50 }), 'u1');
-    assert.equal(w.withdrawable, 0, 'an unplayed deposit is locked again');
-    assert.equal(w.playthroughRequired, true);
-  } finally {
-    delete process.env.WITHDRAW_PLAYTHROUGH;
-  }
+    assert.equal(w.withdrawable, 50);
+    assert.equal(w.playthroughRequired, false);
+  } finally { delete process.env.WITHDRAW_PLAYTHROUGH; }
 });
 
-test('winnings were always withdrawable and still are', async () => {
-  // 50 deposited, 50 wagered, 80 in the balance: the 30 above the deposit is
-  // winnings, and was withdrawable under the old rule too.
-  for (const on of ['true', undefined]) {
-    if (on) process.env.WITHDRAW_PLAYTHROUGH = on; else delete process.env.WITHDRAW_PLAYTHROUGH;
-    const { getWithdrawable } = load();
-    const w = await getWithdrawable(db({ coins: 80, wins: 1, deposited: 50, wagered: 50 }), 'u1');
-    assert.equal(w.withdrawable, 80, `switch=${on}: a played-through balance is fully withdrawable`);
-  }
+test('the refusal says how much is left to wager', async () => {
+  // The old wording said a deposit "has not been played yet" and stopped
+  // there — true, and useless: it never said how much wagering would clear
+  // it, which is the only thing the player can act on.
   delete process.env.WITHDRAW_PLAYTHROUGH;
+  const { playthroughMessage } = load();
+  const m = playthroughMessage({
+    hasPlayed: true, lifetimeDeposited: 50, lifetimeWagered: 20,
+    unplayedDeposits: 30, withdrawable: 15,
+  });
+  assert.match(m, /deposited \$50\.00/);
+  assert.match(m, /wagered \$20\.00/);
+  assert.match(m, /\$30\.00 still needs to be wagered/);
+  assert.match(m, /withdraw \$15\.00 right now/);
 });
 
-test('the "play a match first" refusal is on the same switch', () => {
-  // Two guards, one rule. Leaving this one unconditional would refuse the
-  // request while the balance check said the money was free to go — the same
-  // withdrawal blocked for a reason that no longer applies.
-  const guards = ROUTE.match(/if \(src\.playthroughRequired && !src\.hasPlayed\)/g) || [];
-  assert.equal(guards.length, 2, 'crypto and bank withdrawals both need it');
-  assert.ok(!/if \(!src\.hasPlayed\)/.test(ROUTE), 'an unconditional guard is left');
+test('with nothing withdrawable it does not offer to withdraw nothing', async () => {
+  delete process.env.WITHDRAW_PLAYTHROUGH;
+  const { playthroughMessage } = load();
+  const m = playthroughMessage({
+    hasPlayed: true, lifetimeDeposited: 50, lifetimeWagered: 0,
+    unplayedDeposits: 50, withdrawable: 0,
+  });
+  assert.match(m, /\$50\.00 still needs to be wagered/);
+  assert.ok(!/right now/.test(m), '"you can withdraw $0.00 right now" is noise');
+});
+
+test('a cleared balance produces no message at all', async () => {
+  delete process.env.WITHDRAW_PLAYTHROUGH;
+  const { playthroughMessage } = load();
+  assert.equal(playthroughMessage({
+    hasPlayed: true, lifetimeDeposited: 50, lifetimeWagered: 50,
+    unplayedDeposits: 0, withdrawable: 80,
+  }), null);
+});
+
+test('never having played is its own message', async () => {
+  // Distinct from the wager rule: someone whose balance came from a tip has
+  // no unwagered deposit, so only this catches them.
+  delete process.env.WITHDRAW_PLAYTHROUGH;
+  const { playthroughMessage } = load();
+  assert.equal(playthroughMessage({
+    hasPlayed: false, lifetimeDeposited: 50, lifetimeWagered: 0,
+    unplayedDeposits: 50, withdrawable: 0,
+  }), 'Play at least one match before withdrawing.');
+});
+
+test('with the rule off there is no message on either half', async () => {
+  process.env.WITHDRAW_PLAYTHROUGH = 'false';
+  try {
+    const { playthroughMessage } = load();
+    assert.equal(playthroughMessage({ hasPlayed: false, unplayedDeposits: 50, withdrawable: 0 }), null);
+  } finally { delete process.env.WITHDRAW_PLAYTHROUGH; }
+});
+
+test('both rails refuse with the same builder, and send the numbers', () => {
+  // Two routes were refusing the same person for the same reason in two
+  // different wordings. The figures ride along so the page can show progress
+  // without parsing the sentence.
+  const uses = ROUTE.match(/const blocked = playthroughMessage\(src\);/g) || [];
+  assert.equal(uses.length, 2, 'crypto and bank withdrawals both need it');
+  assert.equal((ROUTE.match(/remainingToWager: src\.unplayedDeposits/g) || []).length, 2);
+  assert.ok(!/has not been played yet/.test(ROUTE), 'the old wording is gone');
 });

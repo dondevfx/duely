@@ -6,7 +6,7 @@ const {
   getDiamondBalance, creditDiamonds, deductDiamonds,
   sanitizeAmount, sanitizeDiamondAmount,
   MAX_SINGLE_AMOUNT,
-  recordWithdrawal, getWithdrawable,
+  recordWithdrawal, getWithdrawable, playthroughMessage,
 } = require('../services/walletService');
 const { getOrCreateAddress } = require('../services/addressService');
 const { sendCrypto, checkSolanaSignature } = require('../services/chainSend');
@@ -403,18 +403,28 @@ module.exports = function walletRoutes(supabase, io) {
       // riskier of the two rails — a crypto payout is irreversible the
       // moment it lands, where a fiat one still has bank-side recall options.
       const src = await getWithdrawable(supabase, req.user.id);
-      // Gated on the same switch as the amount below, not on hasPlayed alone.
-      // Leaving this in place would have kept the refusal while the balance
-      // check said the money was free to go — the same request refused for
-      // two different reasons, one of which no longer applies.
-      if (src.playthroughRequired && !src.hasPlayed) {
-        return res.status(403).json({ error: 'Play at least one match before withdrawing.' });
+      // One message for both halves of the rule — "you have never played" and
+      // "this much of your deposit is still unwagered" were two refusals in
+      // two wordings, and neither told the player how much was left to
+      // wager, which is the only thing they can act on.
+      //
+      // The numbers ride along so the page can show a progress bar without
+      // parsing the sentence.
+      const blocked = playthroughMessage(src);
+      if (blocked && (!src.hasPlayed || amount > src.withdrawable)) {
+        return res.status(403).json({
+          error: blocked,
+          playthroughRequired: true,
+          deposited: src.lifetimeDeposited,
+          wagered: src.lifetimeWagered,
+          remainingToWager: src.unplayedDeposits,
+          withdrawable: src.withdrawable,
+        });
       }
       if (amount > src.withdrawable) {
         return res.status(400).json({
-          error: src.withdrawable > 0
-            ? `Part of your balance is from a recent deposit that has not been played yet. You can withdraw up to $${src.withdrawable.toFixed(2)} right now.`
-            : 'Part of your balance is from a recent deposit that has not been played yet. Play a match first, or wait for it to clear.',
+          error: `You can withdraw up to $${src.withdrawable.toFixed(2)} right now.`,
+          withdrawable: src.withdrawable,
         });
       }
 
@@ -787,18 +797,28 @@ module.exports = function walletRoutes(supabase, io) {
       // the middle; the deposit-then-withdraw pattern this guards against
       // works identically on either rail. See getWithdrawable's own comment.
       const src = await getWithdrawable(supabase, req.user.id);
-      // Gated on the same switch as the amount below, not on hasPlayed alone.
-      // Leaving this in place would have kept the refusal while the balance
-      // check said the money was free to go — the same request refused for
-      // two different reasons, one of which no longer applies.
-      if (src.playthroughRequired && !src.hasPlayed) {
-        return res.status(403).json({ error: 'Play at least one match before withdrawing.' });
+      // One message for both halves of the rule — "you have never played" and
+      // "this much of your deposit is still unwagered" were two refusals in
+      // two wordings, and neither told the player how much was left to
+      // wager, which is the only thing they can act on.
+      //
+      // The numbers ride along so the page can show a progress bar without
+      // parsing the sentence.
+      const blocked = playthroughMessage(src);
+      if (blocked && (!src.hasPlayed || amount > src.withdrawable)) {
+        return res.status(403).json({
+          error: blocked,
+          playthroughRequired: true,
+          deposited: src.lifetimeDeposited,
+          wagered: src.lifetimeWagered,
+          remainingToWager: src.unplayedDeposits,
+          withdrawable: src.withdrawable,
+        });
       }
       if (amount > src.withdrawable) {
         return res.status(400).json({
-          error: src.withdrawable > 0
-            ? `Part of your balance is from a recent deposit that has not been played yet. You can withdraw up to $${src.withdrawable.toFixed(2)} right now.`
-            : 'Part of your balance is from a recent deposit that has not been played yet. Play a match first, or wait for it to clear.',
+          error: `You can withdraw up to $${src.withdrawable.toFixed(2)} right now.`,
+          withdrawable: src.withdrawable,
         });
       }
 

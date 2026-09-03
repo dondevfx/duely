@@ -409,18 +409,45 @@ async function recordWithdrawal(supabase, userId, amount, source) {
 // unblocked fraudulent one (money gone).
 // Whether a deposit has to be played before it can be withdrawn.
 //
-// OFF by default, at the owner's instruction: money you just put in can be
-// taken straight back out. What it was there for is worth writing down rather
-// than deleting with the code — deposit in, withdraw out, no play, is the
-// textbook laundering pattern, and a payment processor that notices it is the
-// usual reason a platform like this loses its rails. It also removes the cost
-// of using deposits and withdrawals as a free transfer between accounts.
+// ON by default: a deposit must be wagered in full before it can be
+// withdrawn. Deposit in, withdraw out, no play, is the textbook laundering
+// pattern and the usual reason a payment processor drops a platform like this
+// — and without it a deposit and a withdrawal are a free transfer between
+// accounts.
 //
-// Set WITHDRAW_PLAYTHROUGH=true to put it back. The arithmetic below still
-// runs either way, so the admin panel and /wallet/withdrawable keep reporting
-// how much of a balance is unplayed — the number stays visible even when it
-// no longer blocks anything.
-const REQUIRE_PLAYTHROUGH = process.env.WITHDRAW_PLAYTHROUGH === 'true';
+// 100% of the deposit, not a fraction: wager what you put in and the whole
+// balance unlocks. Winnings above the deposit were never locked.
+//
+// Set WITHDRAW_PLAYTHROUGH=false to turn it off. The arithmetic runs either
+// way, so the admin panel and /wallet/withdrawable keep reporting how much of
+// a balance is unplayed even when it is not blocking anything.
+const REQUIRE_PLAYTHROUGH = process.env.WITHDRAW_PLAYTHROUGH !== 'false';
+
+const usd = (n) => `$${(Number(n) || 0).toFixed(2)}`;
+
+/**
+ * Why a withdrawal is being refused, in the player's own numbers.
+ *
+ * One builder for both rails, because the crypto and bank routes were
+ * refusing the same person for the same reason in two different wordings —
+ * and neither said how much was left to wager, which is the only thing the
+ * player actually needs in order to act.
+ */
+function playthroughMessage(src) {
+  if (!REQUIRE_PLAYTHROUGH) return null;
+  if (!src.hasPlayed) {
+    return 'Play at least one match before withdrawing.';
+  }
+  const left = Math.max(0, src.unplayedDeposits || 0);
+  if (left <= 0) return null;
+  const head =
+    `Deposits have to be wagered before they can be withdrawn. ` +
+    `You have deposited ${usd(src.lifetimeDeposited)} and wagered ${usd(src.lifetimeWagered)}, ` +
+    `so ${usd(left)} still needs to be wagered.`;
+  return src.withdrawable > 0
+    ? `${head} You can withdraw ${usd(src.withdrawable)} right now.`
+    : head;
+}
 
 async function getWithdrawable(supabase, userId) {
   const { data: profile } = await supabase
@@ -570,6 +597,7 @@ async function settleDrawMatchDiamonds(supabase, p1Id, p2Id, entryFee) {
 }
 
 module.exports = {
+  playthroughMessage,
   VALID_COINS,
   notifyBalance,
   PLATFORM_FEE_PERCENT,
