@@ -364,11 +364,21 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
     // else draw — winnerPlayer stays null
   }
 
-  // Demo always wins vs the bot — force the demo player as winner if the bot
-  // somehow solved first or the greens tiebreaker didn't favor the demo.
-  if (room.demoWin) {
-    const demoP = room.players.find(p => p.isDemo && !p.isBot);
-    if (demoP) { winnerPlayer = demoP; loserPlayer = room.players.find(p => p !== demoP); }
+  // In a bot match, solving the word is the only thing that decides it.
+  //
+  // The bot never plays the answer, so when the player fails, nobody solved —
+  // and the greens tiebreaker above would hand the win to whoever happened to
+  // have more correct letters in a row. That let a player win a paid match
+  // without solving anything, on a technicality against an opponent that was
+  // never trying. Solve it and you win; run out of guesses and you lose.
+  const botP = room.players.find(p => p.isBot);
+  if (botP) {
+    const humanP = room.players.find(p => !p.isBot);
+    if (humanP) {
+      const solved = !!room.pstate[humanP.socketId]?.solved;
+      winnerPlayer = solved ? humanP : botP;
+      loserPlayer  = solved ? botP : humanP;
+    }
   }
 
   const isDraw = !winnerPlayer;
@@ -574,42 +584,96 @@ function _botFilterCandidates(candidates, history) {
   });
 }
 
+// A delay that does not, by itself, keep the process alive.
+//
+// The bot loop below polls while it waits for the player, and an ordinary
+// setTimeout holds a Node event loop open — so a finished match could keep a
+// process running for the length of the loop's safety valve. In the server
+// that is masked by the HTTP listener; anywhere else (a test, a script) it
+// hangs. unref says "wake me if we are still running", which is exactly what
+// following a live room means.
+function sleep(ms) {
+  return new Promise((resolve) => {
+    const t = setTimeout(resolve, ms);
+    if (t.unref) t.unref();
+  });
+}
+
 async function scheduleBotWordleMove(io, supabase, roomId, botSocketId) {
   const room = rooms.get(roomId);
   if (!room || room.settled) return;
+
+  const humanSocketId = room.players.find(p => p.socketId !== botSocketId)?.socketId;
+  if (!humanSocketId) return;
 
   let candidates = [...ANSWERS];
   const history  = [];
   let guessNum   = 0;
 
+  // The bot follows the player instead of a clock.
+  //
+  // It used to guess every 1.5-3 seconds regardless of what the player was
+  // doing, and it filtered candidates properly — so it could and did solve the
+  // word first, and a slow player lost a match they were never really in. It
+  // is a bot match: the opponent is scenery, and the only question a bot game
+  // should ask is whether YOU can solve it.
+  //
+  // So it stays exactly one guess behind. The player takes their third guess,
+  // the bot takes its second. It fills the board at the player's own pace,
+  // which is what makes it read as an opponent rather than a timer, and it can
+  // never get ahead because it has nowhere to get ahead from.
+  const behindBy = 1;
+
   while (guessNum < MAX_GUESSES) {
-    const delay = 1500 + Math.floor(Math.random() * 1500);
-    await new Promise(r => setTimeout(r, delay));
+    // Wait until the player is far enough ahead for the bot's next guess to
+    // still leave it behind.
+    let waited = 0;
+    for (;;) {
+      const fresh = rooms.get(roomId);
+      if (!fresh || fresh.settled) return;
+      const hs = fresh.pstate[humanSocketId];
+      const bs = fresh.pstate[botSocketId];
+      if (!bs || bs.finished) return;
+      // The player is done — solved it, or used every guess. Nothing left for
+      // the bot to trail, and the match is about to settle either way.
+      if (hs?.finished) return;
+      const humanGuesses = hs?.guesses?.length ?? 0;
+      if (humanGuesses - behindBy > guessNum) break;
+      await sleep(200);
+      // A safety valve, not a pace: without it a player who walks away leaves
+      // this loop polling for the life of the room. The room's own idle timer
+      // settles the match; this just stops following it.
+      waited += 200;
+      if (waited > 5 * 60 * 1000) return;
+    }
+
+    // A beat before answering, so the reply does not land on the same frame as
+    // the player's own guess.
+    await sleep(600 + Math.floor(Math.random() * 900));
 
     const fresh = rooms.get(roomId);
     if (!fresh || fresh.settled) return;
-
     const ps = fresh.pstate[botSocketId];
     if (!ps || ps.finished) return;
+    if (fresh.pstate[humanSocketId]?.finished) return;
 
-    let guess = guessNum === 0 ? BOT_OPENER : (candidates[Math.floor(Math.random() * Math.min(candidates.length, 5))] || candidates[0] || BOT_OPENER);
-    // Demo always wins: never let the bot play the winning word — it stays a
-    // little behind, guessing near-misses until the demo solves it.
-    if (fresh.demoWin && guess === fresh.word) {
-      const alt = candidates.find(c => c !== fresh.word) || ANSWERS.find(w => w !== fresh.word);
-      guess = alt || guess;
-    }
+    // Never the answer. Not "unless this is a demo" — a bot that can win a bot
+    // match is the thing being removed, and the demo rig was a special case of
+    // a rule that should always have applied.
+    const notTheWord = (w) => w !== fresh.word;
+    const pool = candidates.filter(notTheWord);
+    let guess = guessNum === 0
+      ? (BOT_OPENER !== fresh.word ? BOT_OPENER : (pool[0] || BOT_OPENER))
+      : (pool[Math.floor(Math.random() * Math.min(pool.length, 5))] || pool[0] || ANSWERS.find(notTheWord));
+    if (guess === fresh.word) guess = ANSWERS.find(notTheWord) || guess;
+
     const feedback = evaluateGuess(fresh.word, guess);
     history.push({ guess, feedback });
-
-    // Update candidates for next turn
     candidates = _botFilterCandidates(candidates, history);
 
     await handleWordleGuess(io, supabase, roomId, botSocketId, guess);
-
     guessNum++;
 
-    // Check if bot just solved it
     const updated = rooms.get(roomId);
     if (!updated || updated.settled) return;
     if (updated.pstate[botSocketId]?.finished) return;
@@ -628,4 +692,9 @@ module.exports = {
   scheduleBotWordleMove,
   evaluateGuess, MAX_GUESSES, WORD_LENGTH,
   getRandomWordleWord,
+  // The room map, for tests that need to drive a real match and read its
+  // state. Exported rather than reached into, so the shape stays this file's
+  // business — and named with an underscore because nothing in the app should
+  // be calling it.
+  _rooms: () => rooms,
 };

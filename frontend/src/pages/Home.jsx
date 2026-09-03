@@ -50,6 +50,62 @@ const PHONE_HIDE_FLEX = PHONE_MINIMAL ? 'hidden' : 'flex';
 // switch rather than a breakpoint per section.
 const PHONE_HIDE_LG   = PHONE_MINIMAL ? 'hidden' : 'hidden lg:block';
 
+// The How Duely Works card, as a grid cell.
+//
+// It used to sit in a side rail. It is now the ninth cell of a 3x3 grid: eight
+// games and this, so a wide screen ends on a full row rather than on two
+// games and a gap. col-span-2 on a phone keeps it full width under the four
+// rows of two, which is where it already was.
+//
+// md:aspect-square so it matches the cards beside it — the games are square,
+// and a shorter card in the corner reads as something that failed to load.
+function HowDuelyWorks() {
+  return (
+          <div className="bg-surface border border-surfaceLight rounded-2xl p-5 xl:p-4 col-span-2 xl:col-span-1 xl:aspect-square flex flex-col justify-center">
+            <h3 className="font-bold text-white mb-3 xl:mb-2">How Duely Works</h3>
+            <ul className="text-sm xl:text-[0.8125rem] text-muted space-y-2 xl:space-y-1.5">
+              <li className="flex items-start gap-2">
+                <span className="text-primary">•</span>
+                <span className="inline-flex items-center gap-1 flex-wrap">1 <CoinIcon size="1em" /> = $1 USD — deposit on the Wallet page</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary">•</span>
+                {/* Wrapped, like the other two bullets. Bare, the icon was a
+                    flex CHILD of the li — items-start pinned it to the top of
+                    the line and vertical-align does not apply inside flex, so
+                    it floated above the sentence instead of sitting in it. */}
+                <span><DiamondIcon /> Diamonds are free — claim diamonds on the Rewards page</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary">•</span>
+                <span>Bet <span className="inline-flex items-center gap-1 align-middle"><CoinIcon size="1em" /></span> Coins or <DiamondIcon /> Diamonds on any game</span>
+              </li>
+            </ul>
+            {/* Two destinations, because the card names two currencies and
+                they are topped up in different places — coins on the wallet,
+                diamonds on rewards. A single "Open Wallet" link left the
+                diamond line with nowhere to go.
+
+                Equal halves of one row: neither is the primary action, and
+                sizing one larger would have said otherwise. */}
+            <div className="mt-4 xl:mt-3 flex gap-2 shrink-0">
+              <Link
+                to="/wallet"
+                className="flex-1 py-2.5 xl:py-2 rounded-xl bg-primary hover:bg-blue-500 text-white text-sm font-bold text-center transition-all"
+              >
+                Wallet
+              </Link>
+              <Link
+                to="/rewards"
+                className="flex-1 py-2.5 xl:py-2 rounded-xl bg-primary hover:bg-blue-500 text-white text-sm font-bold text-center transition-all"
+              >
+                Rewards
+              </Link>
+            </div>
+          </div>
+  );
+}
+
 function DailySpinWidget({ profile }) {
   return profile ? (
     <SpinWheel />
@@ -187,17 +243,31 @@ export default function Home() {
             it held one card, and a lone card in a 288px rail beside a grid is
             a layout built for content that is no longer there. */}
         <div className="flex flex-col gap-8">
-          <div className="flex-1 min-w-0 w-full max-w-3xl mx-auto">
+          <div className="flex-1 min-w-0 w-full max-w-3xl xl:max-w-5xl mx-auto">
             <h2 className={`${PHONE_HIDE} text-xl md:text-2xl font-bold text-white mb-4 md:mb-6`}>Games</h2>
-            {/* Two columns, everywhere.
-                The old counts (3 at sm, 2 at md, 3 at lg, 4 at 2xl) existed to
-                fill a wide row, and produced cards that got SMALLER as the
-                window got bigger: at 1194px landscape, three columns measured
-                189px against a phone's 173px in a far smaller window, because
-                the 240px left nav is the real constraint rather than the
-                viewport. Two columns in a centred, bounded container gives the
-                same shape at every size, which is what was asked for. */}
-            <div className="grid grid-cols-2 gap-3 md:gap-4">
+            {/* Two on a phone, three from md — and How Duely Works is the
+                ninth cell rather than a separate block underneath.
+
+                Eight games plus one card is exactly 3x3, which is the reason
+                for three rather than four: four columns leaves the last row
+                holding one game and a card with two empty cells beside them.
+                Nine cells, no gaps.
+
+                Three at xl, and that is about the two sidebars rather than the
+                viewport. This page loses 240px to the left nav from md up and
+                another 320px to world chat from lg up, so the grid gets 560px
+                less than the window suggests. Measured, with both open:
+
+                  iPad portrait   834px   3 cols -> 175px   2 cols -> 271px
+                  iPad landscape  1194px  3 cols -> 189px   2 cols -> 285px
+                  desktop         1440px  3 cols -> 271px
+
+                Three columns below xl makes cards SMALLER than the 169px a
+                phone gives in a window a third the size, which is the shape
+                this layout already had once. So tablets take two and desktop
+                takes three — and on desktop the ninth cell lands exactly where
+                it was asked to. */}
+            <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
               {GAMES.map(game => (
                 <GameVideoCard
                   key={game.slug}
@@ -205,6 +275,7 @@ export default function Home() {
                   liveCount={game.countKey ? (playerCounts?.[game.countKey] ?? 0) : 0}
                 />
               ))}
+              <HowDuelyWorks />
             </div>
 
             {/* Invite — mobile only, above the daily spin. The desktop copy lives
@@ -242,48 +313,7 @@ export default function Home() {
               </div>
             )}
             </div>
-            <div className="bg-surface border border-surfaceLight rounded-2xl p-5">
-              <h3 className="font-bold text-white mb-3">How Duely Works</h3>
-              <ul className="text-sm text-muted space-y-2">
-                <li className="flex items-start gap-2">
-                  <span className="text-primary">•</span>
-                  <span className="inline-flex items-center gap-1 flex-wrap">1 <CoinIcon size="1em" /> = $1 USD — deposit on the Wallet page</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary">•</span>
-                  {/* Wrapped, like the other two bullets. Bare, the icon was a
-                      flex CHILD of the li — items-start pinned it to the top of
-                      the line and vertical-align does not apply inside flex, so
-                      it floated above the sentence instead of sitting in it. */}
-                  <span><DiamondIcon /> Diamonds are free — claim diamonds on the Rewards page</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary">•</span>
-                  <span>Bet <span className="inline-flex items-center gap-1 align-middle"><CoinIcon size="1em" /></span> Coins or <DiamondIcon /> Diamonds on any game</span>
-                </li>
-              </ul>
-              {/* Two destinations, because the card names two currencies and
-                  they are topped up in different places — coins on the wallet,
-                  diamonds on rewards. A single "Open Wallet" link left the
-                  diamond line with nowhere to go.
 
-                  Equal halves of one row: neither is the primary action, and
-                  sizing one larger would have said otherwise. */}
-              <div className="mt-4 flex gap-2">
-                <Link
-                  to="/wallet"
-                  className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-blue-500 text-white text-sm font-bold text-center transition-all"
-                >
-                  Wallet
-                </Link>
-                <Link
-                  to="/rewards"
-                  className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-blue-500 text-white text-sm font-bold text-center transition-all"
-                >
-                  Rewards
-                </Link>
-              </div>
-            </div>
 
             {/* Fills the empty space below How It Works. Desktop only — on
                 mobile the copy above the daily spin is shown instead. */}

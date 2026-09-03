@@ -14,29 +14,37 @@ const BLOCK  = strip(fe('pages', 'BlockBlastGame.jsx'));
 
 // ── Home ──────────────────────────────────────────────────────────────────
 
-test('the game grid is two columns at every width', () => {
-  // The old counts (3 at sm, 2 at md, 3 at lg, 4 at 2xl) produced cards that
-  // got SMALLER as the window got bigger — at 1194px landscape three columns
-  // measured 189px against a phone's 173px, because the 240px left nav is the
-  // real constraint rather than the viewport.
-  assert.match(HOME, /className="grid grid-cols-2 gap-3 md:gap-4"/);
-  assert.ok(!/grid-cols-2 sm:grid-cols-3/.test(HOME), 'the responsive column counts are back');
+test('the game grid is two columns, and three once there is room', () => {
+  // Two everywhere was the previous ask; three on a desktop is the current
+  // one. The constant across both is that the count never produces cards
+  // smaller than a phone's — which is what the old responsive counts did.
+  assert.match(HOME, /className="grid grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4"/);
+  assert.ok(!/grid-cols-2 sm:grid-cols-3/.test(HOME), 'the old responsive counts are back');
+  assert.ok(!/grid-cols-2 (md|lg):grid-cols-3/.test(HOME),
+    'three columns before xl measured 175-189px against a phone at 169px, because the ' +
+    'left nav takes 240px from md and world chat another 320px from lg');
 });
 
-test('the page is one column, so How Duely Works sits under the games', () => {
-  assert.match(HOME, /<div className="flex flex-col gap-8">/);
+test('the page is one column, so How Duely Works sits with the games', () => {
   assert.ok(!/flex-col lg:flex-row/.test(HOME), 'a side column puts How It Works beside the grid again');
   assert.ok(!/lg:w-72/.test(HOME), 'the fixed rail is gone');
 });
 
-test('the games and the card below share one centred width', () => {
-  // Centred under the title, and the same width as each other — measured at
-  // 1440px, the grid centre and the h1 centre are the same pixel.
-  assert.equal((HOME.match(/w-full max-w-3xl mx-auto/g) || []).length, 2,
-    'the grid column and the column under it must both be bounded and centred');
+test('How Duely Works is the ninth cell of the grid', () => {
+  // Eight games plus the card is exactly 3x3, so a wide screen ends on a full
+  // row instead of two games and a gap.
+  const grid = HOME.slice(HOME.indexOf('grid grid-cols-2 xl:grid-cols-3'));
+  const games = grid.indexOf('GAMES.map');
+  const card  = grid.indexOf('<HowDuelyWorks />');
+  assert.ok(games > 0 && card > games, 'the card must come after the games, inside the grid');
+  const comp = HOME.slice(HOME.indexOf('function HowDuelyWorks()'), HOME.indexOf('function DailySpinWidget'));
+  assert.match(comp, /col-span-2 xl:col-span-1/, 'full width on a phone, one cell on a desktop');
+  assert.match(comp, /xl:aspect-square/, 'a shorter card in the corner reads as a failed load');
 });
 
-// ── Duplicate SVG ids ─────────────────────────────────────────────────────
+test('the grid widens when it goes to three columns', () => {
+  assert.match(HOME, /max-w-3xl xl:max-w-5xl/);
+});
 
 test('gradient ids are unique per instance', () => {
   // An id is document-wide. DiamondIcon declared "dia_pav" and "dia_crown" as
