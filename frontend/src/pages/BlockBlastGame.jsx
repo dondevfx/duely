@@ -953,7 +953,16 @@ export default function BlockBlastGame() {
           {/* HUD */}
           {/* The help button sits IN this row, not floating over it. Floated at
               top-right it landed squarely on the opponent's score. */}
-          <div className="relative flex items-center justify-between w-full max-w-lg gap-2 pl-12">
+          {/* px-12, not pl-12. The help button is absolute at left-3 with w-9, so
+            it occupies 12px to 48px — and the row reserved exactly 48px on
+            the left and nothing on the right. Two consequences, both
+            reported: the centre column is centred inside a row that is 48px
+            narrower on one side, so the mode label sits 24px right of true
+            centre; and the guess count starts at exactly 48px, flush against
+            the button with no clearance, which is where the avatar met the
+            "?". Padding both sides equally re-centres the middle column, and
+            14 rather than 12 puts 8px between the button and the column. */}
+        <div className="relative flex items-center justify-between w-full max-w-lg gap-2 px-14">
             <GameHelp gameType="blockBlast" placement="top-left" />
             {/* My score */}
             <div className="text-center min-w-[72px]">

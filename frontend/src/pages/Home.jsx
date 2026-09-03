@@ -181,39 +181,23 @@ export default function Home() {
 
       {/* Game cards + daily bonus */}
       <section className="max-w-7xl mx-auto px-4 pb-16 md:pb-24">
-        {/* The right-hand column moves beside the grid at lg, not md.
-            At md it stacked alongside on an iPad portrait, where this page
-            ALREADY loses 240px to the left nav — an 834px viewport gave
-            590px of page, and minus a 256px side column and its gap the
-            seven cards shared 270px. They rendered 79px wide. Below lg the
-            column now sits underneath, giving the grid the full width. */}
-        <div className="flex flex-col lg:flex-row gap-8">
-          <div className="flex-1 min-w-0">
+        {/* One column at every width — the games, then How Duely Works under
+            them, centred beneath the title. The side column was there to use
+            the space a wide screen has spare, but with the extra sections cut
+            it held one card, and a lone card in a 288px rail beside a grid is
+            a layout built for content that is no longer there. */}
+        <div className="flex flex-col gap-8">
+          <div className="flex-1 min-w-0 w-full max-w-3xl mx-auto">
             <h2 className={`${PHONE_HIDE} text-xl md:text-2xl font-bold text-white mb-4 md:mb-6`}>Games</h2>
-            {/* Column counts are chosen from the width this grid ACTUALLY
-                gets — after the 240px left nav, and after the side column
-                from xl — not from the raw viewport:
-
-                NOTE: md is 720px in this project, not Tailwind's default
-                768 (see tailwind.config.js) — so every iPad, portrait
-                included, is already past it and always has the 240px left
-                nav. Measured card widths:
-
-                  phone     390px      2 cols -> 173px
-                  sm        640-719    3 cols  (no left nav yet)
-                  md/iPad   720-1279   2 cols -> 226-271px
-                  xl        1280-1535  3 cols
-                  2xl       1536+      4 cols  (side column returns at xl)
-
-                The whole iPad range — portrait AND landscape — stays at 2.
-                At 1194 landscape, 3 cols measured 189px, smaller than a
-                phone's 173px in a far bigger window, because the 240px nav
-                is the real constraint, not max-w-7xl.
-
-                md drops back to 2 deliberately: that is where the left nav
-                appears and takes 240px, so three cards there would be
-                smaller than they are on a phone. */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+            {/* Two columns, everywhere.
+                The old counts (3 at sm, 2 at md, 3 at lg, 4 at 2xl) existed to
+                fill a wide row, and produced cards that got SMALLER as the
+                window got bigger: at 1194px landscape, three columns measured
+                189px against a phone's 173px in a far smaller window, because
+                the 240px left nav is the real constraint rather than the
+                viewport. Two columns in a centred, bounded container gives the
+                same shape at every size, which is what was asked for. */}
+            <div className="grid grid-cols-2 gap-3 md:gap-4">
               {GAMES.map(game => (
                 <GameVideoCard
                   key={game.slug}
@@ -236,7 +220,9 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="lg:w-72 flex flex-col gap-5 lg:pt-[3.5rem]">
+          {/* Under the games and the same width as them, rather than beside
+              them in a fixed rail. */}
+          <div className="w-full max-w-3xl mx-auto flex flex-col gap-5">
             {/* Wrapped rather than the column hidden — How It Works sits in this
                 same column and stays on phones. */}
             <div className={PHONE_HIDE}>

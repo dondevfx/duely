@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useId } from 'react';
 import DiamondIcon, { DiamondGlyph } from './DiamondIcon';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
@@ -71,6 +72,11 @@ function fmtCountdown(ms) {
 }
 
 export default function SpinWheel({ locked = false }) {
+  // Prefixes every gradient id in this wheel. Two wheels can be mounted at
+  // once — the hero one and the in-column one, only one of them visible — and
+  // both declared seg0..seg7 and hubGrad, so the hidden wheel's defs could be
+  // the ones the visible wheel painted from.
+  const uid = useId();
   const { refreshProfile, updateProfile, profile } = useAuth();
   const [status,    setStatus]    = useState({ canSpin: false });
   const [spinning,  setSpinning]  = useState(false);
@@ -212,13 +218,13 @@ export default function SpinWheel({ locked = false }) {
               {SEG.map((seg, i) => {
                 const t = THEMES[seg.theme];
                 return (
-                  <linearGradient key={i} id={`seg${i}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                  <linearGradient key={i} id={`${uid}seg${i}`} x1="0%" y1="0%" x2="100%" y2="100%">
                     <stop offset="0%" stopColor={t.bg} />
                     <stop offset="100%" stopColor={t.fade} />
                   </linearGradient>
                 );
               })}
-              <radialGradient id="hubGrad" cx="40%" cy="35%" r="60%">
+              <radialGradient id={`${uid}hub`} cx="40%" cy="35%" r="60%">
                 <stop offset="0%" stopColor="#1e293b" />
                 <stop offset="100%" stopColor="#020617" />
               </radialGradient>
@@ -240,7 +246,7 @@ export default function SpinWheel({ locked = false }) {
                   {/* Filled wedge */}
                   <path
                     d={wedge(CX, CY, R, sDeg, eDeg)}
-                    fill={`url(#seg${i})`}
+                    fill={`url(#${uid}seg${i})`}
                     stroke="#0f172a"
                     strokeWidth="2"
                   />
@@ -290,7 +296,7 @@ export default function SpinWheel({ locked = false }) {
 
             {/* Center hub */}
             <circle cx={CX} cy={CY} r={30} fill="#0f172a" stroke="#1e293b" strokeWidth="2.5" />
-            <circle cx={CX} cy={CY} r={24} fill="url(#hubGrad)" stroke="#334155" strokeWidth="1.5" />
+            <circle cx={CX} cy={CY} r={24} fill={`url(#${uid}hub)`} stroke="#334155" strokeWidth="1.5" />
             <circle cx={CX} cy={CY} r={18} fill="none" stroke="#1e293b" strokeWidth="1" />
             <DiamondGlyph cx={CX} cy={CY + 1} size={17} />
           </svg>

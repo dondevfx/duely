@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { ICON_ALIGN } from './UiIcon';
 
 /**
@@ -56,6 +57,17 @@ function BlockBurst() {
 // was the C Coin, which is a different thing entirely and made the game look
 // like it was about coins rather than the flip.
 function CoinFlip() {
+  // Unique per instance. "cf_face" was a fixed id, and this icon renders once
+  // per game card plus once in the nav — three copies on Home alone — so
+  // every url(#cf_face) resolved to whichever mounted first, and unmounting
+  // that one would strip the fill from the rest.
+  //
+  // Declared HERE, in the component that owns the <defs>, not in GameIcon:
+  // the gradient is drawn by this function, and a constant defined in the
+  // parent is not in scope inside it. That mistake builds cleanly and throws
+  // at render, which is why it needs the page opened rather than a green
+  // build to catch.
+  const faceId = `cf_face_${useId()}`;
   const ticks = [];
   for (let i = 0; i < 20; i++) {
     const a = (i / 20) * Math.PI * 2;
@@ -69,13 +81,13 @@ function CoinFlip() {
   return (
     <g>
       <defs>
-        <radialGradient id="cf_face" cx="38%" cy="32%" r="72%">
+        <radialGradient id={faceId} cx="38%" cy="32%" r="72%">
           <stop offset="0%"  stopColor="#A0D8FF" />
           <stop offset="42%" stopColor="#1250B4" />
           <stop offset="100%" stopColor="#003088" />
         </radialGradient>
       </defs>
-      <circle cx="12" cy="12" r="9.6" fill="url(#cf_face)" stroke="#0066DD" strokeWidth="1.4" />
+      <circle cx="12" cy="12" r="9.6" fill={`url(#${faceId})`} stroke="#0066DD" strokeWidth="1.4" />
       {ticks}
       <circle cx="12" cy="12" r="7" fill="none" stroke="rgba(160,216,255,0.55)" strokeWidth="0.8" />
       <text x="12" y="16.2" fontSize="10.5" fontWeight="900" textAnchor="middle"

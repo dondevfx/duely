@@ -484,12 +484,24 @@ export default function WordleGame() {
     runSoloCountdown();
   }
 
-  function startSoloPaid() {
+  // A real match against a real bot, not a solo session with a stake on it.
+  //
+  // "Bet vs Bot" used to emit wordle_solo_start, which opens a session with no
+  // opponent at all — so the screen said Solo, showed nobody to play against,
+  // and the diamonds went into a bet that had no second side. The server has
+  // had a proper bot match all along (play_scrabble_vs_bot: a Duely Bot
+  // player, a real room, settlement through the engine, diamonds supported).
+  // Nothing was missing but the call.
+  //
+  // Free play still goes to startSolo below — that one genuinely is solo, and
+  // is labelled Solo Mode rather than pretending to have an opponent.
+  function playVsBotPaid() {
     if (!authenticated) { doAuth(); return; }
-    lastModeRef.current = 'solo';
+    lastModeRef.current = 'bot';
     lastSettingsRef.current = { entryFee, currency: betCurrency };
     resetGameState();
-    socket.emit('wordle_solo_start', { entryFee, currency: betCurrency });
+    socket.emit('play_scrabble_vs_bot', { entryFee, currency: betCurrency });
+    setStatusMsg('');
   }
 
   function leaveQueue() {
@@ -721,7 +733,7 @@ export default function WordleGame() {
           balance={balance}
           authenticated={authenticated} doAuth={doAuth}
           onQueue={joinQueue}
-          onBot={startSoloPaid}
+          onBot={playVsBotPaid}
           onBotFree={startSolo}
           botLabel="Solo Mode"
           onCreatePrivate={createPrivate}
@@ -810,7 +822,16 @@ export default function WordleGame() {
         {/* HUD — matches Block Blast layout exactly */}
         {/* In the row, not over it — floated top-right it covered the
             opponent's guess count. */}
-        <div className="relative flex items-center justify-between w-full max-w-lg gap-2 pl-12">
+        {/* px-12, not pl-12. The help button is absolute at left-3 with w-9, so
+            it occupies 12px to 48px — and the row reserved exactly 48px on
+            the left and nothing on the right. Two consequences, both
+            reported: the centre column is centred inside a row that is 48px
+            narrower on one side, so the mode label sits 24px right of true
+            centre; and the guess count starts at exactly 48px, flush against
+            the button with no clearance, which is where the avatar met the
+            "?". Padding both sides equally re-centres the middle column, and
+            14 rather than 12 puts 8px between the button and the column. */}
+        <div className="relative flex items-center justify-between w-full max-w-lg gap-2 px-14">
           <GameHelp gameType="scrabble" placement="top-left" />
           {/* My guess count */}
           <div className="text-center min-w-[72px]">

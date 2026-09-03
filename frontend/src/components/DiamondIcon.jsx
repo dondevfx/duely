@@ -1,3 +1,4 @@
+import { useId } from 'react';
 /**
  * DiamondIcon — the diamond currency.
  *
@@ -11,6 +12,12 @@
  * same way CoinIcon does — a currency mark should follow its number.
  */
 export default function DiamondIcon({ size = '1em', className = '', title }) {
+  // useId is stable across server and client render and unique per instance,
+  // which is exactly what an SVG def needs and what a hand-written constant
+  // cannot be.
+  const uid = useId();
+  const crownId = `dia_crown_${uid}`;
+  const pavId   = `dia_pav_${uid}`;
   return (
     <svg
       width={size} height={size} viewBox="0 0 24 24"
@@ -21,20 +28,29 @@ export default function DiamondIcon({ size = '1em', className = '', title }) {
       aria-hidden={title ? undefined : 'true'}
       focusable="false"
     >
+      {/* Ids unique per instance, via useId.
+          These were the fixed strings "dia_crown" and "dia_pav", and a page
+          with eleven diamonds on it therefore declared the same two ids
+          eleven times. An id is document-wide: every url(#dia_pav) reference
+          resolved to whichever copy happened to be first in the DOM, so all
+          eleven icons were painted from one icon's defs. It looks harmless
+          while they are identical and is not — unmount the first one and the
+          other ten lose their fill, because the gradient they point at no
+          longer exists. */}
       <defs>
-        <linearGradient id="dia_crown" x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id={crownId} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%"   stopColor="#BFF3FF" />
           <stop offset="100%" stopColor="#5CD8F5" />
         </linearGradient>
-        <linearGradient id="dia_pav" x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id={pavId} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%"   stopColor="#3FC4EC" />
           <stop offset="100%" stopColor="#137FB8" />
         </linearGradient>
       </defs>
       {/* pavilion — girdle down to the point */}
-      <path d="M2.6 9.9h18.8L12 21.6z" fill="url(#dia_pav)" />
+      <path d="M2.6 9.9h18.8L12 21.6z" fill={`url(#${pavId})`} />
       {/* crown — table and the facets above the girdle */}
-      <path d="M7.4 3.2h9.2l4.8 6.7H2.6z" fill="url(#dia_crown)" />
+      <path d="M7.4 3.2h9.2l4.8 6.7H2.6z" fill={`url(#${crownId})`} />
       {/* facet lines, the thing that makes it read as a gem and not a kite */}
       <path d="M7.4 3.2 5.6 9.9 12 21.6 18.4 9.9 16.6 3.2" fill="none"
         stroke="rgba(255,255,255,0.55)" strokeWidth="0.85" strokeLinejoin="round" />
