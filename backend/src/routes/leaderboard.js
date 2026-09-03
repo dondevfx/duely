@@ -1,6 +1,11 @@
 const { Router } = require('express');
 const { requireAuth } = require('../middleware/auth');
 const { DEMO_IDS } = require('../services/demoAccounts');
+// weekStart() below calls this. It was used without ever being imported, so
+// both wagered boards threw a ReferenceError on every request — and because
+// Express 4 does not catch a rejected async handler, the request was never
+// answered at all. The client's spinner had nothing to stop it.
+const { startOfPacificWeek } = require('../services/weekReset');
 
 // Remove demo accounts from any array of profile objects
 const stripDemos = (arr) => (arr || []).filter(p => !DEMO_IDS.includes(p.id));
@@ -25,11 +30,29 @@ async function selectWithOptional(build, cols, optional) {
   return r;
 }
 
+// Every handler in this file is async, and Express 4 does not catch a rejected
+// promise from one. A handler that throws therefore never calls res — the
+// connection is simply held open until something upstream gives up, which on
+// the client is a spinner that never stops. That is not a hypothetical: the
+// two wagered boards did exactly this, and a request to them was still open
+// after ninety seconds.
+//
+// Wrapping is the fix rather than a try/catch per route, because the bug is
+// "somebody forgot", and there are nine routes here for somebody to forget in.
+// A rejection now answers 500 with the message, so the board says it failed
+// instead of pretending to load, and the reason appears in the log where it
+// can be read.
+const wrap = (fn) => (req, res, next) =>
+  Promise.resolve(fn(req, res, next)).catch((err) => {
+    console.error(`[leaderboard] ${req.method} ${req.originalUrl} failed:`, err?.message || err);
+    if (!res.headersSent) res.status(500).json({ error: 'Leaderboard unavailable' });
+  });
+
 module.exports = function leaderboardRoutes(supabase) {
   const router = Router();
 
   // Streak leaderboard — top 100 by current_streak
-  router.get('/streak', async (req, res) => {
+  router.get('/streak', wrap(async (req, res) => {
     const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
     const { data, error } = await selectWithOptional(
       (cols) => supabase
@@ -50,10 +73,10 @@ module.exports = function leaderboardRoutes(supabase) {
       userRank = inList ? inList.rank : null;
     }
     res.json({ players, userRank });
-  });
+  }));
 
   // ELO leaderboard — top 500 + optional user rank
-  router.get('/', async (req, res) => {
+  router.get('/', wrap(async (req, res) => {
     const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
     const { data, error } = await selectWithOptional(
       (cols) => supabase
@@ -86,10 +109,10 @@ module.exports = function leaderboardRoutes(supabase) {
     }
 
     res.json({ players, userRank });
-  });
+  }));
 
   // Diamond balance leaderboard — top 500 by current diamond balance
-  router.get('/diamonds', async (req, res) => {
+  router.get('/diamonds', wrap(async (req, res) => {
     const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
     const { data, error } = await selectWithOptional(
       (cols) => supabase
@@ -122,10 +145,10 @@ module.exports = function leaderboardRoutes(supabase) {
     }
 
     res.json({ players, userRank });
-  });
+  }));
 
   // Weekly win leaderboard — top 100 by wins in the last 7 days
-  router.get('/weekly', async (req, res) => {
+  router.get('/weekly', wrap(async (req, res) => {
     const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -172,10 +195,10 @@ module.exports = function leaderboardRoutes(supabase) {
       }));
 
     res.json({ players });
-  });
+  }));
 
   // Coin balance leaderboard — top 500 by current coin balance
-  router.get('/coins', async (req, res) => {
+  router.get('/coins', wrap(async (req, res) => {
     const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
     const { data, error } = await selectWithOptional(
       (cols) => supabase
@@ -208,7 +231,7 @@ module.exports = function leaderboardRoutes(supabase) {
     }
 
     res.json({ players, userRank });
-  });
+  }));
 
   // The start of the current week — Monday 00:00 in the platform's own zone.
   //
@@ -225,7 +248,7 @@ module.exports = function leaderboardRoutes(supabase) {
   }
 
   // Total wagered leaderboard — current week only (resets every Monday)
-  router.get('/wagered', async (req, res) => {
+  router.get('/wagered', wrap(async (req, res) => {
     const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
     const { data: matchData, error } = await supabase
       .from('matches')
@@ -283,10 +306,10 @@ module.exports = function leaderboardRoutes(supabase) {
     }
 
     res.json({ players, userRank, userWagered });
-  });
+  }));
 
   // Total wagered diamonds leaderboard — current week only (resets every Monday)
-  router.get('/wagered-diamonds', async (req, res) => {
+  router.get('/wagered-diamonds', wrap(async (req, res) => {
     const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
     const { data: matchData, error } = await supabase
       .from('matches')
@@ -344,7 +367,7 @@ module.exports = function leaderboardRoutes(supabase) {
     }
 
     res.json({ players, userRank, userWagered });
-  });
+  }));
 
   // Game-specific highscore leaderboard
   // Score-based games use game_highscores; all others use wins from matches table
@@ -359,7 +382,7 @@ module.exports = function leaderboardRoutes(supabase) {
     coinFlip: 'coin_flip', // frontend sends 'coinFlip', matches stored as 'coin_flip'
   };
 
-  router.get('/game/:gameType', async (req, res) => {
+  router.get('/game/:gameType', wrap(async (req, res) => {
     const { gameType: rawGameType } = req.params;
     const gameType = GAME_TYPE_MAP[rawGameType] || rawGameType;
     const adminId = process.env.ADMIN_USER_ID || '00000000-0000-0000-0000-000000000000';
@@ -491,7 +514,7 @@ module.exports = function leaderboardRoutes(supabase) {
     }
 
     return res.json({ players, userRank });
-  });
+  }));
 
   return router;
 };
