@@ -1,5 +1,8 @@
 ﻿import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import CoinIcon from '../components/CoinIcon';
+import { RefreshIcon } from '../components/UiIcon';
+import DiamondIcon from '../components/DiamondIcon';
 import AdminChart from '../components/AdminChart';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
@@ -146,7 +149,7 @@ function AttentionRow({ tx, busy, onResolve }) {
               {/* The question that decides everything: were they already paid? */}
               <div className={`text-xs font-bold mb-2 ${ctx.alreadyCredited ? 'text-warning' : 'text-muted'}`}>
                 {ctx.alreadyCredited
-                  ? '⚠ A manual credit already references this transaction — check before paying again.'
+                  ? 'A manual credit already references this transaction — check before paying again.'
                   : 'No manual credit recorded against this transaction yet.'}
               </div>
 
@@ -411,16 +414,65 @@ function AnalyticsPanel() {
             ))}
           </div>
 
-          {/* Which games carried the window */}
-          <div className="bg-surface border border-border rounded-2xl p-5">
-            <h3 className="text-white font-bold text-sm mb-3">Matches by Game — this range</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {GAME_LABELS.map(({ key, label }) => (
-                <div key={key} className="bg-bg border border-border rounded-xl p-3 text-center">
-                  <div className="text-xl font-black text-white">{(data?.by_game?.[key] ?? 0).toLocaleString()}</div>
-                  <div className="text-[0.6875rem] text-muted mt-0.5">{label}</div>
-                </div>
-              ))}
+          {/* Which games carried the window, and how */}
+          <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+            <div className="p-4 border-b border-border">
+              <h3 className="text-white font-bold text-sm">Games — this range</h3>
+              <p className="text-[0.6875rem] text-muted mt-0.5">
+                Rake is 5% of the coin pool, derived per match. Diamonds pay out in full, so a game
+                played mostly in diamonds is popular and free — a match count on its own cannot tell
+                those two apart.
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-muted text-xs uppercase tracking-wider">
+                    <th className="text-left px-4 py-2.5">Game</th>
+                    <th className="text-right px-4 py-2.5">Matches</th>
+                    <th className="text-right px-4 py-2.5">Rake</th>
+                    <th className="text-right px-4 py-2.5">Wagered</th>
+                    <th className="text-right px-4 py-2.5">Diamonds</th>
+                    <th className="text-right px-4 py-2.5">PvP / Bot</th>
+                    <th className="text-right px-4 py-2.5">Paid / Free</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {GAME_LABELS.map(({ key, label }) => {
+                    const g = data?.by_game?.[key];
+                    return (
+                      <tr key={key} className="border-b border-border/50 last:border-0">
+                        <td className="px-4 py-2.5 text-white font-medium">{label}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-white">{(g?.matches ?? 0).toLocaleString()}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-warning">{fmt(g?.rake_c ?? 0)}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-success">{fmt(g?.wagered_c ?? 0)}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-accent">{(g?.wagered_diamonds ?? 0).toLocaleString()}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-muted">{g?.pvp ?? 0} / {g?.vs_bot ?? 0}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-muted">{g?.paid ?? 0} / {g?.free ?? 0}</td>
+                      </tr>
+                    );
+                  })}
+                  {/* Totals, so the table can be read against the cards above
+                      it without adding seven rows up by hand. */}
+                  <tr className="bg-bg font-bold">
+                    <td className="px-4 py-2.5 text-white">All games</td>
+                    {['matches', 'rake_c', 'wagered_c', 'wagered_diamonds'].map(k => {
+                      const v = Object.values(data?.by_game ?? {}).reduce((a, g) => a + (g[k] ?? 0), 0);
+                      return (
+                        <td key={k} className="px-4 py-2.5 text-right font-mono text-white">
+                          {k === 'matches' || k === 'wagered_diamonds' ? Math.round(v).toLocaleString() : fmt(v)}
+                        </td>
+                      );
+                    })}
+                    {['pvp', 'paid'].map(k => {
+                      const other = k === 'pvp' ? 'vs_bot' : 'free';
+                      const a = Object.values(data?.by_game ?? {}).reduce((n, g) => n + (g[k] ?? 0), 0);
+                      const b = Object.values(data?.by_game ?? {}).reduce((n, g) => n + (g[other] ?? 0), 0);
+                      return <td key={k} className="px-4 py-2.5 text-right font-mono text-muted">{a} / {b}</td>;
+                    })}
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </>
@@ -728,7 +780,7 @@ export default function Admin() {
       await refreshProfile();
       load(); // refresh stats
       if (d.collected > 0) {
-        setCollectMsg(`Collected ${fmt(d.collected)} 🪙 → balance: ${fmt(d.c_coins)} 🪙`);
+        setCollectMsg(`Collected ${fmt(d.collected)} coins → balance: ${fmt(d.c_coins)}`);
       } else {
         setCollectMsg('No fees to collect right now.');
       }
@@ -746,7 +798,7 @@ export default function Admin() {
     try {
       const d = await api.post('/admin/add-diamonds', {});
       await refreshProfile();
-      setDiamondMsg(`Done! Balance: ${(d.diamonds ?? 0).toLocaleString()} 💎`);
+      setDiamondMsg(`Done! Balance: ${(d.diamonds ?? 0).toLocaleString()} diamonds`);
     } catch (e) {
       setDiamondMsg(`Error: ${e.message}`);
     } finally {
@@ -791,7 +843,7 @@ export default function Admin() {
     setPlayerEloMsg('');
     try {
       const d = await api.post('/admin/set-player-elo', { username: setEloUsername.trim(), elo: parseInt(setEloValue, 10) });
-      setPlayerEloMsg(`✓ ${d.username}: ${d.oldElo} → ${d.newElo} ELO`);
+      setPlayerEloMsg(`${d.username}: ${d.oldElo} → ${d.newElo} ELO`);
       setSetEloUsername('');
       setSetEloValue('');
     } catch (e) {
@@ -839,7 +891,7 @@ export default function Admin() {
             <p className="text-muted text-sm mt-1">Platform overview and management</p>
           </div>
           <button onClick={load} className="px-4 py-2 text-sm font-semibold text-muted border border-border rounded-xl hover:border-primary hover:text-white transition-all">
-            ↻ Refresh
+            <RefreshIcon /> Refresh
           </button>
         </div>
 
@@ -934,10 +986,10 @@ export default function Admin() {
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-              <StatCard label="Uncollected Fees"   value={`${fmt(stats?.fee_balance)} 🪙`}             sub="click Collect to claim" color={stats?.fee_balance > 0 ? 'text-warning' : 'text-muted'} />
-              <StatCard label="Wallet Balance"     value={`${fmt(stats?.fees_coins)} 🪙`}              sub={`${(stats?.fees_diamonds ?? 0).toLocaleString()} 💎`} color="text-success" />
-              <StatCard label="Total Fees Claimed" value={`${fmt(stats?.total_fees_claimed)} 🪙`}      sub="all time" color="text-accent" />
-              <StatCard label="Total Wagered"      value={`${fmt(stats?.total_wagered)} 🪙`}           sub="prize pool across all matches" color="text-white" />
+              <StatCard label="Uncollected Fees"   value={<span className="inline-flex items-center gap-1">{fmt(stats?.fee_balance)} <CoinIcon size="0.8em" /></span>}             sub="click Collect to claim" color={stats?.fee_balance > 0 ? 'text-warning' : 'text-muted'} />
+              <StatCard label="Wallet Balance"     value={<span className="inline-flex items-center gap-1">{fmt(stats?.fees_coins)} <CoinIcon size="0.8em" /></span>}              sub={<span className="inline-flex items-center gap-1">{(stats?.fees_diamonds ?? 0).toLocaleString()} <DiamondIcon size="0.8em" /></span>} color="text-success" />
+              <StatCard label="Total Fees Claimed" value={<span className="inline-flex items-center gap-1">{fmt(stats?.total_fees_claimed)} <CoinIcon size="0.8em" /></span>}      sub="all time" color="text-accent" />
+              <StatCard label="Total Wagered"      value={<span className="inline-flex items-center gap-1">{fmt(stats?.total_wagered)} <CoinIcon size="0.8em" /></span>}           sub="prize pool across all matches" color="text-white" />
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
@@ -989,7 +1041,7 @@ export default function Admin() {
               <div className="bg-surface border border-border rounded-2xl p-5 flex flex-col gap-3" style={{ borderColor: stats?.fee_balance > 0 ? 'rgba(234,179,8,0.4)' : undefined }}>
                 <div className="font-bold text-white text-sm">Collect Fee Earnings</div>
                 <div className="text-xs text-muted">
-                  Moves <span className="font-bold" style={{ color: stats?.fee_balance > 0 ? '#eab308' : undefined }}>{fmt(stats?.fee_balance)} 🪙</span> of uncollected match fees into your coin balance.
+                  Moves <span className="font-bold" style={{ color: stats?.fee_balance > 0 ? '#eab308' : undefined }}>{fmt(stats?.fee_balance)} <CoinIcon size="0.8em" /></span> of uncollected match fees into your coin balance.
                 </div>
                 <button
                   onClick={handleCollectFees}
@@ -1003,7 +1055,7 @@ export default function Admin() {
                     boxShadow: '0 0 18px rgba(234,179,8,0.25)',
                   }}
                 >
-                  {collectingFees ? 'Collecting…' : `Collect ${fmt(stats?.fee_balance)} 🪙`}
+                  {collectingFees ? 'Collecting…' : <span className="inline-flex items-center gap-1">Collect {fmt(stats?.fee_balance)} <CoinIcon size="0.85em" /></span>}
                 </button>
                 {collectMsg && <div className="text-xs text-center" style={{ color: collectMsg.startsWith('Error') ? '#ef4444' : '#22c55e' }}>{collectMsg}</div>}
               </div>
@@ -1011,7 +1063,7 @@ export default function Admin() {
               {/* Add 5M Diamonds */}
               <div className="bg-surface border border-border rounded-2xl p-5 flex flex-col gap-3">
                 <div className="font-bold text-white text-sm">Add 5M Diamonds</div>
-                <div className="text-xs text-muted">Credits 5,000,000 💎 directly to your admin account.</div>
+                <div className="text-xs text-muted inline-flex items-center gap-1">Credits 5,000,000 <DiamondIcon size="0.85em" /> directly to your admin account.</div>
                 <button
                   onClick={handleAddDiamonds}
                   disabled={addingDiamonds}
@@ -1024,7 +1076,7 @@ export default function Admin() {
                     boxShadow: '0 0 18px rgba(124,58,237,0.25)',
                   }}
                 >
-                  {addingDiamonds ? 'Adding…' : '+ 5,000,000 💎'}
+                  {addingDiamonds ? 'Adding…' : <span className="inline-flex items-center gap-1">+ 5,000,000 <DiamondIcon size="0.85em" /></span>}
                 </button>
                 {diamondMsg && <div className="text-xs text-center" style={{ color: diamondMsg.startsWith('Error') ? '#ef4444' : '#22c55e' }}>{diamondMsg}</div>}
               </div>
@@ -1142,7 +1194,7 @@ export default function Admin() {
               {/* Remove Coins */}
               <div className="bg-surface border border-border rounded-2xl p-5 flex flex-col gap-3">
                 <div className="font-bold text-white text-sm">Remove My Coins</div>
-                <div className="text-xs text-muted">Current balance: <span className="text-white font-mono">{profile?.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'} 🪙</span></div>
+                <div className="text-xs text-muted">Current balance: <span className="text-white font-mono">{profile?.c_coins?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'} <CoinIcon size="0.8em" /></span></div>
                 <button
                   onClick={handleRemoveCoins}
                   disabled={removingCoins}
@@ -1155,7 +1207,7 @@ export default function Admin() {
                     boxShadow: '0 0 14px rgba(239,68,68,0.2)',
                   }}
                 >
-                  {removingCoins ? 'Removing…' : '🗑 Remove All Coins'}
+                  {removingCoins ? 'Removing…' : 'Remove All Coins'}
                 </button>
                 {removeCoinsMsg && <div className="text-xs text-center" style={{ color: removeCoinsMsg.startsWith('Error') ? '#ef4444' : '#22c55e' }}>{removeCoinsMsg}</div>}
               </div>
@@ -1309,7 +1361,7 @@ export default function Admin() {
                               <span className={`font-semibold ${meta.color}`}>{meta.label}</span>
                             </td>
                             <td className="px-4 py-3 text-right font-mono font-bold text-white">
-                              {fmt(tx.amount_c)} 🪙
+                              {fmt(tx.amount_c)} <CoinIcon size="0.8em" />
                             </td>
                             <td className="px-4 py-3">
                               <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${

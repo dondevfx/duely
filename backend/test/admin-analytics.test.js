@@ -10,23 +10,34 @@ const express = require('express');
 // A supabase double for exactly the three tables the route reads. Each call
 // records its filters so the test can check the range actually reached the
 // query rather than being applied afterwards in JS.
+// What a PostgREST instance will hand back in one request no matter what
+// the client asks for.
+const PAGE_CAP = 1000;
+
 function fakeDb(tables, seen = []) {
   return {
     from(table) {
-      const q = { table, gte: null, lte: null, limit: null };
+      const q = { table, gte: null, lte: null, calls: 0, lastRange: null };
       seen.push(q);
       const chain = {
         select() { return chain; },
         gte(_c, v) { q.gte = v; return chain; },
         lte(_c, v) { q.lte = v; return chain; },
         order() { return chain; },
-        limit(n) {
-          q.limit = n;
+        // range(), and it enforces a server-side page ceiling the way
+        // PostgREST does — asking for more than PAGE_CAP rows in one request
+        // silently returns PAGE_CAP of them. That ceiling is the whole reason
+        // the route pages, so the double has to have it or the test proves
+        // nothing.
+        range(from, to) {
+          q.calls++;
+          q.lastRange = [from, to];
           const rows = (tables[table] || []).filter(r => {
             const ts = r.created_at || r.played_at;
             return (!q.gte || ts >= q.gte) && (!q.lte || ts <= q.lte);
           });
-          return Promise.resolve({ data: rows.slice(0, n), error: null });
+          const want = Math.min(to - from + 1, PAGE_CAP);
+          return Promise.resolve({ data: rows.slice(from, from + want), error: null });
         },
       };
       return chain;
@@ -162,7 +173,7 @@ test('the range reaches the query rather than being filtered afterwards', async 
     assert.equal(seen.length, 3, 'profiles, matches, transactions');
     for (const q of seen) {
       assert.ok(q.gte && q.lte, `${q.table} was fetched unbounded`);
-      assert.equal(q.limit, 50000, `${q.table} was fetched without a row cap`);
+      assert.ok(q.lastRange, `${q.table} was not fetched by page`);
     }
   } finally { server.close(); }
 });
@@ -183,5 +194,117 @@ test('a backwards or unparseable range is refused', async () => {
   try {
     assert.equal((await get(port, 'from=2026-03-05&to=2026-03-01')).status, 400);
     assert.equal((await get(port, 'from=not-a-date&to=2026-03-01')).status, 400);
+  } finally { server.close(); }
+});
+
+// ── The bug that made a 90-day range report zero fees ─────────────────────
+
+test('a range wider than one page is read in full', async () => {
+  // This is the reported failure, reproduced: 30 days showed fees and 90 days
+  // showed none. A single request came back cut at the server's row ceiling,
+  // and because rows arrive oldest-first the cut fell on the NEWEST ones —
+  // which is exactly where fee collections are. The metric did not read low,
+  // it read zero.
+  const rows = [];
+  for (let i = 0; i < 2500; i++) {
+    rows.push({ created_at: day(1), type: 'deposit', amount_c: 1, status: 'confirmed', user_id: 'u' });
+  }
+  // The fee sits past the first page, where the old code could never see it.
+  rows.push({ created_at: day(2), type: 'fee_collection', amount_c: 42, status: 'confirmed', user_id: 'u' });
+
+  const { server, port } = await boot({ profiles: [], matches: [], transactions: rows });
+  try {
+    const { body } = await get(port, 'from=2026-03-01&to=2026-03-03');
+    assert.equal(body.totals.deposits, 2500, 'every page must be read, not just the first');
+    assert.equal(body.totals.fees, 42, 'the fee is past the first page — this is the reported bug');
+    assert.deepEqual(body.truncated, [], 'and reading it in full is not truncation');
+  } finally { server.close(); }
+});
+
+test('paging stops at a short page rather than looping', async () => {
+  const seen = [];
+  const { server, port } = await boot({
+    profiles: [{ created_at: day(1), id: 'a' }], matches: [], transactions: [],
+  }, seen);
+  try {
+    await get(port, 'from=2026-03-01&to=2026-03-02');
+    const profiles = seen.find(q => q.table === 'profiles');
+    assert.equal(profiles.calls, 1, 'one short page is the end of the range');
+  } finally { server.close(); }
+});
+
+// ── Demo accounts ─────────────────────────────────────────────────────────
+
+test('demo accounts are not in any number on the page', async () => {
+  // A demo wins every bot match by design and can be topped up on demand, so
+  // leaving them in makes every figure a mixture of what happened and what
+  // was staged.
+  process.env.DEMO_ACCOUNT_IDS = 'demo-1,demo-2';
+  delete require.cache[require.resolve('../src/services/demoAccounts')];
+  delete require.cache[require.resolve('../src/routes/admin')];
+
+  const { server, port } = await boot({
+    profiles: [
+      { created_at: day(1), id: 'real-1' },
+      { created_at: day(1), id: 'demo-1' },
+    ],
+    matches: [
+      { played_at: day(1), player1_id: 'real-1', player2_id: 'real-2', prize_pool_c: 10 },
+      // Dropped even though only one side is a demo: the opponent did not
+      // play a real match either.
+      { played_at: day(1), player1_id: 'real-3', player2_id: 'demo-2', prize_pool_c: 999 },
+    ],
+    transactions: [
+      { created_at: day(1), type: 'deposit', amount_c: 5,   status: 'confirmed', user_id: 'real-1' },
+      { created_at: day(1), type: 'deposit', amount_c: 500, status: 'confirmed', user_id: 'demo-1' },
+    ],
+  });
+  try {
+    const { body } = await get(port, 'from=2026-03-01&to=2026-03-02');
+    assert.equal(body.totals.new_users, 1, 'the demo signup is not a signup');
+    assert.equal(body.totals.matches, 1);
+    assert.equal(body.totals.wagered, 10, 'the staged 999 must not be in the money');
+    assert.equal(body.totals.deposits, 5);
+    assert.equal(body.totals.active_players, 2, 'real-1 and real-2, not real-3 or demo-2');
+  } finally {
+    server.close();
+    delete process.env.DEMO_ACCOUNT_IDS;
+    delete require.cache[require.resolve('../src/services/demoAccounts')];
+    delete require.cache[require.resolve('../src/routes/admin')];
+  }
+});
+
+// ── Per-game metrics ──────────────────────────────────────────────────────
+
+test('each game reports what it earned, not just how often it was played', async () => {
+  // A count says which games get played, not which ones earn. Rake is the
+  // platform's only income from a match and comes off the coin pool at 5%;
+  // diamonds pay out in full, so a game played entirely in diamonds is
+  // popular and free, and a count cannot tell those two apart.
+  const { server, port } = await boot({
+    profiles: [], transactions: [],
+    matches: [
+      // Paid PvP in coins.
+      { played_at: day(1), game_type: 'tower', player1_id: 'a', player2_id: 'b', prize_pool_c: 100 },
+      // Paid vs a bot — the engines write null for the bot's side.
+      { played_at: day(1), game_type: 'tower', player1_id: 'a', player2_id: null, prize_pool_c: 20 },
+      // Diamonds: no rake, and must not land in the coin column.
+      { played_at: day(1), game_type: 'tower', player1_id: 'a', player2_id: 'c', prize_pool_diamonds: 5000 },
+      // Free.
+      { played_at: day(1), game_type: 'carDash', player1_id: 'a', player2_id: 'b' },
+    ],
+  });
+  try {
+    const { body } = await get(port, 'from=2026-03-01&to=2026-03-02');
+    const t = body.by_game.tower;
+    assert.equal(t.matches, 3);
+    assert.equal(t.rake_c, 6, '5% of 120 coins — the diamond match contributes none');
+    assert.equal(t.wagered_c, 120);
+    assert.equal(t.wagered_diamonds, 5000);
+    assert.equal(t.pvp, 2);
+    assert.equal(t.vs_bot, 1, 'a null player id is the bot side, not missing data');
+    assert.equal(t.paid, 3);
+    assert.equal(body.by_game.carDash.free, 1);
+    assert.equal(body.by_game.carDash.rake_c, 0);
   } finally { server.close(); }
 });

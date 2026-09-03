@@ -1469,11 +1469,16 @@ export default function Profile() {
         />
       )}
 
-      <div className="px-4 py-12">
+      <div className="px-4 py-4 sm:py-12">
         <div className="relative max-w-2xl mx-auto">
         <div>
         {/* Profile header */}
-        <div className="bg-surface border border-surfaceLight rounded-2xl p-6 mb-6 relative">
+        {/* pt-12 on a phone: the Sign Out button is absolutely positioned in
+            this corner, and absolute means it takes no space — so a long
+            username ran straight underneath it. The card is taller by exactly
+            the band the button sits in, which is also why the name no longer
+            needs to be truncated to avoid it. */}
+        <div className="bg-surface border border-surfaceLight rounded-2xl p-6 pt-12 sm:pt-6 mb-6 relative">
 
           {/* Sign out — phones only. On desktop it lives in the navbar's
               account dropdown, which does not exist at this width. Absolutely
@@ -1597,21 +1602,25 @@ export default function Profile() {
                   </GlowButton>
                 </div>
               ) : (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0">
                   {/* Demo accounts can open their own card from here.
                       It is how the popup gets demonstrated without a second
                       account to click on, and it is read-only — the card is
                       opened viewOnly so there is no Add Friend on yourself. */}
+                  {/* min-w-0 + truncate: a 20-character name at text-2xl is
+                      wider than the card on a phone, and without these the
+                      flex row grows to fit it and pushes the Edit button off
+                      the edge instead of wrapping. */}
                   {profile.is_demo ? (
                     <button
                       onClick={() => setViewingSelf(true)}
-                      className="text-2xl font-black text-white hover:text-primary transition-colors"
+                      className="text-2xl font-black text-white hover:text-primary transition-colors min-w-0 truncate"
                       title="View your profile card"
                     >
                       {profile.username}
                     </button>
                   ) : (
-                    <h1 className="text-2xl font-black text-white">{profile.username}</h1>
+                    <h1 className="text-2xl font-black text-white min-w-0 truncate" title={profile.username}>{profile.username}</h1>
                   )}
                   <button
                     onClick={() => setEditing(true)}

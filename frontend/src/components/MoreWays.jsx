@@ -6,7 +6,7 @@
  * code) is a thing almost nobody reaches for on arrival, and stacking it all
  * under the stake made the lobby the tallest screen in the app.
  *
- * Deliberately just an arrow, and deliberately narrow. A full-width button
+ * Deliberately just an arrow. A full-width button
  * with a label is another thing to read on a screen whose whole problem was
  * having too much on it — and naming what is hidden defeats the point of
  * hiding it. An arrow pointing down at a gap is understood without being read.
@@ -16,30 +16,33 @@
  * copy is how the two drift apart.
  */
 
-// One wide chevron, stretched the full width of the button and rotated for
-// the open state.
+// A small chevron, centred on a full-width bar.
 //
-// preserveAspectRatio="none" is what does the stretching: the viewBox is a
-// long flat box and the SVG is told not to letterbox it, so the stroke spans
-// whatever width the button has instead of sitting as a small glyph in the
-// middle. vectorEffect keeps the line the same weight while that happens —
-// without it, stretching an 80-wide box to 340px would thicken the horizontal
-// run and leave the ends hairline-thin.
+// It used to be stretched across the whole button with
+// preserveAspectRatio="none", which made it a line drawn on the card rather
+// than an arrow sitting on it. The bar spans the card because it is a lid on
+// the group below; the mark does not have to span anything.
 //
-// The shaft is gone. At this height there is no room for one, and a chevron
-// spanning the whole control already says which way it goes — the shaft was
-// carrying no information the shape did not.
+// No shaft. At this height there is no room for one, and a chevron already
+// says which way it goes.
 function WideChevron({ up }) {
   return (
     <svg
-      viewBox="0 0 80 10" preserveAspectRatio="none" aria-hidden="true"
-      className="w-full h-2.5 transition-transform duration-200"
-      style={{ transform: up ? 'rotate(180deg)' : 'none' }}
+      viewBox="0 0 24 10" aria-hidden="true"
+      // A fixed, small glyph now, centred — not stretched.
+      // preserveAspectRatio="none" made the chevron span the whole button,
+      // which turned it into a line across the card rather than an arrow on
+      // it. The bar still spans the card; the mark on it does not have to.
+      className="w-6 h-2.5 transition-transform duration-200"
+      // rotateX, not rotate. A flat rotate spins the chevron through the
+      // horizontal — it passes edge-on and reads as sideways travel. rotateX
+      // tips it over the top instead, which is the motion the control is
+      // describing: the panel coming down, and going back up.
+      style={{ transform: up ? 'rotateX(180deg)' : 'none' }}
     >
       <path
-        d="M2 2.5 L40 8 L78 2.5" fill="none" stroke="currentColor"
-        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-        vectorEffect="non-scaling-stroke"
+        d="M3 3 L12 8 L21 3" fill="none" stroke="currentColor"
+        strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
       />
     </svg>
   );
@@ -58,7 +61,7 @@ export function MoreWaysToggle({ open, onToggle, className = '' }) {
       // reads as a lid on the group below rather than as another button
       // competing with the two above it — which is what a full-height row
       // with a label did.
-      className={`w-full flex items-center justify-center px-4 py-1 rounded-lg
+      className={`w-full flex items-center justify-center px-4 py-2 rounded-lg
                   border border-border bg-surface text-white/70
                   hover:border-primary hover:text-white active:bg-surfaceLight
                   transition-all ${className}`}

@@ -310,7 +310,7 @@ export default function Wallet() {
 
   return (
     <div className="min-h-screen bg-bg pt-16" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}>
-      <div className="max-w-2xl mx-auto px-4 py-12">
+      <div className="max-w-2xl mx-auto px-4 py-4 sm:py-12">
         {emailPrompt && <VerifyEmailModal onClose={() => setEmailPrompt(false)} />}
         {verifyPrompt && (
           <VerifyModal

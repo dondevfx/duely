@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const { requireAuth } = require('../middleware/auth');
 const { creditDiamonds, creditCoins, deductCoins } = require('../services/walletService');
-const { filterDemos } = require('../services/demoAccounts');
+const { filterDemos, isDemo: isDemoAccount } = require('../services/demoAccounts');
 
 module.exports = function adminRoutes(supabase, io) {
   const router = Router();
@@ -278,14 +278,36 @@ module.exports = function adminRoutes(supabase, io) {
     return keys;
   }
 
+  // Paged, not capped.
+  //
+  // This used to be a single .limit(MAX_ROWS) with .order(ascending), and that
+  // combination is what made "90 days" report zero fees while "30 days"
+  // reported them correctly. PostgREST enforces its own row ceiling regardless
+  // of what .limit() asks for, so a wide range came back cut — and cut from
+  // the END, because ascending order puts the newest rows last. Fee
+  // collections are recent, so they were exactly what fell off. The numbers
+  // were not wrong by a little; whole metrics read as zero.
+  //
+  // Pages until a short page comes back, which is the only way to know the
+  // range is exhausted rather than merely capped. The overall ceiling stays,
+  // but it is now a real ceiling rather than a silent one — reaching it sets
+  // `truncated`, and a page that stops early cannot be mistaken for the end.
+  const PAGE = 1000;
+
   async function fetchRange(table, tsCol, fromIso, toIso, cols) {
-    const { data, error } = await supabase
-      .from(table).select(cols)
-      .gte(tsCol, fromIso).lte(tsCol, toIso)
-      .order(tsCol, { ascending: true })
-      .limit(MAX_ROWS);
-    if (error) throw new Error(table + ': ' + error.message);
-    return data || [];
+    const out = [];
+    for (let from = 0; from < MAX_ROWS; from += PAGE) {
+      const { data, error } = await supabase
+        .from(table).select(cols)
+        .gte(tsCol, fromIso).lte(tsCol, toIso)
+        .order(tsCol, { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) throw new Error(table + ': ' + error.message);
+      const rows = data || [];
+      out.push(...rows);
+      if (rows.length < PAGE) return out;
+    }
+    return out;
   }
 
   router.get('/analytics', requireAuth, requireAdmin, async (req, res) => {
@@ -301,13 +323,24 @@ module.exports = function adminRoutes(supabase, io) {
       const fromIso = new Date(fromMs).toISOString();
       const toIso   = new Date(toMs).toISOString();
 
-      const [users, matches, txs] = await Promise.all([
-        fetchRange('profiles', 'created_at', fromIso, toIso, 'created_at'),
+      const [rawUsers, rawMatches, rawTxs] = await Promise.all([
+        fetchRange('profiles', 'created_at', fromIso, toIso, 'id, created_at'),
         fetchRange('matches', 'played_at', fromIso, toIso,
-          'played_at, entry_fee_c, prize_pool_c, player1_id, player2_id, game_type'),
+          'played_at, entry_fee_c, entry_fee_diamonds, prize_pool_c, prize_pool_diamonds, player1_id, player2_id, game_type'),
         fetchRange('transactions', 'created_at', fromIso, toIso,
-          'created_at, type, amount_c, status'),
+          'created_at, type, amount_c, user_id, status'),
       ]);
+
+      // Demo accounts are excluded everywhere, not filtered in the client.
+      //
+      // They exist to be played with — a demo wins every bot match by design
+      // and can be topped up on demand — so leaving them in makes every number
+      // on this page a mixture of what happened and what was staged. A match
+      // is dropped if EITHER side is a demo, because a demo's opponent did not
+      // play a real match either.
+      const users   = rawUsers.filter(u => !isDemoAccount(u.id));
+      const matches = rawMatches.filter(m => !isDemoAccount(m.player1_id) && !isDemoAccount(m.player2_id));
+      const txs     = rawTxs.filter(t => !isDemoAccount(t.user_id));
 
       const blank = () => ({
         new_users: 0, matches: 0, wagered: 0, fees: 0,
@@ -360,13 +393,52 @@ module.exports = function adminRoutes(supabase, io) {
       // Active players is the one total that is NOT the sum of its buckets:
       // somebody who played Monday and Tuesday is one player, not two.
       const allPlayers = new Set();
-      const byGame = {};
       for (const m of matches) {
         if (m.player1_id) allPlayers.add(m.player1_id);
         if (m.player2_id) allPlayers.add(m.player2_id);
-        const g = m.game_type || 'unknown';
-        byGame[g] = (byGame[g] || 0) + 1;
       }
+
+      // Per game, and per mode within it.
+      //
+      // "Matches by game" was a count and nothing else, which says which games
+      // get played but not which ones earn. Rake is the platform's only income
+      // from a match, and it comes off the coin prize pool at 5% — diamonds
+      // pay out in full, so a game played entirely in diamonds is popular and
+      // free, and the count alone cannot tell those two apart.
+      //
+      // Rake here is DERIVED (5% of the coin pool) rather than read from
+      // fee_collection rows, because those are recorded per collection and
+      // carry no game. It is the right number for comparing games against each
+      // other; the Fees Collected chart above is the one to trust for what
+      // actually landed in the account.
+      const RAKE = 0.05;
+      const byGame = {};
+      const gameOf = (m) => m.game_type || 'unknown';
+      for (const m of matches) {
+        const g = gameOf(m);
+        const b = byGame[g] || (byGame[g] = {
+          matches: 0, wagered_c: 0, wagered_diamonds: 0, rake_c: 0,
+          pvp: 0, vs_bot: 0, free: 0, paid: 0, coins: 0, diamonds: 0,
+        });
+        const poolC = Number(m.prize_pool_c) || (Number(m.entry_fee_c) || 0) * 2;
+        const poolD = Number(m.prize_pool_diamonds) || (Number(m.entry_fee_diamonds) || 0) * 2;
+        b.matches++;
+        b.wagered_c += poolC;
+        b.wagered_diamonds += poolD;
+        b.rake_c += poolC * RAKE;
+        // A null player id is the bot's side of the row — that is how the
+        // engines record a bot match, not a missing value.
+        if (m.player1_id && m.player2_id) b.pvp++; else b.vs_bot++;
+        if (poolC > 0 || poolD > 0) b.paid++; else b.free++;
+        if (poolC > 0) b.coins++;
+        if (poolD > 0) b.diamonds++;
+      }
+      for (const g of Object.keys(byGame)) {
+        byGame[g].wagered_c = Number(byGame[g].wagered_c.toFixed(2));
+        byGame[g].wagered_diamonds = Math.round(byGame[g].wagered_diamonds);
+        byGame[g].rake_c = Number(byGame[g].rake_c.toFixed(4));
+      }
+
 
       res.json({
         from: fromIso, to: toIso, bucket, points,
@@ -383,10 +455,13 @@ module.exports = function adminRoutes(supabase, io) {
         // Said out loud rather than quietly under-reported. A capped range
         // looks exactly like a quiet one otherwise, and the difference matters
         // when the number is being used to decide something.
+        // Measured on the RAW counts: the demo filter above legitimately
+        // shrinks these, and a range that was truncated and then filtered
+        // would otherwise stop reporting itself as truncated.
         truncated: [
-          users.length   >= MAX_ROWS ? 'profiles' : null,
-          matches.length >= MAX_ROWS ? 'matches' : null,
-          txs.length     >= MAX_ROWS ? 'transactions' : null,
+          rawUsers.length   >= MAX_ROWS ? 'profiles' : null,
+          rawMatches.length >= MAX_ROWS ? 'matches' : null,
+          rawTxs.length     >= MAX_ROWS ? 'transactions' : null,
         ].filter(Boolean),
       });
     } catch (e) {

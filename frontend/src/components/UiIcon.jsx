@@ -417,6 +417,23 @@ const BJ = {
   ) },
 };
 
+// Reload. Replaces the ↻ that headed the admin refresh button — a glyph with
+// no weight of its own, which rendered as a hairline next to bold text.
+export function RefreshIcon({ size = 15, className = '' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" role="img"
+      aria-label="refresh" focusable="false"
+      className={`inline-block shrink-0 ${className}`} style={ICON_ALIGN}>
+      {/* An open circle with an arrowhead on the gap, which is what makes it
+          read as "go round again" rather than as a letter O. */}
+      <path d="M20 12a8 8 0 1 1-2.6-5.9" fill="none" stroke="currentColor"
+        strokeWidth="2.2" strokeLinecap="round" />
+      <path d="M20 3.5V8h-4.5" fill="none" stroke="currentColor"
+        strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 // Joining a friend's game by code. Replaces the 🔗 that headed the join
 // dialog — a paperclip on some platforms, a chain on others, and never the
 // brand's blue. Two links of a chain, which is what a shared code is.

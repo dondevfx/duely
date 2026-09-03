@@ -55,24 +55,27 @@ test('the extra ways to play are collapsed on load, on every betting screen', ()
   }
 });
 
-test('the toggle is a wide chevron on a short bar, that flips when open', () => {
+test('the toggle is a small chevron on a short full-width bar', () => {
   const mw = fe('components', 'MoreWays.jsx');
-  // Full width, short. It reads as a lid on the group below rather than as
-  // another button competing with the two above it.
-  assert.match(mw, /w-full flex items-center justify-center px-4 py-1 rounded-lg/);
-  assert.ok(!/w-1\/3/.test(mw), 'the bar spans the card now, not a third of it');
-  // preserveAspectRatio="none" is what stretches the chevron across that
-  // width instead of leaving a small glyph in the middle; non-scaling-stroke
-  // is what stops the stretch thickening the horizontal run and thinning the
-  // ends. Neither works without the other.
-  assert.match(mw, /preserveAspectRatio="none"/);
-  assert.match(mw, /vectorEffect="non-scaling-stroke"/);
-  // One shape, rotated — a glyph that changes shape reads as a second control.
-  assert.match(mw, /transform: up \? 'rotate\(180deg\)' : 'none'/);
+  // Comments stripped for the negative checks: the notes explaining why
+  // preserveAspectRatio and w-1/3 were removed name both, and a test that
+  // reads prose passes when someone deletes the code and keeps the note.
+  const code = strip(mw);
+  // The bar spans the card because it is a lid on the group below. The mark
+  // on it does not: stretched edge to edge the chevron read as a line drawn
+  // across the card rather than an arrow sitting on it.
+  assert.match(mw, /w-full flex items-center justify-center px-4 py-2 rounded-lg/);
+  assert.match(mw, /className="w-6 h-2\.5 transition-transform/);
+  assert.ok(!/preserveAspectRatio="none"/.test(code), 'the chevron must not stretch with the bar');
+  assert.ok(!/w-1\/3/.test(code), 'the bar spans the card');
+  // rotateX, not rotate. A flat rotate spins the chevron through the
+  // horizontal, passing edge-on, which reads as sideways travel; rotateX tips
+  // it over the top, which is the motion the control describes.
+  assert.match(mw, /transform: up \? 'rotateX\(180deg\)' : 'none'/);
+  assert.ok(!/[^X]rotate\(180deg\)/.test(code), 'a flat rotate flips it sideways');
   assert.match(mw, /<WideChevron up=\{open\} \/>/);
-  // No shaft: at this height there is no room for one, and a chevron spanning
-  // the whole control already says which way it goes.
-  assert.equal((mw.match(/<path/g) || []).length, 1);
+  // No shaft: a chevron already says which way it goes.
+  assert.equal((code.match(/<path/g) || []).length, 1);
   // Still reachable without sight of the arrow.
   assert.match(mw, /aria-expanded=\{open\}/);
   assert.match(mw, /aria-label=\{open \? 'Fewer ways to play' : 'More ways to play'\}/);
