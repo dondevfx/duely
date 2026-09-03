@@ -403,7 +403,11 @@ module.exports = function walletRoutes(supabase, io) {
       // riskier of the two rails — a crypto payout is irreversible the
       // moment it lands, where a fiat one still has bank-side recall options.
       const src = await getWithdrawable(supabase, req.user.id);
-      if (!src.hasPlayed) {
+      // Gated on the same switch as the amount below, not on hasPlayed alone.
+      // Leaving this in place would have kept the refusal while the balance
+      // check said the money was free to go — the same request refused for
+      // two different reasons, one of which no longer applies.
+      if (src.playthroughRequired && !src.hasPlayed) {
         return res.status(403).json({ error: 'Play at least one match before withdrawing.' });
       }
       if (amount > src.withdrawable) {
@@ -783,7 +787,11 @@ module.exports = function walletRoutes(supabase, io) {
       // the middle; the deposit-then-withdraw pattern this guards against
       // works identically on either rail. See getWithdrawable's own comment.
       const src = await getWithdrawable(supabase, req.user.id);
-      if (!src.hasPlayed) {
+      // Gated on the same switch as the amount below, not on hasPlayed alone.
+      // Leaving this in place would have kept the refusal while the balance
+      // check said the money was free to go — the same request refused for
+      // two different reasons, one of which no longer applies.
+      if (src.playthroughRequired && !src.hasPlayed) {
         return res.status(403).json({ error: 'Play at least one match before withdrawing.' });
       }
       if (amount > src.withdrawable) {

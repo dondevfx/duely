@@ -58,7 +58,12 @@ test('both withdrawal routes call the real function, each with its own request\'
     const body = WALLET.slice(at, nextRoute === -1 ? at + 4000 : nextRoute);
     assert.match(body, /await getWithdrawable\(supabase, req\.user\.id\)/,
       `${routeStart} must call getWithdrawable — a route with no call has no protection at all`);
-    assert.match(body, /if \(!src\.hasPlayed\)/, `${routeStart} must gate on hasPlayed`);
+    // Gated on the switch as well as on hasPlayed. The playthrough
+    // requirement is off by default now (see withdraw-playthrough.test.js) —
+    // an unconditional guard here would refuse the withdrawal while the
+    // amount check below said the money was free to go.
+    assert.match(body, /if \(src\.playthroughRequired && !src\.hasPlayed\)/,
+      `${routeStart} must gate on hasPlayed, behind the switch`);
     assert.match(body, /amount > src\.withdrawable/, `${routeStart} must cap on src.withdrawable`);
   }
 });

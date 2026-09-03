@@ -407,6 +407,21 @@ async function recordWithdrawal(supabase, userId, amount, source) {
 // fraud control rather than a payout feature, a blocked legitimate
 // withdrawal (a support ticket) was judged the safer failure mode against an
 // unblocked fraudulent one (money gone).
+// Whether a deposit has to be played before it can be withdrawn.
+//
+// OFF by default, at the owner's instruction: money you just put in can be
+// taken straight back out. What it was there for is worth writing down rather
+// than deleting with the code — deposit in, withdraw out, no play, is the
+// textbook laundering pattern, and a payment processor that notices it is the
+// usual reason a platform like this loses its rails. It also removes the cost
+// of using deposits and withdrawals as a free transfer between accounts.
+//
+// Set WITHDRAW_PLAYTHROUGH=true to put it back. The arithmetic below still
+// runs either way, so the admin panel and /wallet/withdrawable keep reporting
+// how much of a balance is unplayed — the number stays visible even when it
+// no longer blocks anything.
+const REQUIRE_PLAYTHROUGH = process.env.WITHDRAW_PLAYTHROUGH === 'true';
+
 async function getWithdrawable(supabase, userId) {
   const { data: profile } = await supabase
     .from('profiles').select('c_coins, wins, losses').eq('id', userId).single();
@@ -427,9 +442,20 @@ async function getWithdrawable(supabase, userId) {
     .reduce((s, r) => s + (parseFloat(r.entry_fee_c) || 0), 0);
 
   const unplayedDeposits = Math.max(0, lifetimeDeposited - lifetimeWagered);
-  const withdrawable = Math.max(0, balance - unplayedDeposits);
+  // With the requirement off, the whole balance is withdrawable — including a
+  // deposit that landed a moment ago. unplayedDeposits is still returned, so
+  // nothing that reports on it starts reading zero.
+  const withdrawable = REQUIRE_PLAYTHROUGH
+    ? Math.max(0, balance - unplayedDeposits)
+    : balance;
 
-  return { withdrawable, balance, hasPlayed, lifetimeDeposited, lifetimeWagered };
+  return {
+    withdrawable, balance, hasPlayed, lifetimeDeposited, lifetimeWagered,
+    unplayedDeposits,
+    // So a caller does not have to read the env var to know which rules the
+    // numbers above were produced under.
+    playthroughRequired: REQUIRE_PLAYTHROUGH,
+  };
 }
 
 // Forfeit settlement for diamonds — fees already deducted at match start, just credit winner 2x.
