@@ -1016,9 +1016,15 @@ export default function BlockBlastGame() {
       {phase === 'active' && (
         <div className="relative flex flex-col items-center gap-4 animate-fade-in w-full" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 24px)' }}>
           <style>{`
+            /* No transform in here any more.
+               A CSS animation overrides an inline transform outright, so this
+               was quietly cancelling the bar's own translate — and a scale
+               pulsing twice a second on the element that is supposed to be
+               sliding smoothly is its own source of judder. Brightness and
+               glow say "powered up" without moving anything. */
             @keyframes powerUpPulse {
-              0%, 100% { transform: scale(1); filter: brightness(1); }
-              50% { transform: scale(1.08); filter: brightness(1.35); }
+              0%, 100% { filter: brightness(1);    box-shadow: 0 0 6px rgba(0,204,255,0.55); }
+              50%      { filter: brightness(1.35); box-shadow: 0 0 16px rgba(0,204,255,0.95); }
             }
           `}</style>
           {/*
@@ -1113,24 +1119,44 @@ export default function BlockBlastGame() {
               </span>
               {!blastMode && <span className="text-xs text-muted">{Math.round(energy)}/100</span>}
             </div>
-            <div className="w-full h-3 bg-surface border border-border rounded-full overflow-hidden">
+            {/* The pulse lives on the track, not on the fill — see the
+                keyframes above for why the fill cannot carry an animation. */}
+            <div
+              className="w-full h-3 bg-surface border border-border rounded-full overflow-hidden"
+              style={{ animation: blastMode ? 'powerUpPulse 0.5s ease-in-out infinite' : undefined }}
+            >
               <div
                 className="h-full rounded-full"
                 style={{
-                  // During blast the width is a destination, not a reading:
-                  // 100% on the first frame, 0% from the next, with the
-                  // transition below doing the five seconds in between.
-                  width: blastMode ? (blastDraining ? '0%' : '100%') : `${energy}%`,
+                  // The fill is always full width and SLIDES, rather than
+                  // being resized.
+                  //
+                  // width is a layout property, so animating it reflows and
+                  // repaints every frame on the same main thread that is
+                  // running the game; a transform can be composited instead.
+                  // That is the standard reason to prefer it, though it is
+                  // NOT the measured cause of the judder here — see the
+                  // keyframes above, which were cancelling the fill's
+                  // transform outright and pulsing it twice a second besides.
+                  //
+                  // translateX rather than scaleX because scaling squashes the
+                  // rounded ends and the gradient with them; sliding under the
+                  // track's overflow keeps the geometry exactly right.
+                  width: '100%',
+                  transform: blastMode
+                    ? (blastDraining ? 'translateX(-100%)' : 'translateX(0%)')
+                    : `translateX(-${100 - Math.max(0, Math.min(100, energy))}%)`,
                   // linear, because it is a clock. An ease would spend longer
                   // near the ends and read as the timer slowing down.
                   transition: blastMode
-                    ? `width ${BLAST_MS}ms linear`
-                    : 'width 200ms ease, background 200ms ease',
+                    ? `transform ${BLAST_MS}ms linear`
+                    : 'transform 200ms ease, background 200ms ease',
+                  // Promotes the fill to its own layer up front, so the first
+                  // frame of the drain is not the one that pays for it.
+                  willChange: 'transform',
                   background: blastMode
                     ? 'linear-gradient(90deg, #00ccff, #7dd3fc)'
                     : 'linear-gradient(90deg, #1250B4, #00ccff)',
-                  boxShadow: blastMode ? '0 0 12px #00ccff' : energy > 70 ? '0 0 8px #1250B4' : 'none',
-                  animation: blastMode ? 'powerUpPulse 0.5s ease-in-out infinite' : undefined,
                 }}
               />
             </div>

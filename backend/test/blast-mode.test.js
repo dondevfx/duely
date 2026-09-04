@@ -17,7 +17,7 @@ test('the bar drains instead of sitting full', () => {
   // counting down beside it — and the bar, the bigger of the two, said
   // nothing. How it drains is asserted below; this is only that it does.
   assert.ok(!/width: blastMode \? '100%' :/.test(CODE), 'the bar is pinned full again');
-  assert.match(CODE, /blastDraining \? '0%' : '100%'/);
+  assert.match(CODE, /blastDraining \? 'translateX\(-100%\)' : 'translateX\(0%\)'/);
 });
 
 test('the drain is measured against a deadline, not counted down', () => {
@@ -39,7 +39,7 @@ test('one constant for how long blast lasts', () => {
 test('the drain is linear, because it is a clock', () => {
   // An ease would spend longer near the ends and read as the timer slowing
   // down at the start and finish.
-  assert.match(CODE, /`width \$\{BLAST_MS\}ms linear`/);
+  assert.match(CODE, /`transform \$\{BLAST_MS\}ms linear`/);
 });
 
 // ── The taps that vanished ────────────────────────────────────────────────
@@ -100,9 +100,37 @@ test('the bar is animated by the browser, not pushed from React', () => {
   // the compositor interpolate it.
   assert.ok(!/setEnergy\(\(left \/ BLAST_MS\) \* 100\)/.test(CODE),
     'the width is being pushed per tick again');
-  assert.match(CODE, /transition: blastMode\s*\n?\s*\? `width \$\{BLAST_MS\}ms linear`/,
+  assert.match(CODE, /transition: blastMode[\s\S]{0,40}transform \$\{BLAST_MS\}ms linear/,
     'the drain must be one linear transition');
-  assert.match(CODE, /width: blastMode \? \(blastDraining \? '0%' : '100%'\) : `\$\{energy\}%`/);
+});
+
+test('the fill slides rather than being resized', () => {
+  // width is a layout property; a transform can be composited. translateX
+  // rather than scaleX because scaling squashes the rounded ends and the
+  // gradient with them — sliding under the track's overflow keeps the
+  // geometry exact.
+  assert.match(CODE, /width: '100%',/);
+  assert.ok(!/`width \$\{BLAST_MS\}ms linear`/.test(CODE), 'the width transition is back');
+});
+
+test('the pulse never touches transform', () => {
+  // THE measured cause of the judder, and not a theory: verified in a browser
+  // that an element with transform:translateX(-30%) plus a keyframe setting
+  // transform:scale() computes to matrix(1.00149,0,0,1.00149,0,0) — the scale
+  // alone, with the translate gone. A CSS animation replaces an inline
+  // transform outright. So the pulse cancelled the drain, and pulsed the bar
+  // twice a second besides.
+  const kf = CODE.slice(CODE.indexOf('@keyframes powerUpPulse'), CODE.indexOf('`}</style>'));
+  assert.ok(kf.length > 0, 'the keyframes are gone');
+  assert.ok(!/transform:/.test(kf),
+    'a keyframe that sets transform replaces the inline one entirely');
+  assert.match(kf, /filter: brightness/);
+  // And it belongs on the track, not on the fill it would otherwise cancel.
+  const track = CODE.indexOf('bg-surface border border-border rounded-full overflow-hidden');
+  const fill  = CODE.indexOf('transform: blastMode');
+  const anim  = CODE.indexOf("animation: blastMode ? 'powerUpPulse");
+  assert.ok(anim > track && anim < fill,
+    'the pulse must sit on the track, above the fill it would otherwise cancel');
 });
 
 test('there is a frame between full and empty', () => {
