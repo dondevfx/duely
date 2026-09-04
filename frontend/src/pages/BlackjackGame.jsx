@@ -688,7 +688,10 @@ function BlackjackGame() {
     pendingStartRef.current = null;
     setOpponentUsername('Duely Bot');
     setCountdown(3); // countdown will apply buffered bj_start data when it hits 0
-    setPhase('queue');
+    // Straight to the countdown, not through the queue. There is nobody to
+    // queue for in a bot match, so that screen showed for one frame on its way
+    // past — a flicker rather than a step.
+    setPhase('countdown');
     socket.emit('play_bj_vs_bot', { entryFee: fee, currency: cur });
   }
 
@@ -790,7 +793,8 @@ function BlackjackGame() {
       pendingStartRef.current = null;
       setOpponentUsername('Duely Bot');
       setCountdown(3);
-      setPhase('queue');
+      // Play Again takes the same route as the first time — see playVsBot.
+      setPhase('countdown');
       socket.emit('play_bj_vs_bot', { entryFee: s.entryFee, currency: s.currency });
     } else {
       setPhase('lobby');

@@ -399,7 +399,7 @@ test('a nested ring counter-rotates, and still lines up on the lane', () => {
   assert.match(CANVAS, /th \* loop\.spin/, 'each loop must be drawn at its own signed angle');
 
   // Every nested family must actually use inner() for its second loop.
-  for (const name of ['doubleCircle', 'squareCircle', 'triangleCircle']) {
+  for (const name of ['doubleCircle', 'squareCircle']) {
     const at = CANVAS.indexOf(`name: '${name}'`);
     const line = CANVAS.slice(at, CANVAS.indexOf('\n', at));
     assert.match(line, /inner\(/, `${name}'s inner loop must counter-rotate`);
@@ -463,7 +463,7 @@ test('the obstacles are big enough to hold station inside', () => {
   const reach = ballR + thick / 2;
   // Every circleLoop radius used as an inner loop.
   const inners = [...CANVAS.matchAll(/inner\(circleLoop\((\d+)\)\)/g)].map(m => Number(m[1]));
-  assert.ok(inners.length >= 3, `expected the nested shapes, found ${inners.length}`);
+  assert.ok(inners.length >= 2, `expected the nested shapes, found ${inners.length}`);
   for (const r of inners) {
     const window = 2 * (r - reach);
     assert.ok(window > arc,
@@ -641,8 +641,12 @@ test('nothing user-facing spells it "colour"', () => {
   }
 });
 
-test('the six requested obstacle families all exist', () => {
-  for (const name of ['circle', 'square', 'triangle', 'doubleCircle', 'squareCircle', 'triangleCircle']) {
+test('the five obstacle families all exist', () => {
+  // triangleCircle was removed, not rationed. A triangle already gives the
+  // least warning of where its lane will be — the corners sweep past far
+  // faster than the flats — and a ring inside it turns one hard read into two
+  // at once. Capping its appearances made it rarer without making it fairer.
+  for (const name of ['circle', 'square', 'triangle', 'doubleCircle', 'squareCircle']) {
     assert.match(CANVAS, new RegExp(`name: '${name}'`), `missing obstacle: ${name}`);
   }
 });
@@ -720,7 +724,6 @@ test('a dot lands exactly on every corner, at even spacing, on every shape', () 
     'inner circle': [geom.circleLoop(118), false],
     'outer circle': [geom.circleLoop(275), false],
     triangle:       [geom.polyLoop(3, 275), true],
-    triangleCircle: [geom.polyLoop(3, 285), true],
     square:         [geom.polyLoop(4, 235, 0), true],
   };
 
@@ -771,7 +774,7 @@ test('no obstacle grows wider than a phone screen', () => {
   const block = CANVAS.slice(CANVAS.indexOf('const SHAPES = ['),
                              CANVAS.indexOf('];', CANVAS.indexOf('const SHAPES = [')));
   const shapes = [...block.matchAll(/name: '(\w+)',\s+loops: \[(.*)\] \}/g)];
-  assert.equal(shapes.length, 6, `expected the six families, found ${shapes.length}`);
+  assert.equal(shapes.length, 5, `expected the five families, found ${shapes.length}`);
 
   const polyHalf = (R, n, rot) => {
     const miter = hw / Math.sin((Math.PI * (n - 2) / n) / 2);
@@ -802,7 +805,7 @@ test('a nested pair is scaled together, so the lane between them survives', () =
   const block = CANVAS.slice(CANVAS.indexOf('const SHAPES = ['),
                              CANVAS.indexOf('];', CANVAS.indexOf('const SHAPES = [')));
   const nested = [...block.matchAll(/name: '(\w+)',\s+loops: \[outer\((?:circleLoop|polyLoop)\(([^)]*)\)\), inner\(circleLoop\((\d+)\)\)\]/g)];
-  assert.equal(nested.length, 3, `expected three nested families, found ${nested.length}`);
+  assert.equal(nested.length, 2, `expected two nested families, found ${nested.length}`);
   for (const [, name, outerArgs, innerR] of nested) {
     const a = outerArgs.split(',').map((v) => Number(v.trim()));
     const outerR = a.length > 1 ? a[1] : a[0];
@@ -838,8 +841,8 @@ test('no more than two ringed obstacles in the first fifteen', () => {
   const SHAPES = [...cut('const SHAPES = [', String.fromCharCode(10) + '];')
     .matchAll(/name: '(\w+)',\s*loops: \[([^\]]*)\]/g)]
     .map((m) => ({ name: m[1], loops: m[2].split('), ').length > 1 ? [0, 0] : [0] }));
-  assert.equal(SHAPES.length, 6, 'expected six shape families');
-  assert.equal(SHAPES.filter((s) => s.loops.length > 1).length, 3, 'expected three ringed families');
+  assert.equal(SHAPES.length, 5, 'expected five shape families');
+  assert.equal(SHAPES.filter((s) => s.loops.length > 1).length, 2, 'expected two ringed families');
 
   const make = (seed) => new Function('seed', 'SHAPES',
     `${cut('function hash32', 'const TAU =')}

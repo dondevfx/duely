@@ -231,9 +231,12 @@ export default function BlockBlastGame() {
   const [energy, setEnergy]               = useState(0);
   const [blastMode, setBlastMode]         = useState(false);
   const [blastSecondsLeft, setBlastSecondsLeft] = useState(0);
-  // When the current blast ends, as a wall-clock deadline — see the drain
-  // effect below for why it is a deadline and not a countdown.
+  // When the current blast ends, as a wall-clock deadline — see the countdown
+  // effect below for why it is a deadline and not a subtraction.
   const blastUntilRef = useRef(0);
+  // false on the frame blast starts, true from the next one. The gap between
+  // the two is what gives the CSS transition something to animate from.
+  const [blastDraining, setBlastDraining] = useState(false);
   const [keepPlayingSeconds, setKeepPlayingSeconds] = useState(0);
   const energyRef = useRef(0);
   const blastModeRef = useRef(false);
@@ -274,14 +277,32 @@ export default function BlockBlastGame() {
   // Blast mode: the energy bar runs backwards as the clock.
   //
   // There were two things saying the same thing — a bar pinned at 100% and a
-  // number counting 5, 4, 3 beside it — and the bar, the bigger of the two,
-  // was the one saying nothing. It drains now, so the thing already being
-  // watched while filling is the thing that shows how long is left.
+  // number counting down beside it — and the bar, the bigger of the two, was
+  // the one saying nothing.
   //
-  // Driven from a deadline rather than by subtracting a fixed step per tick.
-  // A tick that arrives late (a dropped frame, a backgrounded tab) would
-  // otherwise stretch the five seconds; reading the clock each time means the
-  // bar is always where the wall clock says it should be.
+  // The DRAIN is one CSS transition, not a value pushed every 60ms. Setting
+  // the width 83 times a second means 83 React renders of the whole board
+  // fighting the grid for frames, and the bar visibly stepped — the stutter
+  // was the updates arriving, not the animation. Handing the browser a single
+  // "go to 0% over five seconds, linearly" lets it interpolate on the
+  // compositor, which is both perfectly smooth and free.
+  //
+  // Two renders total: one to pin it full, one on the next frame to start it
+  // moving. The frame between them is what makes the transition run at all —
+  // set to 0% in the same paint as 100% and there is nothing to animate from.
+  useEffect(() => {
+    if (!blastMode) { setBlastDraining(false); return undefined; }
+    const raf = requestAnimationFrame(() => setBlastDraining(true));
+    return () => cancelAnimationFrame(raf);
+  }, [blastMode]);
+
+  // The seconds counter beside it, which needs a value rather than a style.
+  // Once a second is all it can show, so that is all it is asked for.
+  //
+  // Measured against a deadline rather than counted down: a tick that arrives
+  // late — a dropped frame, a backgrounded tab — would otherwise stretch the
+  // five seconds, and the number would disagree with the bar the browser is
+  // animating on its own clock.
   useEffect(() => {
     if (!blastMode) return undefined;
     const until = blastUntilRef.current || (Date.now() + BLAST_MS);
@@ -295,14 +316,10 @@ export default function BlockBlastGame() {
         setBlastSecondsLeft(0);
         return;
       }
-      // 60ms rather than a frame: this is a 5-second bar three pixels tall,
-      // and a repaint every frame buys nothing a player can see while the
-      // grid is the thing that needs the frames.
-      setEnergy((left / BLAST_MS) * 100);
       setBlastSecondsLeft(Math.ceil(left / 1000));
     };
     tick();
-    const interval = setInterval(tick, 60);
+    const interval = setInterval(tick, 200);
     return () => clearInterval(interval);
   }, [blastMode]);
 
@@ -746,12 +763,18 @@ export default function BlockBlastGame() {
   function playVsBot() {
     if (!authenticated) { doAuth(); return; }
     socket.emit('play_block_blast_vs_bot', { entryFee, currency: betCurrency });
-    setPhase('queue'); setStatusMsg('Starting solo game...');
+    // Straight to the countdown. A bot match has nothing to wait for — the
+    // room is created on the server the moment this reaches it — so the queue
+    // screen appeared for one frame and then vanished, which reads as a
+    // flicker rather than as a step. match_found sets the same phase and the
+    // real count a moment later; this only decides what is on screen in
+    // between.
+    setCountdown(3); setPhase('countdown'); setStatusMsg('');
   }
   function playVsBotFree() {
     if (!authenticated) { doAuth(); return; }
     socket.emit('play_block_blast_vs_bot', { entryFee: 0, currency: 'coins' });
-    setPhase('queue'); setStatusMsg('Starting free match...');
+    setCountdown(3); setPhase('countdown'); setStatusMsg('');
   }
   function leaveQueue() {
     socket.emit('leave_block_blast_queue'); setPhase('lobby'); setStatusMsg('');
@@ -1092,12 +1115,17 @@ export default function BlockBlastGame() {
             </div>
             <div className="w-full h-3 bg-surface border border-border rounded-full overflow-hidden">
               <div
-                // No width transition during blast: the drain already moves the
-                // bar every 60ms, and a 200ms ease on top of that makes it
-                // lag its own countdown.
-                className={`h-full rounded-full ${blastMode ? '' : 'transition-all duration-200'}`}
+                className="h-full rounded-full"
                 style={{
-                  width: `${energy}%`,
+                  // During blast the width is a destination, not a reading:
+                  // 100% on the first frame, 0% from the next, with the
+                  // transition below doing the five seconds in between.
+                  width: blastMode ? (blastDraining ? '0%' : '100%') : `${energy}%`,
+                  // linear, because it is a clock. An ease would spend longer
+                  // near the ends and read as the timer slowing down.
+                  transition: blastMode
+                    ? `width ${BLAST_MS}ms linear`
+                    : 'width 200ms ease, background 200ms ease',
                   background: blastMode
                     ? 'linear-gradient(90deg, #00ccff, #7dd3fc)'
                     : 'linear-gradient(90deg, #1250B4, #00ccff)',

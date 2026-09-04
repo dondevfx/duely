@@ -15,10 +15,9 @@ const blastClick = CODE.slice(CODE.indexOf('function handleBlastClick'),
 test('the bar drains instead of sitting full', () => {
   // Two things said the same thing — a bar pinned at 100% and a number
   // counting down beside it — and the bar, the bigger of the two, said
-  // nothing.
-  assert.match(CODE, /setEnergy\(\(left \/ BLAST_MS\) \* 100\)/);
-  assert.ok(!/width: blastMode \? '100%'/.test(CODE), 'the bar is pinned full again');
-  assert.match(CODE, /width: `\$\{energy\}%`/);
+  // nothing. How it drains is asserted below; this is only that it does.
+  assert.ok(!/width: blastMode \? '100%' :/.test(CODE), 'the bar is pinned full again');
+  assert.match(CODE, /blastDraining \? '0%' : '100%'/);
 });
 
 test('the drain is measured against a deadline, not counted down', () => {
@@ -37,10 +36,10 @@ test('one constant for how long blast lasts', () => {
     'a bare 5000 somewhere else will drift out of step');
 });
 
-test('the bar does not ease while it is draining', () => {
-  // The drain already moves it every 60ms; a 200ms transition on top makes
-  // the bar lag its own countdown.
-  assert.match(CODE, /blastMode \? '' : 'transition-all duration-200'/);
+test('the drain is linear, because it is a clock', () => {
+  // An ease would spend longer near the ends and read as the timer slowing
+  // down at the start and finish.
+  assert.match(CODE, /`width \$\{BLAST_MS\}ms linear`/);
 });
 
 // ── The taps that vanished ────────────────────────────────────────────────
@@ -90,4 +89,92 @@ test('a cell responds on contact, not on release', () => {
   assert.match(CODE, /onPointerDown=\{\(\) => blastMode && handleBlastClick\(r\)\}/);
   assert.ok(!/onClick=\{\(\) => blastMode && handleBlastClick\(r\)\}/.test(CODE),
     'click waits for release and can be dropped entirely');
+});
+
+// ── The drain has to be smooth ────────────────────────────────────────────
+
+test('the bar is animated by the browser, not pushed from React', () => {
+  // Setting the width 83 times a second is 83 renders of the whole board
+  // competing with the grid for frames, and the bar visibly stepped — the
+  // stutter was the updates arriving, not the animation. One transition lets
+  // the compositor interpolate it.
+  assert.ok(!/setEnergy\(\(left \/ BLAST_MS\) \* 100\)/.test(CODE),
+    'the width is being pushed per tick again');
+  assert.match(CODE, /transition: blastMode\s*\n?\s*\? `width \$\{BLAST_MS\}ms linear`/,
+    'the drain must be one linear transition');
+  assert.match(CODE, /width: blastMode \? \(blastDraining \? '0%' : '100%'\) : `\$\{energy\}%`/);
+});
+
+test('there is a frame between full and empty', () => {
+  // Set to 0% in the same paint as 100% and there is nothing to animate from,
+  // so the bar would simply be empty for five seconds.
+  assert.match(CODE, /requestAnimationFrame\(\(\) => setBlastDraining\(true\)\)/);
+  assert.match(CODE, /if \(!blastMode\) \{ setBlastDraining\(false\); return undefined; \}/);
+});
+
+test('the seconds counter is not what draws the bar', () => {
+  // It can only ever show whole seconds, so that is all it is asked for — and
+  // it stays on a deadline so it cannot disagree with the bar the browser is
+  // animating on its own clock.
+  assert.match(CODE, /setBlastSecondsLeft\(Math\.ceil\(left \/ 1000\)\)/);
+  assert.match(CODE, /const left = until - Date\.now\(\)/);
+});
+
+// ── No queue screen for a bot match ───────────────────────────────────────
+
+test('a bot match goes straight to the countdown', () => {
+  // There is nobody to queue for: the room exists on the server the moment
+  // the emit lands, so the queue screen showed for one frame on its way past.
+  const FILES = {
+    BlockBlastGame: CODE,
+    BlackjackGame: strip(fs.readFileSync(
+      path.join(__dirname, '..', '..', 'frontend', 'src', 'pages', 'BlackjackGame.jsx'), 'utf8')),
+  };
+  // Scoped to the enclosing function, not a window of characters around the
+  // emit. joinQueue sits directly above playVsBot in both files, so a
+  // fixed-width window reads the PvP queue call as if it belonged to the bot
+  // path — which is what the first version of this test did, and it failed
+  // against code that was already correct.
+  const enclosing = (s, at) => {
+    const start = s.lastIndexOf('function ', at);
+    let depth = 0;
+    for (let j = s.indexOf('{', start); j < s.length; j++) {
+      if (s[j] === '{') depth++;
+      else if (s[j] === '}' && --depth === 0) return s.slice(start, j);
+    }
+    return s.slice(start);
+  };
+  for (const [name, src] of Object.entries(FILES)) {
+    let found = 0;
+    for (const m of src.matchAll(/_vs_bot'/g)) {
+      const body = enclosing(src, m.index);
+      // Only the functions a button calls — not socket handlers.
+      if (!/^function play/.test(body)) continue;
+      const fname = body.slice(9, body.indexOf('('));
+      found++;
+
+      // The setPhase NEAREST the emit, before or after it.
+      //
+      // Not "anywhere in the function": playAgain handles PvP and bot in two
+      // branches, and its PvP branch legitimately queues — checking the whole
+      // body flagged correct code. Not "the last one before the emit" either:
+      // Block Burst sets the phase on the line after. Nearest is what
+      // actually means "the phase set on the way into THIS match".
+      const at = m.index - src.indexOf(body);
+      let best = null, bestDist = Infinity;
+      for (const p of body.matchAll(/setPhase\('(\w+)'\)/g)) {
+        const d = Math.abs(p.index - at);
+        if (d < bestDist) { bestDist = d; best = p[1]; }
+      }
+      assert.equal(best, 'countdown',
+        `${name}.${fname} enters a bot match via the '${best}' phase, not the countdown`);
+    }
+    assert.ok(found >= 1, `${name}: no bot-match function found to check`);
+  }
+});
+
+test('a PvP queue still shows the queue screen', () => {
+  // The flicker fix must not remove the screen from the case that needs it —
+  // there really is a wait when the opponent is a person.
+  assert.match(CODE, /join_block_blast_queue[\s\S]{0,200}setPhase\('queue'\)/);
 });

@@ -313,7 +313,14 @@ const SHAPES = [
   { name: 'doubleCircle',   loops: [outer(circleLoop(254)), inner(circleLoop(149))] },
   // x1.064 on both rings
   { name: 'squareCircle',   loops: [outer(polyLoop(4, 250, 0)), inner(circleLoop(136))] },
-  { name: 'triangleCircle', loops: [outer(polyLoop(3, 285)), inner(circleLoop(118))] },
+  // triangleCircle is gone rather than rationed.
+  //
+  // It was the hardest family by a distance: a triangle already gives the
+  // least warning of where its lane will be, because the corners sweep past
+  // far faster than the flats, and a ring inside it turns one hard read into
+  // two at once. Holding it back to two appearances made it rarer without
+  // making it fairer — the runs it ended were still ended by it. The plain
+  // triangle stays, and so do both of the other ringed shapes.
 ];
 
 export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
@@ -360,9 +367,8 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
     // loses the ring.
     const hasRing = (s) => s.loops.length > 1;
     const PLAIN = {
-      doubleCircle:   SHAPES.findIndex((s) => s.name === 'circle'),
-      squareCircle:   SHAPES.findIndex((s) => s.name === 'square'),
-      triangleCircle: SHAPES.findIndex((s) => s.name === 'triangle'),
+      doubleCircle: SHAPES.findIndex((s) => s.name === 'circle'),
+      squareCircle: SHAPES.findIndex((s) => s.name === 'square'),
     };
 
     function shapeFor(i) {
