@@ -224,9 +224,16 @@ export default function BlockBlastGame() {
   const grabOffsetRef     = useRef({ x: 0, y: 0, halfRows: 0, halfCols: 0 });
   const gridContainerRef  = useRef(null);
   const popupIdRef     = useRef(0);
+  // How long blast mode lasts. One constant: the countdown, the bar's drain
+  // and the backstop timeout all have to agree, and three copies of 5000 is
+  // three places for them to stop agreeing.
+  const BLAST_MS = 5000;
   const [energy, setEnergy]               = useState(0);
   const [blastMode, setBlastMode]         = useState(false);
   const [blastSecondsLeft, setBlastSecondsLeft] = useState(0);
+  // When the current blast ends, as a wall-clock deadline — see the drain
+  // effect below for why it is a deadline and not a countdown.
+  const blastUntilRef = useRef(0);
   const [keepPlayingSeconds, setKeepPlayingSeconds] = useState(0);
   const energyRef = useRef(0);
   const blastModeRef = useRef(false);
@@ -264,22 +271,38 @@ export default function BlockBlastGame() {
   // than corrected, because the shared hook already does the job properly and
   // two things fighting over body styles is how one of them ends up stuck.
 
-  // Blast mode countdown ticker
+  // Blast mode: the energy bar runs backwards as the clock.
+  //
+  // There were two things saying the same thing — a bar pinned at 100% and a
+  // number counting 5, 4, 3 beside it — and the bar, the bigger of the two,
+  // was the one saying nothing. It drains now, so the thing already being
+  // watched while filling is the thing that shows how long is left.
+  //
+  // Driven from a deadline rather than by subtracting a fixed step per tick.
+  // A tick that arrives late (a dropped frame, a backgrounded tab) would
+  // otherwise stretch the five seconds; reading the clock each time means the
+  // bar is always where the wall clock says it should be.
   useEffect(() => {
-    if (!blastMode) return;
-    const interval = setInterval(() => {
-      setBlastSecondsLeft(s => {
-        if (s <= 1) {
-          blastModeRef.current = false;
-          setBlastMode(false);
-          energyRef.current = 0;
-          setEnergy(0);
-          clearInterval(interval);
-          return 0;
-        }
-        return s - 1;
-      });
-    }, 1000);
+    if (!blastMode) return undefined;
+    const until = blastUntilRef.current || (Date.now() + BLAST_MS);
+    const tick = () => {
+      const left = until - Date.now();
+      if (left <= 0) {
+        blastModeRef.current = false;
+        setBlastMode(false);
+        energyRef.current = 0;
+        setEnergy(0);
+        setBlastSecondsLeft(0);
+        return;
+      }
+      // 60ms rather than a frame: this is a 5-second bar three pixels tall,
+      // and a repaint every frame buys nothing a player can see while the
+      // grid is the thing that needs the frames.
+      setEnergy((left / BLAST_MS) * 100);
+      setBlastSecondsLeft(Math.ceil(left / 1000));
+    };
+    tick();
+    const interval = setInterval(tick, 60);
     return () => clearInterval(interval);
   }, [blastMode]);
 
@@ -523,24 +546,51 @@ export default function BlockBlastGame() {
     if (cleared === 0) return;
     playClear();
 
+    // Everything lands NOW. The board, the score and the ping all used to sit
+    // inside a 200ms setTimeout so the flash could play over the old cells,
+    // and clicking faster than that lost rows:
+    //
+    //   click A  -> gridRef = gA, timer scheduled carrying gA and scoreA
+    //   click B  -> reads scoreRef, which the timer has NOT written yet, so
+    //               scoreB is computed from the score BEFORE A
+    //   +200ms   -> timer A sets the board back to gA, undoing B on screen
+    //   +300ms   -> timer B sets scoreB, and A's points are gone
+    //
+    // Two rows cleared, one row's points, and a board that flickered
+    // backwards in between. Which is exactly "some of the rows I clicked
+    // didn't register".
+    //
+    // The flash is a decoration and is the only thing that stays on a timer —
+    // it is additive, so overlapping clicks light up more cells rather than
+    // fighting over one value.
     const pts = cleared * 20;
     const newScore = scoreRef.current + pts;
-    const cells = new Set();
-    for (let c = 0; c < GRID; c++) cells.add(`${r},${c}`);
-    setFlashCells(cells);
     gridRef.current = g;
+    setGrid(g);
+    scoreRef.current = newScore;
+    setScore(newScore);
+    if (socket && roomIdRef.current) socket.emit('block_blast_score_ping', { roomId: roomIdRef.current, score: newScore });
+
+    const flashed = [];
+    for (let c = 0; c < GRID; c++) flashed.push(`${r},${c}`);
+    setFlashCells(prev => {
+      const next = new Set(prev);
+      for (const k of flashed) next.add(k);
+      return next;
+    });
     setTimeout(() => {
-      setGrid(g);
-      scoreRef.current = newScore;
-      setScore(newScore);
-      setFlashCells(new Set());
-      if (socket && roomIdRef.current) socket.emit('block_blast_score_ping', { roomId: roomIdRef.current, score: newScore });
-      if (pts > 0) {
-        const id = ++popupIdRef.current;
-        setScorePopups(p => [...p, { id, text: `⚡ +${pts}` }]);
-        setTimeout(() => setScorePopups(p => p.filter(x => x.id !== id)), 1200);
-      }
+      setFlashCells(prev => {
+        const next = new Set(prev);
+        for (const k of flashed) next.delete(k);
+        return next;
+      });
     }, 200);
+
+    if (pts > 0) {
+      const id = ++popupIdRef.current;
+      setScorePopups(p => [...p, { id, text: `⚡ +${pts}` }]);
+      setTimeout(() => setScorePopups(p => p.filter(x => x.id !== id)), 1200);
+    }
   }
 
   // ── Drag-and-drop ─────────────────────────────────────────────────────────
@@ -566,9 +616,13 @@ export default function BlockBlastGame() {
     setEnergy(energyRef.current);
     if (newEnergy >= 100 && !blastModeRef.current) {
       blastModeRef.current = true;
+      blastUntilRef.current = Date.now() + BLAST_MS;
       setBlastMode(true);
       playBlast();
-      setBlastSecondsLeft(5);
+      setBlastSecondsLeft(Math.round(BLAST_MS / 1000));
+      // The bar starts full and the drain effect above takes it down; the
+      // timeout stays as a backstop in case that effect never mounts.
+      setEnergy(100);
       if (blastTimerRef.current) clearTimeout(blastTimerRef.current);
       blastTimerRef.current = setTimeout(() => {
         blastModeRef.current = false;
@@ -576,7 +630,7 @@ export default function BlockBlastGame() {
         setBlastSecondsLeft(0);
         energyRef.current = 0;
         setEnergy(0);
-      }, 5000);
+      }, BLAST_MS);
     }
 
     const newTray = [...trayRef.current];
@@ -1034,13 +1088,16 @@ export default function BlockBlastGame() {
               <span className="text-xs font-bold" style={{ color: blastMode ? '#00ccff' : '#888' }}>
                 {blastMode ? `⚡ BLAST MODE — ${blastSecondsLeft}s` : '⚡ Energy'}
               </span>
-              {!blastMode && <span className="text-xs text-muted">{energy}/100</span>}
+              {!blastMode && <span className="text-xs text-muted">{Math.round(energy)}/100</span>}
             </div>
             <div className="w-full h-3 bg-surface border border-border rounded-full overflow-hidden">
               <div
-                className="h-full rounded-full transition-all duration-200"
+                // No width transition during blast: the drain already moves the
+                // bar every 60ms, and a 200ms ease on top of that makes it
+                // lag its own countdown.
+                className={`h-full rounded-full ${blastMode ? '' : 'transition-all duration-200'}`}
                 style={{
-                  width: blastMode ? '100%' : `${energy}%`,
+                  width: `${energy}%`,
                   background: blastMode
                     ? 'linear-gradient(90deg, #00ccff, #7dd3fc)'
                     : 'linear-gradient(90deg, #1250B4, #00ccff)',
@@ -1069,7 +1126,13 @@ export default function BlockBlastGame() {
                     key={`${r}-${c}`}
                     data-r={r}
                     data-c={c}
-                    onClick={() => blastMode && handleBlastClick(r)}
+                    // pointerdown, not click. A click waits for the release
+                    // and only counts if press and release land on the SAME
+                    // cell — tap fast on a 3px-gapped grid and a finger that
+                    // slides one cell between the two produces no click at
+                    // all. pointerdown fires on contact, for mouse and touch
+                    // alike, so every tap that reaches a cell registers.
+                    onPointerDown={() => blastMode && handleBlastClick(r)}
                     style={{
                       width: CELL_PX, height: CELL_PX,
                       borderRadius: 6,

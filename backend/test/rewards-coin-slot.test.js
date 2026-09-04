@@ -31,6 +31,7 @@ const { rollPrize, COIN_ODDS, WEIGHTS, DIAMOND_IDX, TIER_PRIZES } = loadRollPriz
 
 test('the coin has real, nonzero odds', () => {
   assert.ok(COIN_ODDS > 0, 'a zero-odds coin is exactly the bug this replaced');
+  assert.equal(COIN_ODDS, 1 / 100_000_000, 'the odds are set deliberately, not drifted into');
   assert.ok(COIN_ODDS <= 1 / 1_000_000,
     'this is meant to be a near-impossible novelty, not a real reward tier');
 });

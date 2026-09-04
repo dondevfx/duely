@@ -812,52 +812,63 @@ test('a nested pair is scaled together, so the lane between them survives', () =
   }
 });
 
-test('the triangle with a ring inside is held back until obstacle 10', () => {
-  // It is the hardest family — the narrowest lane of any shape, and a
-  // triangle's corners give the least warning of where that lane will be.
-  // Meeting one in the first few obstacles ends a run before it starts.
+test('no more than two ringed obstacles in the first fifteen', () => {
+  // A ring is a second lane to read inside whatever it sits in, and two of
+  // them in the opening stretch ends a run before it starts. The rule used to
+  // hold back triangleCircle alone, which left doubleCircle and squareCircle
+  // free to turn up immediately — and it did not much matter which of the
+  // three you got.
   //
   // Keyed on the obstacle INDEX, which is the same number as the score since
-  // there is exactly one diamond per obstacle. Keying on the player's own score
-  // would give the two of them different courses, and the match is a race.
-  assert.match(CANVAS, /const TRI_RING_FROM\s*=\s*10;/);
-  assert.match(CANVAS, /const TRI_RING_FREE\s*=\s*20;/);
-  assert.match(CANVAS, /const TRI_RING_BAND_MAX\s*=\s*2;/);
+  // there is exactly one diamond per obstacle. Keying on the player's own
+  // score would give the two of them different courses, and the match is a
+  // race.
+  assert.match(CANVAS, /const RING_FREE\s*=\s*15;/);
+  assert.match(CANVAS, /const RING_BAND_MAX\s*=\s*2;/);
   assert.doesNotMatch(CANVAS, /shapeFor\(i,\s*S\.score/, 'the course must not depend on a score');
 
-  // Run the real selector.
+  // Run the real selector, with the real shape table — a ring shape is one
+  // with an inner loop, so the table has to carry that rather than a name list.
   const cut = (from, to) => CANVAS.slice(CANVAS.indexOf(from), CANVAS.indexOf(to, CANVAS.indexOf(from)));
-  // The REAL values, so the behaviour below is checked at whatever the game is
-  // configured to do rather than at numbers repeated here.
-  // Escaped twice: inside a template literal `\s` is just "s".
-  const cfg = (n) => Number(CANVAS.match(new RegExp(`const ${n}\\s*=\\s*(\\d+);`))[1]);
-  const SHAPES = [...cut('const SHAPES = [', '\n];').matchAll(/name: '(\w+)'/g)].map((m) => ({ name: m[1] }));
+  // No backslashes at all in this pattern. It has been through a template
+  // literal and a Python heredoc on the way here, and both eat them — the
+  // regex silently became `const RING_FREEs*=s*(d+);` and matched nothing,
+  // which surfaces as a null deref rather than as a wrong answer.
+  const cfg = (n) => Number(CANVAS.match(new RegExp('const ' + n + '[^0-9]+([0-9]+)'))[1]);
+  const SHAPES = [...cut('const SHAPES = [', String.fromCharCode(10) + '];')
+    .matchAll(/name: '(\w+)',\s*loops: \[([^\]]*)\]/g)]
+    .map((m) => ({ name: m[1], loops: m[2].split('), ').length > 1 ? [0, 0] : [0] }));
+  assert.equal(SHAPES.length, 6, 'expected six shape families');
+  assert.equal(SHAPES.filter((s) => s.loops.length > 1).length, 3, 'expected three ringed families');
+
   const make = (seed) => new Function('seed', 'SHAPES',
     `${cut('function hash32', 'const TAU =')}
-     const TRI_RING_FROM = ${cfg('TRI_RING_FROM')}, TRI_RING_FREE = ${cfg('TRI_RING_FREE')}, TRI_RING_BAND_MAX = ${cfg('TRI_RING_BAND_MAX')};
+     const RING_FREE = ${cfg('RING_FREE')}, RING_BAND_MAX = ${cfg('RING_BAND_MAX')};
      ${cut('const rawShape = (k)', '    const obstacles')}
      return shapeFor;`)(seed, SHAPES);
 
-  let earliest = Infinity, worstBand = 0;
-  for (let seed = 1; seed <= 300; seed++) {
+  let worstEarly = 0;
+  for (let seed = 1; seed <= 400; seed++) {
     const shapeFor = make(seed);
-    let band = 0;
-    for (let i = 0; i < 60; i++) {
-      if (shapeFor(i).name !== 'triangleCircle') continue;
-      earliest = Math.min(earliest, i);
-      if (i >= 10 && i < 20) band++;
-    }
-    worstBand = Math.max(worstBand, band);
+    let early = 0;
+    for (let i = 0; i < 15; i++) if (shapeFor(i).loops.length > 1) early++;
+    worstEarly = Math.max(worstEarly, early);
   }
-  assert.ok(earliest >= 10, `one turned up at obstacle ${earliest}`);
-  assert.ok(worstBand <= 2, `${worstBand} of them landed between 10 and 19`);
+  assert.ok(worstEarly <= 2, `${worstEarly} ringed obstacles landed in the first fifteen`);
+
+  // A held-back ring keeps its own outline rather than becoming some other
+  // shape — the slot should lose the ring, not change silhouette.
+  const shapeFor = make(7);
+  for (let i = 0; i < 15; i++) {
+    assert.ok(!/Circle$/.test(shapeFor(i).name) || shapeFor(i).loops.length > 1);
+  }
 
   // And the answer cannot depend on the order obstacles are asked for, or the
   // two clients build different courses depending on how each one scrolled.
-  const shapeFor = make(999);
-  const fwd = [...Array(40).keys()].map((i) => shapeFor(i).name);
+  const sf = make(999);
+  const fwd = [...Array(40).keys()].map((i) => sf(i).name);
   const back = [];
-  for (let i = 39; i >= 0; i--) back[i] = shapeFor(i).name;
+  for (let i = 39; i >= 0; i--) back[i] = sf(i).name;
   assert.deepEqual(fwd, back, 'the course changes with the order it is read in');
 
   // Two clients, one seed, same course.

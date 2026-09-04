@@ -34,11 +34,16 @@ const DIAMOND_IDX = [0, 1, 3, 4, 5, 6, 7]; // tier-array indices these weights l
 // just rare, which is different from what was asked for: real odds, just
 // vanishingly small, with no floor or pity timer forcing it to ever land.
 //
-// 1 in 10,000,000. At one spin per tier per day this would take, on average,
-// over 27,000 YEARS of daily spins to hit — a number chosen to be a genuine
-// probability rather than a disguised "never", while still being something
-// that will not visibly move the story of this feature.
-const COIN_ODDS = 1 / 10_000_000;
+// 1 in 100,000,000. At one spin a day that is an average wait of about
+// 274,000 years — a genuine probability rather than a disguised "never", and
+// small enough that it will not visibly move the story of this feature.
+//
+// Well inside what Math.random can express: its resolution is about 2^-53, so
+// 1e-8 is roughly 45 million times coarser than the floor. The roll is not
+// crypto-grade, which is the standard this codebase holds money outcomes to —
+// worth knowing, though at these odds the practical exposure is a rounding
+// error against the diamond prizes it sits beside.
+const COIN_ODDS = 1 / 100_000_000;
 
 // { kind: 'coins', amount: 1, segIdx: 2 } | { kind: 'diamonds', amount, segIdx }
 //

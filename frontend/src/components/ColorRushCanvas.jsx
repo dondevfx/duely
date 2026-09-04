@@ -92,11 +92,11 @@ const MAX_FRAME = 0.25;
 // already near the ceiling, so the run went from settling in to unreadable
 // inside about twenty seconds. The climb stays at 1.09 while the player is
 // finding their feet, then eases to 1.03 for the long middle of a run.
-const SPIN_RAMP       = 1.09;   // obstacles 0 to SPIN_RAMP_KNEE
-const SPIN_RAMP_LATE  = 1.03;   // then to SPIN_RAMP_KNEE2
-const SPIN_RAMP_LATE2 = 1.02;   // and every one after that
-const SPIN_RAMP_KNEE  = 6;
-const SPIN_RAMP_KNEE2 = 10;
+const SPIN_RAMP       = 1.08;   // obstacles 0 to SPIN_RAMP_KNEE
+const SPIN_RAMP_LATE  = 1.015;  // then to SPIN_RAMP_KNEE2
+const SPIN_RAMP_LATE2 = 1.01;   // and every one after that
+const SPIN_RAMP_KNEE  = 7;
+const SPIN_RAMP_KNEE2 = 14;
 
 // When the triangle-with-a-circle-inside is allowed to turn up.
 //
@@ -109,9 +109,20 @@ const SPIN_RAMP_KNEE2 = 10;
 // exactly one diamond per obstacle — and not on the player's own score, which
 // differs between the two of them. The course has to be identical for both or
 // the match is not a race.
-const TRI_RING_FROM     = 10;   // none at all below this
-const TRI_RING_FREE     = 20;   // no limit at or above it
-const TRI_RING_BAND_MAX = 2;    // at most this many in between
+// Every shape with an inner ring, not just the triangle.
+//
+// The rule used to hold back triangleCircle alone, which left doubleCircle and
+// squareCircle free to arrive in the first few obstacles — and a ring is a
+// second lane to read whatever it sits inside. Two rings in the opening
+// stretch is a run that ends before it starts, and it did not much matter
+// which of the three you got.
+//
+// Keyed on the obstacle INDEX, which is the same number as the score — there
+// is exactly one diamond per obstacle — and not on the player's own score,
+// which differs between the two of them. The course has to be identical for
+// both or the match is not a race.
+const RING_FREE     = 15;   // no limit at or above this
+const RING_BAND_MAX = 2;    // at most this many below it
 const SPIN_MAX  = 4.5;   // rad/s — a quarter turn every 0.35s
 
 // How long the start screen waits before letting go of the ball.
@@ -343,20 +354,30 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
     // it does not matter which order obstacles are asked for — a player who
     // scrolls back to an earlier one gets the same answer as the first time.
     const rawShape = (k) => SHAPES[Math.floor(rnd01(seed, k, 1) * SHAPES.length) % SHAPES.length];
-    const TRIANGLE = SHAPES.findIndex((s) => s.name === 'triangle');
+
+    // A ring shape is one with an inner loop; each falls back to its own
+    // outline, so the course keeps the same silhouette in that slot and only
+    // loses the ring.
+    const hasRing = (s) => s.loops.length > 1;
+    const PLAIN = {
+      doubleCircle:   SHAPES.findIndex((s) => s.name === 'circle'),
+      squareCircle:   SHAPES.findIndex((s) => s.name === 'square'),
+      triangleCircle: SHAPES.findIndex((s) => s.name === 'triangle'),
+    };
 
     function shapeFor(i) {
       const s = rawShape(i);
-      if (s.name !== 'triangleCircle') return s;
-      // Too early: fall back to the plain triangle, so the course keeps the
-      // same silhouette in that slot and only loses the inner ring.
-      if (i < TRI_RING_FROM) return SHAPES[TRIANGLE];
-      if (i >= TRI_RING_FREE) return s;
+      if (!hasRing(s)) return s;
+      if (i >= RING_FREE) return s;
+      // Recomputed by walking the earlier indices rather than remembered, so
+      // it does not matter which order obstacles are asked for — a player who
+      // scrolls back to an earlier one gets the same answer as the first time,
+      // and so does the opponent's client.
       let seen = 0;
-      for (let j = TRI_RING_FROM; j < i; j++) {
-        if (rawShape(j).name === 'triangleCircle') seen++;
+      for (let j = 0; j < i; j++) {
+        if (hasRing(rawShape(j))) seen++;
       }
-      return seen < TRI_RING_BAND_MAX ? s : SHAPES[TRIANGLE];
+      return seen < RING_BAND_MAX ? s : SHAPES[PLAIN[s.name]];
     }
 
     const obstacles = new Map();
