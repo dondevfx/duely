@@ -534,6 +534,21 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
   // Emit result immediately after wallet settles — don't wait for ELO/stats DB writes
   io.emit('active_game_ended', { id: roomId });
   gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId) });
+  // Streaks are resolved BEFORE the result goes out.
+  //
+  // The payload below carried a hard-coded winnerStreak: 0 while the real
+  // value was worked out in the fire-and-forget block AFTER it — so the card
+  // never showed anything but zero, however long the run. The streak in the
+  // database was right the whole time; the number sent to the card was a
+  // placeholder nobody replaced.
+  //
+  // It no-ops on bot matches, which keeps streaks PvP-only, and a draw leaves
+  // them untouched rather than breaking them.
+  let winnerStreak = 0, isFirstWin = false;
+  if (supabase && !isDraw && !winner.isBot && !loser.isBot) {
+    try { ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser)); } catch {}
+  }
+
   io.to(roomId).emit('block_blast_result', {
     isDraw,
     isSolo: false,
@@ -548,13 +563,11 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
     winnerScore, loserScore,
     currency: room.currency || 'coins',
     entryFee: room.entryFee || 0,
-    winnerStreak: 0,
-    isFirstWin: false,
+    winnerStreak, isFirstWin,
   });
 
   // Fire-and-forget: ELO, streaks, highscores, match record
   Promise.resolve().then(async () => {
-    let winnerStreak = 0, isFirstWin = false;
     // A free match still counts toward the record — see the note in
     // blackjackEngine. Only the rating is gated on the entry fee.
     if (supabase && !winner.isBot) {
@@ -562,8 +575,6 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
         try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
       }
       if (!isDraw) { try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); } }
-      // Streaks are PvP-only — applyMatchStreaks no-ops on bot matches.
-      try { if (!isDraw) ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser)); } catch {}
     }
 
     if (supabase && !loser.isBot) {

@@ -567,8 +567,27 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
   // Drop the room shortly after settling so finished rooms can't accumulate and
   // can't be re-resolved by a late event.
   setTimeout(() => deleteCarDashRoom(roomId), 5_000);
+  // Streaks are resolved BEFORE the result goes out.
+  //
+  // This ran in the fire-and-forget block below, after the emit had already
+  // left — so the card had nothing to show and the "N Win Streak!" line never
+  // appeared here, in a game where a run of PvP wins is the point. The streak
+  // itself was always recorded correctly; it just arrived too late to tell
+  // anyone about.
+  //
+  // MOVED rather than added: applyMatchStreaks increments, so calling it in
+  // both places would count every win twice.
+  //
+  // It no-ops on bot matches, which is what keeps streaks PvP-only, and a draw
+  // leaves them untouched rather than breaking them.
+  let winnerStreak = 0, isFirstWin = false;
+  if (supabase && !isDraw && !winner.isBot && !loser.isBot) {
+    try { ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser)); } catch {}
+  }
+
   io.to(roomId).emit('car_dash_result', {
     isDraw,
+    winnerStreak, isFirstWin,
     winnerId: winner.userId, loserId: loser.userId,
     winnerUsername: winner.username, loserUsername: loser.username,
     newWinnerElo, newLoserElo, balanceChange,
@@ -593,7 +612,6 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
       if (ranked) { try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch {} }
       if (!isDraw) { try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch {} }
       // Streaks are PvP-only — applyMatchStreaks no-ops on bot matches.
-      if (!isDraw) { try { await applyMatchStreaks(supabase, winner, loser); } catch {} }
     }
 
     if (!loser.isBot) {

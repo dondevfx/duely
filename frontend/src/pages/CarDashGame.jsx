@@ -438,6 +438,11 @@ export default function CarDashGame() {
           // and the card would have told them both they lost.
           isWinner={isWinner}
           isDraw={!!result.isDraw}
+          // The server has always sent this for Tower and now sends it for the
+          // other two; the card just never received it, so a PvP win streak was
+          // recorded and never once shown.
+          winnerStreak={result.winnerStreak ?? 0}
+          isFirstWin={!!result.isFirstWin}
           winnerUsername={result.winnerUsername}
           loserUsername={result.loserUsername}
           newWinnerElo={result.newWinnerElo}
