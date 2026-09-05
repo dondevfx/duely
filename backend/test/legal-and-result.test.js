@@ -86,3 +86,17 @@ test('the result card is tightened on a phone only', () => {
   }
   assert.ok(!/className="p-7"/.test(RESULT), 'the fixed desktop padding must be gone');
 });
+
+test('the game label never breaks across two lines', () => {
+  // It sits opposite the player names in a justify-between row, and the names
+  // take the space first — so a long username squeezed "Solo Endless" until it
+  // broke, with "Endless" under "Solo". Reproduced at 360px: two lines with a
+  // long name, one after.
+  //
+  // The names already truncate (min-w-0 + overflow-hidden), so the label
+  // giving up its flexibility costs nothing — the side that can shorten
+  // gracefully is the side that should.
+  assert.match(RESULT, /className="text-xs text-muted whitespace-nowrap shrink-0">\{gameLabel\}/);
+  // And the side that absorbs the squeeze still can.
+  assert.match(RESULT, /className="text-muted min-w-0 flex items-center gap-1\.5 overflow-hidden"/);
+});

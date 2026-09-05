@@ -288,7 +288,15 @@ export default function ResultScreen({
                   </>
                 )}
               </span>
-              <span className="text-xs text-muted">{gameLabel}</span>
+              {/* nowrap and shrink-0.
+                  This sits opposite the player names in a justify-between row,
+                  and the names take the space first — so a long username
+                  squeezed "Solo Endless" until it broke across two lines, with
+                  "Endless" under "Solo". The names already truncate (min-w-0 +
+                  overflow-hidden on the left), so the label giving up its
+                  flexibility costs nothing: the side that CAN shorten
+                  gracefully is the side that does. */}
+              <span className="text-xs text-muted whitespace-nowrap shrink-0">{gameLabel}</span>
             </div>
             {disconnected && (
               <div className="flex justify-between">

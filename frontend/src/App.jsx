@@ -93,6 +93,7 @@ function ResultPreview() {
         isWinner winnerUsername="you" loserUsername="them"
         newWinnerElo={1020} winnerBefore={1000}
         balanceChange={1.9} currency="coins" entryFee={1}
+        gameLabel="Solo Endless"
         winnerStreak={2}
         profile={{ wins: 1, losses: 0, elo: 1020 }}
         onPlayAgain={() => {}} onBackToLobby={() => {}}
