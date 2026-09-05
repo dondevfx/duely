@@ -3,7 +3,7 @@ const { closestByElo } = require('./queueMatch');
 const { findRoomBySocket } = require('./roomLookup');
 const { isValidWord } = require('./wordValidator');
 const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings } = require('./eloService');
-const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
+const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const { updateHighscore } = require('./highscoreService');
 const gameEvents = require('./gameEvents');
@@ -423,9 +423,38 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
       loserBefore   = ratings.loserBefore;
     }
 
-    if (fee > 0 && supabase && winner && loser && !room.feesDeducted) {
+    // A draw settles too.
+    //
+    // Every branch here was gated on `winner && loser`, and a draw sets both to
+    // null — so a drawn staked match skipped settlement entirely. The stakes
+    // were taken at match start and never came back: the house quietly kept the
+    // whole pot, neither player was unlocked, and the escrow stayed open. Word
+    // VS was the only game with a draw and no settleDrawMatch call; the other
+    // six have had one all along.
+    //
+    // Settled off p1 and p2 rather than winner/loser, because on a draw those
+    // are the only two references to the players that exist.
+    if (fee > 0 && supabase && !room.feesDeducted) {
       console.error(`[wordle] CRITICAL: room ${room.roomId} settled without feesDeducted — no payout issued`);
-      unlockUser(winner.userId); unlockUser(loser.userId);
+      unlockUser(p1.userId); unlockUser(p2.userId);
+    } else if (fee > 0 && supabase && isDraw) {
+      try {
+        if (hasBot && human) {
+          // Bot draw: the fee was deducted upfront, so hand it straight back.
+          if (currency === 'diamonds') await creditDiamonds(supabase, human.userId, Math.floor(fee));
+          else await creditCoins(supabase, human.userId, parseFloat(fee));
+          balanceChange = { winnerPayout: fee };
+          unlockUser(human.userId);
+        } else {
+          balanceChange = currency === 'diamonds'
+            ? await settleDrawMatchDiamonds(supabase, p1.userId, p2.userId, fee)
+            : await settleDrawMatch(supabase, p1.userId, p2.userId, fee);
+        }
+      } catch (e) {
+        console.error('[wordle] draw settle error:', e.message);
+        // A failed refund must not also leave them locked out of the next match.
+        unlockUser(p1.userId); unlockUser(p2.userId);
+      }
     } else if (fee > 0 && supabase && winner && loser) {
       try {
         if (hasBot && human) {
@@ -692,6 +721,9 @@ module.exports = {
   scheduleBotWordleMove,
   evaluateGuess, MAX_GUESSES, WORD_LENGTH,
   getRandomWordleWord,
+  // Settlement, for a test that needs to drive a real drawn match and watch
+  // where the stakes go. Underscored: nothing in the app calls this directly.
+  _settleWordle,
   // The room map, for tests that need to drive a real match and read its
   // state. Exported rather than reached into, so the shape stays this file's
   // business — and named with an underscore because nothing in the app should
