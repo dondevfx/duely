@@ -1045,6 +1045,32 @@ export default function BlockBlastGame() {
             the button with no clearance, which is where the avatar met the
             "?". Padding both sides equally re-centres the middle column, and
             14 rather than 12 puts 8px between the button and the column. */}
+        {/* The mode label is its own line, above the scores.
+            It used to sit in the middle column of this row, between the two
+            score readouts — and that column is whatever is left after both
+            scores and 56px of padding on each side. Measured at 360px it was
+            81px against a 95px label, and once the scores reach six figures it
+            collapses to 20px, where even "vs Bot" does not fit. There is no
+            font size that survives that, because the space depends on the
+            score. On its own line it has the full width at every size.
+
+            Three modes, not two. isSolo means "vs the bot" and is true for a
+            STAKED bot match as much as a free one — so betting diamonds
+            against the bot read as "Solo Endless", which is neither solo nor
+            endless. The stake separates them. A disguised demo opponent is
+            free and vs a bot too and must keep looking like an ordinary
+            match, which is what opponent.isBot settles. */}
+        <div className="text-center w-full max-w-lg px-4 -mb-1">
+          {isSolo && entryFee > 0 ? (
+            <span className="text-xs sm:text-sm text-muted">vs <span className="text-accent font-semibold">Bot</span></span>
+          ) : isSolo && opponent?.isBot ? (
+            <span className="text-xs sm:text-sm text-muted">Solo <span className="text-accent font-semibold">Endless</span></span>
+          ) : (
+            <span className="text-sm sm:text-base font-black text-accent">Score Race</span>
+          )}
+          {oppStuck && !isSolo && <span className="text-xs text-warning font-bold ml-2">Opp stuck</span>}
+        </div>
+
         <div className="relative flex items-center justify-between w-full max-w-lg gap-2 px-14">
             <GameHelp gameType="blockBlast" placement="top-left" />
             {/* My score */}
@@ -1056,17 +1082,10 @@ export default function BlockBlastGame() {
               </div>
             </div>
 
-            {/* Center: mode label */}
-            <div className="text-center flex-1">
-              {isSolo ? (
-                <span className="text-sm text-muted">Solo — <span className="text-accent font-semibold">Endless</span></span>
-              ) : (
-                <>
-                  <div className="text-base font-black text-accent">Score Race</div>
-                  {oppStuck && <span className="text-xs text-warning font-bold">Opp stuck</span>}
-                </>
-              )}
-            </div>
+            {/* Nothing in the middle any more — see the mode line above the
+                row. This keeps the space between the two scores and nothing
+                else, so neither score can be squeezed by a label. */}
+            <div className="flex-1 min-w-0" />
 
             {/* Opponent score */}
             <div className="text-center min-w-[72px]">

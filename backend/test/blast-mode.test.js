@@ -262,3 +262,45 @@ test('a PvP queue still shows the queue screen', () => {
   // there really is a wait when the opponent is a person.
   assert.match(CODE, /join_block_blast_queue[\s\S]{0,200}setPhase\('queue'\)/);
 });
+
+// ── The in-game mode label ────────────────────────────────────────────────
+
+const WORDLE = strip(fs.readFileSync(
+  path.join(__dirname, '..', '..', 'frontend', 'src', 'pages', 'WordleGame.jsx'), 'utf8'));
+
+test('the mode label is not squeezed between the two scores', () => {
+  // It sat in the middle column of the score row, and that column is whatever
+  // is left after both readouts and 56px of padding either side. Measured at
+  // 360px: 81px of column against a 95px label. Once the scores reach six
+  // figures it collapses to 20px, where even "vs Bot" does not fit — so no
+  // font size survives it, because the space depends on the score.
+  //
+  // Its own line has the full width: 75px of label in 288px at 320px wide.
+  for (const [name, src] of [['BlockBlastGame', CODE], ['WordleGame', WORDLE]]) {
+    const row = src.indexOf('flex items-center justify-between w-full max-w-lg gap-2 px-14');
+    assert.ok(row > 0, `${name}: the score row is gone`);
+    const mode = src.indexOf('text-center w-full max-w-lg px-4 -mb-1');
+    assert.ok(mode > 0 && mode < row, `${name}: the mode line must sit above the score row`);
+    // And the middle of the row is now only space.
+    assert.match(src.slice(row, row + 1400), /<div className="flex-1 min-w-0" \/>/,
+      `${name}: something is still competing for the middle column`);
+  }
+});
+
+test('no em dash left inside the label', () => {
+  // "Solo — Endless" broke after the dash, which is what put Endless on its
+  // own line under it.
+  for (const [name, src] of [['BlockBlastGame', CODE], ['WordleGame', WORDLE]]) {
+    assert.ok(!/Solo — <span/.test(src), `${name} still splits the label with a dash`);
+  }
+});
+
+test('a staked bot match is not called Solo Endless', () => {
+  // isSolo means "vs the bot" and is true for a STAKED bot match as much as a
+  // free one, so betting diamonds against the bot read as Solo Endless —
+  // neither solo nor endless. The stake separates them, and opponent.isBot
+  // keeps a disguised demo opponent looking like an ordinary match.
+  const mode = CODE.slice(CODE.indexOf('text-center w-full max-w-lg px-4 -mb-1'));
+  assert.match(mode.slice(0, 900), /isSolo && entryFee > 0 \?[\s\S]{0,200}vs <span[^>]*>Bot/);
+  assert.match(mode.slice(0, 900), /isSolo && opponent\?\.isBot \?[\s\S]{0,200}Solo <span[^>]*>Endless/);
+});

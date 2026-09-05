@@ -831,6 +831,29 @@ export default function WordleGame() {
             the button with no clearance, which is where the avatar met the
             "?". Padding both sides equally re-centres the middle column, and
             14 rather than 12 puts 8px between the button and the column. */}
+        {/* The mode line, above the row rather than between the two counts.
+            The middle column is whatever is left after both readouts and 56px
+            of padding either side, which on a phone is not enough for two
+            words — see the note in BlockBlastGame, which had the same row and
+            the same problem. */}
+        <div className="text-center w-full max-w-lg px-4 -mb-1">
+          {isSoloMode ? (
+            <span className="text-xs sm:text-sm text-muted">Solo <span className="text-accent font-semibold">Practice</span></span>
+          ) : (
+            <>
+              <span className="text-sm sm:text-base font-black text-accent">Word Race</span>
+              {oppFailed && failSecs !== null && failSecs > 0 && !myDone && (
+                <span className="text-xs font-bold ml-2" style={{ color: failSecs <= 15 ? '#ef4444' : '#f59e0b' }}>
+                  {failSecs}s left
+                </span>
+              )}
+              {myDone && !result && (
+                <span className="text-xs font-bold text-green-400 ml-2">Solved! Waiting…</span>
+              )}
+            </>
+          )}
+        </div>
+
         <div className="relative flex items-center justify-between w-full max-w-lg gap-2 px-14">
           <GameHelp gameType="scrabble" placement="top-left" />
           {/* My guess count */}
@@ -842,24 +865,8 @@ export default function WordleGame() {
             </div>
           </div>
 
-          {/* Center: mode */}
-          <div className="text-center flex-1">
-            {isSoloMode ? (
-              <span className="text-sm text-muted">Solo — <span className="text-accent font-semibold">Practice</span></span>
-            ) : (
-              <>
-                <div className="text-base font-black text-accent">Word Race</div>
-                {oppFailed && failSecs !== null && failSecs > 0 && !myDone && (
-                  <div className="text-xs font-bold mt-0.5" style={{ color: failSecs <= 15 ? '#ef4444' : '#f59e0b' }}>
-                    ⏱ {failSecs}s left
-                  </div>
-                )}
-                {myDone && !result && (
-                  <div className="text-xs font-bold text-green-400 mt-0.5">Solved! Waiting…</div>
-                )}
-              </>
-            )}
-          </div>
+          {/* Nothing in the middle — the mode line sits above this row. */}
+          <div className="flex-1 min-w-0" />
 
           {/* Opponent guess count — only when there IS one. In solo the column
               was a permanent "Solo / —": a scoreboard for a player who is not
