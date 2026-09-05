@@ -185,6 +185,19 @@ export default function BlockBlastGame() {
   const [invitedFriend, setInvitedFriend] = useState(null);
   const [isSolo, setIsSolo]           = useState(false);
 
+  // Solo Endless: free, against the openly-named bot.
+  //
+  // isSolo alone means "vs the bot" and is true for a staked bot match too, so
+  // it cannot be the test — that is what labelled a diamond bet "Solo
+  // Endless". The stake separates those two. opponent.isBot separates a demo
+  // match, which is also free and also vs a bot but disguised, and must keep
+  // looking like an ordinary match rather than announcing itself as solo.
+  //
+  // Derived once and used by both the mode label and the opponent column, so
+  // the two cannot disagree about what kind of match this is — which is
+  // exactly how the label said Solo Endless while the column said Duely Bot.
+  const soloEndless = isSolo && !(entryFee > 0) && !!opponent?.isBot;
+
   // Responsive cell size
   const [cellPx, setCellPx] = useState(Math.min(48, Math.floor((window.innerWidth - 32) / GRID)));
   useEffect(() => {
@@ -894,7 +907,10 @@ export default function BlockBlastGame() {
             isWinner={result.humanWon}
             // A free run has no opponent worth naming and nothing at stake, so
             // it drops the "you vs bot" framing; a paid bot match keeps it.
-            solo={!(result.entryFee > 0)}
+            // Same test as the HUD's soloEndless, for the same reason: a
+            // demo match is free and vs a bot too, and solo={true} would hide
+            // the disguised opponent it is meant to be showing off.
+            solo={!(result.entryFee > 0) && !!opponent?.isBot}
             winnerUsername={result.humanWon ? profile?.username : 'Duely Bot'}
             loserUsername={result.humanWon ? 'Duely Bot' : profile?.username}
             newWinnerElo={result.humanWon ? result.newElo : undefined}
@@ -1061,10 +1077,10 @@ export default function BlockBlastGame() {
             free and vs a bot too and must keep looking like an ordinary
             match, which is what opponent.isBot settles. */}
         <div className="text-center w-full max-w-lg px-4 -mb-1">
-          {isSolo && entryFee > 0 ? (
-            <span className="text-xs sm:text-sm text-muted">vs <span className="text-accent font-semibold">Bot</span></span>
-          ) : isSolo && opponent?.isBot ? (
+          {soloEndless ? (
             <span className="text-xs sm:text-sm text-muted">Solo <span className="text-accent font-semibold">Endless</span></span>
+          ) : isSolo && entryFee > 0 ? (
+            <span className="text-xs sm:text-sm text-muted">vs <span className="text-accent font-semibold">Bot</span></span>
           ) : (
             <span className="text-sm sm:text-base font-black text-accent">Score Race</span>
           )}
@@ -1087,25 +1103,36 @@ export default function BlockBlastGame() {
                 else, so neither score can be squeezed by a label. */}
             <div className="flex-1 min-w-0" />
 
-            {/* Opponent score */}
-            <div className="text-center min-w-[72px]">
-              <div className={`text-xl font-black font-mono ${oppScore > score ? 'text-danger' : oppScore < score ? 'text-success' : 'text-accent'}`}>
-                {oppScore.toLocaleString()}
+            {/* Opponent score — but not in Solo Endless.
+                A staked bot match has a real rival with a real score, and it
+                gets a name and a face like anyone else. Solo Endless does not:
+                the bot there is plumbing, so showing "Duely Bot" beside a
+                score invents an opponent for a mode whose whole point is that
+                there isn't one. The column goes entirely rather than being
+                blanked, so the run's own score sits where it should.
+
+                Balanced by an empty column of the same width, so your score
+                stays where it is instead of sliding to the middle when the
+                mode changes. */}
+            {soloEndless ? (
+              <div className="min-w-[72px]" aria-hidden="true" />
+            ) : (
+              <div className="text-center min-w-[72px]">
+                <div className={`text-xl font-black font-mono ${oppScore > score ? 'text-danger' : oppScore < score ? 'text-success' : 'text-accent'}`}>
+                  {oppScore.toLocaleString()}
+                </div>
+                <div className="text-[0.625rem] text-muted flex items-center justify-center">
+                  <PlayerName
+                    username={isSolo ? 'Duely Bot' : (opponent?.username ?? 'Opponent')}
+                    avatarUrl={isSolo ? null : opponent?.avatarUrl}
+                    color={isSolo ? null : opponent?.profileColor}
+                    // Not isSolo: a demo match is solo AND disguised, and the
+                    // mode does not know which. Only the opponent does.
+                    isBot={!!opponent?.isBot}
+                    size="w-4 h-4" />
+                </div>
               </div>
-              <div className="text-[0.625rem] text-muted flex items-center justify-center">
-                {/* isSolo here means "against the bot" — the bot is a real
-                    opponent in this game and has a score, so it gets a face
-                    like anyone else. */}
-                <PlayerName
-                  username={isSolo ? 'Duely Bot' : (opponent?.username ?? 'Opponent')}
-                  avatarUrl={isSolo ? null : opponent?.avatarUrl}
-                  color={isSolo ? null : opponent?.profileColor}
-                  // Not isSolo: a demo match is solo AND disguised, and the
-                  // mode does not know which. Only the opponent does.
-                  isBot={!!opponent?.isBot}
-                  size="w-4 h-4" />
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Status banners */}

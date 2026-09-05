@@ -301,6 +301,38 @@ test('a staked bot match is not called Solo Endless', () => {
   // neither solo nor endless. The stake separates them, and opponent.isBot
   // keeps a disguised demo opponent looking like an ordinary match.
   const mode = CODE.slice(CODE.indexOf('text-center w-full max-w-lg px-4 -mb-1'));
+  // Solo Endless is decided by the shared soloEndless value now, so the
+  // label and the opponent column cannot disagree — see the test below.
+  assert.match(mode.slice(0, 900), /\{soloEndless \?[\s\S]{0,200}Solo <span[^>]*>Endless/);
   assert.match(mode.slice(0, 900), /isSolo && entryFee > 0 \?[\s\S]{0,200}vs <span[^>]*>Bot/);
-  assert.match(mode.slice(0, 900), /isSolo && opponent\?\.isBot \?[\s\S]{0,200}Solo <span[^>]*>Endless/);
+});
+
+test('Solo Endless shows no opponent at all', () => {
+  // The label said Solo Endless while the column beside it said "Duely Bot"
+  // with a score — inventing an opponent for the one mode whose point is that
+  // there isn't one. A STAKED bot match keeps its opponent: the bot is a real
+  // rival there with a real score.
+  assert.match(CODE, /const soloEndless = isSolo && !\(entryFee > 0\) && !!opponent\?\.isBot;/);
+  const row = CODE.slice(CODE.indexOf('flex items-center justify-between w-full max-w-lg gap-2 px-14'));
+  assert.match(row.slice(0, 2500), /\{soloEndless \? \([\s\S]{0,200}min-w-\[72px\]" aria-hidden="true"/,
+    'the opponent column must go, replaced by a spacer of the same width');
+  // Balanced, so your own score does not slide to the middle when the mode
+  // changes.
+  assert.equal((row.slice(0, 2500).match(/min-w-\[72px\]/g) || []).length, 3,
+    'expected my score, the spacer, and the opponent column');
+});
+
+test('one derivation decides the mode, not two', () => {
+  // The label and the opponent column each worked it out separately, which is
+  // exactly how one could say Solo Endless while the other said Duely Bot.
+  assert.equal((CODE.match(/const soloEndless =/g) || []).length, 1);
+  const mode = CODE.slice(CODE.indexOf('text-center w-full max-w-lg px-4 -mb-1'));
+  assert.match(mode.slice(0, 600), /\{soloEndless \?/, 'the label must use the shared value');
+});
+
+test('a demo match is not mistaken for a solo run', () => {
+  // A demo is free AND against a bot, and has to keep looking like an ordinary
+  // match — opponent.isBot is what separates the openly-named Duely Bot from a
+  // disguised one, on the result card as well as in the HUD.
+  assert.match(CODE, /solo=\{!\(result\.entryFee > 0\) && !!opponent\?\.isBot\}/);
 });
