@@ -9,7 +9,7 @@ const { randomInt } = require('node:crypto');
 const { closestByElo } = require('./queueMatch');
 const { findRoomBySocket } = require('./roomLookup');
 const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings } = require('./eloService');
-const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
+const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const { v4: uuidv4 } = require('uuid');
 const { updateHighscore } = require('./highscoreService');
@@ -454,12 +454,18 @@ async function _resolveFromScores(io, supabase, roomId) {
   const [p1, p2] = room.players;
   const s1 = room.scores[p1.socketId] ?? room.pingScores[p1.socketId] ?? 0;
   const s2 = room.scores[p2.socketId] ?? room.pingScores[p2.socketId] ?? 0;
+  // An equal score is a draw, not a win for whoever the tiebreak favours.
+  //
+  // Two players with identical scores got a winner and a loser, decided by
+  // nothing either of them was playing for. >= was the whole bug: a tie is not "player 1 scored at least as much",
+  // it is a tie, and player 1 is just whoever the room happened to list first.
+  const isDraw = s1 === s2;
   const winner = s1 >= s2 ? p1 : p2;
   const loser  = s1 >= s2 ? p2 : p1;
-  await _resolve(io, supabase, roomId, winner, loser, Math.max(s1, s2), Math.min(s1, s2));
+  await _resolve(io, supabase, roomId, winner, loser, Math.max(s1, s2), Math.min(s1, s2), { isDraw });
 }
 
-async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserScore) {
+async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserScore, { isDraw = false } = {}) {
   const room = getTowerRoom(roomId);
   if (!room || room.state === 'finished') return;
   room.state = 'finished';
@@ -469,7 +475,9 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
   const isFree = (room.entryFee || 0) === 0;
   // null means "this mode does not rate", so the result card omits the row
   // rather than printing an unchanged number as if something had happened.
-  const { newWinnerElo, newLoserElo, winnerBefore, loserBefore } = isFree
+  // A draw moves nobody's rating: there is no winner to gain and no loser to
+  // drop, and freshRatings only knows how to compute one of each.
+  const { newWinnerElo, newLoserElo, winnerBefore, loserBefore } = (isFree || isDraw)
     ? { newWinnerElo: null, newLoserElo: null, winnerBefore: null, loserBefore: null }
     : await freshRatings(supabase, winner, loser);
 
@@ -479,10 +487,18 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
     unlockUser(winner.userId); unlockUser(loser.userId);
   } else if (supabase && room.entryFee > 0) {
     try {
-      const meta = { game: 'Tower', winnerUsername: winner.username, loserUsername: loser.username };
-      balanceChange = (room.currency === 'diamonds')
-        ? await settleMatchDiamonds(supabase, winner.userId, loser.userId, room.entryFee, meta)
-        : await settleMatch(supabase, winner.userId, loser.userId, room.entryFee, meta);
+      if (isDraw) {
+        // Both stakes straight back. The fee was taken at match start, and a
+        // match nobody won is a match the house takes nothing from.
+        balanceChange = (room.currency === 'diamonds')
+          ? await settleDrawMatchDiamonds(supabase, winner.userId, loser.userId, room.entryFee)
+          : await settleDrawMatch(supabase, winner.userId, loser.userId, room.entryFee);
+      } else {
+        const meta = { game: 'Tower', winnerUsername: winner.username, loserUsername: loser.username };
+        balanceChange = (room.currency === 'diamonds')
+          ? await settleMatchDiamonds(supabase, winner.userId, loser.userId, room.entryFee, meta)
+          : await settleMatch(supabase, winner.userId, loser.userId, room.entryFee, meta);
+      }
     } catch (e) { console.error('[tower] settle:', e.message); }
   } else {
     unlockUser(winner.userId); unlockUser(loser.userId);
@@ -495,13 +511,14 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
   let winnerStreak = 0, isFirstWin = false;
   if (supabase && !winner.isBot && !loser.isBot) {
     try {
-      ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser));
+      if (!isDraw) ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser));
     } catch (e) { console.error('[tower] streaks:', e.message); }
   }
 
   io.emit('active_game_ended', { id: roomId });
   gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId) });
   io.to(roomId).emit('tower_result', {
+    isDraw,
     isSolo: false,
     winnerId: winner.userId, loserId: loser.userId,
     winnerUsername: winner.username, loserUsername: loser.username,
@@ -526,14 +543,14 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
       if (!isFree) {
         try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch {}
       }
-      try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch {}
+      if (!isDraw) { try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch {} }
       // Streaks already applied above, before the emit.
     }
     if (!loser.isBot) {
       if (!isFree) {
         try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch {}
       }
-      try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch {}
+      if (!isDraw) { try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch {} }
     }
     if (!winner.isBot) await updateHighscore(supabase, winner.userId, 'tower', winnerScore).catch(() => {});
     if (!loser.isBot)  await updateHighscore(supabase, loser.userId,  'tower', loserScore).catch(() => {});
@@ -542,7 +559,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
       await supabase.from('matches').insert({
         player1_id: winner.isBot ? null : winner.userId,
         player2_id: loser.isBot ? null : loser.userId,
-        winner_id:  winner.isBot ? null : winner.userId,
+        winner_id:  (isDraw || winner.isBot) ? null : winner.userId,
         game_type: 'tower',
         entry_fee_c:        cur === 'coins'    ? (room.entryFee || 0) : 0,
         entry_fee_diamonds: cur === 'diamonds' ? (room.entryFee || 0) : 0,
@@ -560,4 +577,8 @@ module.exports = {
   startTowerCountdown, trackTowerScorePing,
   handleTowerComplete, checkTowerOvertake,
   CATCHUP_MS,
+  // Exported so a test can settle a room directly and watch what actually
+  // happens — the tie rule is worth driving rather than reading. Underscored
+  // because nothing in the app should call it from outside.
+  _resolveFromScores,
 };

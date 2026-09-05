@@ -29,7 +29,7 @@ const { findRoomBySocket } = require('./roomLookup');
  * the settlement path in one is a mechanical port to the other, which is how
  * the double-ELO bug got fixed everywhere rather than in one engine.
  */
-const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
+const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings } = require('./eloService');
 const { updateHighscore } = require('./highscoreService');
@@ -401,15 +401,26 @@ async function _resolveFromTimes(io, supabase, roomId) {
     return;
   }
 
-  // Highest SCORE wins; survival time breaks a tie.
+  // Highest SCORE wins. An equal score is a DRAW.
+  // An equal score is a draw, not a win for whoever the tiebreak favours.
+  //
+  // This used to fall through to survival time, and if the times matched too,
+  // to player 1 — so two players with identical scores got a winner and a
+  // loser, decided by something neither of them was playing for. Score is what
+  // the match is about; if it is level, nobody won it.
   const s1 = scoreOf(p1), s2 = scoreOf(p2);
   const t1 = timeOf(p1),  t2 = timeOf(p2);
-  const p1Wins = s1 !== s2 ? s1 > s2 : t1 >= t2;
-  const winner = p1Wins ? p1 : p2;
-  const loser  = p1Wins ? p2 : p1;
+  const isDraw = s1 === s2;
+  const p1Wins = s1 > s2;
+  // On a draw these are just the two players in room order — the payload still
+  // needs two names and two scores to show, and the card reads isDraw to know
+  // neither of them is the winner.
+  const winner = p1Wins || isDraw ? p1 : p2;
+  const loser  = p1Wins || isDraw ? p2 : p1;
+  const first = p1Wins || isDraw;
   await _resolve(io, supabase, roomId, winner, loser,
-    p1Wins ? t1 : t2, p1Wins ? t2 : t1,
-    p1Wins ? s1 : s2, p1Wins ? s2 : s1);
+    first ? t1 : t2, first ? t2 : t1,
+    first ? s1 : s2, first ? s2 : s1, { isDraw });
 }
 
 /**
@@ -459,7 +470,7 @@ async function forceResolveColorRush(io, supabase, roomId) {
   await _resolveFromTimes(io, supabase, roomId);
 }
 
-async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, winnerScore = 0, loserScore = 0) {
+async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, winnerScore = 0, loserScore = 0, { isDraw = false } = {}) {
   const room = getColorRushRoom(roomId);
   if (!room || room.state === 'finished') return;
   room.state = 'finished';
@@ -472,7 +483,9 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
   const ranked = !isFree || !vsBot;
   // Ratings computed from CURRENT profile values, not the elo cached on the
   // socket at queue time — see freshRatings.
-  const { newWinnerElo, newLoserElo, winnerBefore, loserBefore } = ranked
+  // A draw moves nobody's rating: there is no winner to gain and no loser to
+  // drop, and freshRatings only knows how to compute one of each.
+  const { newWinnerElo, newLoserElo, winnerBefore, loserBefore } = ranked && !isDraw
     ? await freshRatings(supabase, winner, loser)
     : { newWinnerElo: null, newLoserElo: null, winnerBefore: null, loserBefore: null };
 
@@ -482,7 +495,20 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
     unlockUser(winner.userId); unlockUser(loser.userId);
   } else if (supabase && room.entryFee > 0) {
     try {
-      if (winner.isBot || loser.isBot) {
+      if (isDraw) {
+        // Both stakes straight back. The fee was taken at match start, and a
+        // match nobody won is a match the house takes nothing from.
+        if (winner.isBot || loser.isBot) {
+          const humanId = winner.isBot ? loser.userId : winner.userId;
+          if ((room.currency || 'coins') === 'diamonds') await creditDiamonds(supabase, humanId, Math.floor(room.entryFee));
+          else await creditCoins(supabase, humanId, parseFloat(room.entryFee));
+          balanceChange = { winnerPayout: room.entryFee };
+        } else {
+          balanceChange = (room.currency || 'coins') === 'diamonds'
+            ? await settleDrawMatchDiamonds(supabase, winner.userId, loser.userId, room.entryFee)
+            : await settleDrawMatch(supabase, winner.userId, loser.userId, room.entryFee);
+        }
+      } else if (winner.isBot || loser.isBot) {
         const humanId = winner.isBot ? loser.userId : winner.userId;
         balanceChange = await settleBotMatch(supabase, humanId, room.entryFee, room.currency || 'coins', !winner.isBot, { game: GAME_NAME });
       } else {
@@ -498,6 +524,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
   gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId).filter(Boolean) });
   setTimeout(() => deleteColorRushRoom(roomId), 5_000);
   io.to(roomId).emit('color_rush_result', {
+    isDraw,
     winnerId: winner.userId, loserId: loser.userId,
     winnerUsername: winner.username, loserUsername: loser.username,
     newWinnerElo, newLoserElo, balanceChange,
@@ -516,12 +543,12 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
     if (!supabase) return;
     if (!winner.isBot) {
       if (ranked) { try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch {} }
-      try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch {}
-      try { await applyMatchStreaks(supabase, winner, loser); } catch {}
+      if (!isDraw) { try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch {} }
+      if (!isDraw) { try { await applyMatchStreaks(supabase, winner, loser); } catch {} }
     }
     if (!loser.isBot) {
       if (ranked) { try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch {} }
-      try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch {}
+      if (!isDraw) { try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch {} }
     }
     if (!winner.isBot) await updateHighscore(supabase, winner.userId, 'colorRush', winnerScore).catch(() => {});
     if (!loser.isBot)  await updateHighscore(supabase, loser.userId,  'colorRush', loserScore).catch(() => {});
@@ -530,7 +557,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
       await supabase.from('matches').insert({
         player1_id: winner.isBot ? null : winner.userId,
         player2_id: loser.isBot ? null : loser.userId,
-        winner_id: winner.isBot ? null : winner.userId,
+        winner_id: (isDraw || winner.isBot) ? null : winner.userId,
         game_type: 'colorRush',
         entry_fee_c: cur === 'coins' ? (room.entryFee || 0) : 0,
         entry_fee_diamonds: cur === 'diamonds' ? (room.entryFee || 0) : 0,

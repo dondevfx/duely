@@ -8,7 +8,7 @@ const { randomInt } = require('node:crypto');
 const { closestByElo } = require('./queueMatch');
 const { findRoomBySocket } = require('./roomLookup');
 ﻿const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings } = require('./eloService');
-const { settleMatch, settleMatchDiamonds, settleBotMatch } = require('./walletService');
+const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const { v4: uuidv4 } = require('uuid');
 const { updateHighscore } = require('./highscoreService');
@@ -452,7 +452,10 @@ async function _forceResolve(io, supabase, roomId) {
     room.state = 'finished';
     io.emit('active_game_ended', { id: roomId });
     gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId) });
-    io.to(roomId).emit('block_blast_result', { draw: true, reason: 'timeout' });
+    // isDraw, the same name every other draw uses. This path predates the
+    // score-tie draw and had invented its own flag, so the page was reading
+    // two different fields for one outcome.
+    io.to(roomId).emit('block_blast_result', { isDraw: true, draw: true, reason: 'timeout' });
     return;
   }
   await _resolveFromScores(io, supabase, roomId);
@@ -465,12 +468,18 @@ async function _resolveFromScores(io, supabase, roomId) {
   // Prefer submitted final score; fall back to last ping score for players still playing
   const s1 = room.scores[p1.socketId] ?? room.pingScores[p1.socketId] ?? 0;
   const s2 = room.scores[p2.socketId] ?? room.pingScores[p2.socketId] ?? 0;
+  // An equal score is a draw, not a win for whoever the tiebreak favours.
+  //
+  // Two players with identical scores got a winner and a loser, decided by
+  // nothing either of them was playing for. >= was the whole bug: a tie is not "player 1 scored at least as much",
+  // it is a tie, and player 1 is just whoever the room happened to list first.
+  const isDraw = s1 === s2;
   const winner = s1 >= s2 ? p1 : p2;
   const loser  = s1 >= s2 ? p2 : p1;
-  await _resolve(io, supabase, roomId, winner, loser, Math.max(s1, s2), Math.min(s1, s2));
+  await _resolve(io, supabase, roomId, winner, loser, Math.max(s1, s2), Math.min(s1, s2), { isDraw });
 }
 
-async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserScore) {
+async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserScore, { isDraw = false } = {}) {
   const room = getBlockBlastRoom(roomId);
   if (!room || room.state === 'finished') return;
   room.state = 'finished';
@@ -482,7 +491,9 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
   // a rated match that happened to be worth nothing. null means "this mode
   // does not rate", and the card omits the row entirely. Rush Hour already
   // did this; the rest did not.
-  const { newWinnerElo, newLoserElo, winnerBefore, loserBefore } = isFree
+  // A draw moves nobody's rating either: there is no winner to gain and no
+  // loser to drop, and freshRatings only knows how to compute one of each.
+  const { newWinnerElo, newLoserElo, winnerBefore, loserBefore } = (isFree || isDraw)
     ? { newWinnerElo: null, newLoserElo: null, winnerBefore: null, loserBefore: null }
     : await freshRatings(supabase, winner, loser);
 
@@ -494,7 +505,20 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
   } else if (supabase && room.entryFee > 0) {
     try {
       const _hasBot = winner.isBot || loser.isBot;
-      if (_hasBot) {
+      if (isDraw) {
+        // Both stakes straight back. The fee was taken at match start, and a
+        // match nobody won is a match the house takes nothing from.
+        if (_hasBot) {
+          const _humanId = winner.isBot ? loser.userId : winner.userId;
+          if ((room.currency || 'coins') === 'diamonds') await creditDiamonds(supabase, _humanId, Math.floor(room.entryFee));
+          else await creditCoins(supabase, _humanId, parseFloat(room.entryFee));
+          balanceChange = { winnerPayout: room.entryFee };
+        } else {
+          balanceChange = (room.currency || 'coins') === 'diamonds'
+            ? await settleDrawMatchDiamonds(supabase, winner.userId, loser.userId, room.entryFee)
+            : await settleDrawMatch(supabase, winner.userId, loser.userId, room.entryFee);
+        }
+      } else if (_hasBot) {
         const _humanId = winner.isBot ? loser.userId : winner.userId;
         const _humanWon = !winner.isBot;
         balanceChange = await settleBotMatch(supabase, _humanId, room.entryFee, room.currency || 'coins', _humanWon, { game: 'Block Burst' });
@@ -511,6 +535,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
   io.emit('active_game_ended', { id: roomId });
   gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId) });
   io.to(roomId).emit('block_blast_result', {
+    isDraw,
     isSolo: false,
     winnerId: winner.userId, loserId: loser.userId,
     winnerUsername: winner.username, loserUsername: loser.username,
@@ -536,16 +561,16 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
       if (!isFree) {
         try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
       }
-      try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
+      if (!isDraw) { try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); } }
       // Streaks are PvP-only — applyMatchStreaks no-ops on bot matches.
-      try { ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser)); } catch {}
+      try { if (!isDraw) ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser)); } catch {}
     }
 
     if (supabase && !loser.isBot) {
       if (!isFree) {
         try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
       }
-      try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
+      if (!isDraw) { try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); } }
     }
     if (supabase) {
       if (!winner.isBot) await updateHighscore(supabase, winner.userId, 'blockBlast', winnerScore);
@@ -553,7 +578,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
       try {
         await supabase.from('matches').insert({
           player1_id: winner.isBot ? null : winner.userId, player2_id: loser.isBot ? null : loser.userId,
-          winner_id: winner.isBot ? null : winner.userId, game_type: 'blockBlast',
+          winner_id: (isDraw || winner.isBot) ? null : winner.userId, game_type: 'blockBlast',
           entry_fee_c: (room.currency || 'coins') === 'coins' ? (room.entryFee || 0) : 0, entry_fee_diamonds: (room.currency || 'coins') === 'diamonds' ? (room.entryFee || 0) : 0,
           prize_pool_c: (room.currency || 'coins') === 'coins' ? (room.entryFee || 0) * 2 : 0,
           prize_pool_diamonds: (room.currency || 'coins') === 'diamonds' ? (room.entryFee || 0) * 2 : 0,

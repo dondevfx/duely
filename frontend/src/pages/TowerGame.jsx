@@ -312,7 +312,11 @@ export default function TowerGame() {
     return (
       <div className="min-h-[calc(100dvh-3.5rem)] bg-bg flex items-center justify-center px-4">
         <ResultScreen
+          // A draw is its own outcome, not a loss for whoever is not the
+          // winnerId — with no winner, isWinner is false for BOTH players
+          // and the card would have told them both they lost.
           isWinner={isWinner}
+          isDraw={!!result.isDraw}
           vsBot={!!result.vsBot}
           opponent={opponent}
           solo={freeSolo}

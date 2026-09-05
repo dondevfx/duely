@@ -869,8 +869,11 @@ export default function BlockBlastGame() {
           <ResultScreen
             vsBot={!!result.vsBot}
             opponent={opponent}
+            // A draw is its own outcome, not a loss for whoever is not the
+            // winnerId — with no winner, isWinner is false for BOTH players
+            // and the card would have told them both they lost.
             isWinner={isWinner}
-            isDraw={result.draw}
+            isDraw={!!(result.isDraw || result.draw)}
             winnerUsername={result.winnerUsername}
             loserUsername={result.loserUsername}
             newWinnerElo={result.newWinnerElo}
