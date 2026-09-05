@@ -621,10 +621,19 @@ export default function CoinFlipGame() {
       setStatusMsg(`Waiting for someone to pick ${s.side === 'heads' ? 'Tails' : 'Heads'}…`);
     } else if (mode === 'bot_free' || mode === 'bot_paid') {
       socket.emit('play_coin_flip_vs_bot', { entryFee: s.entryFee, currency: s.currency, side: s.side });
-      setPhase('flipping');
-      // This path skips the countdown and starts spinning immediately, so it
-      // takes its own hold — a bot flip settles and gives the result away just
-      // as readily as a PvP one.
+      // The same countdown the first flip gets.
+      //
+      // This went straight to 'flipping' — so Play Again against the bot began
+      // spinning the instant it was pressed, with no "3, 2, 1", while the very
+      // same match started from the lobby had one. Play Again is meant to be
+      // the same match again, not a different one.
+      setFlipResult(null);
+      setResultLanded(false);
+      rotRef.current = 0;
+      setCountdown(3);
+      setPhase('countdown');
+      // Still takes its own hold here rather than at the flip: a bot flip
+      // settles and gives the result away just as readily as a PvP one.
       releaseBalanceRef.current?.();
       releaseBalanceRef.current = holdBalance();
       setStatusMsg('vs Duely Bot');

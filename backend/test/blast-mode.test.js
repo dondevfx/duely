@@ -150,19 +150,19 @@ test('the seconds counter is not what draws the bar', () => {
 
 // ── No queue screen for a bot match ───────────────────────────────────────
 
-test('a bot match goes straight to the countdown', () => {
-  // There is nobody to queue for: the room exists on the server the moment
-  // the emit lands, so the queue screen showed for one frame on its way past.
-  const FILES = {
-    BlockBlastGame: CODE,
-    BlackjackGame: strip(fs.readFileSync(
-      path.join(__dirname, '..', '..', 'frontend', 'src', 'pages', 'BlackjackGame.jsx'), 'utf8')),
-  };
-  // Scoped to the enclosing function, not a window of characters around the
-  // emit. joinQueue sits directly above playVsBot in both files, so a
-  // fixed-width window reads the PvP queue call as if it belonged to the bot
-  // path — which is what the first version of this test did, and it failed
-  // against code that was already correct.
+test('a bot match reaches a countdown the page can actually render', () => {
+  // Two rules, and the second is the one I broke.
+  //
+  // A bot match has nobody to wait for, so it must not sit on a searching
+  // screen. But "set the phase to 'countdown'" is not the rule — Blackjack
+  // has no such phase: its queue branch renders the countdown whenever
+  // countdown > 0 and the spinner otherwise, so setting the count first is
+  // what skips the spinner. Renaming the phase there rendered nothing at all,
+  // because no branch matched, and the countdown vanished from the game.
+  //
+  // So: whatever phase the bot path sets, the page has to have a branch for
+  // it, and a countdown has to be on screen when it arrives.
+  const PAGES = ['BlockBlastGame', 'BlackjackGame', 'CoinFlipGame'];
   const enclosing = (s, at) => {
     const start = s.lastIndexOf('function ', at);
     let depth = 0;
@@ -172,32 +172,88 @@ test('a bot match goes straight to the countdown', () => {
     }
     return s.slice(start);
   };
-  for (const [name, src] of Object.entries(FILES)) {
+
+  for (const page of PAGES) {
+    const src = strip(fs.readFileSync(
+      path.join(__dirname, '..', '..', 'frontend', 'src', 'pages', `${page}.jsx`), 'utf8'));
     let found = 0;
     for (const m of src.matchAll(/_vs_bot'/g)) {
       const body = enclosing(src, m.index);
-      // Only the functions a button calls — not socket handlers.
       if (!/^function play/.test(body)) continue;
       const fname = body.slice(9, body.indexOf('('));
       found++;
 
-      // The setPhase NEAREST the emit, before or after it.
-      //
-      // Not "anywhere in the function": playAgain handles PvP and bot in two
-      // branches, and its PvP branch legitimately queues — checking the whole
-      // body flagged correct code. Not "the last one before the emit" either:
-      // Block Burst sets the phase on the line after. Nearest is what
-      // actually means "the phase set on the way into THIS match".
+      // The setPhase nearest the emit — not "anywhere in the function", since
+      // playAgain handles PvP and bot in two branches and its PvP branch
+      // legitimately queues.
       const at = m.index - src.indexOf(body);
-      let best = null, bestDist = Infinity;
+      let phase = null, bestDist = Infinity;
       for (const p of body.matchAll(/setPhase\('(\w+)'\)/g)) {
         const d = Math.abs(p.index - at);
-        if (d < bestDist) { bestDist = d; best = p[1]; }
+        if (d < bestDist) { bestDist = d; phase = p[1]; }
       }
-      assert.equal(best, 'countdown',
-        `${name}.${fname} enters a bot match via the '${best}' phase, not the countdown`);
+      assert.ok(phase, `${page}.${fname} sets no phase at all`);
+
+      // 1. The page must render that phase.
+      assert.ok(new RegExp(`phase === '${phase}'`).test(src),
+        `${page}.${fname} enters the '${phase}' phase, which ${page} never renders`);
+
+      // 2. A countdown has to be showing when it gets there — either the
+      //    branch is the countdown, or it is gated on countdown > 0.
+      const isCountdownPhase = phase === 'countdown';
+      // Plain string scanning, no escapes.
+      //
+      // The regex version of this read `[\s\S]` inside a template literal,
+      // where a backslash-s is just an "s" — the pattern silently became
+      // `[sS]{0,400}` and matched nothing, so a correct page was reported as
+      // having no countdown. Same class of mistake as the two earlier ones in
+      // this suite. Every occurrence is checked, because the first is the
+      // scroll-lock call rather than a render branch.
+      const needle = `phase === '${phase}'`;
+      let gatesOnCount = false;
+      for (let k = src.indexOf(needle); k !== -1; k = src.indexOf(needle, k + 1)) {
+        if (src.slice(k, k + 400).includes('countdown > 0')) { gatesOnCount = true; break; }
+      }
+      assert.ok(isCountdownPhase || gatesOnCount,
+        `${page}.${fname} lands on '${phase}', which shows no countdown`);
+
+      // 3. And the count is set, or the countdown branch has nothing to show.
+      // Both measured from the emit, for the same reason the phase was:
+      // playAgain has a PvP branch and a bot branch, and the PvP branch's
+      // setPhase sits BEFORE the bot branch's setCountdown in the file. Taking
+      // the first of each in the function said the count came second when it
+      // does not — a correct page reported as broken.
+      const nearest = (re) => {
+        let best = null, dist = Infinity;
+        for (const x of body.matchAll(re)) {
+          const d = Math.abs(x.index - at);
+          if (d < dist) { dist = d; best = x.index; }
+        }
+        return best;
+      };
+      const cAt = nearest(/setCountdown\((\d+)\)/g);
+      assert.ok(cAt !== null, `${page}.${fname} never sets the count`);
+      if (gatesOnCount) {
+        const pAt = nearest(/setPhase\('\w+'\)/g);
+        assert.ok(cAt < pAt,
+          `${page}.${fname} sets the phase before the count, so the searching screen shows first`);
+      }
     }
-    assert.ok(found >= 1, `${name}: no bot-match function found to check`);
+    assert.ok(found >= 1, `${page}: no bot-match function found to check`);
+  }
+});
+
+test('every game has a countdown before play', () => {
+  // Quick Match is the exception and is meant to be: it picks a game and
+  // navigates into it, and that page runs its own countdown.
+  const GAMES = ['BlockBlastGame', 'CarDashGame', 'ColorRushGame', 'TowerGame',
+                 'WordleGame', 'CoinFlipGame', 'BlackjackGame'];
+  for (const page of GAMES) {
+    const src = strip(fs.readFileSync(
+      path.join(__dirname, '..', '..', 'frontend', 'src', 'pages', `${page}.jsx`), 'utf8'));
+    assert.match(src, /setCountdown\(/, `${page} never sets a countdown`);
+    assert.ok(/phase === 'countdown'/.test(src) || /countdown > 0/.test(src),
+      `${page} never renders a countdown`);
   }
 });
 

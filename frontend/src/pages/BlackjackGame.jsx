@@ -687,11 +687,14 @@ function BlackjackGame() {
     lastSettingsRef.current = { entryFee: fee, currency: cur };
     pendingStartRef.current = null;
     setOpponentUsername('Duely Bot');
+    // 'queue', and this page has no 'countdown' phase — its queue screen IS
+    // the countdown screen whenever countdown > 0, and the "Searching..."
+    // spinner is the other half of the same branch. Setting the count FIRST is
+    // what skips the spinner, so a bot match lands on "3, 2, 1" with no
+    // searching step, which is what a phase called 'countdown' was supposed to
+    // achieve. Renaming it here rendered nothing at all: no branch matches.
     setCountdown(3); // countdown will apply buffered bj_start data when it hits 0
-    // Straight to the countdown, not through the queue. There is nobody to
-    // queue for in a bot match, so that screen showed for one frame on its way
-    // past — a flicker rather than a step.
-    setPhase('countdown');
+    setPhase('queue');
     socket.emit('play_bj_vs_bot', { entryFee: fee, currency: cur });
   }
 
@@ -792,9 +795,10 @@ function BlackjackGame() {
     } else if (mode === 'bot_free' || mode === 'bot_paid') {
       pendingStartRef.current = null;
       setOpponentUsername('Duely Bot');
+      // Same as playVsBot: count first, then 'queue', which renders as the
+      // countdown rather than as the spinner.
       setCountdown(3);
-      // Play Again takes the same route as the first time — see playVsBot.
-      setPhase('countdown');
+      setPhase('queue');
       socket.emit('play_bj_vs_bot', { entryFee: s.entryFee, currency: s.currency });
     } else {
       setPhase('lobby');
