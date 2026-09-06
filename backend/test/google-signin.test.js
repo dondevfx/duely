@@ -49,15 +49,29 @@ test('a cancelled Google window is not a crash', () => {
   assert.match(cb, /navigate\('\/login', \{ replace: true \}\)/);
 });
 
-test('the button is on both pages, under Create Account', () => {
+test('the Google button is off both pages while verification is pending', () => {
+  // Taken off the front end, not deleted. Google's OAuth branding check has
+  // not passed for duely.us, and a button that sends people to a consent
+  // screen Google flags as unverified is worse than no button.
+  //
+  // Everything behind it is intact — the component, /auth/callback,
+  // signInWithGoogle, and POST /auth/oauth-profile all still work and are
+  // still covered by the tests around this one. Putting it back is one import
+  // and one <GoogleSignInButton /> per page.
   for (const page of ['Login.jsx', 'Signup.jsx']) {
     const src = fe('pages', page);
-    assert.match(src, /<GoogleSignInButton \/>/, `${page} has no Google button`);
-    assert.match(src, /import GoogleSignInButton from '\.\.\/components\/GoogleSignInButton'/);
-    const create = src.indexOf('Create Account');
-    const google = src.indexOf('<GoogleSignInButton />');
-    assert.ok(create > 0 && google > create, `${page} puts Google above Create Account`);
+    assert.doesNotMatch(src, /<GoogleSignInButton \/>/, `${page} still renders it`);
+    assert.doesNotMatch(src, /import GoogleSignInButton/, `${page} still imports it`);
   }
+});
+
+test('the machinery behind the button is still there to switch back on', () => {
+  // The point of removing only the button: none of this has to be rebuilt.
+  assert.match(fe('components', 'GoogleSignInButton.jsx'), /signInWithGoogle/);
+  assert.match(fe('App.jsx'), /path="\/auth\/callback"/);
+  const ctx = fe('context', 'AuthContext.jsx');
+  assert.match(ctx, /signInWithGoogle/);
+  assert.match(ctx, /completeOAuthLogin/);
 });
 
 test('the profile is created before it is fetched', () => {

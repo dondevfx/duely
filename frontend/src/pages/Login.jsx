@@ -1,6 +1,5 @@
 ﻿import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import GoogleSignInButton from '../components/GoogleSignInButton';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { api } from '../utils/api';
@@ -374,17 +373,6 @@ export default function Login() {
             >
               Create Account
             </Link>
-
-            {/* Under Create Account, not above the password form. Someone who
-                already has a password account is here to type it; the third
-                option belongs with the other way of starting, not competing
-                with the form they came for. */}
-            <div className="flex items-center gap-3 my-4">
-              <div className="flex-1 h-px bg-surfaceLight" />
-              <span className="text-xs text-muted">or</span>
-              <div className="flex-1 h-px bg-surfaceLight" />
-            </div>
-            <GoogleSignInButton />
           </div>
           </>
           )}
