@@ -92,7 +92,38 @@
   </head>
   <body>
     <div id="google_translate_element" style="display:none;visibility:hidden;position:absolute;width:0;height:0;overflow:hidden"></div>
-    <div id="root"></div>
+    <!--
+      The app renders into #root. Everything inside it below is a fallback for
+      anything that reads the page without running JavaScript, and React
+      replaces the lot on mount (createRoot().render swaps the children out).
+
+      It is here because Google's OAuth branding check fetches the home page
+      with no JS and judges what comes back. An empty <div id="root"></div> is
+      an empty page to it, which it reported as "unresponsive" and which
+      blocked verification. Search engines and link previews read the page the
+      same way, so this is worth having regardless.
+
+      Keep it to what the site actually is. It is the description Google reads
+      back when deciding whether the app matches its stated purpose, so it
+      should stay true if the product changes.
+    -->
+    <div id="root">
+      <main style="max-width:40rem;margin:0 auto;padding:4rem 1.5rem;color:#fff;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;line-height:1.6">
+        <h1 style="font-size:2rem;font-weight:800;margin:0 0 .5rem">Duely</h1>
+        <p style="color:#9CA3AF;margin:0 0 2rem">1v1 skill games, played for real stakes.</p>
+        <p>Duely is a head-to-head skill gaming platform. Pick a game, set a stake, and
+           play a live 1v1 match against another person or against a bot. Matches are
+           decided on skill — reaction, accuracy and speed — never on chance.</p>
+        <p>Games include Color Rush, Block Burst, Word VS, Car Dash, Tower, Coin Flip
+           and Blackjack, each playable solo, against a bot, or ranked against another
+           player.</p>
+        <p style="color:#9CA3AF;font-size:.875rem;margin-top:2rem">
+          Duely needs JavaScript to run. Please enable it, or open
+          <a href="https://www.duely.us" style="color:#3B82F6">www.duely.us</a> in a
+          current browser.
+        </p>
+      </main>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
       function googleTranslateElementInit() {

@@ -1,0 +1,9 @@
+# Without this file the SPA rewrite answers /robots.txt with the app's HTML,
+# which is not a robots file and is not a helpful thing for a crawler to be
+# handed. Nothing here is secret; the rules keep crawlers off paths that only
+# mean anything to a signed-in person.
+User-agent: *
+Allow: /
+Disallow: /auth/callback
+Disallow: /wallet
+Disallow: /admin

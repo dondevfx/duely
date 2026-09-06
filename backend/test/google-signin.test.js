@@ -70,6 +70,29 @@ test('the profile is created before it is fetched', () => {
   assert.ok(fetchP > post, 'fetchProfile runs before the profile exists');
 });
 
+test('the home page says something without JavaScript', () => {
+  // Google's OAuth branding check fetches the home page and does not run JS.
+  // An empty <div id="root"></div> reads as an unresponsive site to it, and it
+  // rejected verification on exactly that. Link previews and search crawlers
+  // read the page the same way.
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'index.html'), 'utf8');
+  const root = html.match(/<div id="root">([\s\S]*?)<\/div>\s*<script/);
+  assert.ok(root, 'no #root, or nothing between it and the app script');
+  const text = root[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  assert.ok(text.length > 200, `only ${text.length} characters render without JS`);
+  assert.match(text, /Duely/);
+});
+
+test('robots.txt is a robots file, not the app', () => {
+  // Every unmatched path rewrites to index.html, so without a real file at
+  // this path a crawler asking for robots.txt is handed the SPA's HTML.
+  const robots = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'public', 'robots.txt'), 'utf8');
+  assert.match(robots, /^User-agent:/m);
+  assert.doesNotMatch(robots, /<html|<!DOCTYPE/i);
+});
+
 // ── The server half ───────────────────────────────────────────────────────
 
 // A profiles table that answers the three things the route asks it: does this
