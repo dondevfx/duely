@@ -8,11 +8,24 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 // persistSession:false  → Supabase never touches storage (we own storage).
 // autoRefreshToken:false → Supabase never runs a timer (we own the timer).
 // detectSessionInUrl:false → no OAuth redirect handling.
+//
+// flowType 'implicit' rather than the v2 default of 'pkce', and that is forced
+// by the three lines above rather than a preference. PKCE has to stash a code
+// verifier before sending the browser to Google and read it back on return —
+// but persistSession:false leaves supabase-js with in-memory storage, which
+// does not survive leaving the page. The verifier would be gone by the time
+// the redirect landed and every Google sign-in would fail to exchange.
+//
+// Implicit returns the tokens in the URL fragment instead, which /auth/callback
+// reads and hands to setSession. That also keeps the session going into OUR
+// storage, the same as a password sign-in, rather than a second copy inside
+// supabase-js.
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: false,
     autoRefreshToken: false,
     detectSessionInUrl: false,
+    flowType: 'implicit',
   },
 });
 

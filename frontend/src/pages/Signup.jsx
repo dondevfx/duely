@@ -1,5 +1,6 @@
 ﻿import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import GoogleSignInButton from '../components/GoogleSignInButton';
 import { useAuth } from '../context/AuthContext';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
@@ -141,6 +142,18 @@ export default function Signup() {
               {loading ? 'Creating account...' : 'Create Account'}
             </GlowButton>
           </form>
+
+          {/* Under Create Account, as asked. Outside the <form> deliberately —
+              inside it, a button without type="button" submits, and this one
+              navigates away instead. It carries its own type, but keeping it
+              out of the form means the Enter key still belongs to the email
+              and password fields. */}
+          <div className="flex items-center gap-3 my-4">
+            <div className="flex-1 h-px bg-surfaceLight" />
+            <span className="text-xs text-muted">or</span>
+            <div className="flex-1 h-px bg-surfaceLight" />
+          </div>
+          <GoogleSignInButton />
 
           <p className="text-center text-sm text-muted mt-4">
             Have an account?{' '}

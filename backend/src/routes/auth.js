@@ -51,6 +51,69 @@ module.exports = function authRoutes(supabase) {
   }
 
   // Upsert profile on first login
+  // ── A profile for someone who signed in with Google ────────────────────
+  //
+  // Email signup asks for a username and posts it to /profile. Google gives us
+  // an account with no username at all, and every screen in the app is built
+  // on there being one — the navbar, chat, the leaderboards, an opponent's
+  // name in a match. So one is derived here rather than putting a second
+  // "choose a username" step between pressing the button and playing. It can
+  // be changed on the profile page like any other.
+  //
+  // Idempotent: signing in with Google again returns the existing profile
+  // untouched. The username is only ever invented for an account that has
+  // none, so a rename is never undone by a later sign-in.
+  router.post('/oauth-profile', requireAuth, async (req, res) => {
+    const userId = req.user.id;
+
+    const { data: existing } = await supabase
+      .from('profiles').select('*').eq('id', userId).maybeSingle();
+    if (existing) return res.json(existing);
+
+    // What Google gave us, in order of how much it looks like a name someone
+    // picked. Falls back to the email's local part, then to nothing.
+    const meta = req.user.user_metadata || {};
+    const raw = meta.preferred_username || meta.user_name || meta.full_name || meta.name
+      || String(req.user.email || '').split('@')[0] || '';
+
+    // The same rule /profile enforces: letters, numbers and underscores, 3-20.
+    // Spaces become underscores rather than being dropped, so "Ada Lovelace"
+    // reads as Ada_Lovelace and not AdaLovelace.
+    let base = raw.trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+    if (base.length > 16) base = base.slice(0, 16);   // room for a suffix
+    if (base.length < 3) base = 'player';
+
+    // First free name. Checked rather than assumed, because usernames are
+    // unique and a common first name will already be taken — and a random
+    // suffix on every account would make them all look like bot names.
+    let username = null;
+    for (let attempt = 0; attempt < 12 && !username; attempt++) {
+      const candidate = attempt === 0 ? base : `${base}${attempt + 1}`;
+      const { data: taken } = await supabase
+        .from('profiles').select('id').ilike('username', candidate).maybeSingle();
+      if (!taken) username = candidate;
+    }
+    // Twelve collisions on one base is unlikely enough that a random tail is
+    // the right answer rather than counting further.
+    if (!username) username = `${base}${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .insert({ id: userId, username })
+      .select()
+      .single();
+
+    if (error) {
+      // Two sign-ins racing: the other one won, so return what it made rather
+      // than failing a login over a duplicate key.
+      const { data: now } = await supabase
+        .from('profiles').select('*').eq('id', userId).maybeSingle();
+      if (now) return res.json(now);
+      return res.status(500).json({ error: error.message });
+    }
+    res.json(data);
+  });
+
   router.post('/profile', requireAuth, async (req, res) => {
     const { username, wallet_address } = req.body;
     const userId = req.user.id;

@@ -241,6 +241,48 @@ export function AuthProvider({ children }) {
     return data;
   }
 
+  // ── Google ────────────────────────────────────────────────────────────
+
+  /**
+   * Hands the browser to Google. Nothing after this line runs — the page is
+   * replaced — so there is no session to return here; it comes back in the URL
+   * fragment at /auth/callback.
+   */
+  async function signInWithGoogle() {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        // Its own route rather than the page they started on. The fragment
+        // that comes back carries an access token, and a route that exists
+        // only to consume it can strip it from the address bar immediately
+        // instead of leaving it in history on a real page.
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+    if (error) throw error;
+  }
+
+  /**
+   * Finish a Google sign-in: adopt the tokens, then make sure the account has
+   * a profile.
+   *
+   * Google gives an account with no username, and every screen is built on
+   * there being one — so /auth/oauth-profile derives one for a first-time
+   * sign-in and returns the existing profile every time after.
+   */
+  async function completeOAuthLogin({ access_token, refresh_token }) {
+    const { data, error } = await supabase.auth.setSession({ access_token, refresh_token });
+    if (error) throw error;
+    const sess = data?.session;
+    if (!sess) throw new Error('Google sign-in did not return a session.');
+    _applySession(sess);
+    // Before fetchProfile, not after: on a first sign-in there is no profile to
+    // fetch yet, and this is what creates it.
+    await api.post('/auth/oauth-profile', {});
+    await fetchProfile();
+    return sess;
+  }
+
   async function signIn(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
@@ -374,6 +416,7 @@ export function AuthProvider({ children }) {
       mfaPending, mfaFactorId,
       showSaveLogin, setShowSaveLogin,
       signUp, signIn, signOut, refreshProfile, updateProfile, completeMfaLogin, verifyMfaStepUp,
+      signInWithGoogle, completeOAuthLogin,
       // Exposed for SocketContext: the server can reject a stale access token
       // (the socket authenticated with whatever it had, without knowing it had
       // expired) well before this component's own scheduled refresh timer was

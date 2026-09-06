@@ -120,6 +120,7 @@ import Transactions from './pages/Transactions';
 import Rewards from './pages/Rewards';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import AuthCallback from './pages/AuthCallback';
 import ResetPassword from './pages/ResetPassword';
 import ToS from './pages/ToS';
 import Privacy from './pages/Privacy';
@@ -236,6 +237,9 @@ function Shell() {
           <Route path="/leaderboard"        element={<Leaderboard />} />
           <Route path="/login"              element={<Login />} />
           <Route path="/signup"             element={<Signup />} />
+          {/* Where Google sends the browser back. Not behind
+              ProtectedRoute — arriving here is how you become signed in. */}
+          <Route path="/auth/callback"      element={<AuthCallback />} />
           <Route path="/profile"            element={<Profile />} />
           <Route path="/wallet"             element={<Wallet />} />
           <Route path="/tip"                element={<Tip />} />
