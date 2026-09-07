@@ -999,6 +999,49 @@ let _passNo = 0;
 // for an hour before it is even broadcast, and the cost of being generous here
 // is a handful of requests for one address, while the cost of being tight is a
 // player watching a confirmed transaction go unnoticed.
+// How often a hot address is actually asked about, per coin.
+//
+// Every coin was polled on the same 45-second pass, which is a number chosen
+// for nothing in particular: Bitcoin produces a block every ten minutes, so 13
+// of every 14 requests could not possibly have found anything new.
+//
+// That is not merely wasteful, it is the binding constraint. A hot address is
+// polled 80 times an hour, and BlockCypher's free tier allows about 100
+// requests an hour in total — so ONE player sitting on the Litecoin deposit
+// page consumes most of the allowance, and a Litecoin and a Dogecoin depositor
+// at the same time exceed it outright. Past the limit BlockCypher answers with
+// an error, which until recently was read as "no deposits" and is now a thrown
+// fault: either way, deposits stop being detected while real money is arriving.
+//
+// So the cadence is keyed to each chain's block time, with confirmations in
+// mind — a deposit is not credited until it is confirmed anyway, so polling
+// faster than the chain produces blocks buys nothing at all.
+//
+//   btc   ~10 min blocks  -> every 6 min
+//   ltc   ~2.5 min        -> every 3 min
+//   doge  ~1 min, 6 confs -> every 3 min
+//   trx   ~3 s, ~1 min final -> every 90 s
+//   eth   ~12 s           -> every pass; Blockscout and Etherscan both allow it
+//
+// This takes BlockCypher from 160 requests an hour with two depositors to 40,
+// and costs at most a few minutes of detection latency on chains whose
+// confirmations already take longer than that.
+const COIN_EVERY_PASSES = {
+  btc: 8,   // 6 min
+  ltc: 4,   // 3 min
+  doge: 4,  // 3 min
+  trx: 2,   // 90 s
+  eth: 1,   // 45 s
+};
+const DEFAULT_EVERY_PASSES = 1;
+
+// Sweeps ignore this — a sweep is the backstop that must see everything, and it
+// runs four times a day.
+function coinDueThisPass(coin, passNo) {
+  const every = COIN_EVERY_PASSES[String(coin).toLowerCase()] ?? DEFAULT_EVERY_PASSES;
+  return (passNo % every) === 0;
+}
+
 const HOT_MS = 2 * 60 * 60 * 1000;
 const HOT_MAX = 10_000;
 const _hot = new Map();
@@ -1042,9 +1085,12 @@ async function pollOnce(supabase) {
   let list = addresses;
   const heliusOn = require('./heliusWebhooks').isEnabled();
   const sweeping = (_passNo % SWEEP_EVERY_PASSES) === 0;
+  const passNo = _passNo;
   _passNo++;
   if (!sweeping) {
     list = addresses.filter(a => {
+      // Chains slower than the poll interval are not asked every pass.
+      if (!coinDueThisPass(a.coin, passNo)) return false;
       // Solana is heard from rather than asked, and a webhook is both faster
       // than a 45-second poll and free. Polling it during the hot window would
       // buy nothing and cost credits. With webhooks off it is an ordinary
@@ -1176,4 +1222,4 @@ function init(supabase) {
 // into money with two sets of rules is how a deposit gets credited twice.
 // hotSize is exported for the ceiling test — the only way to tell a bound
 // that holds from one that was written and then disabled.
-module.exports = { init, claimDeposit, sweepStrandedUsdc, processDeposit, markActive, isHot, hotSize: () => _hot.size };
+module.exports = { init, claimDeposit, coinDueThisPass, COIN_EVERY_PASSES, sweepStrandedUsdc, processDeposit, markActive, isHot, hotSize: () => _hot.size };
