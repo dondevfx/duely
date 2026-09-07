@@ -1356,4 +1356,4 @@ function init(supabase) {
 // into money with two sets of rules is how a deposit gets credited twice.
 // hotSize is exported for the ceiling test — the only way to tell a bound
 // that holds from one that was written and then disabled.
-module.exports = { init, claimDeposit, reportConfig, gasReserveFor, coinDueThisPass, COIN_EVERY_PASSES, sweepStrandedUsdc, processDeposit, markActive, isHot, hotSize: () => _hot.size };
+module.exports = { init, fetchTxs, claimDeposit, reportConfig, gasReserveFor, coinDueThisPass, COIN_EVERY_PASSES, sweepStrandedUsdc, processDeposit, markActive, isHot, hotSize: () => _hot.size };
