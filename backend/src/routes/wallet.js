@@ -353,7 +353,12 @@ module.exports = function walletRoutes(supabase, io) {
     const blocked = await withdrawalGuards(req);
     if (blocked) return res.status(blocked.status).json(blocked.body);
 
-    const { coin, address, memo } = req.body;
+    // Both of these are reachable from a hostile body and produced a 500 with a
+    // stack trace rather than a refusal: req.body is undefined when the request
+    // is not JSON, so destructuring it throws, and {"coin": 123} makes
+    // coin.toLowerCase() a TypeError.
+    const { coin, address, memo } = req.body || {};
+    const coinKey = String(coin ?? '').toLowerCase();
 
     // Validate coin — any SimpleSwap-supported coin.
     // NOTE: all of these early-return validations run BEFORE the in-flight lock
@@ -361,7 +366,7 @@ module.exports = function walletRoutes(supabase, io) {
     // failure (no delete on those returns), permanently locking the user out of
     // withdrawing until server restart. These checks are synchronous, so no
     // concurrent request can slip through before the lock is set.
-    if (!coin || !SS_TICKERS[coin.toLowerCase()]) {
+    if (!coinKey || !SS_TICKERS[coinKey]) {
       return res.status(400).json({ error: 'Invalid or unsupported withdrawal coin' });
     }
     if (!validateAddress(address, coin)) {
@@ -373,7 +378,7 @@ module.exports = function walletRoutes(supabase, io) {
       return res.status(400).json({ error: 'Invalid memo / destination tag' });
     }
 
-    const coinMin = WITHDRAW_MINS[coin.toLowerCase()] ?? WITHDRAW_MINS.default;
+    const coinMin = WITHDRAW_MINS[coinKey] ?? WITHDRAW_MINS.default;
 
     let amount;
     try { amount = sanitizeAmount(req.body.amountUsd, coinMin, MAX_SINGLE_AMOUNT); }
