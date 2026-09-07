@@ -1025,7 +1025,20 @@ async function loadAddresses() {
 // ~5/s, Helius considerably more.
 const COIN_DELAY_MS = {
   btc: 500, ltc: 500, doge: 500,   // BlockCypher
-  eth: 250, bnb: 250, trx: 250,    // Etherscan / BscScan / TronGrid
+  eth: 250, bnb: 250,              // Etherscan / BscScan — ~5 requests/second
+  // TronGrid's free tier allows ONE request per second, and answers a burst
+  // with "request rate of (getTransactionByAccount) exceeded the
+  // allowed_rps(1), and the query server is suspended for 5 s". At 250ms this
+  // tripped on every pass with more than one TRX address, and the 5-second
+  // suspension then swallowed the rest of the group.
+  //
+  // Found in production the hour this file started reporting provider failures
+  // instead of returning them as an empty address — before that it had been
+  // reading as "no deposits" for every TRX address, every pass.
+  //
+  // 1200ms rather than 1000 because the limit is enforced on their side and a
+  // burst that arrives a few milliseconds early still counts.
+  trx: 1200,
   sol: 120, usdc: 120, usdt: 120,  // Helius
 };
 const DEFAULT_DELAY_MS = 500;

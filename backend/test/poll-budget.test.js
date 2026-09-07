@@ -130,3 +130,31 @@ test('Solana is heard from, not asked, while webhooks are on', () => {
   assert.match(fn, /heliusOn && SOL_COINS\.has/,
     'solana coins must be skipped on non-sweep passes when webhooks are carrying them');
 });
+
+test('no coin is polled faster than its provider allows', () => {
+  // Per-second limits, which the cadence above does not cover: the cadence
+  // decides how often a coin is asked about, this decides how fast its
+  // addresses are walked within one pass.
+  //
+  // TronGrid's free tier allows ONE request per second and suspends the query
+  // server for 5 seconds on a burst. At 250ms this tripped on every pass with
+  // more than one TRX address — found in production, and invisible until this
+  // file started reporting provider failures rather than returning them as an
+  // empty address.
+  const block = SRC.match(/const COIN_DELAY_MS = \{[\s\S]*?\};/);
+  assert.ok(block, 'the per-address stagger is gone');
+  const delay = (coin) => {
+    const m = block[0].match(new RegExp(coin + ':\\s*(\\d+)'));
+    assert.ok(m, `${coin} has no stagger`);
+    return Number(m[1]);
+  };
+  // provider request-per-second allowances
+  const RPS = { trx: 1, btc: 3, ltc: 3, doge: 3, eth: 5 };
+  for (const [coin, rps] of Object.entries(RPS)) {
+    const actual = 1000 / delay(coin);
+    assert.ok(actual <= rps,
+      `${coin} is polled at ${actual.toFixed(2)} req/s against an allowance of ${rps}`);
+  }
+  assert.ok(delay('trx') >= 1000,
+    'TronGrid allows 1 request/second — anything under 1000ms bursts past it');
+});
