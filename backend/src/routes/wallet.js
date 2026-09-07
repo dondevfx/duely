@@ -9,7 +9,7 @@ const {
   recordWithdrawal, getWithdrawable, playthroughMessage,
 } = require('../services/walletService');
 const { getOrCreateAddress } = require('../services/addressService');
-const { sendCrypto, checkSolanaSignature } = require('../services/chainSend');
+const { sendCrypto, checkPayout } = require('../services/chainSend');
 const { createWithdrawalSwap, estimateWithdrawal, getWithdrawalMinUsd, SS_TICKERS } = require('../services/simpleSwapService');
 const { isValidAddressFor } = require('../services/addressValidator');
 const { swapUsdcToSol, swapUsdcToUsdt } = require('../services/jupiterService');
@@ -551,16 +551,27 @@ module.exports = function walletRoutes(supabase, io) {
 
         // ── Did it actually fail? ──────────────────────────────────────────
         //
-        // A Solana send broadcasts first and confirms second, so a confirmation
+        // Every chain broadcasts first and confirms second, so a confirmation
         // timeout is NOT proof the money stayed put. Refunding on the error
         // alone therefore paid the player on-chain and gave their coins back —
         // a double-spend anyone could fish for by retrying withdrawals during
         // congestion until a confirmation happened to time out.
         //
+        // This guard was Solana-only and the hole stayed open everywhere else:
+        // ETH waits for a block after broadcasting, and TRX and the UTXO coins
+        // can lose the response after the node has accepted the transaction.
+        // Each of those now carries its identifier on the error the same way.
+        //
         // So we ask the chain before touching the balance.
         const sig = payoutErr.signature || null;
         if (sig) {
-          const state = await checkSolanaSignature(sig).catch(() => 'unknown');
+          // Ask the chain this payout was actually sent on.
+          //
+          // This called checkSolanaSignature for every coin, so an ETH or BTC
+          // hash was looked up on Solana, never found, and came back 'missing'
+          // — a payout that had really landed, classified as one that never
+          // happened, and then refunded on top of it.
+          const state = await checkPayout(coin, sig).catch(() => 'unknown');
 
           if (state === 'confirmed') {
             // It landed. The player has been paid; the only thing that failed

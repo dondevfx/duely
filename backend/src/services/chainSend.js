@@ -109,6 +109,104 @@ async function checkSolanaSignature(signature, { attempts = 5, delayMs = 3000 } 
   return 'unknown';
 }
 
+// What actually happened to a payout, on whichever chain it was sent.
+//
+// checkSolanaSignature answered this for Solana and the withdrawal handler
+// called it for every coin — so an ETH hash was looked up on Solana, never
+// found, and reported 'missing': a confirmed payout classified as one that
+// never happened, and refunded on top. This routes to the right chain.
+//
+// Same four answers as the Solana version, and the same contract:
+//
+//   'confirmed' — it landed and succeeded. Do NOT refund.
+//   'failed'    — it landed and reverted. The money is still ours; refund.
+//   'missing'   — the chain has no record and cannot acquire one. Refund.
+//   'unknown'   — we could not find out. Refund NOTHING and escalate; guessing
+//                 here is how you either rob a player or pay them twice.
+async function checkEvmTransaction(rpcUrl, hash, { attempts = 5, delayMs = 3000 } = {}) {
+  if (!hash) return 'missing';
+  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  let sawRpc = false;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const rc = await provider.getTransactionReceipt(hash);
+      sawRpc = true;
+      if (rc) return rc.status === 1 ? 'confirmed' : 'failed';
+      // No receipt yet, but the node knows the transaction — it is in the
+      // mempool and WILL likely land. That is not 'missing'.
+      const tx = await provider.getTransaction(hash);
+      if (tx) return 'unknown';
+    } catch { /* an RPC that is down is not an answer */ }
+    if (i < attempts - 1) await new Promise(r => setTimeout(r, delayMs));
+  }
+  // Every attempt answered and no node had heard of it. An EVM transaction
+  // nothing has seen in this window was not accepted anywhere.
+  return sawRpc ? 'missing' : 'unknown';
+}
+
+async function checkTronTransaction(txID, { attempts = 5, delayMs = 3000 } = {}) {
+  if (!txID) return 'missing';
+  let sawApi = false;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const r = await fetch('https://api.trongrid.io/wallet/gettransactionbyid', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: txID }),
+      });
+      const j = await r.json();
+      sawApi = true;
+      if (j && Object.keys(j).length) {
+        const ret = j.ret?.[0]?.contractRet;
+        // No ret yet means accepted but not yet executed — still in flight.
+        if (!ret) return 'unknown';
+        return ret === 'SUCCESS' ? 'confirmed' : 'failed';
+      }
+    } catch { /* try again */ }
+    if (i < attempts - 1) await new Promise(r => setTimeout(r, delayMs));
+  }
+  return sawApi ? 'missing' : 'unknown';
+}
+
+async function checkUtxoTransaction(coin, hash, { attempts = 5, delayMs = 3000 } = {}) {
+  if (!hash) return 'missing';
+  const chain = BLOCKCYPHER_CHAINS[coin];
+  if (!chain) return 'unknown';
+  const token = process.env.BLOCKCYPHER_TOKEN ? `?token=${process.env.BLOCKCYPHER_TOKEN}` : '';
+  let sawApi = false;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const r = await fetch(`https://api.blockcypher.com/v1/${chain}/txs/${hash}${token}`);
+      const j = await r.json();
+      if (j.hash) return 'confirmed';   // known to the network, mempool or mined
+      // A 404-shaped answer is a real "never heard of it"; anything else is a
+      // provider problem and must not be read as an answer.
+      if (r.status === 404) sawApi = true;
+    } catch { /* try again */ }
+    if (i < attempts - 1) await new Promise(r => setTimeout(r, delayMs));
+  }
+  return sawApi ? 'missing' : 'unknown';
+}
+
+// One entry point, so a caller never has to know which chain it is on.
+async function checkPayout(coin, ref, opts) {
+  if (!ref) return 'missing';
+  switch (String(coin).toLowerCase()) {
+    case 'sol': case 'usdc': case 'usdt':
+      return checkSolanaSignature(ref, opts);
+    case 'eth':
+      return checkEvmTransaction(process.env.ALCHEMY_ETH_RPC || ETH_RPC_FALLBACK, ref, opts);
+    case 'bnb':
+      return checkEvmTransaction(process.env.BSC_RPC || 'https://bsc-dataseed.binance.org/', ref, opts);
+    case 'trx':
+      return checkTronTransaction(ref, opts);
+    case 'btc': case 'ltc': case 'doge':
+      return checkUtxoTransaction(String(coin).toLowerCase(), ref, opts);
+    default:
+      // An unrecognised coin is not a licence to guess.
+      return 'unknown';
+  }
+}
+
 // Actual network fee reserves (realistic)
 const GAS_RESERVE = {
   btc:  0.00002,   // ~$1.30 at $65k — covers typical tx fee
@@ -155,30 +253,57 @@ function b58encode(buf) {
 // and carries no SLA. But an unset key should slow sends down, not break them.
 const ETH_RPC_FALLBACK = 'https://ethereum-rpc.publicnode.com';
 
-async function sendEth(privKey, toAddress, amount) {
-  const provider = new ethers.JsonRpcProvider(process.env.ALCHEMY_ETH_RPC || ETH_RPC_FALLBACK);
+// Broadcast and confirmation are separate failures here too.
+//
+// sendTransaction broadcasts; tx.wait(1) waits for a block. A wait that times
+// out, or an RPC that drops mid-wait, throws — but the transaction is already
+// on the network and will very likely be mined. The withdrawal handler refunds
+// on a payout error, so that threw the coins back while the ETH left: a real
+// double-spend, and one anybody could fish for by retrying withdrawals during
+// congestion until a confirmation happened to time out.
+//
+// This is the same hole that was closed for Solana, left open on every other
+// chain. The fix is the same: the hash is captured at BROADCAST time and
+// carried on the error, so a caller about to refund can ask the chain what
+// actually happened instead of assuming the worst.
+async function sendEvm(rpcUrl, privKey, toAddress, amount) {
+  const provider = new ethers.JsonRpcProvider(rpcUrl);
   const wallet   = new ethers.Wallet('0x' + privKey.toString('hex'), provider);
-  const tx       = await wallet.sendTransaction({
-    to:    toAddress,
-    value: ethers.parseEther(String(amount)),
-  });
-  await tx.wait(1);
+
+  // Nothing is on the network yet, so a failure here is unambiguous.
+  let tx;
+  try {
+    tx = await wallet.sendTransaction({
+      to:    toAddress,
+      value: ethers.parseEther(String(amount)),
+    });
+  } catch (e) {
+    throw new PayoutError(e.message, null);
+  }
+
+  try {
+    const rc = await tx.wait(1);
+    // Mined and reverted. The money did not move, so this is safe to refund —
+    // but it still carries the hash so the caller's own check agrees.
+    if (rc && rc.status === 0) {
+      throw new PayoutError(`transaction reverted on chain: ${tx.hash}`, tx.hash);
+    }
+  } catch (e) {
+    if (e instanceof PayoutError) throw e;
+    throw new PayoutError(`could not confirm: ${e.message}`, tx.hash);
+  }
   return tx.hash;
+}
+
+async function sendEth(privKey, toAddress, amount) {
+  return sendEvm(process.env.ALCHEMY_ETH_RPC || ETH_RPC_FALLBACK, privKey, toAddress, amount);
 }
 
 // ── BNB (BSC) ─────────────────────────────────────────────────────────────────
 
 async function sendBnb(privKey, toAddress, amount) {
-  const provider = new ethers.JsonRpcProvider(
-    process.env.BSC_RPC || 'https://bsc-dataseed.binance.org/'
-  );
-  const wallet = new ethers.Wallet('0x' + privKey.toString('hex'), provider);
-  const tx     = await wallet.sendTransaction({
-    to:    toAddress,
-    value: ethers.parseEther(String(amount)),
-  });
-  await tx.wait(1);
-  return tx.hash;
+  return sendEvm(process.env.BSC_RPC || 'https://bsc-dataseed.binance.org/',
+                 privKey, toAddress, amount);
 }
 
 // ── SOL ───────────────────────────────────────────────────────────────────────
@@ -277,11 +402,24 @@ async function sendTrx(privKey, toAddress, amount) {
   const fromAddress = tronWeb.defaultAddress.base58;
   const tx          = await tronWeb.transactionBuilder.sendTrx(toAddress, sun, fromAddress);
   const signed      = await tronWeb.trx.sign(tx, privKeyHex);
-  const receipt     = await tronWeb.trx.sendRawTransaction(signed);
-  if (receipt.code && receipt.code !== 'SUCCESS') {
-    throw new Error(`TRX send failed: ${receipt.code} ${receipt.message || ''}`);
+  // The id is known BEFORE broadcasting — it is a hash of the signed
+  // transaction — so a lost response is still identifiable. Without it, a
+  // request that times out after the node accepted the transaction looks
+  // exactly like one that never left, and the handler refunds a payout that
+  // actually happened.
+  const txID = signed.txID;
+  let receipt;
+  try {
+    receipt = await tronWeb.trx.sendRawTransaction(signed);
+  } catch (e) {
+    throw new PayoutError(`could not confirm: ${e.message}`, txID);
   }
-  return receipt.txid || signed.txID;
+  if (receipt.code && receipt.code !== 'SUCCESS') {
+    // The node rejected it outright — it was never accepted, so it is safe to
+    // refund and the signature is deliberately null.
+    throw new PayoutError(`TRX send failed: ${receipt.code} ${receipt.message || ''}`, null);
+  }
+  return receipt.txid || txID;
 }
 
 // ── BTC / LTC / DOGE (via BlockCypher) ───────────────────────────────────────
@@ -383,14 +521,27 @@ async function sendUtxoCoin(coin, privKey, toAddress, amount) {
   });
 
   // Step 3: broadcast
-  const sendRes = await fetch(`${apiBase}/txs/send${qs}`, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify(skel),
-  });
-  const sent = await sendRes.json();
-  if (sent.errors?.length) throw new Error(`BlockCypher broadcast: ${JSON.stringify(sent.errors)}`);
-  return sent.tx?.hash;
+  // BlockCypher fills in the hash on the skeleton it gave us, so the id is
+  // known before the push. A response lost in transit after the node accepted
+  // the transaction would otherwise be indistinguishable from a rejection, and
+  // the handler would refund coins for money that had already gone.
+  const preHash = skel.tx?.hash || null;
+  let sent;
+  try {
+    const sendRes = await fetch(`${apiBase}/txs/send${qs}`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(skel),
+    });
+    sent = await sendRes.json();
+  } catch (e) {
+    throw new PayoutError(`could not confirm: ${e.message}`, preHash);
+  }
+  // An explicit rejection means it was never accepted — safe to refund.
+  if (sent.errors?.length) {
+    throw new PayoutError(`BlockCypher broadcast: ${JSON.stringify(sent.errors)}`, null);
+  }
+  return sent.tx?.hash || preHash;
 }
 
 // ── USDC sweep ────────────────────────────────────────────────────────────────
@@ -488,4 +639,4 @@ async function sendCrypto({ coin, privKey, toAddress, amount }) {
   }
 }
 
-module.exports = { sendCrypto, sweepUsdc, sweepSplToken, USDC_MINT, USDT_MINT, GAS_RESERVE, PayoutError, checkSolanaSignature, sendAndVerify, derEncode };
+module.exports = { sendCrypto, sweepUsdc, sweepSplToken, USDC_MINT, USDT_MINT, GAS_RESERVE, PayoutError, checkSolanaSignature, checkPayout, checkEvmTransaction, checkTronTransaction, checkUtxoTransaction, sendAndVerify, derEncode };
