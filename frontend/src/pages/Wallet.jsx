@@ -420,6 +420,36 @@ export default function Wallet() {
                   <p className="text-xs text-muted mt-0.5">Balance credited with exact USD value received after network fees</p>
                 </div>
 
+                {/* Wrong-network warning.
+                    The address is the thing people copy, so this sits directly
+                    above it rather than in the small print underneath.
+
+                    It exists because an ETH deposit was sent to the correct
+                    address on Robinhood Chain instead of Ethereum, and simply
+                    vanished from the player's point of view: the send
+                    succeeded, the address was right, and nothing credited.
+                    Robinhood defaults ETH withdrawals to its own L2, so this
+                    is not an exotic mistake — it is what happens if you do not
+                    change the network.
+
+                    Named for the network rather than worded as a general
+                    caution, because "make sure you use the right network"
+                    reads as boilerplate and is skipped. */}
+                {depAddress.address?.startsWith('0x') && (
+                  <div className="bg-warning/10 border border-warning/30 rounded-lg px-4 py-3">
+                    <p className="text-sm text-warning font-bold mb-1">
+                      Send on {depCoin.network} only
+                    </p>
+                    <p className="text-xs text-white/80 leading-relaxed">
+                      This address exists on every EVM network, so a send on the wrong one
+                      succeeds and is <span className="font-semibold">not credited</span>.
+                      If you are withdrawing from Robinhood, change the network from
+                      Robinhood Chain to {depCoin.network} first — funds sent on an L2 have
+                      to be recovered by hand.
+                    </p>
+                  </div>
+                )}
+
                 {/* Address */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">

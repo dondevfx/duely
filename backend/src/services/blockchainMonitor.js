@@ -243,20 +243,47 @@ function explorerMiss(coin, address, d) {
 // as a fallback for BNB in case the two keys really are different here.
 const EVM_CHAIN_IDS = { eth: 1, bnb: 56 };
 
-async function fetchEvmTxs(coin, address) {
-  const key = coin === 'bnb'
-    ? (process.env.ETHERSCAN_API_KEY || process.env.BSCSCAN_API_KEY || '')
-    : (process.env.ETHERSCAN_API_KEY || '');
-  const chainId = EVM_CHAIN_IDS[coin];
+// Where to ask about an EVM address, in order.
+//
+// Etherscan first when a key is configured — it is the fastest and has the
+// highest limits. Blockscout second, and it needs NO API KEY, which is the
+// point: ETH deposits were invisible for months because ETHERSCAN_API_KEY was
+// empty, Etherscan answered "Missing/Invalid API Key", and a non-success reply
+// is read here as "no deposits arrived". A whole coin was silently off, and the
+// transactions table has not one ETH deposit in it to this day.
+//
+// A deposit path that stops working when one key expires is a deposit path that
+// will stop working again. The keyless source means the worst an unset or
+// rejected key can now do is make deposits slower, not invisible.
+//
+// Blockscout answers in the same shape as Etherscan — hash, to, value, isError,
+// confirmations, all identically named — so both parse through one branch.
+// Newest N only. An explorer asked for a full history walks every transaction
+// an address has ever had, which on a busy one is slow enough to blow the
+// 12-second timeout — and a timeout here reads as "no deposits", the exact
+// failure this whole change exists to remove. A deposit is found within
+// seconds of arriving or not at all, so the newest page is all that is ever
+// needed.
+const PAGE = 25;
 
-  const r = await fetchWithTimeout(
-    `https://api.etherscan.io/v2/api?chainid=${chainId}` +
-    `&module=account&action=txlist&address=${address}&sort=desc&apikey=${key}`
-  );
-  const d = await readJson(r);
-  if (d.status !== '1') { explorerMiss(coin, address, d); return []; }
-  if (!Array.isArray(d.result)) { explorerMiss(coin, address, d); return []; }
+const EVM_SOURCES = {
+  eth: [
+    { name: 'etherscan',  needsKey: true,
+      url: (a, k) => `https://api.etherscan.io/v2/api?chainid=1&module=account&action=txlist&address=${a}&sort=desc&apikey=${k}&page=1&offset=${PAGE}` },
+    { name: 'blockscout', needsKey: false,
+      url: (a)    => `https://eth.blockscout.com/api?module=account&action=txlist&address=${a}&sort=desc&page=1&offset=${PAGE}` },
+  ],
+  bnb: [
+    { name: 'etherscan',  needsKey: true,
+      url: (a, k) => `https://api.etherscan.io/v2/api?chainid=56&module=account&action=txlist&address=${a}&sort=desc&apikey=${k}&page=1&offset=${PAGE}` },
+  ],
+};
 
+// Parse one Etherscan-shaped response into the deposits we care about.
+// Returns null when the response is not a usable success, so the caller can
+// try the next source rather than reporting an empty address.
+function parseEvmTxs(d, address) {
+  if (d?.status !== '1' || !Array.isArray(d.result)) return null;
   return d.result
     .filter(tx => tx.to?.toLowerCase() === address.toLowerCase() && tx.isError === '0')
     .map(tx => ({
@@ -265,6 +292,38 @@ async function fetchEvmTxs(coin, address) {
       confirmed: parseInt(tx.confirmations) >= 1,
     }))
     .filter(t => t.amount > 0);
+}
+
+async function fetchEvmTxs(coin, address) {
+  const key = coin === 'bnb'
+    ? (process.env.ETHERSCAN_API_KEY || process.env.BSCSCAN_API_KEY || '')
+    : (process.env.ETHERSCAN_API_KEY || '');
+
+  const sources = EVM_SOURCES[coin] || [];
+  let lastBody = null;
+
+  for (const src of sources) {
+    // No key, no point spending a request to be told so.
+    if (src.needsKey && !key) continue;
+    try {
+      const r = await fetchWithTimeout(src.url(address, key));
+      const d = await readJson(r);
+
+      // A genuinely empty address is a real answer, not a failure to fall past.
+      if (/no transactions found/i.test(String(d?.message || ''))) return [];
+
+      const out = parseEvmTxs(d, address);
+      if (out) return out;
+      lastBody = d;
+    } catch (e) {
+      lastBody = { status: '0', message: 'NOTOK', result: `${src.name}: ${e.message}` };
+    }
+  }
+
+  // Every source failed. Report the last reason and treat the address as empty,
+  // which is the only safe thing left — but say so, loudly enough to be found.
+  explorerMiss(coin, address, lastBody || { status: '0', message: 'NOTOK', result: 'no usable source' });
+  return [];
 }
 
 const fetchEthTxs = (address) => fetchEvmTxs('eth', address);
@@ -1069,6 +1128,14 @@ function init(supabase) {
     .catch(e => console.error('[monitor] stranded sweep error:', e.message));
   setTimeout(runSweep, 30_000);          // after boot, once the RPC is warm
   setInterval(runSweep, SWEEP_INTERVAL_MS);
+
+  // Deposits that landed on the right address but the wrong chain. Four
+  // eth_getBalance calls per ETH address, so it rides the same slow timer as
+  // the stranded-USDC sweep rather than the 45-second poll.
+  const runL2 = () => require('./l2Watch').sweep(supabase)
+    .catch(e => console.error('[monitor] l2 watch error:', e.message));
+  setTimeout(runL2, 45_000);
+  setInterval(runL2, SWEEP_INTERVAL_MS);
 
   async function loop() {
     await pollOnce(supabase).catch(e => console.error('[monitor] loop error:', e.message));

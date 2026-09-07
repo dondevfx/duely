@@ -144,8 +144,19 @@ function b58encode(buf) {
 
 // ── ETH ───────────────────────────────────────────────────────────────────────
 
+// ALCHEMY_ETH_RPC is optional, and was not being treated that way.
+//
+// Unset, this built a JsonRpcProvider on undefined, and every ETH send threw
+// before it reached the chain — the same silent gap the deposit side had, at
+// the other end of the flow. BNB and SOL already fall back to a public node
+// when their RPC is unset; ETH is the one that did not, for no reason.
+//
+// A dedicated endpoint is still worth setting: the public node is rate limited
+// and carries no SLA. But an unset key should slow sends down, not break them.
+const ETH_RPC_FALLBACK = 'https://ethereum-rpc.publicnode.com';
+
 async function sendEth(privKey, toAddress, amount) {
-  const provider = new ethers.JsonRpcProvider(process.env.ALCHEMY_ETH_RPC);
+  const provider = new ethers.JsonRpcProvider(process.env.ALCHEMY_ETH_RPC || ETH_RPC_FALLBACK);
   const wallet   = new ethers.Wallet('0x' + privKey.toString('hex'), provider);
   const tx       = await wallet.sendTransaction({
     to:    toAddress,

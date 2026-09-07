@@ -51,7 +51,12 @@ test('a non-array result cannot crash the poll', () => {
   // On an error response `result` is a STRING. Calling .filter on it throws,
   // and the per-address catch would report it as a poll failure rather than an
   // explorer refusal — hiding the real cause behind a stack trace.
-  const fn = CODE.slice(CODE.indexOf('async function fetchEvmTxs'), CODE.indexOf('const fetchEthTxs'));
+  //
+  // Scanned from parseEvmTxs rather than from fetchEvmTxs: the guard moved into
+  // parseEvmTxs when a second, keyless explorer was added, and a slice that
+  // starts at fetchEvmTxs no longer contains it. The rule is unchanged — the
+  // check just lives in the function that now does the parsing.
+  const fn = CODE.slice(CODE.indexOf('function parseEvmTxs'), CODE.indexOf('const fetchEthTxs'));
   assert.match(fn, /Array\.isArray\(d\.result\)/,
     'result is a string on failure, and .filter on a string throws');
 });
