@@ -66,6 +66,38 @@ test('a deposit that only exists as an internal transfer is found', async () => 
   } finally { process.env.ETHERSCAN_API_KEY = realKey; }
 });
 
+test('an internal deposit is found whichever provider reports it', async () => {
+  // The two providers name the hash field differently, and they disagree:
+  // Blockscout returns `transactionHash`, Etherscan returns `hash`.
+  //
+  // This shipped reading only `transactionHash`, verified live against
+  // Blockscout — and Blockscout is the FALLBACK. Production runs on Etherscan,
+  // where every internal row therefore had an undefined hash and was dropped by
+  // the guard that discards hashless rows. A real $8 deposit was returned by
+  // the API, parsed, and thrown away.
+  //
+  // Both shapes, one test, because verifying against one provider is what
+  // caused this.
+  const realKey = process.env.ETHERSCAN_API_KEY;
+  const shapes = {
+    etherscan:  { hash: '0xdeposit' },              // Etherscan's field name
+    blockscout: { transactionHash: '0xdeposit' },   // Blockscout's
+  };
+  for (const [who, hashField] of Object.entries(shapes)) {
+    process.env.ETHERSCAN_API_KEY = '';
+    const monitor = loadMonitor(async (url) => String(url).includes('txlistinternal')
+      ? reply({ status: '1', message: 'OK', result: [{
+          ...hashField, to: '0xdead', value: '3210067423593700', isError: '0' }] })
+      : reply({ status: '0', message: 'No transactions found', result: [] }));
+    try {
+      const out = await monitor.__fetchEvmTxs('eth', '0xDEAD');
+      assert.equal(out.length, 1, `${who}: the deposit was dropped`);
+      assert.equal(out[0].txHash, '0xdeposit', `${who}: wrong hash field read`);
+      assert.equal(out[0].confirmed, true, `${who}: not credited`);
+    } finally { process.env.ETHERSCAN_API_KEY = realKey; }
+  }
+});
+
 test('Blockscout answering status 2 is still a usable answer', async () => {
   // It returns "some internal transactions within this block range have not yet
   // been processed" alongside perfectly good rows. A strict status === '1'

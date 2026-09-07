@@ -283,7 +283,10 @@ const EVM_SOURCES = {
 // `internal` covers the txlistinternal endpoint, whose rows differ in three
 // ways that each silently produce nothing if missed:
 //
-//   - the hash is `transactionHash`, not `hash`
+//   - the hash field is named differently by each provider, and they disagree:
+//     Blockscout calls it `transactionHash`, Etherscan calls it `hash`. Take
+//     whichever is present — reading only one drops every internal deposit the
+//     OTHER provider reports, which is a deposit found and then thrown away.
 //   - there is no `confirmations` field at all, so the usual >= 1 test is
 //     NaN >= 1, which is false, and every internal deposit would be found and
 //     then never credited
@@ -299,7 +302,7 @@ function parseEvmTxs(d, address, internal = false) {
   return d.result
     .filter(tx => tx.to?.toLowerCase() === address.toLowerCase() && tx.isError === '0')
     .map(tx => ({
-      txHash:    internal ? tx.transactionHash : tx.hash,
+      txHash:    internal ? (tx.transactionHash || tx.hash) : tx.hash,
       amount:    parseFloat(tx.value) / 1e18,
       confirmed: internal ? true : parseInt(tx.confirmations) >= 1,
     }))
