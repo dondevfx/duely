@@ -167,14 +167,35 @@ async function poll(exchangeId, userId, startedAt, creditUser, kind = 'deposit')
         } else {
           console.log(`[swapPoller] exchange ${exchangeId} already credited — skipping duplicate`);
         }
+      } else if (creditUser && !(usdcRaw > 0)) {
+        // Finished, and we could not read what arrived.
+        //
+        // This is never a legitimate outcome. ChangeNow does not report a swap
+        // finished without paying one out, so a zero here means we failed to
+        // READ the amount, not that nothing came. Filing it as below_min said
+        // "a real deposit was too small to credit" — a sentence about the
+        // player's money that was not true, and one nobody would investigate.
+        //
+        // It hid a field-name mismatch that zeroed every ChangeNow deposit the
+        // platform ever took. Now it goes to the admin queue, where a stuck row
+        // is looked at.
+        await supabaseRef
+          .from('transactions')
+          .update({ status: 'stuck', notes:
+            'exchange finished but the received amount read as zero — the swap ' +
+            'paid out, so this is a read failure, not a small deposit. Credit by hand.' })
+          .eq('tx_hash', exchangeId)
+          .eq('status', 'converting');
+        console.error(`[swapPoller] exchange ${exchangeId} FINISHED but read $0 received — ` +
+          `not crediting, and not calling it below_min. Someone is owed money; check the exchange.`);
       } else {
-        // $7–$9.99 buffer band — platform keeps USDC, no user credit
+        // Genuinely under the floor, or a swap we never intended to credit.
         await supabaseRef
           .from('transactions')
           .update({ status: 'below_min', amount_c: 0 })
           .eq('tx_hash', exchangeId)
           .eq('status', 'converting');
-        console.log(`[swapPoller] exchange ${exchangeId} finished — $${usdcRaw} USDC received, no user credit (buffer band or zero)`);
+        console.log(`[swapPoller] exchange ${exchangeId} finished — $${usdcRaw} USDC received, under the $${MIN_CREDIT_USD} floor`);
       }
       activePolls.delete(exchangeId);
 

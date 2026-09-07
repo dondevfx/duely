@@ -131,10 +131,25 @@ async function createWithdrawalSwap({ coin, amountUsd, playerAddress, playerMemo
 // ChangeNow statuses: waiting, confirming, exchanging, sending, finished, failed, refunded, expired
 async function getExchangeStatus(exchangeId) {
   const data = await cnGet(`/transactions/${exchangeId}/${API_KEY}`);
+  // ChangeNow's v1 transaction status calls these amountSend and amountReceive.
+  //
+  // This read amountFrom and amountTo, which the response does not contain, so
+  // `parseFloat(undefined || 0)` was 0 on every single call. swapPoller credits
+  // the received amount and refuses anything under $3, so EVERY ChangeNow
+  // deposit was read as zero USDC and never credited — which is why, in the
+  // whole history of the platform, no BTC, ETH, LTC, DOGE or TRX deposit had
+  // ever reached a player's balance. The money arrived every time; the number
+  // saying how much did not.
+  //
+  // Found on a real $8 ETH deposit: status "finished", payoutHash present, and
+  // amountReceive 7.46551 USDC sitting in our treasury, while the poller logged
+  // "$0 USDC received, no user credit".
+  //
+  // The old names are kept as a fallback in case a v2 endpoint is ever used.
   return {
     status:       data.status,
-    amountFrom:   parseFloat(data.amountFrom || 0),
-    amountTo:     parseFloat(data.amountTo   || 0),
+    amountFrom:   parseFloat(data.amountSend    ?? data.amountFrom ?? 0),
+    amountTo:     parseFloat(data.amountReceive ?? data.amountTo   ?? 0),
     currencyFrom: data.fromCurrency,
     currencyTo:   data.toCurrency,
     txFrom:       data.payinHash,
