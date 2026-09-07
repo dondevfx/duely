@@ -153,7 +153,20 @@ async function sync(supabase) {
 
   // Skip the write when nothing changed. This runs on every boot and after
   // every new address, and an unchanged PUT is a request that buys nothing.
-  const before = new Set(mine.accountAddresses || []);
+  //
+  // The address list has to be fetched SEPARATELY. Helius's list endpoint
+  // returns webhookID, project, wallet, webhookURL, transactionTypes,
+  // webhookType, authHeader and active — and no accountAddresses at all. Only
+  // a GET of the single webhook carries them.
+  //
+  // Reading them off the list row therefore always gave undefined, so `before`
+  // was always empty, `same` was always false, and the guard never once did
+  // what it says: every boot wrote the same list back and logged
+  // "webhook updated: 0 -> 8", as though the webhook had been empty. Which
+  // also meant a genuine change was indistinguishable from a no-op in the log.
+  const full = await heliusFetch(`${API}/${mine.webhookID}?api-key=${apiKey()}`)
+    .catch(() => null);
+  const before = new Set(full?.accountAddresses || mine.accountAddresses || []);
   const same = before.size === watch.length && watch.every(a => before.has(a));
   if (same) return { unchanged: true, addresses: watch.length };
 

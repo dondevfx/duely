@@ -239,6 +239,61 @@ test('an unchanged address list is not rewritten', () => {
   assert.match(SERVICE, /if \(same\) return \{ unchanged: true/);
 });
 
+test('the guard works against the API Helius actually has', async () => {
+  // The one above checks the guard is WRITTEN. This checks it FIRES, which it
+  // did not: Helius's list endpoint returns webhookID, project, wallet,
+  // webhookURL, transactionTypes, webhookType, authHeader and active — and no
+  // accountAddresses at all. Only a GET of the single webhook carries them.
+  //
+  // So `mine.accountAddresses` was always undefined, `before` was always
+  // empty, and every boot rewrote the same list and logged
+  // "webhook updated: 0 -> 8". Verified against the live API before fixing.
+  const nf = require.resolve('node-fetch');
+  const realFetch = require.cache[nf];
+  const realEnv = {
+    HELIUS_API_KEY: process.env.HELIUS_API_KEY,
+    HELIUS_WEBHOOK_SECRET: process.env.HELIUS_WEBHOOK_SECRET,
+    PUBLIC_API_URL: process.env.PUBLIC_API_URL,
+  };
+  process.env.HELIUS_API_KEY = 'k';
+  process.env.HELIUS_WEBHOOK_SECRET = 's';
+  process.env.PUBLIC_API_URL = 'https://api.example.com';
+
+  const WATCHED = ['SoLaddr1', 'SoLaddr2'];
+  const methods = [];
+  require.cache[nf] = { id: nf, filename: nf, loaded: true, exports:
+    async (url, opts = {}) => {
+      methods.push(`${opts.method || 'GET'} ${String(url).split('?')[0]}`);
+      const single = /\/webhooks\/[^/?]+/.test(String(url));
+      const body = single
+        // The single GET carries the addresses...
+        ? { webhookID: 'w1', webhookURL: 'https://api.example.com/api/webhooks/helius',
+            accountAddresses: WATCHED }
+        // ...the list does NOT. This is the shape that broke it.
+        : [{ webhookID: 'w1', webhookURL: 'https://api.example.com/api/webhooks/helius',
+             transactionTypes: ['ANY'], webhookType: 'enhanced', active: true }];
+      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+    } };
+
+  delete require.cache[require.resolve('../src/services/heliusWebhooks')];
+  try {
+    const helius = require('../src/services/heliusWebhooks');
+    const db = { from: () => ({ select: () => ({ in: async () => ({
+      data: WATCHED.map(a => ({ address: a, coin: 'sol' })), error: null }) }) }) };
+    const out = await helius.sync(db);
+    assert.equal(out.unchanged, true,
+      `an unchanged list was rewritten (result: ${JSON.stringify(out)})`);
+    assert.ok(!methods.some(m => m.startsWith('PUT')),
+      `wrote the same list back: ${methods.join(', ')}`);
+  } finally {
+    if (realFetch) require.cache[nf] = realFetch; else delete require.cache[nf];
+    delete require.cache[require.resolve('../src/services/heliusWebhooks')];
+    for (const [k, v] of Object.entries(realEnv)) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+});
+
 test('the webhook is found by its delivery URL, not a stored id', () => {
   // An id needs somewhere durable to live and goes stale the moment someone
   // deletes the webhook in the dashboard. The URL is what makes it ours.
