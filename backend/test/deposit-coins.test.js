@@ -124,9 +124,16 @@ test('disabled coins are not polled', () => {
 test('a repeating explorer failure does not repeat in the log', () => {
   // A plan limit or an outage affects every address at once and does not change
   // between polls. One line per address per pass makes the log unreadable.
-  const fn = MONITOR_SRC.slice(MONITOR_SRC.indexOf('function explorerMiss'),
-                               MONITOR_SRC.indexOf('async function fetchEthTxs'));
+  //
+  // The throttle moved. explorerMiss was the EVM path's own reporter; every
+  // provider now reports failure by throwing, so there is one handler for all
+  // of them — pollCoin's catch — and the throttle belongs with it.
+  const fn = MONITOR_SRC.slice(MONITOR_SRC.indexOf('async function pollCoin'),
+                               MONITOR_SRC.indexOf('const SWEEP_EVERY_PASSES'));
+  assert.notEqual(MONITOR_SRC.indexOf('async function pollCoin'), -1, 'pollCoin is gone');
   assert.match(fn, /MISS_REPEAT_MS/, 'identical failures must be throttled');
-  assert.match(fn, /\$\{coin\}:\$\{String\(why\)/,
+  assert.match(fn, /const key = `\$\{coin\}:\$\{why\}`/,
     'the reason must be part of the key, so a DIFFERENT failure still reports immediately');
+  assert.match(fn, /replace\(address, '<address>'\)/,
+    'the address must NOT be part of the key, or the throttle is per address');
 });

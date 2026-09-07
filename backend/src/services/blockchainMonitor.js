@@ -196,39 +196,6 @@ async function fetchBtcTxs(address) {
   }
 }
 
-// An Etherscan-family response that is not a success.
-//
-// status '0' with "No transactions found" is the normal empty case for an
-// address nobody has paid yet. Anything else — a rejected key, a rate limit, a
-// retired endpoint — was being returned as an empty list, indistinguishable
-// from "no deposits arrived".
-//
-// `result` is the field that actually says WHY. message is always the useless
-// "NOTOK"; result carries "Invalid API Key", "Max rate limit reached", or the
-// deprecation notice. Logging only message told us something was wrong without
-// telling us what, which cost a round trip.
-const _missLogged = new Map();
-const MISS_REPEAT_MS = 30 * 60 * 1000;
-
-function explorerMiss(coin, address, d) {
-  const msg = String(d?.message || '');
-  if (/no transactions found/i.test(msg)) return;   // genuinely empty, not a fault
-  const why = typeof d?.result === 'string' ? d.result : JSON.stringify(d?.result ?? null);
-
-  // Once per coin+reason per half hour. A provider outage or a plan limit
-  // affects every address at once and does not change between polls, so
-  // logging it per address per pass buries everything else — which is how the
-  // BNB plan limit produced a line every 45 seconds and nothing else was
-  // readable. The reason is part of the key, so a DIFFERENT failure still
-  // reports immediately.
-  const key = `${coin}:${String(why).slice(0, 80)}`;
-  const last = _missLogged.get(key) || 0;
-  if (Date.now() - last < MISS_REPEAT_MS) return;
-  _missLogged.set(key, Date.now());
-
-  console.warn(`[monitor] ${coin} explorer refused: status=${d?.status} message="${msg}" ` +
-    `result="${String(why).slice(0, 200)}" (e.g. ${address}) — treating as no deposits, which may be wrong`);
-}
 
 // ETH and BNB share one client, because Etherscan V2 serves every chain from a
 // single endpoint keyed by chainid — and one Etherscan API key covers them all.
@@ -258,6 +225,36 @@ const EVM_CHAIN_IDS = { eth: 1, bnb: 56 };
 //
 // Blockscout answers in the same shape as Etherscan — hash, to, value, isError,
 // confirmations, all identically named — so both parse through one branch.
+// "The provider did not answer" is not "no deposits arrived".
+//
+// Every fetcher below used to collapse the two: a missing field in an error
+// body became an empty array, so an address we could not read was reported as
+// an address with nothing on it. ETH is the one that got caught — an empty API
+// key and months of invisible deposits — but the shape was everywhere:
+//
+//   BlockCypher (ltc, doge, btc fallback)  if (!d.txs)  return [];
+//   TronGrid    (trx, usdt-trc20)          if (!d.data) return [];
+//   Solana RPC  (sol, usdc, usdt)          d.result || []
+//
+// Checked against all four providers: an address with genuinely nothing on it
+// returns the field, empty — BlockCypher gives txs: [], TronGrid gives data: []
+// with success: true, Solana gives result: []. A MISSING field only ever means
+// the request failed. The two are distinguishable, and this throws for the
+// failure.
+//
+// Throwing is what BTC already did, and it is right: the per-address catch in
+// pollCoin logs it and the next pass retries. The coins sit in the deposit
+// address meanwhile — nothing is lost, and nobody is told a lie about it.
+function providerFailed(provider, coin, address, detail) {
+  const why = typeof detail === 'string' ? detail : JSON.stringify(detail ?? null);
+  throw new Error(`${provider} did not answer for ${coin} ${address}: ${String(why).slice(0, 200)}`);
+}
+
+// Failures are reported once per coin per reason per half hour — see the note
+// in pollCoin's catch for why the address is deliberately not part of the key.
+const _missLogged = new Map();
+const MISS_REPEAT_MS = 30 * 60 * 1000;
+
 // Newest N only. An explorer asked for a full history walks every transaction
 // an address has ever had, which on a busy one is slow enough to blow the
 // 12-second timeout — and a timeout here reads as "no deposits", the exact
@@ -320,10 +317,10 @@ async function fetchEvmTxs(coin, address) {
     }
   }
 
-  // Every source failed. Report the last reason and treat the address as empty,
-  // which is the only safe thing left — but say so, loudly enough to be found.
-  explorerMiss(coin, address, lastBody || { status: '0', message: 'NOTOK', result: 'no usable source' });
-  return [];
+  // Every source failed. Same rule as every other provider: an address we could
+  // not read is not an address with nothing on it.
+  providerFailed('every explorer', coin, address,
+    lastBody?.result || lastBody?.message || 'no usable source');
 }
 
 const fetchEthTxs = (address) => fetchEvmTxs('eth', address);
@@ -345,8 +342,10 @@ async function fetchSplTxs(walletAddress, coin = 'usdc') {
     const walletPubkey = new solWeb3.PublicKey(walletAddress);
     const tokenAccount = splToken.getAssociatedTokenAddressSync(MINT, walletPubkey);
     tokenAccountStr = tokenAccount.toBase58();
-  } catch {
-    return [];
+  } catch (e) {
+    // A stored address that will not parse is a data fault, and reporting it as
+    // an empty wallet would hide it for as long as the row exists.
+    providerFailed('address derivation', coin, walletAddress, e.message);
   }
 
   // Get recent signatures for the token account
@@ -360,7 +359,10 @@ async function fetchSplTxs(walletAddress, coin = 'usdc') {
     }),
   });
   const sigData = await readJson(sigRes);
-  const sigs = sigData.result || [];
+  if (sigData.error || !Array.isArray(sigData.result)) {
+    providerFailed('solana rpc', coin, walletAddress, sigData.error || sigData);
+  }
+  const sigs = sigData.result;
 
   const results = [];
   for (const sig of sigs) {
@@ -402,7 +404,9 @@ async function fetchSolTxs(address) {
     }),
   });
   const d = await readJson(r);
-  const sigs = d.result || [];
+  // result: [] is a real empty answer; a missing result is a failed request.
+  if (d.error || !Array.isArray(d.result)) providerFailed('solana rpc', 'sol', address, d.error || d);
+  const sigs = d.result;
 
   const results = [];
   for (const sig of sigs) {
@@ -436,7 +440,8 @@ async function fetchTrxTxs(address) {
     `https://api.trongrid.io/v1/accounts/${address}/transactions?only_confirmed=true&limit=20&direction=in`
   );
   const d = await readJson(r);
-  if (!d.data) return [];
+  // An empty account still carries data: [] with success: true.
+  if (!Array.isArray(d.data)) providerFailed('trongrid', 'trx', address, d.error || d);
   return d.data
     .filter(tx => {
       const contract = tx.raw_data?.contract?.[0];
@@ -460,7 +465,7 @@ async function fetchUsdtTrc20Txs(address) {
     `https://api.trongrid.io/v1/accounts/${address}/transactions/trc20?only_confirmed=true&limit=20&contract_address=${usdtContract}`
   );
   const d = await readJson(r);
-  if (!d.data) return [];
+  if (!Array.isArray(d.data)) providerFailed('trongrid', 'usdt-trc20', address, d.error || d);
   return d.data
     .filter(tx => tx.to === address && parseFloat(tx.value) > 0)
     .map(tx => ({
@@ -476,7 +481,8 @@ async function fetchBlockcypherTxs(coin, address) {
   const token  = process.env.BLOCKCYPHER_TOKEN ? `?token=${process.env.BLOCKCYPHER_TOKEN}` : '';
   const r = await fetchWithTimeout(`https://api.blockcypher.com/v1/${chain}/addrs/${address}/full?limit=5${token}`);
   const d = await readJson(r);
-  if (!d.txs) return [];
+  // An address with nothing on it still carries txs: [] — see providerFailed.
+  if (!Array.isArray(d.txs)) providerFailed('blockcypher', coin, address, d.error || d);
   return d.txs.map(tx => {
     const out = tx.outputs?.find(o => o.addresses?.includes(address));
     const val = out?.value || 0;
@@ -940,7 +946,24 @@ async function pollCoin(supabase, coin, list) {
         });
       }
     } catch (e) {
-      console.error(`[monitor] poll error ${coin}/${address}:`, e.message);
+      // Deduped by coin and reason, not by address.
+      //
+      // A provider outage or a rejected key hits every address at once and does
+      // not change between passes, so logging per address per pass buries
+      // everything else — which is how a BNB plan limit once produced a line
+      // every 45 seconds and nothing else was readable. The reason is part of
+      // the key, so a DIFFERENT failure still reports immediately.
+      //
+      // This lives here rather than in each fetcher because every provider now
+      // reports failure the same way: by throwing.
+      const why = String(e.message).replace(address, '<address>').slice(0, 120);
+      const key = `${coin}:${why}`;
+      const last = _missLogged.get(key) || 0;
+      if (Date.now() - last >= MISS_REPEAT_MS) {
+        _missLogged.set(key, Date.now());
+        console.error(`[monitor] poll error ${coin}/${address}: ${e.message} ` +
+          `— NOT treated as "no deposits"; retrying next pass`);
+      }
     }
     if (i < list.length - 1) await new Promise(r => setTimeout(r, delay));
   }

@@ -33,18 +33,44 @@ test('both chains go through the V2 endpoint with a chain id', () => {
 
 test('the failure reason is actually logged', () => {
   // message is always the useless "NOTOK"; result carries "Invalid API Key",
-  // "Max rate limit reached" or the deprecation notice. Logging only message
+  // "Max rate limit reached" or the deprecation notice. Reporting only message
   // says something is wrong without saying what.
-  const fn = CODE.slice(CODE.indexOf('function explorerMiss'), CODE.indexOf('const EVM_CHAIN_IDS'));
-  assert.match(fn, /d\?\.result/, 'result is the field that says why');
+  //
+  // explorerMiss is gone: every provider now reports failure by throwing, and
+  // the reason travels on the error. So the check is that the reason is put
+  // ON the error, and that the handler prints it.
+  const fn = CODE.slice(CODE.indexOf('function providerFailed'), CODE.indexOf('const _missLogged'));
+  assert.match(fn, /lastBody\?\.result|detail/, 'the reason must reach the message');
+  assert.match(CODE, /lastBody\?\.result/, 'the EVM path must pass result, not just message');
+  assert.match(CODE, /poll error \$\{coin\}\/\$\{address\}: \$\{e\.message\}/,
+    'the handler must print the reason it was given');
 });
 
 test('a normally empty address stays quiet', () => {
   // An address nobody has paid returns status 0 with "No transactions found".
   // Logging that would bury the real faults under one line per address per poll.
-  const fn = CODE.slice(CODE.indexOf('function explorerMiss'), CODE.indexOf('const EVM_CHAIN_IDS'));
+  // It has to return an empty list BEFORE anything can treat it as a failure.
+  const fn = CODE.slice(CODE.indexOf('async function fetchEvmTxs'), CODE.indexOf('const fetchEthTxs'));
   assert.match(fn, /no transactions found/i);
-  assert.match(fn, /return;/, 'the empty case must return before logging');
+  const empty = fn.search(/no transactions found/i);
+  const fail  = fn.indexOf('providerFailed');
+  assert.ok(empty > 0 && fail > empty, 'the empty case must be settled before the failure path');
+});
+
+test('no provider reports a failure as an empty address', () => {
+  // The bug that hid every ETH deposit, and the same shape was in four other
+  // places: BlockCypher (ltc, doge, btc fallback), TronGrid (trx, trc20) and
+  // the Solana RPC (sol, usdc, usdt) each turned a missing field in an error
+  // body into "no deposits arrived".
+  //
+  // Verified against all four providers that an address with genuinely nothing
+  // on it returns the field, empty — so the two cases really are separable.
+  assert.doesNotMatch(CODE, /if \(!d\.txs\) return \[\]/,   'blockcypher swallows failures');
+  assert.doesNotMatch(CODE, /if \(!d\.data\) return \[\]/,  'trongrid swallows failures');
+  assert.doesNotMatch(CODE, /\.result \|\| \[\]/,           'the solana rpc swallows failures');
+  for (const p of ['blockcypher', 'trongrid', 'solana rpc', 'every explorer']) {
+    assert.ok(CODE.includes(`'${p}'`), `${p} does not report failure through providerFailed`);
+  }
 });
 
 test('a non-array result cannot crash the poll', () => {

@@ -36,7 +36,7 @@ function fn(name, endMarker) {
 }
 
 test('BTC detection survives one provider being down', () => {
-  const btc = fn('fetchBtcTxs', 'function explorerMiss');
+  const btc = fn('fetchBtcTxs', 'function providerFailed');
   assert.match(btc, /blockstream/, 'the primary provider');
   assert.match(btc, /fetchBlockcypherTxs\('btc'/,
     'with a single provider, an outage stops every Bitcoin deposit being noticed');
@@ -46,7 +46,7 @@ test('a total outage reports an error rather than "no deposits"', () => {
   // The dangerous failure is returning [] when we could not read the address:
   // that is indistinguishable from "nothing arrived", and the deposit is
   // silently ignored. Same shape of lie as a price of 0 meaning "worthless".
-  const btc = fn('fetchBtcTxs', 'function explorerMiss');
+  const btc = fn('fetchBtcTxs', 'function providerFailed');
   const fallback = btc.slice(btc.indexOf('catch'));
   assert.ok(!/return \[\]/.test(fallback),
     'swallowing a double outage into an empty list hides real deposits');
