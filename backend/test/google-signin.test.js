@@ -98,6 +98,61 @@ test('the home page says something without JavaScript', () => {
   assert.match(text, /Duely/);
 });
 
+test('the splash says what the product actually is', () => {
+  // It is the first thing a person sees on a slow connection AND the
+  // description Google reads back when deciding whether the app matches its
+  // stated purpose, so it has to be true on both counts.
+  //
+  // The first version got two things wrong: it ruled out chance entirely while
+  // listing two games that turn on it, and it named a game by its internal
+  // route rather than the name players see.
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'index.html'), 'utf8');
+  const root = html.match(/<div id="root">([\s\S]*?)<\/div>\s*<script/);
+  assert.ok(root, 'no #root, or nothing between it and the app script');
+  const text = root[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+
+  // Checked against the real list, so the copy cannot drift from the product.
+  const games = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'src', 'data', 'games.js'), 'utf8');
+  const titles = [...games.matchAll(/title:\s*'([^']+)'/g)].map((m) => m[1])
+    .filter((t) => t !== 'Quick Match');   // a mode, not a game
+  assert.ok(titles.length >= 7, `only found ${titles.length} games to check against`);
+  for (const t of titles) {
+    assert.ok(text.includes(t), `the splash does not mention ${t}`);
+  }
+
+  // 'car-dash' is the route; players see Rush Hour.
+  assert.doesNotMatch(text, /Car Dash/, 'that is a route slug, not a name any player sees');
+
+  // Chance cannot be ruled out while Coin Flip and Blackjack are on the list.
+  assert.doesNotMatch(text, /never on chance|not on chance|no element of chance/i,
+    'Coin Flip and Blackjack turn on chance — this cannot be denied outright');
+
+  // A skill claim is fine, and true of five of the seven — but it has to be
+  // qualified. "Matches are decided on skill" is a claim about all of them.
+  if (/skill/i.test(text)) {
+    assert.match(text, /\b(most|many|some|five)\b[^.]*skill/i,
+      'an unqualified skill claim covers Coin Flip and Blackjack too, and is false of both');
+  }
+});
+
+test('the splash reads as a loading screen, not a failed page', () => {
+  // React replaces it on mount, but on a phone on mobile data that is a second
+  // or two of real screen time — long enough that a left-aligned wall of
+  // marketing copy reads as the site having failed to load.
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'index.html'), 'utf8');
+  assert.match(html, /class="boot"/);
+  assert.match(html, /boot-spin/, 'no loading indicator');
+  assert.match(html, /aria-label="Loading Duely"/, 'the spinner is unlabelled for a screen reader');
+  assert.match(html, /prefers-reduced-motion/, 'the spinner must respect reduced motion');
+  // The app's stylesheet has not loaded at this point, so the reset has to be
+  // here — without it the default 8px body margin made the splash 876px
+  // against an 812px viewport and it scrolled.
+  assert.match(html, /html, body \{ margin: 0/, 'without this the splash scrolls');
+});
+
 test('robots.txt is a robots file, not the app', () => {
   // Every unmatched path rewrites to index.html, so without a real file at
   // this path a crawler asking for robots.txt is handed the SPA's HTML.

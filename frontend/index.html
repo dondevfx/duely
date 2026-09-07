@@ -67,6 +67,49 @@
       body { top: 0 !important; }
       #goog-gt-tt, .goog-te-balloon-frame, .goog-tooltip, .goog-tooltip-content { display: none !important; }
       .goog-text-highlight { background: none !important; box-shadow: none !important; }
+
+      /* ── The boot splash ────────────────────────────────────────────────
+         Styles for the markup inside #root, which React replaces on mount.
+         Inline here rather than in the app's stylesheet because the point is
+         to render correctly BEFORE any of the app's CSS has been fetched. */
+      /* The app's stylesheet has not loaded yet, so there is no reset in force
+         and the browser's default 8px body margin still applies. With it, the
+         splash measured 876px against an 812px viewport and scrolled. */
+      html, body { margin: 0; background: #000; }
+      .boot {
+        box-sizing: border-box;
+        min-height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: .75rem;
+        padding: 2rem 1.5rem;
+        margin: 0 auto;
+        max-width: 34rem;
+        text-align: center;
+        color: #fff;
+        background: #000;
+        font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+        line-height: 1.6;
+      }
+      .boot-mark { font-size: 2.25rem; font-weight: 800; letter-spacing: -.02em; }
+      .boot-mark span { color: #1250B4; }
+      .boot-tag { margin: 0; color: #9CA3AF; font-size: .9375rem; }
+      .boot-spin {
+        width: 1.75rem; height: 1.75rem; margin: .5rem 0 .25rem;
+        border: 3px solid #222; border-top-color: #1250B4; border-radius: 50%;
+        animation: boot-spin 1s linear infinite;
+      }
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .boot-spin { animation: none; } }
+      /* The text a crawler needs and a person does not read while waiting a
+         second. Small and quiet — present and selectable, never hidden, since
+         text served only to crawlers is cloaking. */
+      .boot-copy { max-width: 30rem; color: #6B7280; font-size: .8125rem; line-height: 1.55; }
+      .boot-copy p { margin: .75rem 0 0; }
+      .boot-note { color: #4B5563; }
+      .boot-copy a { color: #3B82F6; }
     </style>
     <script>
       // Auto-detect language from browser on first visit, then set googtrans cookie
@@ -93,35 +136,46 @@
   <body>
     <div id="google_translate_element" style="display:none;visibility:hidden;position:absolute;width:0;height:0;overflow:hidden"></div>
     <!--
-      The app renders into #root. Everything inside it below is a fallback for
-      anything that reads the page without running JavaScript, and React
-      replaces the lot on mount (createRoot().render swaps the children out).
+      The splash the app renders over.
 
-      It is here because Google's OAuth branding check fetches the home page
-      with no JS and judges what comes back. An empty <div id="root"></div> is
-      an empty page to it, which it reported as "unresponsive" and which
-      blocked verification. Search engines and link previews read the page the
-      same way, so this is worth having regardless.
+      React replaces all of this on mount (createRoot().render swaps the
+      children out), so it is on screen only until the bundle arrives — but on
+      a phone on mobile data that is a second or two, and it IS seen. The first
+      version was a left-aligned wall of marketing copy that looked like the
+      site had failed to load. This is laid out as a loading screen, because
+      that is what a person is actually looking at.
 
-      Keep it to what the site actually is. It is the description Google reads
-      back when deciding whether the app matches its stated purpose, so it
-      should stay true if the product changes.
+      It has to carry real text all the same. Google's OAuth branding check
+      fetches this page without running JavaScript and judges what comes back;
+      an empty <div id="root"></div> read as "unresponsive" and blocked
+      verification. Search engines and link previews read it the same way.
+
+      Keep it TRUE when editing. This is the description Google reads back when
+      deciding whether the app matches its stated purpose, and it is the first
+      thing a person sees. The first version got two things wrong: it ruled out
+      chance entirely while listing two games that turn on it, and it used an
+      internal route name for a game rather than the name players see.
+
+      The game list lives in src/data/games.js — titles there are what players
+      see, and slugs are not. If that list changes, change it here.
     -->
     <div id="root">
-      <main style="max-width:40rem;margin:0 auto;padding:4rem 1.5rem;color:#fff;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;line-height:1.6">
-        <h1 style="font-size:2rem;font-weight:800;margin:0 0 .5rem">Duely</h1>
-        <p style="color:#9CA3AF;margin:0 0 2rem">1v1 skill games, played for real stakes.</p>
-        <p>Duely is a head-to-head skill gaming platform. Pick a game, set a stake, and
-           play a live 1v1 match against another person or against a bot. Matches are
-           decided on skill — reaction, accuracy and speed — never on chance.</p>
-        <p>Games include Color Rush, Block Burst, Word VS, Car Dash, Tower, Coin Flip
-           and Blackjack, each playable solo, against a bot, or ranked against another
-           player.</p>
-        <p style="color:#9CA3AF;font-size:.875rem;margin-top:2rem">
-          Duely needs JavaScript to run. Please enable it, or open
-          <a href="https://www.duely.us" style="color:#3B82F6">www.duely.us</a> in a
-          current browser.
-        </p>
+      <main class="boot">
+        <div class="boot-mark">Duely<span>.</span></div>
+        <p class="boot-tag">Live 1v1 matches, played for real stakes.</p>
+        <div class="boot-spin" role="status" aria-label="Loading Duely"></div>
+        <div class="boot-copy">
+          <p>Duely is a head-to-head gaming platform. Pick a game, set a stake, and play
+             a live 1v1 match against another player or against a bot. Most of the games
+             are pure skill — reaction, accuracy and speed decide them.</p>
+          <p>Seven games: Block Burst, Rush Hour, Color Rush, Tower, Word VS, Coin Flip
+             and Blackjack. Each can be played solo, against a bot, or ranked against
+             another player.</p>
+          <p class="boot-note">
+            Duely needs JavaScript to run. If this screen stays put, enable JavaScript or
+            open <a href="https://www.duely.us">www.duely.us</a> in a current browser.
+          </p>
+        </div>
       </main>
     </div>
     <script type="module" src="/src/main.jsx"></script>
