@@ -68,14 +68,25 @@ test('a refused explorer falls through instead of reporting an empty address', a
   // and treating the two the same is what hid every ETH deposit.
   const realKey = process.env.ETHERSCAN_API_KEY;
   process.env.ETHERSCAN_API_KEY = 'set-but-rejected';
-  let call = 0;
-  const monitor = loadMonitor(async () => reply(++call === 1
-    ? { status: '0', message: 'NOTOK', result: 'Missing/Invalid API Key' }
-    : { status: '1', message: 'OK', result: [{ hash: '0xf00d', to: '0xdead',
-        value: '1000000000000000000', isError: '0', confirmations: '3' }] }));
+  //
+  // Counted by SOURCE rather than by request: each source is now asked for both
+  // txlist and txlistinternal, so a call count encodes the number of endpoints
+  // as well as the fallback, and would fail for the wrong reason.
+  const sources = new Set();
+  const monitor = loadMonitor(async (url) => {
+    const source = String(url).includes('etherscan.io') ? 'etherscan' : 'blockscout';
+    sources.add(source);
+    if (source === 'etherscan') {
+      return reply({ status: '0', message: 'NOTOK', result: 'Missing/Invalid API Key' });
+    }
+    return reply(String(url).includes('txlistinternal')
+      ? { status: '0', message: 'No internal transactions found', result: [] }
+      : { status: '1', message: 'OK', result: [{ hash: '0xf00d', to: '0xdead',
+          value: '1000000000000000000', isError: '0', confirmations: '3' }] });
+  });
   try {
     const out = await monitor.__fetchEvmTxs('eth', '0xDEAD');
-    assert.equal(call, 2, 'never tried the second source');
+    assert.ok(sources.has('blockscout'), 'never tried the second source');
     assert.equal(out.length, 1, 'a rejected key still swallowed the deposit');
   } finally {
     process.env.ETHERSCAN_API_KEY = realKey;
@@ -83,13 +94,20 @@ test('a refused explorer falls through instead of reporting an empty address', a
 });
 
 test('an address with nothing on it is not a failure to retry', async () => {
+  // Two requests, not four: both endpoints of the FIRST source are asked, and
+  // an empty answer from them settles it. Falling through to a second source
+  // would double the cost of the overwhelmingly common case — an address
+  // nobody has paid yet.
+  const hosts = new Set();
   let calls = 0;
-  const monitor = loadMonitor(async () => {
+  const monitor = loadMonitor(async (url) => {
     calls++;
+    hosts.add(String(url).includes('etherscan.io') ? 'etherscan' : 'blockscout');
     return reply({ status: '0', message: 'No transactions found', result: [] });
   });
   assert.deepEqual(await monitor.__fetchEvmTxs('eth', '0xDEAD'), []);
-  assert.equal(calls, 1, 'burned a second source on a genuinely empty address');
+  assert.equal(hosts.size, 1, 'burned a second source on a genuinely empty address');
+  assert.equal(calls, 2, 'one call per endpoint, on one source');
 });
 
 test('explorers are asked for one page, not a whole history', () => {

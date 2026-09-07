@@ -266,29 +266,44 @@ const PAGE = 25;
 const EVM_SOURCES = {
   eth: [
     { name: 'etherscan',  needsKey: true,
-      url: (a, k) => `https://api.etherscan.io/v2/api?chainid=1&module=account&action=txlist&address=${a}&sort=desc&apikey=${k}&page=1&offset=${PAGE}` },
+      url: (a, k, action) => `https://api.etherscan.io/v2/api?chainid=1&module=account&action=${action}&address=${a}&sort=desc&apikey=${k}&page=1&offset=${PAGE}` },
     { name: 'blockscout', needsKey: false,
-      url: (a)    => `https://eth.blockscout.com/api?module=account&action=txlist&address=${a}&sort=desc&page=1&offset=${PAGE}` },
+      url: (a, _k, action) => `https://eth.blockscout.com/api?module=account&action=${action}&address=${a}&sort=desc&page=1&offset=${PAGE}` },
   ],
   bnb: [
     { name: 'etherscan',  needsKey: true,
-      url: (a, k) => `https://api.etherscan.io/v2/api?chainid=56&module=account&action=txlist&address=${a}&sort=desc&apikey=${k}&page=1&offset=${PAGE}` },
+      url: (a, k, action) => `https://api.etherscan.io/v2/api?chainid=56&module=account&action=${action}&address=${a}&sort=desc&apikey=${k}&page=1&offset=${PAGE}` },
   ],
 };
 
 // Parse one Etherscan-shaped response into the deposits we care about.
 // Returns null when the response is not a usable success, so the caller can
 // try the next source rather than reporting an empty address.
-function parseEvmTxs(d, address) {
-  if (d?.status !== '1' || !Array.isArray(d.result)) return null;
+//
+// `internal` covers the txlistinternal endpoint, whose rows differ in three
+// ways that each silently produce nothing if missed:
+//
+//   - the hash is `transactionHash`, not `hash`
+//   - there is no `confirmations` field at all, so the usual >= 1 test is
+//     NaN >= 1, which is false, and every internal deposit would be found and
+//     then never credited
+//   - Blockscout answers status "2" ("some internal transactions within this
+//     block range have not yet been processed") alongside perfectly good rows,
+//     which a strict status === '1' test throws away
+//
+// An internal transaction exists only once its block is mined — there is no
+// mempool for them — so being returned at all means it is confirmed.
+function parseEvmTxs(d, address, internal = false) {
+  const ok = d?.status === '1' || (internal && d?.status === '2');
+  if (!ok || !Array.isArray(d.result)) return null;
   return d.result
     .filter(tx => tx.to?.toLowerCase() === address.toLowerCase() && tx.isError === '0')
     .map(tx => ({
-      txHash:    tx.hash,
+      txHash:    internal ? tx.transactionHash : tx.hash,
       amount:    parseFloat(tx.value) / 1e18,
-      confirmed: parseInt(tx.confirmations) >= 1,
+      confirmed: internal ? true : parseInt(tx.confirmations) >= 1,
     }))
-    .filter(t => t.amount > 0);
+    .filter(t => t.amount > 0 && t.txHash);
 }
 
 async function fetchEvmTxs(coin, address) {
@@ -299,21 +314,46 @@ async function fetchEvmTxs(coin, address) {
   const sources = EVM_SOURCES[coin] || [];
   let lastBody = null;
 
+  // One endpoint is not enough.
+  //
+  // txlist returns only top-level transactions. Money that arrives from a
+  // CONTRACT — a bridge paying out through its outbox, an exchange or wallet
+  // that sends through one — is an "internal" transfer and appears only in
+  // txlistinternal. Verified against the live explorer: internal transfers to
+  // an address are entirely absent from its txlist.
+  //
+  // So a bridged deposit was invisible, in exactly the way an L2 deposit was.
+  // Both endpoints are asked and the results merged, deduped by hash.
+  const ACTIONS = ['txlist', 'txlistinternal'];
+
+  const ask = async (src, action) => {
+    const r = await fetchWithTimeout(src.url(address, key, action));
+    const d = await readJson(r);
+    // A genuinely empty address is a real answer, not a failure to fall past.
+    //
+    // The two endpoints phrase it differently — "No transactions found" and
+    // "No internal transactions found" — and matching only the first meant
+    // every ordinary address (external transactions, no internal ones) fell
+    // through every source and was reported as a provider failure. Which is to
+    // say: nearly all of them.
+    if (/no (internal )?transactions found/i.test(String(d?.message || ''))) return [];
+    const out = parseEvmTxs(d, address, action === 'txlistinternal');
+    if (!out) throw Object.assign(new Error('unusable response'), { body: d });
+    return out;
+  };
+
   for (const src of sources) {
     // No key, no point spending a request to be told so.
     if (src.needsKey && !key) continue;
     try {
-      const r = await fetchWithTimeout(src.url(address, key));
-      const d = await readJson(r);
-
-      // A genuinely empty address is a real answer, not a failure to fall past.
-      if (/no transactions found/i.test(String(d?.message || ''))) return [];
-
-      const out = parseEvmTxs(d, address);
-      if (out) return out;
-      lastBody = d;
+      const found = [];
+      for (const action of ACTIONS) found.push(...await ask(src, action));
+      // A transaction can legitimately appear in both lists; the deposit is one
+      // deposit either way, and processDeposit claims by hash.
+      const seen = new Set();
+      return found.filter(t => !seen.has(t.txHash) && seen.add(t.txHash));
     } catch (e) {
-      lastBody = { status: '0', message: 'NOTOK', result: `${src.name}: ${e.message}` };
+      lastBody = e.body || { status: '0', message: 'NOTOK', result: `${src.name}: ${e.message}` };
     }
   }
 
@@ -565,6 +605,67 @@ async function claimDeposit(supabase, row) {
   return 'error';
 }
 
+// What to hold back from a deposit to pay for forwarding it.
+//
+// The table above is a fixed number per coin, and a fixed number is a flat fee
+// on the player: whatever is reserved is not forwarded, so it is not converted
+// and not credited. That is fine when it is close to the real cost and awful
+// when it is not. Measured on the ETH deposit that prompted this: the reserve
+// is 0.0004 ETH, the forward costs 0.00000168 ETH at 0.08 gwei — 238 times the
+// real cost, and on an $8 deposit it is a 12% haircut.
+//
+// So for the EVM coins, where the cost is one eth_gasPrice call away, it is
+// measured instead. The others keep their table: Bitcoin's is deliberately
+// generous (its fees spike hard and an under-reserved forward fails outright),
+// Tron's covers a bandwidth model this cannot price, and Solana's fees are
+// already noise.
+//
+// Bounded on both sides. The floor stops a quiet moment reserving so little
+// that the forward fails when gas moves between the poll and the send; the
+// ceiling — twice the old fixed number — keeps a genuine spike from taking an
+// unbounded bite out of a deposit, and means the worst case is only ever
+// slightly worse than the fixed behaviour it replaces.
+const EVM_GAS_UNITS = 21_000n;         // a plain transfer
+const EVM_GAS_PAD   = 4n;              // headroom for gas moving before the send
+const EVM_GAS_FLOOR = { eth: 0.00002, bnb: 0.00005 };
+
+async function gasReserveFor(coin, fallback) {
+  const c = String(coin).toLowerCase();
+  const rpcUrl = c === 'eth'
+    ? (process.env.ALCHEMY_ETH_RPC || 'https://ethereum-rpc.publicnode.com')
+    : c === 'bnb'
+      ? (process.env.BSC_RPC || 'https://bsc-dataseed.binance.org/')
+      : null;
+  if (!rpcUrl) return fallback;
+
+  try {
+    const r = await fetchWithTimeout(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_gasPrice', params: [] }),
+    }, 8_000);
+    const d = await readJson(r);
+    if (!d?.result) throw new Error('no gas price in the response');
+
+    const wei = BigInt(d.result) * EVM_GAS_UNITS * EVM_GAS_PAD;
+    const eth = Number(wei) / 1e18;
+    if (!Number.isFinite(eth) || eth <= 0) throw new Error(`nonsense gas price ${d.result}`);
+
+    const floor = EVM_GAS_FLOOR[c] ?? 0;
+    const reserve = Math.min(Math.max(eth, floor), fallback * 2);
+    if (reserve < fallback) {
+      console.log(`[monitor] ${c} gas reserve ${reserve.toFixed(8)} (measured) ` +
+                  `instead of ${fallback} — ${(fallback / reserve).toFixed(0)}x less held back`);
+    }
+    return reserve;
+  } catch (e) {
+    // Never block a deposit on a gas lookup. The fixed number is what this has
+    // always used and is known to be adequate.
+    console.warn(`[monitor] could not price ${c} gas (${e.message}) — using the fixed reserve ${fallback}`);
+    return fallback;
+  }
+}
+
 async function processDeposit(supabase, { userId, coin, address, txHash, amount }) {
   if (_seenTxs.has(txHash)) return; // already handled this poll cycle or prior
 
@@ -597,7 +698,7 @@ async function processDeposit(supabase, { userId, coin, address, txHash, amount 
   // would turn a busy day into failed forwards, which is worse than
   // over-reserving on a quiet one.
   const gasReserveMap = { btc: 0.00002, eth: 0.0004, bnb: 0.0005, sol: 0.003, ltc: 0.001, trx: 2, doge: 1 };
-  const gasRes    = (coin !== 'usdc') ? (gasReserveMap[coin] || 0) : 0;
+  const gasRes    = (coin !== 'usdc') ? await gasReserveFor(coin, gasReserveMap[coin] || 0) : 0;
   const netAmount = Math.max(0, amount - gasRes);
   if (coin !== 'usdc' && netAmount <= 0) { _seenTxs.add(txHash); return; } // dust — silent
 
@@ -1031,7 +1132,10 @@ const COIN_EVERY_PASSES = {
   ltc: 4,   // 3 min
   doge: 4,  // 3 min
   trx: 2,   // 90 s
-  eth: 1,   // 45 s
+  // Two endpoints are asked per poll now — txlist and txlistinternal — so the
+  // cadence halves and the hourly request count is exactly what it was.
+  // Ethereum makes a block every 12 seconds; 90s of latency is not noticed.
+  eth: 2,   // 90 s, x2 endpoints
 };
 const DEFAULT_EVERY_PASSES = 1;
 
@@ -1189,9 +1293,39 @@ async function sweepStrandedUsdc(supabase) {
   }
 }
 
+// Configuration that changes whether a coin can be detected at all.
+//
+// Said once, at startup, and said plainly. ETH deposits were invisible for
+// months because this key was unset and nothing anywhere mentioned it — the
+// explorer refused every request and the refusal was read as "no deposits".
+//
+// The keyless Blockscout fallback added afterwards does work, but measured
+// against the live service it rate-limits hard and does not recover quickly:
+// two endpoints per poll is more than it will sustain. It is a genuine
+// fallback for an expired or rejected key, not a substitute for having one.
+function reportConfig() {
+  if (!process.env.ETHERSCAN_API_KEY) {
+    console.warn(
+      '[monitor] ETHERSCAN_API_KEY is not set. ETH deposit detection falls back to ' +
+      'keyless Blockscout, which rate-limits under normal polling — deposits will be ' +
+      'detected late or not at all. Get a free key at etherscan.io/apis.');
+  }
+  if (!process.env.BLOCKCYPHER_TOKEN) {
+    console.warn(
+      '[monitor] BLOCKCYPHER_TOKEN is not set. LTC and DOGE detection, and the BTC ' +
+      'fallback, run on the tokenless tier (~100 requests/hour shared).');
+  }
+  if (!process.env.ALCHEMY_ETH_RPC) {
+    console.warn(
+      '[monitor] ALCHEMY_ETH_RPC is not set. ETH sends and gas pricing use a public ' +
+      'node, which is rate-limited and carries no SLA.');
+  }
+}
+
 function init(supabase) {
   supabaseRef = supabase;
   console.log('[monitor] blockchain monitor started');
+  reportConfig();
 
   const runSweep = () => sweepStrandedUsdc(supabase)
     .catch(e => console.error('[monitor] stranded sweep error:', e.message));
@@ -1222,4 +1356,4 @@ function init(supabase) {
 // into money with two sets of rules is how a deposit gets credited twice.
 // hotSize is exported for the ceiling test — the only way to tell a bound
 // that holds from one that was written and then disabled.
-module.exports = { init, claimDeposit, coinDueThisPass, COIN_EVERY_PASSES, sweepStrandedUsdc, processDeposit, markActive, isHot, hotSize: () => _hot.size };
+module.exports = { init, claimDeposit, reportConfig, gasReserveFor, coinDueThisPass, COIN_EVERY_PASSES, sweepStrandedUsdc, processDeposit, markActive, isHot, hotSize: () => _hot.size };

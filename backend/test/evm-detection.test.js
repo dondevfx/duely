@@ -50,9 +50,15 @@ test('a normally empty address stays quiet', () => {
   // An address nobody has paid returns status 0 with "No transactions found".
   // Logging that would bury the real faults under one line per address per poll.
   // It has to return an empty list BEFORE anything can treat it as a failure.
+  //
+  // Both endpoints have to be covered: txlist says "No transactions found" and
+  // txlistinternal says "No INTERNAL transactions found". Matching only the
+  // first made every ordinary address fall through every source and report as
+  // a fault — which is nearly all of them.
   const fn = CODE.slice(CODE.indexOf('async function fetchEvmTxs'), CODE.indexOf('const fetchEthTxs'));
-  assert.match(fn, /no transactions found/i);
-  const empty = fn.search(/no transactions found/i);
+  const pattern = /no \(internal \)\?transactions found/i;
+  assert.match(fn, pattern, 'the empty check must cover the wording of both endpoints');
+  const empty = fn.search(pattern);
   const fail  = fn.indexOf('providerFailed');
   assert.ok(empty > 0 && fail > empty, 'the empty case must be settled before the failure path');
 });
