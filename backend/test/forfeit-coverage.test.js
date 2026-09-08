@@ -97,74 +97,68 @@ const TOP_RIGHT_OCCUPIED = {
   'BlackjackGame':  'the turn timer',
 };
 
-test('the help button never sits where a score does', () => {
-  for (const [game, occupant] of Object.entries(TOP_RIGHT_OCCUPIED)) {
-    const src = readFE('pages', `${game}.jsx`);
+// The three tests that used to live here pinned WHERE the in-game help button
+// sat — off the score, out of the HUD's corners, with padding reserved for it.
+// There is no in-game help button any more: the rules are read on the bet
+// screen, before anything is running, from a ? in its top-right corner.
+//
+// What replaces them is the rule that the button is not in a game at all,
+// which is both what was asked for and the only thing that can now go wrong.
+
+test('no game renders a help button over the play area', () => {
+  // These five put their bet screen through the shared GameLobby, so the page
+  // file is the GAME and must hold no help button at all.
+  for (const g of ['BlockBlastGame', 'CarDashGame', 'ColorRushGame',
+                   'TowerGame', 'WordleGame']) {
+    const src = readFE('pages', `${g}.jsx`);
+    assert.ok(!/<GameHelp/.test(src),
+      `${g} still mounts a help button inside the game`);
+  }
+  // Coin Flip and Blackjack build their own bet screen in the same file as the
+  // game, so counting is the only way to tell one from the other: exactly one
+  // button, and it is the bet screen's.
+  for (const g of ['CoinFlipGame', 'BlackjackGame']) {
+    const src = readFE('pages', `${g}.jsx`);
+    const n = (src.match(/<GameHelp/g) || []).length;
+    assert.equal(n, 1, `${g} has ${n} help buttons — one belongs to the bet screen`);
+    assert.match(src, /placement="top-right"/,
+      `${g}'s only help button is not the bet screen's`);
+  }
+});
+
+test('every bet screen has one, in its top-right corner', () => {
+  // The shared lobby, plus Coin Flip and Blackjack which build their own — the
+  // two that get missed every time something is added to a bet screen.
+  for (const [label, ...where] of [
+    ['GameLobby',  'components', 'GameLobby.jsx'],
+    ['Coin Flip',  'pages', 'CoinFlipGame.jsx'],
+    ['Blackjack',  'pages', 'BlackjackGame.jsx'],
+  ]) {
+    const src = readFE(...where);
+    assert.match(src, /<GameHelp/, `${label} has no help button`);
+    assert.match(src, /placement="top-right"/, `${label} does not put it top right`);
+    // Absolutely positioned inside a relative wrapper, or "top right" is
+    // wherever the flow happens to leave it.
     const at = src.indexOf('<GameHelp');
-    assert.notEqual(at, -1, `${game} has no help button`);
-    const tag = src.slice(at, src.indexOf('/>', at));
-    assert.match(tag, /placement=/,
-      `${game} uses the default top-right placement, which covers ${occupant}`);
-    assert.ok(!/placement="top-right"/.test(tag),
-      `${game} pins the help button over ${occupant}`);
+    const before = src.slice(Math.max(0, at - 300), at);
+    assert.match(before, /absolute top-0 right-0/, `${label}: the button is not pinned`);
+    assert.match(before, /className="relative"/, `${label}: nothing to pin it to`);
   }
 });
 
-test('a corner-placed help button has space reserved for it', () => {
-  // This is the invariant that actually holds the button off the HUD, and the
-  // only one worth pinning. Measured in a browser at 320-768px: with the
-  // reservation the button overlaps nothing; with it removed, it lands on the
-  // player's own score at EVERY width. The corner alone does nothing.
-  //
-  // A reservation is a left pad wide enough to clear a 36px button at left-3
-  // (12px) — so 48px minimum. pl-12 is exactly that.
-  const MIN_RESERVE = 48;
-  for (const game of ['BlockBlastGame', 'WordleGame', 'BlackjackGame']) {
-    const src = readFE('pages', `${game}.jsx`);
-    assert.match(src, /placement="top-left"/, `${game} is not using the reserved-corner placement`);
+test('the help panel opens with real content on every bet screen', () => {
+  // GameHelp is keyed by its own names, which are not the queue keys the lobby
+  // is handed: block-blast against blockBlast. Unmapped, the panel opens empty
+  // on the one screen whose key differs — and an empty panel looks like a bug
+  // in the help, not a missing mapping.
+  const help = readFE('components', 'GameHelp.jsx');
+  const keys = [...help.matchAll(/^\s{2}'?([a-zA-Z-]+)'?: \{/gm)].map(m => m[1]);
+  assert.ok(keys.length >= 7, `only found ${keys.length} help entries`);
 
-    const tw  = /\bpl-12\b/.test(src);                       // 3rem = 48px
-    const css = [...src.matchAll(/padding:\s*'[^']*?(\d+)px'/g)]
-      .some(m => Number(m[1]) >= MIN_RESERVE);               // 4-value shorthand, last = left
-    assert.ok(tw || css,
-      `${game} pins the help button in a corner but reserves no room for it, so the layout puts a score underneath`);
-  }
+  const lobby = readFE('components', 'GameLobby.jsx');
+  const map = lobby.match(/const HELP_KEYS = \{([^}]*)\}/);
+  assert.ok(map, 'nothing maps a queue key to a help key');
+  assert.match(map[1], /'block-blast': 'blockBlast'/,
+    'block-blast is the key that differs, and the one that opens empty without this');
 });
 
-test('the help panel covers the screen, not its container', () => {
-  // The button sits inside a positioned header row; an absolutely positioned
-  // overlay would then be sized to that row rather than to the screen.
-  const src = readFE('components', 'GameHelp.jsx');
-  assert.match(src, /fixed inset-0/, 'the panel must be fixed, or inline placement traps it in a header');
-});
-
-test('every help button has a positioning context to sit in', () => {
-  // The bug behind the floating '?' on Coin Flip. Every placement is
-  // `absolute`, which resolves against the nearest POSITIONED ancestor — and
-  // if the intended container is not positioned, the button silently sails
-  // past it and anchors to whatever is. On Coin Flip it anchored to a small
-  // centred block and floated next to the coin, mid-screen.
-  //
-  // It is invisible in review because the markup looks right: the button is
-  // written inside the container it belongs to. Only the CSS disagrees.
-  const GAMES = [
-    'TowerGame', 'CarDashGame', 'BlockBlastGame',
-    'WordleGame', 'BlackjackGame', 'CoinFlipGame',
-  ];
-  for (const game of GAMES) {
-    const src = readFE('pages', `${game}.jsx`);
-    const at = src.indexOf('<GameHelp');
-    assert.notEqual(at, -1, `${game} has no help button`);
-
-    // The element it is written inside: the nearest <div opened before it.
-    const open = src.lastIndexOf('<div', at);
-    assert.notEqual(open, -1, `${game}: could not find the containing element`);
-    // Everything from that <div up to the button: the whole opening tag,
-    // however it is spread over lines and whether it styles by class or by
-    // inline object.
-    const tag = src.slice(open, at);
-
-    assert.ok(/className="[^"]*\brelative\b/.test(tag) || /position:\s*'relative'/.test(tag),
-      `${game} puts the help button in a container that is not positioned, so it will anchor somewhere else on the page`);
-  }
-});

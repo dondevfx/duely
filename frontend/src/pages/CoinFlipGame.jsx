@@ -8,6 +8,7 @@ import { useSocket } from '../context/SocketContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { COIN_FEES, DIAMOND_FEES, SMALL_BTN } from '../components/GameLobby';
 import { MoreWaysToggle, useRevealOnOpen } from '../components/MoreWays';
+import { useShowBottomBar } from '../components/BottomNav';
 import BetSlider from '../components/BetSlider';
 import ResultScreen from '../components/ResultScreen';
 import GameHelp from '../components/GameHelp';
@@ -229,6 +230,8 @@ export default function CoinFlipGame() {
   const [moreOpen, setMoreOpen] = useState(false);
   // The panel unfolds below the fold on a phone; this brings it into view.
   const moreRef = useRevealOnOpen(moreOpen);
+  // The bar belongs on the bet screen, not over the game it leads into.
+  useShowBottomBar(phase === 'lobby');
   const [privateMode, setPrivateMode] = useState(null);
   const [shortfall, setShortfall] = useState(false);
   const [invitedFriend, setInvitedFriend] = useState(null);
@@ -652,7 +655,6 @@ export default function CoinFlipGame() {
       {/* The help button belongs to the PAGE, not to the flipping block. Nested
           inside that block it anchored to a box a few hundred pixels wide in
           the middle of the screen, and floated there next to the coin. */}
-      {phase === 'flipping' && <GameHelp gameType="coin-flip" placement="top-left" />}
 
       {/* ── RESULT ── */}
       {phase === 'result' && resultData && (() => {
@@ -697,8 +699,15 @@ export default function CoinFlipGame() {
 
         {phase === 'lobby' && (
           <div className="text-center mb-0.5 sm:mb-6">
-            <h1 className="text-3xl sm:text-6xl font-black text-white mb-0.5 sm:mb-2 leading-tight flex items-center justify-center gap-3"><GameTitle slug="coin-flip" title="Coin Flip" /></h1>
-            <p className="text-center text-muted text-sm sm:text-base leading-snug sm:leading-relaxed px-2">Pick heads or tails — you get matched with someone on the opposite side. One flip decides it.</p>
+            {/* The rules moved to the ? in the corner — the description sat
+                between the title and the stake, which is the one place a player
+                is not reading; they came to pick a number. */}
+            <div className="relative">
+              <div className="absolute top-0 right-0 z-10">
+                <GameHelp gameType="coin-flip" placement="top-right" />
+              </div>
+              <h1 className="text-3xl sm:text-6xl font-black text-white mb-4 sm:mb-6 leading-tight px-10 flex items-center justify-center gap-3"><GameTitle slug="coin-flip" title="Coin Flip" /></h1>
+            </div>
           </div>
         )}
 

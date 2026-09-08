@@ -470,7 +470,12 @@ test('the phone bar is always on screen, so nothing can be left open', () => {
   const nav = fe('components', 'BottomNav.jsx');
   assert.match(nav, /fixed bottom-0/, 'the bar must not scroll away');
   assert.match(nav, /md:hidden/, 'phones only — the sidebar does this job from md up');
-  assert.ok(!/useState/.test(nav), 'a bar with open state is a drawer again');
+  // Scoped to the COMPONENT. The file also holds a provider whose useState is
+  // a count of how many screens are asking for the bar — a different thing
+  // from the bar having an open state, which is what would make it a drawer
+  // again.
+  const component = nav.slice(nav.indexOf('export default function BottomNav'));
+  assert.ok(!/useState/.test(component), 'a bar with open state is a drawer again');
   assert.match(nav, /touchAction: 'manipulation'/, 'the tap delay must be off');
   // And the hamburger it replaces really is gone.
   const bar = fe('components', 'Navbar.jsx');

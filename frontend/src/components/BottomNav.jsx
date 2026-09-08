@@ -25,35 +25,61 @@ const ITEMS = [
   { ui: 'wallet',      label: 'Wallet',      to: '/wallet' },
 ];
 
-// Whether the bar is showing, for a given path.
+// Whether the bar shows, and how a bet screen asks for it back.
 //
+// A game ROUTE is two different screens: the bet screen, where the bar is
+// wanted, and the game itself, where it would sit on top of what is being
+// played. The path cannot tell them apart — both are /game/<slug> — so the
+// screen says so instead.
+//
+// A bet screen calls useShowBottomBar(true) while it is the thing on screen.
+// Default off for /game/*, so a screen that says nothing gets no bar: a game
+// that forgets to opt out would otherwise have a bar over its board, which is
+// the worse failure of the two.
+import { createContext, useContext, useEffect, useState } from 'react';
+
+const BarContext = createContext(null);
+
+export function BottomBarProvider({ children }) {
+  const [asked, setAsked] = useState(0);
+  return (
+    <BarContext.Provider value={{ asked, setAsked }}>{children}</BarContext.Provider>
+  );
+}
+
+/**
+ * Ask for the bar while `active`. Counted rather than a boolean, so two screens
+ * mounting across a transition cannot leave it stuck off when the first
+ * unmounts after the second has already asked.
+ */
+export function useShowBottomBar(active = true) {
+  const ctx = useContext(BarContext);
+  useEffect(() => {
+    if (!ctx || !active) return;
+    ctx.setAsked(n => n + 1);
+    return () => ctx.setAsked(n => n - 1);
+  }, [ctx, active]);
+}
+
 // Exported because App.jsx has to reserve the bar's height in the scroll area
-// and must not decide that separately. It did, and the two disagreed: main is
-// `bottom-14` on phones, so on a game route it held back 56px for a bar that
-// no longer renders while every game page still asked for
-// min-h-[calc(100dvh-3.5rem)] — a page 56px taller than the box it sits in.
-// That is why the bet screen showed a clipped title above and clipped buttons
-// below. Measured after: scrollHeight equals clientHeight on a 390x844 phone.
-export function showsBottomNav(pathname) {
+// and must not decide that separately — it did, and the two disagreed: main
+// held back 56px for a bar that no longer rendered while every game page still
+// asked for min-h-[calc(100dvh-3.5rem)], a page taller than the box it sits in.
+export function useShowsBottomNav(pathname) {
+  const ctx = useContext(BarContext);
   // Matched on the /game/ prefix rather than a list of slugs, so a game added
   // later is covered the day it ships. /games is a normal page and keeps it.
-  return !/^\/game(\/|$)/.test(pathname);
+  if (!/^\/game(\/|$)/.test(pathname)) return true;
+  return (ctx?.asked || 0) > 0;
 }
 
 export default function BottomNav() {
   const { pathname } = useLocation();
+  const showsNav = useShowsBottomNav(pathname);
 
-  // Never over a game.
-  //
-  // It is fixed to the bottom of the viewport at z-40, so on a game screen it
-  // sits on top of the thing being played — over Block Burst's board, over the
-  // tap target in Color Rush — and on a bet screen it covers the buttons the
-  // screen exists for. A game is somewhere you go into and come back from; the
-  // way back is the game's own control, not a bar laid across it.
-  //
-  // Matched on the /game/ prefix rather than a list of slugs, so a game added
-  // later is covered the day it ships rather than the day somebody notices.
-  if (!showsBottomNav(pathname)) return null;
+  // A bet screen asks for the bar back; a game does not — see
+  // useShowsBottomNav above.
+  if (!showsNav) return null;
 
   return (
     <nav

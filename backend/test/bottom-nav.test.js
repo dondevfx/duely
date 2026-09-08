@@ -57,10 +57,10 @@ test('the bar sits below the scroll area, not over the end of it', () => {
   // game route the bar is hidden, and reserving its 56px anyway made every
   // game page — all asking for min-h-[calc(100dvh-3.5rem)] — taller than the
   // box it sits in, which is what clipped the bet screen at both ends.
-  assert.match(APP, /\? 'bottom-14' : 'bottom-0'\} md:bottom-0/,
+  assert.match(APP, /barShows \? 'bottom-14' : 'bottom-0'\} md:bottom-0/,
     'main must stop where the bar starts, on phones, and only when there is one');
-  assert.match(APP, /showsBottomNav\(location\.pathname\)/,
-    'the inset must ask the same function the bar does');
+  assert.match(APP, /const barShows = useShowsBottomNav\(location\.pathname\)/,
+    'the inset must ask the same hook the bar does');
   assert.match(APP, /<BottomNav \/>/, 'the bar is never mounted');
 });
 

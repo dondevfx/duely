@@ -18,45 +18,55 @@ const APP    = read('App.jsx');
 
 // ── The bottom bar ─────────────────────────────────────────────────────────
 
-test('the bottom bar never covers a game', () => {
-  // It is fixed at the bottom of the viewport at z-40, so on a game screen it
-  // sits on top of what is being played — over Block Burst's board, over the
-  // tap target in Color Rush — and on a bet screen it covers the buttons the
-  // screen exists for.
-  assert.match(BOTTOM, /useLocation/, 'the bar cannot know where it is');
-  assert.match(BOTTOM, /return null/, 'nothing ever hides it');
-  // The pattern lives in showsBottomNav now, which App.jsx reads too.
-  const guard = BOTTOM.slice(BOTTOM.indexOf('export function showsBottomNav'),
-                             BOTTOM.indexOf('export default'));
-  assert.ok(guard.includes(String.raw`/^\/game`), 'the guard must match the /game/ prefix');
-  const body = BOTTOM.slice(BOTTOM.indexOf('export default function BottomNav'));
-  assert.ok(body.indexOf('return null') > 0 && body.indexOf('return null') < body.indexOf('return ('),
-    'the guard must come before the render');
+test('the bar is on the bet screen and not on the game', () => {
+  // A game ROUTE is two different screens. The bet screen wants the bar; the
+  // game itself would have it sitting on top of the board. The path cannot
+  // tell them apart — both are /game/<slug> — so the screen says so.
+  assert.match(BOTTOM, /export function useShowBottomBar/,
+    'a bet screen has no way to ask for the bar');
+  assert.match(BOTTOM, /export function useShowsBottomNav/, 'nothing decides');
+
+  const decide = BOTTOM.slice(BOTTOM.indexOf('export function useShowsBottomNav'),
+                              BOTTOM.indexOf('export default'));
+  assert.ok(decide.includes(String.raw`/^\/game`),
+    'the default must still be off for a game route');
+  assert.match(decide, /asked \|\| 0\) > 0/,
+    'a screen asking for the bar is what turns it back on');
+
+  // Default OFF, not on. A game that forgets to opt out would otherwise have a
+  // bar over its board, which is the worse of the two failures.
+  const returns = decide.match(/return [^;]+;/g) || [];
+  assert.match(returns[0], /return true/, 'a non-game path keeps its bar');
+  assert.match(returns[1], /asked/, 'a game path must ask');
 });
 
-test('the guard is a prefix, so a new game is covered the day it ships', () => {
-  // Every game route lives under /game/. Matching a list of slugs means the
-  // next one added is uncovered until somebody notices on a phone.
-  const slugs = [...APP.matchAll(/path="\/game\/([a-z-]+)"/g)].map(m => m[1]);
-  assert.ok(slugs.length >= 8, `only found ${slugs.length} game routes`);
-  const guard = BOTTOM.slice(BOTTOM.indexOf('export function showsBottomNav'),
-                             BOTTOM.indexOf('export default'));
-  for (const slug of slugs) {
-    assert.ok(!guard.includes(slug),
-      `the guard names '${slug}' — a list goes stale, the prefix does not`);
+test('every bet screen asks for the bar, and only while it is showing', () => {
+  for (const [label, src, cond] of [
+    ['GameLobby',  LOBBY, /useShowBottomBar\(true\)/],
+    ['Coin Flip',  read('..', 'src', 'pages', 'CoinFlipGame.jsx'),  /useShowBottomBar\(phase === 'lobby'\)/],
+    ['Blackjack',  read('..', 'src', 'pages', 'BlackjackGame.jsx'), /useShowBottomBar\(phase === 'lobby'\)/],
+  ]) {
+    assert.match(src, cond, `${label} does not ask for the bar on its bet screen`);
   }
-  // And the prefix must not swallow the games INDEX, which is a normal page.
-  // The pattern is lifted OUT of the source and run. The first version built
-  // a RegExp from a hardcoded string, so it only ever tested the literal
-  // written here — it passed just the same when the guard in the component was
-  // loosened to one that hides the bar on /games too.
-  const src = BOTTOM.match(/return !(\/.+?\/)\.test\(pathname\);/);
-  assert.ok(src, 'no pathname guard found to test');
-  const re = new RegExp(src[1].slice(1, -1));
-  assert.ok(re.test('/game/block-blast'), 'a game route must match');
-  assert.ok(re.test('/game/tower'), 'and every other one');
-  assert.ok(!re.test('/games'), 'the games list is not a game and must keep its bar');
-  assert.ok(!re.test('/'), 'home must keep its bar');
+  // GameLobby only ever renders as the bet screen, so it can ask flatly. The
+  // other two share a file with the game and must ask on the phase, or the bar
+  // follows them into it.
+  const cf = read('..', 'src', 'pages', 'CoinFlipGame.jsx');
+  assert.ok(!/useShowBottomBar\(true\)/.test(cf),
+    'Coin Flip asks unconditionally, so the bar stays up during the flip');
+});
+
+test('the request is counted, not a boolean', () => {
+  // Two screens mounting across a transition: the second asks before the first
+  // unmounts. A boolean would be left off by the departing screen; a count is
+  // still positive.
+  const provider = BOTTOM.slice(BOTTOM.indexOf('export function BottomBarProvider'),
+                                BOTTOM.indexOf('export function useShowBottomBar'));
+  assert.match(provider, /useState\(0\)/, 'the request is a boolean');
+  const hook = BOTTOM.slice(BOTTOM.indexOf('export function useShowBottomBar'),
+                            BOTTOM.indexOf('export function useShowsBottomNav'));
+  assert.match(hook, /setAsked\(n => n \+ 1\)/, 'mounting must add a request');
+  assert.match(hook, /setAsked\(n => n - 1\)/, 'unmounting must drop it again');
 });
 
 // ── The account avatar ─────────────────────────────────────────────────────
@@ -139,11 +149,14 @@ test('the scroll area does not reserve space for a bar that is not there', () =>
   //
   // Both decisions read the SAME function. Deciding separately is how they
   // came to disagree.
-  assert.match(APP, /import BottomNav, \{ showsBottomNav \}/,
+  assert.match(APP, /import BottomNav, \{ BottomBarProvider, useShowsBottomNav \}/,
     'App decides the inset without asking the bar');
-  assert.match(APP, /showsBottomNav\(location\.pathname\) \? 'bottom-14' : 'bottom-0'/,
+  assert.match(APP, /barShows \? 'bottom-14' : 'bottom-0'/,
     'the scroll area still reserves the bar height everywhere');
-  assert.match(BOTTOM, /export function showsBottomNav/, 'there is no shared answer');
-  assert.match(BOTTOM, /if \(!showsBottomNav\(pathname\)\) return null;/,
-    'the bar itself must use the same function it exports');
+  assert.match(APP, /const barShows = useShowsBottomNav\(location\.pathname\)/,
+    'the inset must ask the same hook the bar does');
+  assert.match(APP, /<BottomBarProvider>/, 'nothing provides the shared answer');
+  assert.match(BOTTOM, /export function useShowsBottomNav/, 'there is no shared answer');
+  assert.match(BOTTOM, /if \(!showsNav\) return null;/,
+    'the bar itself must use the same hook it exports');
 });

@@ -25,7 +25,7 @@ import { SocketProvider, useSocket } from './context/SocketContext';
 import { WalletProvider } from './context/WalletContext';
 import { CurrencyProvider } from './context/CurrencyContext';
 import Navbar from './components/Navbar';
-import BottomNav, { showsBottomNav } from './components/BottomNav';
+import BottomNav, { BottomBarProvider, useShowsBottomNav } from './components/BottomNav';
 import LeftSidebar from './components/LeftSidebar';
 import ChatSidebar from './components/ChatSidebar';
 import Home from './pages/Home';
@@ -172,6 +172,9 @@ function Shell() {
   const [chatOpen, setChatOpen] = useState(getInitialChatOpen);
   const navigate = useNavigate();
   const location = useLocation();
+  // Same answer the bar itself uses, so the reserved height and the bar can
+  // never disagree about whether there is one.
+  const barShows = useShowsBottomNav(location.pathname);
   // Interactive game pages must NOT be inside the TV zoom wrapper — CSS `zoom`
   // on an ancestor breaks position:fixed drag math (e.g. Block Burst's drag
   // ghost jumps away from the cursor when the browser is zoomed out).
@@ -230,7 +233,7 @@ function Shell() {
           which clipped the games' bottom-left help button and let Tower's
           black background run under the sidebar edge. The right side pairs
           lg:right-80 with the chat panel's w-80 and is already correct. */}
-      <main className={`absolute top-14 ${showsBottomNav(location.pathname) ? 'bottom-14' : 'bottom-0'} md:bottom-0 left-0 right-0 overflow-y-auto transition-[left,right] duration-300 md:left-60 ${chatOpen ? 'lg:right-80' : 'md:right-0'}`}
+      <main className={`absolute top-14 ${barShows ? 'bottom-14' : 'bottom-0'} md:bottom-0 left-0 right-0 overflow-y-auto transition-[left,right] duration-300 md:left-60 ${chatOpen ? 'lg:right-80' : 'md:right-0'}`}
             // bottom-14 on phones so the bar sits BELOW the scroll area
             // rather than over the end of it — page padding would still
             // leave the last row under a translucent bar on any page
@@ -322,11 +325,15 @@ export default function App() {
           <SocketProvider>
             <WalletProvider>
               <CurrencyProvider>
-                <ScrollToTop />
-                <NotifyToast />
-                <BalanceSync />
-                <ReferralCapture />
-                <Shell />
+                {/* Above Shell, because both the bar and the scroll area's
+                    reserved height read from it. */}
+                <BottomBarProvider>
+                  <ScrollToTop />
+                  <NotifyToast />
+                  <BalanceSync />
+                  <ReferralCapture />
+                  <Shell />
+                </BottomBarProvider>
               </CurrencyProvider>
             </WalletProvider>
           </SocketProvider>

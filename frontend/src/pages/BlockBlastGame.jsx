@@ -1091,7 +1091,6 @@ export default function BlockBlastGame() {
         </div>
 
         <div className="relative flex items-center justify-between w-full max-w-lg gap-2 px-14">
-            <GameHelp gameType="blockBlast" placement="top-left" />
             {/* My score */}
             <div className="text-center min-w-[72px]">
               <div className="text-xl font-black font-mono text-success">{score.toLocaleString()}</div>

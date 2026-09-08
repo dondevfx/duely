@@ -484,7 +484,6 @@ export default function CarDashGame() {
             still running rather than pretending otherwise. */}
         {/* bottom-left: the canvas draws the timer top-right and the score
             top-centre, and the catch-up banner takes top-left. */}
-        <GameHelp gameType="carDash" placement="bottom-left" />
         <HighwayCanvas
           seed={seed}
           onProgress={onProgress}

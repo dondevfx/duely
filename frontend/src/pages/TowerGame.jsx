@@ -72,7 +72,9 @@ export default function TowerGame() {
   const [soloEndless, setSoloEndless] = useState(false);
   // Only a bot match may be paused — a PvP clock is shared, so stopping it
   // would either freeze an innocent opponent or hand out free thinking time.
-  const [helpPaused, setHelpPaused] = useState(false);
+  // helpPaused is gone with the in-game ? button. It existed to stop the
+  // tower while the rules panel was open; the rules are read on the bet
+  // screen now, before anything is running.
   const [result, setResult]       = useState(null);
   const [privateCode, setPrivateCode]     = useState('');
   const [invitedFriend, setInvitedFriend] = useState(null);
@@ -377,16 +379,8 @@ export default function TowerGame() {
           overscrollBehavior: 'none',
         }}
       >
-        {/* bottom-left: the opponent's height is pinned top-right and the
-            catch-up banner top-left, so the top of this canvas is spoken for. */}
-        <GameHelp
-          gameType="tower"
-          placement="bottom-left"
-          canPause={lastModeRef.current !== 'pvp'}
-          onPauseChange={setHelpPaused}
-        />
         <TowerCanvas
-          running={phase === 'active' && !(helpPaused && lastModeRef.current !== 'pvp')}
+          running={phase === 'active'}
           onScore={onScore}
           onGameOver={onGameOver}
           onPerfect={onPerfect}

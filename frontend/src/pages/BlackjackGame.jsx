@@ -7,6 +7,7 @@ import { playMatchFound, playCard, playCountdown } from '../utils/sound';
 import { useCurrency } from '../context/CurrencyContext';
 import { COIN_FEES, DIAMOND_FEES, SMALL_BTN } from '../components/GameLobby';
 import { MoreWaysToggle, useRevealOnOpen } from '../components/MoreWays';
+import { useShowBottomBar } from '../components/BottomNav';
 import BetSlider from '../components/BetSlider';
 import ResultScreen from '../components/ResultScreen';
 import GameHelp from '../components/GameHelp';
@@ -255,6 +256,8 @@ function BlackjackGame() {
   const [moreOpen, setMoreOpen] = useState(false);
   // The panel unfolds below the fold on a phone; this brings it into view.
   const moreRef = useRevealOnOpen(moreOpen);
+  // The bar belongs on the bet screen, not over the game it leads into.
+  useShowBottomBar(phase === 'lobby');
   const [privateMode, setPrivateMode] = useState(null);
   const [shortfall, setShortfall] = useState(false);
   const [invitedFriend, setInvitedFriend] = useState(null); // waiting on a friend invite
@@ -902,7 +905,6 @@ function BlackjackGame() {
           padding: '12px 60px',
         }}>
           {/* Tucked into the top-left corner, clear of the centred timer. */}
-          <GameHelp gameType="blackjack" placement="top-left" />
           {phase === 'playing' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ width: 120, height: 6, background: timerTrack, borderRadius: 3, overflow: 'hidden' }}>
@@ -1169,8 +1171,15 @@ function BlackjackGame() {
       <div className="w-full max-w-md animate-slide-up">
 
         <div className="text-center mb-1.5 sm:mb-6">
-          <h1 className="text-4xl sm:text-6xl font-black text-white mb-0.5 sm:mb-2 leading-tight flex items-center justify-center gap-3"><GameTitle slug="blackjack" title="Blackjack" /></h1>
-          <p className="text-center text-muted text-sm sm:text-base leading-snug sm:leading-relaxed px-2">Get closer to 21 than your opponent. Both players act at the same time — no waiting.</p>
+          {/* The rules moved to the ? in the corner — the description sat
+              between the title and the stake, which is the one place a player
+              is not reading; they came to pick a number. */}
+          <div className="relative">
+            <div className="absolute top-0 right-0 z-10">
+              <GameHelp gameType="blackjack" placement="top-right" />
+            </div>
+            <h1 className="text-4xl sm:text-6xl font-black text-white mb-4 sm:mb-6 leading-tight px-10 flex items-center justify-center gap-3"><GameTitle slug="blackjack" title="Blackjack" /></h1>
+          </div>
         </div>
 
         <div className="mb-1.5 sm:mb-4 bg-surface border border-border rounded-2xl p-2.5 sm:p-5">

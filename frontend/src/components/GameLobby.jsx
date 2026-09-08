@@ -11,8 +11,10 @@ import CreateRoomModal from './CreateRoomModal';
 import JoinRoomModal from './JoinRoomModal';
 import { LockIcon } from './UiIcon';
 import { MoreWaysToggle, useRevealOnOpen } from './MoreWays';
+import { useShowBottomBar } from './BottomNav';
 import InsufficientModal from './InsufficientModal';
 import GameTitle from './GameTitle';
+import GameHelp from './GameHelp';
 
 // The secondary lobby actions: Challenge a Friend, Bet vs Bot, Play vs Bot,
 // Join Game. Below Find Opponent, which is the one primary action, but not so
@@ -64,6 +66,11 @@ const INVITE_GAME_TYPE = {
 };
 const inviteTypeFor = (queueKey) => INVITE_GAME_TYPE[queueKey] || queueKey;
 
+// GameHelp is keyed by its own names, which are not the queue keys this
+// component is handed — block-blast against blockBlast. Unmapped, the panel
+// opens empty on the one screen whose key differs.
+const HELP_KEYS = { 'block-blast': 'blockBlast' };
+
 export default function GameLobby({
   title,
   description,
@@ -88,6 +95,8 @@ export default function GameLobby({
 
   // Shared with Coin Flip and Blackjack, which build their own bet screens.
   const moreRef = useRevealOnOpen(moreOpen);
+  // The bet screen wants the bar; the game it leads into does not.
+  useShowBottomBar(true);
   const [privateMode, setPrivateMode] = useState(null);
   const [shortfall, setShortfall] = useState(false);
   const [joinCode, setJoinCode]       = useState('');
@@ -173,15 +182,20 @@ export default function GameLobby({
 
   return (
     <div className="w-full max-w-md animate-slide-up">
-      <h1 className="text-4xl sm:text-6xl font-black text-white text-center mb-0.5 sm:mb-3 leading-tight flex items-center justify-center gap-3">
-        <GameTitle slug={gameType} title={title} />
-      </h1>
-      {/* No line clamp. This was line-clamp-2 on mobile, which cut the longer
-          descriptions off mid-sentence with an ellipsis — and the rules are the
-          one thing a new player actually needs to read. */}
-      {description && (
-        <p className="text-center text-muted text-sm sm:text-base leading-snug sm:leading-relaxed mb-1 sm:mb-6 px-2">{description}</p>
-      )}
+      {/* The rules moved to the ? in the corner.
+
+          The description sat between the title and the stake on every bet
+          screen, which is the one place a player is not reading — they came
+          to pick a number. Behind the button it is there for whoever wants
+          it and out of the way of everyone else. */}
+      <div className="relative">
+        <div className="absolute top-0 right-0 z-10">
+          <GameHelp gameType={HELP_KEYS[gameType] ?? gameType} placement="top-right" />
+        </div>
+        <h1 className="text-4xl sm:text-6xl font-black text-white text-center mb-4 sm:mb-6 leading-tight flex items-center justify-center gap-3 px-10">
+          <GameTitle slug={gameType} title={title} />
+        </h1>
+      </div>
 
       {/* ── Entry Fee ── */}
       <div className="mb-1.5 sm:mb-4 bg-surface border border-border rounded-2xl p-2.5 sm:p-5">

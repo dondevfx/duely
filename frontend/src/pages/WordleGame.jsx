@@ -855,7 +855,6 @@ export default function WordleGame() {
         </div>
 
         <div className="relative flex items-center justify-between w-full max-w-lg gap-2 px-14">
-          <GameHelp gameType="scrabble" placement="top-left" />
           {/* My guess count */}
           <div className="text-center min-w-[72px]">
             <div className="text-xl font-black font-mono text-success">{guessNum}</div>

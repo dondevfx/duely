@@ -487,7 +487,6 @@ export default function ColorRushGame() {
       <div className="relative">
         {/* bottom-left: the canvas draws the score top-right, and the catch-up
             banner takes the top centre. */}
-        <GameHelp gameType="colorRush" placement="bottom-left" />
         <ColorRushCanvas
           seed={seed}
           onProgress={onProgress}

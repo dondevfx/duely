@@ -150,13 +150,13 @@ export default function Navbar() {
               onClick={() => {
                             if (pathname === '/') window.location.reload();
               }}
-              className="flex items-center gap-1.5 pointer-events-auto"
+              // pl-1 — a little room off the left edge. Flush against it the
+              // wordmark read as clipped rather than placed.
+              className="flex items-center pl-1 pointer-events-auto"
             >
               <span className="text-[1.6875rem] lg:text-[2.125rem] font-black tracking-tight text-primary" style={{ textShadow: '0 0 22px rgba(18,80,180,0.6)' }}>
                 Duely
               </span>
-              {/* Dot scales with the wordmark, or it reads as a speck next to it. */}
-              <span className="w-2 h-2 lg:w-2.5 lg:h-2.5 rounded-full bg-primary animate-pulse" />
             </Link>
           </div>
 
