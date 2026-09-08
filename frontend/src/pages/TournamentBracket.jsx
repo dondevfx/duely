@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useShowBottomBar } from '../components/BottomNav';
 import Avatar from '../components/Avatar';
 import GameIcon from '../components/GameIcon';
+import { api } from '../utils/api';
 
 /**
  * The screen a player waits on: who is in, and how the bracket stands.
@@ -33,12 +34,25 @@ export default function TournamentBracket() {
 
     const tick = async () => {
       try {
-        const { pool: p } = await (await fetch(`/api/tournaments/${id}`)).json();
+        // Through the shared client, not a bare relative fetch.
+        //
+        // VITE_API_URL points the app at the backend's own host; a hardcoded
+        // "/api/..." asks the site that served the page, which has no such
+        // route. That is the whole of "Lost contact with the tournament" — the
+        // request 404'd on the wrong host every time.
+        const { pool: p } = await api.get(`/tournaments/${id}`);
         if (!alive) return;
         if (!p) { setError('That tournament has finished or never started.'); return; }
         setPool(p);
-      } catch {
-        if (alive) setError('Lost contact with the tournament.');
+      } catch (e) {
+        // A 404 means it is genuinely gone; anything else is the network, and
+        // saying "lost contact" to someone whose tournament simply ended is a
+        // different and more alarming thing than what happened.
+        if (alive) {
+          setError(e?.status === 404
+            ? 'That tournament has finished or never started.'
+            : 'Lost contact with the tournament.');
+        }
       }
       if (alive) timer = setTimeout(tick, 2000);
     };

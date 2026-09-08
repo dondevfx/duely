@@ -19,6 +19,8 @@ const SCREEN = read('pages', 'Tournaments.jsx');
 const CODE = strip(SCREEN);
 const SLIDER = read('components', 'BetSlider.jsx');
 const AUTH = read('context', 'AuthContext.jsx');
+const HELP = read('components', 'GameHelp.jsx');
+const BRACKET = read('pages', 'TournamentBracket.jsx');
 
 // ── The bug that made the screen unusable ──────────────────────────────────
 
@@ -85,7 +87,7 @@ test('the slider can show something other than a single figure', () => {
 test('all three prizes come from the server, not from arithmetic here', () => {
   // A split written out in the frontend can disagree with the one actually
   // paid, and nobody notices until the split changes.
-  assert.match(CODE, /stake\.prizes\[i\]/, 'the prizes must be read from the stake');
+  assert.match(CODE, /stake\.prizes\[p\.i\]/, 'the prizes must be read from the stake');
   // Multiplication by a share, not the bare numbers — 0.55 is an opacity and
   // gap-0.5 is a class name, and matching those made this fail on its own
   // styling rather than on anything to do with prizes.
@@ -136,4 +138,97 @@ test('entering navigates to the bracket that was created', () => {
   assert.match(CODE, /navigate\(`\/tournaments\/\$\{data\.poolId\}`\)/);
   const APP = read('App.jsx');
   assert.match(APP, /path="\/tournaments\/:id"/, 'nothing renders that route');
+});
+
+// ── The podium ─────────────────────────────────────────────────────────────
+
+test('the places are shown in podium order, not 1-2-3', () => {
+  // Second, first, third — the way they stand on one. Listed in rank order it
+  // reads as a table; this reads as a result, and puts the number most people
+  // are looking at where the eye lands.
+  const order = [...CODE.matchAll(/label: '(\dnd|\dst|\drd)'/g)].map(m => m[1]);
+  assert.deepEqual(order, ['2nd', '1st', '3rd'], 'the podium is in the wrong order');
+});
+
+test('first place is bigger than the other two', () => {
+  const at = CODE.indexOf('const PODIUM');
+  const podium = CODE.slice(at, CODE.indexOf('];', at) + 2);
+  assert.match(podium, /label: '1st'[^}]*big: true/, 'first place is not marked as the large one');
+  assert.ok(!/label: '2nd'[^}]*big: true/.test(podium), 'second place is drawn large');
+});
+
+test('each place still reads its own prize, in rank order', () => {
+  // The display is reordered; the server's array is not. Reading prizes[0] for
+  // whatever sits leftmost would pay first place's figure to second.
+  const at = CODE.indexOf('const PODIUM');
+  const podium = CODE.slice(at, CODE.indexOf('];', at) + 2);
+  assert.match(podium, /label: '2nd'[^}]*i: 1/);
+  assert.match(podium, /label: '1st'[^}]*i: 0/);
+  assert.match(podium, /label: '3rd'[^}]*i: 2/);
+  assert.match(CODE, /stake\.prizes\[p\.i\]/, 'the prize is not looked up by the place');
+});
+
+test('the pot and fee line is gone', () => {
+  assert.ok(!/pot/.test(CODE), 'the pot line is back under the stake');
+  assert.ok(!/feeRate/.test(CODE), 'the fee line is back under the stake');
+});
+
+// ── The slider keeps up ────────────────────────────────────────────────────
+
+test('the value follows the thumb while it is dragged', () => {
+  // The three payouts are React-rendered, so without this they only change on
+  // release — the slider moves and the numbers sit still.
+  assert.match(CODE, /^\s*live$/m, 'the tournament slider does not ask for live values');
+  assert.match(SLIDER, /live = false/, 'live is not opt-in — every other screen would re-render on drag');
+  const move = SLIDER.slice(SLIDER.indexOf('function onMove'), SLIDER.indexOf('function onUp'));
+  assert.match(move, /d\.setEntryFee\(d\.fees\[snapped\]\)/, 'the drag never reports a value');
+  assert.match(move, /if \(snapped === d\.lastLive\) return/,
+    'it would report on every pixel rather than on every stop');
+});
+
+// ── Not started yet ────────────────────────────────────────────────────────
+
+test('a tournament that has not started keeps the player here', () => {
+  assert.match(CODE, /if \(data\.started\) \{/, 'it navigates regardless of whether anything started');
+  assert.match(CODE, /setEntered\(data\)/, 'nothing records that a seat was taken');
+  assert.match(CODE, /You are in/, 'the player is not told they are in');
+});
+
+test('and can still go and watch if they want to', () => {
+  assert.match(CODE, /Watch the bracket/, 'there is no way through to the bracket');
+});
+
+// ── The help panel ─────────────────────────────────────────────────────────
+
+test('the help does not talk about a match that is not running', () => {
+  // It is opened from the bet screen now, before anything has started. It used
+  // to warn that "this is a live match", and offer to go "back to the game".
+  const code = strip(HELP);
+  assert.ok(!/live match/i.test(code), 'the panel still warns about a running match');
+  assert.ok(!/Back to the game/i.test(code), 'the way out still points at a game not begun');
+});
+
+test('tournaments have a help entry of their own', () => {
+  // Without one the panel opens empty on the only screen whose ? is not a game.
+  assert.match(HELP, /^\s{2}tournament: \{/m, 'no help entry for tournaments');
+  const entry = HELP.slice(HELP.indexOf('  tournament: {'), HELP.indexOf('  tower: {'));
+  assert.match(entry, /how: \[/);
+  assert.match(entry, /win:/);
+});
+
+// ── The bracket screen ─────────────────────────────────────────────────────
+
+test('the bracket asks the backend, not the site that served the page', () => {
+  // VITE_API_URL points the app at the backend's own host. A hardcoded
+  // "/api/..." asks whoever served the HTML, which has no such route — that is
+  // the whole of "Lost contact with the tournament".
+  const code = strip(BRACKET);
+  assert.match(code, /import \{ api \} from '\.\.\/utils\/api'/);
+  assert.match(code, /api\.get\(`\/tournaments\/\$\{id\}`\)/);
+  assert.ok(!/fetch\(`\/api\//.test(code), 'a bare relative fetch will hit the wrong host');
+});
+
+test('a finished tournament is not reported as a network failure', () => {
+  const code = strip(BRACKET);
+  assert.match(code, /status === 404/, 'every failure reads as lost contact');
 });

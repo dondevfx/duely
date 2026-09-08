@@ -38,6 +38,8 @@ export default function Tournaments() {
   const [entryFee, setEntryFee] = useState(1);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  // Set once a seat is taken in a tournament that has not started yet.
+  const [entered, setEntered] = useState(null);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -71,9 +73,23 @@ export default function Tournaments() {
     if (!session) return navigate('/login');
     setBusy(true);
     setError(null);
+    setEntered(null);
     try {
       const data = await api.post('/tournaments/join', { entryFee, vsBot: !!vsBot });
-      navigate(`/tournaments/${data.poolId}`);
+
+      // Only leave this screen once there is something to watch.
+      //
+      // A bot bracket and a demo account fill instantly, so those go straight
+      // to it. A real entry usually does not: the seat is taken and the pool
+      // waits for the rest of its sixteen, which can be minutes away. Sending
+      // the player to a bracket of empty chairs reads as the tournament being
+      // broken, so they stay here and are told they are in.
+      if (data.started) {
+        navigate(`/tournaments/${data.poolId}`);
+        return;
+      }
+      setEntered(data);
+      setBusy(false);
     } catch (e) {
       setError(e?.data?.error || e?.message || 'Could not enter the tournament.');
       setBusy(false);
@@ -83,10 +99,15 @@ export default function Tournaments() {
   const balance = parseFloat(profile?.c_coins) || 0;
   const canAfford = balance >= entryFee;
 
-  const PLACES = [
-    { label: '1st', color: '#FFD147' },
-    { label: '2nd', color: '#C0C6CF' },
-    { label: '3rd', color: '#C07800' },
+  // Podium order: second, first, third — the way they stand on one. Listing
+  // them 1-2-3 reads as a table; this reads as a result, and puts the number
+  // most people are looking at in the middle where the eye lands.
+  //
+  // `i` is the index into the server's prizes array, which stays 1st-2nd-3rd.
+  const PODIUM = [
+    { label: '2nd', color: '#C0C6CF', i: 1, big: false },
+    { label: '1st', color: '#FFD147', i: 0, big: true  },
+    { label: '3rd', color: '#C07800', i: 2, big: false },
   ];
 
   return (
@@ -132,21 +153,29 @@ export default function Tournaments() {
           entryFee={entryFee}
           setEntryFee={setEntryFee}
           currLabel={<CoinIcon size="0.9em" />}
+          // The three payouts are React-rendered, so they need the value as the
+          // thumb moves rather than on release.
+          live
           payout={
             <div>
               <div className="text-[0.625rem] sm:text-xs uppercase tracking-widest text-muted font-bold text-center">
                 You win
               </div>
-              <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mt-0.5">
-                {PLACES.map((p, i) => (
+              <div className="grid grid-cols-3 gap-1 sm:gap-2 mt-1 items-end">
+                {PODIUM.map((p) => (
                   <div key={p.label} className="text-center">
-                    <div className="text-[0.625rem] sm:text-xs font-bold" style={{ color: p.color }}>
+                    <div className={`font-bold ${p.big ? 'text-xs sm:text-sm' : 'text-[0.6875rem] sm:text-xs'}`}
+                         style={{ color: p.color }}>
                       {p.label}
                     </div>
-                    <div className="text-lg sm:text-2xl font-black text-success inline-flex items-center gap-0.5 leading-none"
-                         style={{ textShadow: '0 0 14px rgba(34,197,94,0.4)' }}>
-                      {stake ? fmtCoins(stake.prizes[i]) : '—'}
-                      <CoinIcon size="0.6em" />
+                    <div
+                      className={`font-black text-success inline-flex items-center gap-0.5 leading-none ${
+                        p.big ? 'text-3xl sm:text-4xl' : 'text-xl sm:text-2xl'
+                      }`}
+                      style={{ textShadow: '0 0 16px rgba(34,197,94,0.45)' }}
+                    >
+                      {stake ? fmtCoins(stake.prizes[p.i]) : '—'}
+                      <CoinIcon size="0.55em" />
                     </div>
                   </div>
                 ))}
@@ -155,22 +184,41 @@ export default function Tournaments() {
           }
         />
 
-        {stake && (
-          <p className="mt-1.5 sm:mt-2 text-center text-[0.6875rem] text-muted">
-            {fmtCoins(stake.pot)} pot · {(schedule.feeRate * 100).toFixed(0)}% fee
-          </p>
-        )}
       </div>
 
       {error && <p className="mb-2 text-center text-sm text-danger">{error}</p>}
 
+      {/* Seated, waiting for the rest. Said here rather than by moving the
+          player to a bracket of empty chairs, which reads as the tournament
+          being broken rather than as it not having started. */}
+      {entered && (
+        <div className="mb-2 rounded-xl border border-primary/50 bg-primary/10 px-3 py-2.5 text-center">
+          <p className="text-sm font-bold text-white">
+            You are in — {entered.players} of {entered.size} seats taken
+          </p>
+          <p className="text-xs text-muted mt-0.5">
+            {entered.startsAt && entered.startsAt > now
+              ? <>Starts in <span className="font-mono font-bold text-primary">
+                  {fmt(Math.ceil((entered.startsAt - now) / 1000))}</span>, or as soon as it fills.</>
+              : 'Starting as soon as it fills.'}
+          </p>
+          <button
+            onClick={() => navigate(`/tournaments/${entered.poolId}`)}
+            className="mt-1.5 text-xs font-bold text-primary hover:text-white transition-colors"
+          >
+            Watch the bracket →
+          </button>
+        </div>
+      )}
+
       <button
         onClick={() => enter(false)}
-        disabled={busy || (session && !canAfford)}
+        disabled={busy || !!entered || (session && !canAfford)}
         className="w-full py-3.5 rounded-xl bg-primary hover:bg-blue-500 text-white font-black text-lg
                    shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {!session ? 'Login to Play'
+          : entered ? 'Waiting for players…'
           : !canAfford ? `Need ${entryFee} coins`
           : busy ? 'Entering…'
           : 'Play'}

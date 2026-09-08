@@ -31,25 +31,36 @@ function applySliderDOM(rawIdx, fees, isDiamonds, thumb, fill, display, payout, 
  *   setEntryFee fn         — called once on pointer release with snapped fee
  *   currLabel   ReactNode  — coin icon or '💎' to show next to amount
  *   isDiamonds  bool       — controls payout formula (2x vs 1.9x)
+ *   live        bool       — also report the value DURING the drag, not only
+ *                            on release. Off by default: this component drives
+ *                            the thumb, the fill and the figures straight
+ *                            through the DOM precisely so a drag causes no
+ *                            React work, and every existing screen renders its
+ *                            payout from that same DOM. A screen whose payout
+ *                            is React-rendered — the tournament one, with three
+ *                            of them — needs the state to keep up, and pays a
+ *                            re-render per step for it. Three stops, so that is
+ *                            at most two renders across a whole drag.
  *   payout      ReactNode  — replaces the single "You win" figure. Tournaments
  *                            pay three places, so one number cannot say what
  *                            is at stake; this keeps them on the ONE slider
  *                            rather than growing a second implementation,
  *                            which is what this component exists to prevent.
  */
-export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDiamonds = false, payoutMult = 0.95, payout = null }) {
+export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDiamonds = false, payoutMult = 0.95, payout = null, live = false }) {
   const hitRef     = useRef(null);
   const trackRef   = useRef(null);
   const thumbRef   = useRef(null);
   const fillRef    = useRef(null);
   const displayRef = useRef(null);
   const payoutRef  = useRef(null);
-  const dragRef    = useRef({ active: false, fees, setEntryFee, isDiamonds, payoutMult });
+  const dragRef    = useRef({ active: false, fees, setEntryFee, isDiamonds, payoutMult, live, lastLive: null });
 
   dragRef.current.fees        = fees;
   dragRef.current.setEntryFee = setEntryFee;
   dragRef.current.isDiamonds  = isDiamonds;
   dragRef.current.payoutMult  = payoutMult;
+  dragRef.current.live        = live;
 
   // Sync DOM when entryFee / fees / isDiamonds changes externally
   useEffect(() => {
@@ -85,12 +96,23 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
 
     function onMove(e) {
       if (!dragRef.current.active) return;
-      apply(rawFromX(e.clientX));
+      const raw = rawFromX(e.clientX);
+      apply(raw);
+      if (!dragRef.current.live) return;
+      // Only when the SNAPPED stop actually changes, not on every pixel: the
+      // value is what the screen renders from, and it only has three possible
+      // values.
+      const d = dragRef.current;
+      const snapped = Math.round(Math.max(0, Math.min(d.fees.length - 1, raw)));
+      if (snapped === d.lastLive) return;
+      d.lastLive = snapped;
+      d.setEntryFee(d.fees[snapped]);
     }
 
     function onUp(e) {
       if (!dragRef.current.active) return;
       dragRef.current.active = false;
+      dragRef.current.lastLive = null;
       const snapped = Math.round(Math.max(0, Math.min(dragRef.current.fees.length - 1, rawFromX(e.clientX))));
       apply(snapped);
       dragRef.current.setEntryFee(dragRef.current.fees[snapped]);

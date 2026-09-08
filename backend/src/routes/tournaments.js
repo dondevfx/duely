@@ -69,7 +69,15 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
     // second click is the common case, not an attack.
     const slot = F.joinableSlot(now);
     const existing = pools.entryIn(slot.startsAt, req.user.id);
-    if (existing) return res.json({ poolId: existing.id, already: true });
+    if (existing) {
+      return res.json({
+        poolId: existing.id, already: true,
+        started: existing.state === 'running',
+        players: existing.players.length,
+        size: F.POOL_SIZE,
+        startsAt: existing.slotStart + F.JOIN_WINDOW_MS,
+      });
+    }
 
     const { data: profile } = await supabase
       .from('profiles').select('username, avatar_url, c_coins').eq('id', req.user.id).maybeSingle();
@@ -116,7 +124,20 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
     if (vsBot) pool.free = true;
     if (vsBot || demo) fillWithBots(pool, now, pools);
 
-    res.json({ poolId: pool.id, already: false, bots: vsBot || demo, free: !!pool.free });
+    // `started` decides whether the client leaves the bet screen. A bot or
+    // demo bracket fills instantly and has something to watch; a real entry
+    // usually waits for the rest of its sixteen, and a bracket of empty chairs
+    // reads as the tournament being broken.
+    res.json({
+      poolId: pool.id,
+      already: false,
+      bots: vsBot || demo,
+      free: !!pool.free,
+      started: pool.state === 'running',
+      players: pool.players.length,
+      size: F.POOL_SIZE,
+      startsAt: pool.slotStart + F.JOIN_WINDOW_MS,
+    });
   });
 
   // How full the pools are right now, so the screen can say "9 of 16 waiting"

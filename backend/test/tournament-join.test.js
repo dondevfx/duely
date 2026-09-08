@@ -180,3 +180,41 @@ test('the bots are not identifiable from what the client receives', async () => 
     assert.ok(shown.players.every(p => p.username), 'a bot arrived with no name');
   } finally { server.close(); }
 });
+
+// ── Whether the client leaves the bet screen ───────────────────────────────
+
+test('a bot bracket reports as started, because it has something to watch', async () => {
+  const { server, port } = boot();
+  try {
+    const res = await join(port, { entryFee: 1, vsBot: true });
+    assert.equal(res.body.started, true);
+    assert.equal(res.body.players, F.POOL_SIZE);
+  } finally { server.close(); }
+});
+
+test('a real entry that is still waiting reports as not started', async () => {
+  // Sending a player to a bracket of empty chairs reads as the tournament
+  // being broken rather than as it not having begun.
+  const { server, port } = boot();
+  try {
+    const res = await join(port, { entryFee: 1 });
+    assert.equal(res.body.started, false, 'one player was told the bracket had begun');
+    assert.equal(res.body.players, 1);
+    assert.equal(res.body.size, F.POOL_SIZE);
+    assert.ok(res.body.startsAt > 0, 'nothing says when it will start');
+  } finally { server.close(); }
+});
+
+test('a second click reports the same state, not a blank one', async () => {
+  // The re-entry path returns early, so it has to answer the same questions —
+  // otherwise clicking twice moves the screen backwards.
+  const { server, port } = boot();
+  try {
+    await join(port, { entryFee: 1 });
+    const again = await join(port, { entryFee: 1 });
+    assert.equal(again.body.already, true);
+    assert.equal(again.body.started, false);
+    assert.equal(again.body.players, 1, 'the second click lost the seat count');
+    assert.ok(again.body.startsAt > 0);
+  } finally { server.close(); }
+});

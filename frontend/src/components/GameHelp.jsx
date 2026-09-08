@@ -13,6 +13,16 @@ import GameIcon from './GameIcon';
 // free thinking time in a race. So in PvP the game runs on behind the panel,
 // which is also why the panel is deliberately small and to one side.
 const HELP = {
+  tournament: {
+    title: 'Tournaments',
+    how: [
+      'Sixteen players, four rounds, knockout. One entry each.',
+      'Every round is a different game, and no game comes up twice.',
+      'Each match has three minutes. Win it and you go through.',
+      'Between rounds you watch the bracket until your next opponent is ready.',
+    ],
+    win: 'The top three are paid, most to the winner. Everyone else is out when they lose.',
+  },
   tower: {
     title: 'Tower',
     how: [
@@ -186,17 +196,18 @@ export default function GameHelp({ gameType, onPauseChange, canPause = false, pl
             <div className="text-xs font-bold uppercase tracking-widest text-primary mb-1.5">How you win</div>
             <p className="text-sm text-white/85 leading-snug mb-4">{info.win}</p>
 
-            <p className="text-[0.6875rem] text-muted mb-4">
-              {canPause
-                ? 'Your game is paused while this is open.'
-                : 'This is a live match — the game is still running.'}
-            </p>
-
+            {/* Nothing is running while this is open.
+                It used to say "this is a live match — the game is still
+                running", which was true when the ? sat on top of a game in
+                progress. The button is opened from the bet screen now, before
+                anything has started, so the warning was telling the player
+                about a match that did not exist — and the way out was labelled
+                as a return to a game they had not begun. */}
             <button
               onClick={() => setOpen(false)}
               className="w-full py-3 rounded-xl bg-primary text-white font-bold hover:bg-blue-500 transition-all"
             >
-              Back to the game
+              Got it
             </button>
           </div>
         </div>
