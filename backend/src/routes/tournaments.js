@@ -10,6 +10,8 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
 const F = require('../services/tournamentFormat');
+const { deductCoins } = require('../services/walletService');
+const { isDemo, randomFunnyName, PROFILE_COLORS } = require('../services/demoAccounts');
 
 module.exports = function tournamentRoutes(supabase, io, pools) {
   const router = express.Router();
@@ -45,6 +47,78 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
     });
   });
 
+  /**
+   * Enter the next tournament.
+   *
+   * The entry fee is taken BEFORE the seat is given. Seating first and charging
+   * after leaves a player in a bracket they have not paid for if the deduction
+   * fails, and there is no way to tell that from a player who has.
+   */
+  router.post('/join', requireAuth, async (req, res) => {
+    const entryFee = Number(req.body?.entryFee);
+    const vsBot = !!req.body?.vsBot;
+    if (!F.ENTRY_FEES.includes(entryFee)) {
+      return res.status(400).json({ error: `Entry is ${F.ENTRY_FEES.join(', ')} coins.` });
+    }
+    if (!pools) return res.status(503).json({ error: 'Tournaments are not available right now.' });
+
+    const now = Date.now();
+    const demo = isDemo(req.user.id);
+
+    // Already in one: hand back the same pool rather than charging twice. A
+    // second click is the common case, not an attack.
+    const slot = F.joinableSlot(now);
+    const existing = pools.entryIn(slot.startsAt, req.user.id);
+    if (existing) return res.json({ poolId: existing.id, already: true });
+
+    const { data: profile } = await supabase
+      .from('profiles').select('username, avatar_url, c_coins').eq('id', req.user.id).maybeSingle();
+
+    // A bot tournament costs nothing and pays nothing. It exists to walk the
+    // bracket end to end without sixteen people, so charging for it would make
+    // testing cost real money.
+    const free = vsBot;
+    if (!free) {
+      const balance = parseFloat(profile?.c_coins) || 0;
+      if (balance < entryFee) {
+        return res.status(400).json({ error: `You need ${entryFee} coins to enter.` });
+      }
+      try {
+        await deductCoins(supabase, req.user.id, entryFee);
+      } catch (e) {
+        console.error('[tournament] entry fee failed:', e.message);
+        return res.status(500).json({ error: 'Could not take the entry fee.' });
+      }
+    }
+
+    let pool;
+    try {
+      ({ pool } = pools.join({
+        userId: req.user.id,
+        username: profile?.username || 'Player',
+        avatarUrl: profile?.avatar_url || null,
+        entryFee, now, free,
+      }));
+    } catch (e) {
+      // The seat could not be given, so the fee goes straight back.
+      if (!free) await refund(supabase, req.user.id, entryFee);
+      return res.status(400).json({ error: e.message });
+    }
+
+    // Fill the rest with bots when asked for, and for a demo account.
+    //
+    // A demo account is a showcase: it is there to be watched filling up and
+    // winning, not to sit in a queue for fifteen minutes waiting for fifteen
+    // real people who may never arrive.
+    // Free is a property of the TOURNAMENT, not of one entry: a bot bracket
+    // takes nothing from anyone and pays nothing out, and settlement has to
+    // read that from the pool rather than from whoever happened to open it.
+    if (vsBot) pool.free = true;
+    if (vsBot || demo) fillWithBots(pool, now, pools);
+
+    res.json({ poolId: pool.id, already: false, bots: vsBot || demo, free: !!pool.free });
+  });
+
   // How full the pools are right now, so the screen can say "9 of 16 waiting"
   // rather than leaving a player wondering whether anything is happening.
   router.get('/pools', (req, res) => {
@@ -72,6 +146,37 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
 
   return router;
 };
+
+/**
+ * Top the pool up with bots so it starts now.
+ *
+ * They carry ordinary-looking names and no avatar, because the point of a
+ * demo account's tournament is that it looks like a real one. `isBot` never
+ * leaves the server — see publicPool.
+ */
+function fillWithBots(pool, now, pools) {
+  while (pool.state === 'filling' && pool.players.length < F.POOL_SIZE) {
+    pools.join({
+      userId: `bot:${pool.id}:${pool.players.length}`,
+      username: randomFunnyName(),
+      avatarUrl: null,
+      entryFee: pool.entryFee,
+      isBot: true,
+      free: true,
+      now,
+    });
+  }
+}
+
+async function refund(supabase, userId, amount) {
+  try {
+    await supabase.rpc('credit_coins', { user_id: userId, amount });
+  } catch (e) {
+    // Loud, because this is money the player has paid and not received a seat
+    // for. It is the one failure here that cannot be left to a retry.
+    console.error(`[tournament] REFUND FAILED for ${userId} (${amount} coins):`, e.message);
+  }
+}
 
 /**
  * A pool as the client may see it.
