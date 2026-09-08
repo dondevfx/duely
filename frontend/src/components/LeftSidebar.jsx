@@ -31,7 +31,9 @@ const NAV = [
   { ui: 'rewards',     label: 'Rewards',     route: '/rewards' },
   { ui: 'leaderboard', label: 'Leaderboard', route: '/leaderboard' },
   { ui: 'wallet',      label: 'Wallet',      route: '/wallet' },
-  { ui: 'tip',         label: 'Tip',         route: '/tip' },
+  // No Tip entry. Tipping is something you do TO a person, so it belongs on
+  // the person — the profile popup has it. As a nav item it opened a page
+  // asking you to type a username you had just been looking at.
 ];
 
 function linkCls(isActive) {

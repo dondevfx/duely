@@ -171,7 +171,7 @@ export default function GameLobby({
   return (
     <div className="w-full max-w-md animate-slide-up">
       <h1 className="text-4xl sm:text-6xl font-black text-white text-center mb-0.5 sm:mb-3 leading-tight flex items-center justify-center gap-3">
-        <GameIcon game={gameType} size={48} className="w-9 h-9 sm:w-14 sm:h-14" /><GameTitle slug={gameType} title={title} />
+        <GameTitle slug={gameType} title={title} />
       </h1>
       {/* No line clamp. This was line-clamp-2 on mobile, which cut the longer
           descriptions off mid-sentence with an ellipsis — and the rules are the

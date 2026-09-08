@@ -25,6 +25,7 @@ import { SocketProvider, useSocket } from './context/SocketContext';
 import { WalletProvider } from './context/WalletContext';
 import { CurrencyProvider } from './context/CurrencyContext';
 import Navbar from './components/Navbar';
+import BottomNav from './components/BottomNav';
 import LeftSidebar from './components/LeftSidebar';
 import ChatSidebar from './components/ChatSidebar';
 import Home from './pages/Home';
@@ -220,6 +221,8 @@ function Shell() {
           <LeftSidebar />
           <ChatSidebar open={chatOpen} onToggle={handleChatToggle} />
         </div>
+        {/* Phones only — the left sidebar already does this job from md up. */}
+        <BottomNav />
       </div>
       {/* Main content always interactive */}
       {/* md:left-60 must match LeftSidebar's w-60. It was left-56 (224px)
@@ -227,7 +230,12 @@ function Shell() {
           which clipped the games' bottom-left help button and let Tower's
           black background run under the sidebar edge. The right side pairs
           lg:right-80 with the chat panel's w-80 and is already correct. */}
-      <main className={`absolute top-14 bottom-0 left-0 right-0 overflow-y-auto transition-[left,right] duration-300 md:left-60 ${chatOpen ? 'lg:right-80' : 'md:right-0'}`}>
+      <main className={`absolute top-14 bottom-14 md:bottom-0 left-0 right-0 overflow-y-auto transition-[left,right] duration-300 md:left-60 ${chatOpen ? 'lg:right-80' : 'md:right-0'}`}
+            // bottom-14 on phones so the bar sits BELOW the scroll area
+            // rather than over the end of it — page padding would still
+            // leave the last row under a translucent bar on any page
+            // that forgot it.
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         <div className={isGamePage ? '' : 'tv-scale'}>
         <ErrorBoundary resetKey={location.pathname}>
         <Routes>

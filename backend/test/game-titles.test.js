@@ -37,17 +37,27 @@ test('an unknown game still renders its name', () => {
     'a game with no case must still show its title');
 });
 
-test('Block Burst uses the colours the falling blocks actually use', () => {
-  // Lifted from pages/BlockBlastGame.jsx. If the game is restyled these have
-  // to move with it, and this fails rather than letting them drift apart.
-  const game = read('..', 'src', 'pages', 'BlockBlastGame.jsx');
-  const inGame = new Set([...game.matchAll(/'(#[0-9a-fA-F]{6})'/g)].map(m => m[1].toLowerCase()));
+test("Block Burst uses the site palette, not the game neon", () => {
+  // It used the ten colours the falling blocks drop in. Ten saturated hues
+  // beside each other read as a toy next to the rest of the interface, which
+  // is built from two blues and a cyan — so these come from tailwind.config
+  // instead, and this fails if a colour is invented here that the site does
+  // not use anywhere else.
+  const theme = read('..', 'tailwind.config.js');
+  const inTheme = new Set([...theme.matchAll(/'(#[0-9a-fA-F]{6})'/g)].map(m => m[1].toLowerCase()));
   const block = TITLE.slice(TITLE.indexOf('const BLOCK_COLORS'), TITLE.indexOf('// ── Word VS'));
   const used = [...block.matchAll(/'(#[0-9a-fA-F]{6})'/g)].map(m => m[1].toLowerCase());
-  assert.ok(used.length >= 8, 'a couple of colours is not the game\'s palette');
+  assert.ok(used.length >= 5, 'too few colours to tell the tiles apart');
+
+  // Every one has to be a blue: same hue family as primary and accent. A green
+  // or a magenta passing "is a hex code" is the thing being prevented.
   for (const c of used) {
-    assert.ok(inGame.has(c), `${c} is not a colour Block Burst plays with`);
+    const r = parseInt(c.slice(1, 3), 16), g = parseInt(c.slice(3, 5), 16), b = parseInt(c.slice(5, 7), 16);
+    assert.ok(b >= g && g >= r, `${c} is not a blue — the palette is primary, accent and their neighbours`);
   }
+  // And the two the whole site is built from must be in there.
+  assert.ok(inTheme.has('#1250b4') && used.includes('#1250b4'), 'primary is missing');
+  assert.ok(inTheme.has('#00bfff') && used.includes('#00bfff'), 'accent is missing');
 });
 
 test('Word VS uses the real tile states', () => {
@@ -66,7 +76,7 @@ test('Word VS uses the real tile states', () => {
 
 test('Color Rush uses its three targets', () => {
   const canvas = read('components', 'ColorRushCanvas.jsx');
-  const rush = TITLE.slice(TITLE.indexOf('const RUSH_COLORS'), TITLE.indexOf('// ── Coin Flip'));
+  const rush = TITLE.slice(TITLE.indexOf('const RUSH_COLORS'), TITLE.indexOf('const SLUG_ALIASES'));
   const used = [...rush.matchAll(/'(#[0-9a-fA-F]{6})'/g)].map(m => m[1]);
   assert.equal(used.length, 3, 'the game asks you to hit three colours');
   for (const c of used) {
@@ -89,11 +99,15 @@ test('everything is sized in em, so one card size fits all', () => {
   assert.match(TITLE, /w-\[\d?\.?\d+em\]/, 'tiles must be sized relative to the type');
 });
 
-test('a two-word name wraps rather than overflowing', () => {
-  // "Block Burst" as eleven tiles is wider than a phone card. It has to break
-  // between the words instead of overflowing or being scaled to nothing.
-  assert.match(TITLE, /flex-wrap/, 'nothing allows the name to break across lines');
+test('a two-word name stacks, second word under first', () => {
+  // Not wrapping — stacking, always. A card is square and a title is two short
+  // words: side by side it runs edge to edge and has to be set small to fit;
+  // stacked it can be half again as large in the same space.
   assert.match(TITLE, /function Words/, 'words must be separate items, or it breaks mid-word');
+  const fn = TITLE.slice(TITLE.indexOf('function Words'), TITLE.indexOf('export default'));
+  assert.match(fn, /flex-col/, 'the words still sit on one line');
+  assert.match(fn, /items-center/, 'a stacked pair has to be centred or it reads as ragged');
+  assert.ok(!/flex-wrap/.test(fn), 'wrapping and stacking together is one of them not working');
 });
 
 // ── What a screen reader hears ─────────────────────────────────────────────
@@ -169,5 +183,49 @@ test('the queue keys the bet screens actually pass are all covered', () => {
   for (const k of keys) {
     const covered = new RegExp(`case '${k}':`).test(TITLE) || new RegExp(`${k}:`).test(map);
     assert.ok(covered, `${k} is passed by a bet screen but has no case and no alias`);
+  }
+});
+
+// ── The coin is the game's coin ────────────────────────────────────────────
+
+test('Coin Flip uses the coin the game actually flips', () => {
+  // It was a drawn gold disc, which was a second coin that looked nothing like
+  // the one on the bet screen or the result card. CoinFaceIcon is that coin.
+  assert.match(TITLE, /import CoinFaceIcon from '\.\/CoinFaceIcon'/,
+    'the title draws its own coin instead of using the game\'s');
+  assert.match(TITLE, /<CoinFaceIcon side="heads"/);
+  assert.ok(!/GOLD_(LIGHT|MID|DARK)/.test(TITLE), 'the hand-drawn gold disc is still here');
+});
+
+test('the coin is sized as a lowercase letter, not an icon', () => {
+  // It stands in for the "o" in Coin. At cap height it reads as an icon parked
+  // in the middle of a word.
+  const size = TITLE.match(/<CoinFaceIcon side="heads" size="([\d.]+)em"/);
+  assert.ok(size, 'the coin has no size');
+  assert.ok(parseFloat(size[1]) <= 0.65,
+    `${size[1]}em is cap height — a lowercase o is around half the em`);
+});
+
+// ── Where the title sits on the card ───────────────────────────────────────
+
+test('the title is centred at the foot of the clip, and larger', () => {
+  const h3 = CARD.match(/<h3[\s\S]*?>/)[0];
+  assert.match(h3, /text-center/, 'the title is still left-aligned');
+  assert.match(h3, /text-base md:text-2xl/, 'the title is still at the old size');
+  const scrim = CARD.slice(CARD.indexOf('absolute inset-x-0 bottom-0'));
+  assert.match(scrim.slice(0, 300), /text-center/, 'the scrim does not centre its contents');
+});
+
+test('the bet screens show the title without a game icon beside it', () => {
+  // The clip and the treatment already say which game this is; the icon was a
+  // third statement of the same thing, at a size that competed with the name.
+  const lobby = read('components', 'GameLobby.jsx');
+  const h1 = lobby.match(/<h1[\s\S]*?<\/h1>/)[0];
+  assert.ok(!/<GameIcon/.test(h1), 'the shared bet screen still shows a game icon');
+  for (const f of ['CoinFlipGame.jsx', 'BlackjackGame.jsx']) {
+    const src = read('..', 'src', 'pages', f);
+    const own = src.match(/<h1[^>]*>[\s\S]*?<\/h1>/);
+    assert.ok(own, `${f} has no heading`);
+    assert.ok(!/<GameIcon/.test(own[0]), `${f} still shows a game icon in its heading`);
   }
 });

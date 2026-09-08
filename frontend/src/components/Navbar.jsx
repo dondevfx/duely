@@ -6,36 +6,11 @@ import RankIcon from './RankIcon';
 import UiIcon, { RakebackTierIcon } from './UiIcon';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
-import { useSocket } from '../context/SocketContext';
 import { getRank, getDisplayRank, isRanked } from '../utils/ranks';
 import { api } from '../utils/api';
 import CoinIcon from './CoinIcon';
 import { fmtCoins, fmtDiamonds } from '../utils/format';
 import Avatar from './Avatar';
-
-const NAV_LINKS = [
-  { ui: 'home',        label: 'Home',        to: '/' },
-  // No Games entry. Home is the games list now — the stripped-back layout is
-  // a title and the grid of cards, so a separate Games page was the same
-  // screen reached a second way. /games still exists and still works; it is
-  // simply not somewhere the navigation sends you.
-  { ui: 'profile',     label: 'Profile',     to: '/profile' },
-  { ui: 'rewards',     label: 'Rewards',     to: '/rewards' },
-  { ui: 'leaderboard', label: 'Leaderboard', to: '/leaderboard' },
-  { ui: 'wallet',      label: 'Wallet',      to: '/wallet' },
-  { ui: 'tip',         label: 'Tip',         to: '/tip' },
-];
-
-const GAME_LINKS = [
-  { game: 'quickMatch', label: 'Quick Match', to: '/game/quick-match' },
-  { game: 'blockBlast', label: 'Block Burst', to: '/game/block-blast', countKey: 'block-blast' },
-  { game: 'carDash',    label: 'Rush Hour',   to: '/game/car-dash',    countKey: 'car-dash' },
-  { game: 'coin-flip',  label: 'Coin Flip',   to: '/game/coin-flip',   countKey: 'coin-flip' },
-  { game: 'colorRush',  label: 'Color Rush',  to: '/game/color-rush',  countKey: 'color-rush' },
-  { game: 'tower',      label: 'Tower',       to: '/game/tower',       countKey: 'tower' },
-  { game: 'scrabble',   label: 'Word VS',     to: '/game/scrabble',    countKey: 'scrabble' },
-  { game: 'blackjack',  label: 'Blackjack',   to: '/game/blackjack',   countKey: 'blackjack' },
-];
 
 
 function fmtRakebackTimer(ms) {
@@ -52,11 +27,9 @@ function fmtRakebackTimer(ms) {
 export default function Navbar() {
   const { profile, session, signOut, refreshProfile } = useAuth();
   const { displayCurrency, setDisplayCurrency } = useCurrency();
-  const { playerCounts } = useSocket();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [dropdownOpen, setDropdownOpen]   = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Shut the drawer on ANY navigation, not just on the links that remember to
   // call setMobileMenuOpen(false) themselves.
@@ -68,7 +41,6 @@ export default function Navbar() {
   // it while the state stays). The next tap then CLOSES a drawer the player
   // cannot see, which reads exactly as "I pressed it and nothing happened", and
   // a reload clears it because the state starts false again.
-  useEffect(() => { setMobileMenuOpen(false); }, [pathname]);
   const [mobileCurrencyOpen, setMobileCurrencyOpen] = useState(false);
   const [rakebackOpen, setRakebackOpen]   = useState(false);
   const [rakebackData, setRakebackData]   = useState(null);
@@ -92,7 +64,6 @@ export default function Navbar() {
   }, []);
 
   // Close mobile menu on route change
-  useEffect(() => { setMobileMenuOpen(false); }, [navigate]);
 
   const fetchRakeback = useCallback(async () => {
     try {
@@ -138,7 +109,6 @@ export default function Navbar() {
   }
 
   async function handleSignOut() {
-    setMobileMenuOpen(false);
     await signOut();
     navigate('/');
   }
@@ -164,19 +134,20 @@ export default function Navbar() {
               touch-action: manipulation drops the double-tap-zoom wait, so the
               tap registers immediately rather than after the browser has
               decided it was not a gesture. */}
-          <button
-            className="md:hidden relative z-10 p-2 rounded-lg text-white hover:bg-surfaceLight transition-colors shrink-0 w-9 h-9 flex items-center justify-center"
+          {/* Where the hamburger was. The four places people actually go are
+              in the bottom bar now, one tap each, and this slot is where a
+              phone expects its account — the only thing that menu held which
+              the bar does not carry. Sign out lives on the profile page. */}
+          <Link
+            to={profile ? '/profile' : '/login'}
+            className="md:hidden relative z-10 shrink-0 w-9 h-9 flex items-center justify-center rounded-full text-white hover:bg-surfaceLight transition-colors"
             style={{ touchAction: 'manipulation' }}
-            onClick={() => setMobileMenuOpen(o => !o)}
-            aria-expanded={mobileMenuOpen}
-            aria-label="Menu"
+            aria-label={profile ? 'Your profile' : 'Sign in'}
           >
-            <div className="w-5 flex flex-col gap-1.5">
-              <span className={`block h-0.5 bg-current rounded transition-all origin-center ${mobileMenuOpen ? 'rotate-45 translate-y-2' : ''}`} />
-              <span className={`block h-0.5 bg-current rounded transition-all ${mobileMenuOpen ? 'opacity-0' : ''}`} />
-              <span className={`block h-0.5 bg-current rounded transition-all origin-center ${mobileMenuOpen ? '-rotate-45 -translate-y-2' : ''}`} />
-            </div>
-          </button>
+            {profile
+              ? <Avatar username={profile.username} url={profile.avatar_url} color={profile.profile_color} size={30} />
+              : <UiIcon name="profile" size={22} />}
+          </Link>
 
           {/* Logo — left-aligned (in flex flow) so a large balance can't overlap it */}
           <div className="relative shrink-0 lg:w-56 flex justify-start pointer-events-auto">
@@ -191,8 +162,7 @@ export default function Navbar() {
             <Link
               to="/"
               onClick={() => {
-                setMobileMenuOpen(false);
-                if (pathname === '/') window.location.reload();
+                            if (pathname === '/') window.location.reload();
               }}
               className="flex items-center gap-1.5 pointer-events-auto"
             >
@@ -474,7 +444,7 @@ export default function Navbar() {
                     ⚙
                   </Link>
                 )}
-                <Link to="/profile" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 group">
+                <Link to="/profile" className="flex items-center gap-2 group">
                   <div className="relative">
                     <Avatar
                       username={profile.username}
@@ -525,107 +495,9 @@ export default function Navbar() {
       </nav>
 
       {/* Mobile menu overlay */}
-      {mobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 top-14 z-40 bg-bg overflow-y-auto pb-8">
-          <div className="px-4 pt-4 space-y-6">
-
-            {/* Nav section */}
-            <div>
-              <p className="text-xs text-muted uppercase tracking-widest font-semibold px-2 mb-2">Menu</p>
-              {/* Games is dropped from the phone drawer while the stripped-back
-                  Home is being tried — the games are listed further down this
-                  same drawer and on Home itself, so the tab was a third route
-                  to the same place. Paired with PHONE_MINIMAL in Home.jsx; both
-                  come back together. This drawer is only ever rendered below
-                  md, so no other size is affected. */}
-              {/* No filter any more — /games is not in NAV_LINKS at all, so
-                  removing it here as well would be removing it twice. */}
-              {NAV_LINKS.map(item => (
-                <NavLink key={item.to} to={item.to} end={item.to === '/'}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-3 rounded-xl text-base font-medium mb-1 transition-all ${
-                      isActive ? 'bg-primary/15 text-primary border border-primary/20' : 'text-muted hover:text-white hover:bg-surfaceLight'
-                    }`
-                  }>
-                  <UiIcon name={item.ui} size={21} />
-                  {item.label}
-                </NavLink>
-              ))}
-            </div>
-
-            <div className="border-t border-border" />
-
-            {/* Games section */}
-            <div>
-              <p className="text-xs text-muted uppercase tracking-widest font-semibold px-2 mb-2">Games</p>
-              {GAME_LINKS.map(item => {
-                const count = playerCounts?.[item.countKey] ?? 0;
-                return (
-                  <NavLink key={item.to} to={item.to}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={({ isActive }) =>
-                      `flex items-center gap-3 px-3 py-3 rounded-xl text-base font-medium mb-1 transition-all ${
-                        isActive ? 'bg-primary/15 text-primary border border-primary/20' : 'text-muted hover:text-white hover:bg-surfaceLight'
-                      }`
-                    }>
-                    <span className="text-xl">{item.game ? <GameIcon game={item.game} size={22} /> : item.icon}</span>
-                    <span className="flex-1">{item.label}</span>
-                    {count > 0 && (
-                      <span className="text-[0.625rem] bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1">
-                        <span className="w-1 h-1 rounded-full bg-primary inline-block" />
-                        {count}
-                      </span>
-                    )}
-                  </NavLink>
-                );
-              })}
-            </div>
-
-            {/* Account */}
-            {profile && (
-              <>
-                <div className="border-t border-border" />
-                <div>
-                  <p className="text-xs text-muted uppercase tracking-widest font-semibold px-2 mb-2">Account</p>
-                  <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-surfaceLight mb-2">
-                    <Avatar
-                      username={profile.username}
-                      avatarUrl={profile.avatar_url}
-                      color={profile.profile_color}
-                      className="w-9 h-9"
-                    />
-                    <div>
-                      <div className="text-sm font-semibold text-white">{profile.username}</div>
-                      <div className="text-xs text-muted">{isRanked(profile) ? `ELO ${profile.elo}` : 'Unranked'} · {balanceDisplay}</div>
-                    </div>
-                  </div>
-                  <button onClick={handleSignOut}
-                    className="w-full text-left px-3 py-3 rounded-xl text-base font-medium text-danger hover:bg-danger/10 transition-all">
-                    Sign out
-                  </button>
-                </div>
-              </>
-            )}
-
-            {!session && (
-              <>
-                <div className="border-t border-border" />
-                <div className="flex flex-col gap-3">
-                  <Link to="/login" onClick={() => setMobileMenuOpen(false)}
-                    className="w-full text-center py-3 rounded-xl border border-border text-muted hover:text-white font-semibold transition-all">
-                    Sign in
-                  </Link>
-                  <Link to="/signup" onClick={() => setMobileMenuOpen(false)}
-                    className="w-full text-center py-3 rounded-xl bg-primary text-white font-bold shadow-glow transition-all">
-                    Create Account
-                  </Link>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      {/* The full-screen mobile menu is gone with the hamburger that opened
+          it. Its destinations are the bottom bar now, and the account section
+          it also held is the avatar in this bar. */}
     </>
   );
 }

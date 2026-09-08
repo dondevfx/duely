@@ -146,7 +146,8 @@ test('the game is reachable from every place a game is listed', () => {
   const places = {
     'data/games.js':              /route:\s+'\/game\/tower'/,
     'components/LeftSidebar.jsx': /'\/game\/tower'/,
-    'components/Navbar.jsx':      /to: '\/game\/tower'/,
+    // Navbar is no longer one of them: its game list lived only inside the
+    // hamburger drawer, and went with it when that became the bottom bar.
     'pages/QuickMatch.jsx':       /queueKey: 'tower'/,
   };
   for (const [file, re] of Object.entries(places)) {

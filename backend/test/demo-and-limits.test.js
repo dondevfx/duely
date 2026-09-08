@@ -459,16 +459,23 @@ test('tipping a demo account answers as though the name does not exist', () => {
 
 // ── The mobile menu ─────────────────────────────────────────────────────────
 
-test('the drawer cannot be left open with nothing on screen', () => {
-  // Every link inside it closes it, but the back button, a redirect and
-  // anything navigating from elsewhere do not — so the state could sit true
-  // with the overlay hidden, and the next tap closed a drawer the player could
-  // not see. That reads as "I pressed it and nothing happened".
-  const src = fe('components', 'Navbar.jsx');
-  assert.match(src, /useEffect\(\(\) => \{ setMobileMenuOpen\(false\); \}, \[pathname\]\);/);
-  // And the button sits above the nav's own blur layer, with the tap delay off.
-  assert.match(src, /md:hidden relative z-10 p-2/);
-  assert.match(src, /touchAction: 'manipulation'/);
+test('the phone bar is always on screen, so nothing can be left open', () => {
+  // This used to guard a hamburger drawer: every link inside it closed it, but
+  // the back button and any redirect did not, so the state could sit open with
+  // the overlay hidden and the next tap closed a drawer nobody could see.
+  //
+  // The drawer is gone. Four destinations sit in a fixed bar instead, which
+  // has no open state to get stuck in — the failure is designed out rather
+  // than guarded against.
+  const nav = fe('components', 'BottomNav.jsx');
+  assert.match(nav, /fixed bottom-0/, 'the bar must not scroll away');
+  assert.match(nav, /md:hidden/, 'phones only — the sidebar does this job from md up');
+  assert.ok(!/useState/.test(nav), 'a bar with open state is a drawer again');
+  assert.match(nav, /touchAction: 'manipulation'/, 'the tap delay must be off');
+  // And the hamburger it replaces really is gone.
+  const bar = fe('components', 'Navbar.jsx');
+  assert.ok(!/mobileMenuOpen/.test(bar), 'the drawer state is still there');
+  assert.ok(!/aria-label="Menu"/.test(bar), 'the hamburger is still there');
 });
 
 test('a document-wide lock is always released, never restored to a captured value', () => {

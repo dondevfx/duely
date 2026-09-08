@@ -32,7 +32,8 @@ test('the game is registered everywhere a game has to be registered', () => {
     ['App route',        fe('App.jsx'),                          /path="\/game\/color-rush"/],
     ['App import',       fe('App.jsx'),                          /import ColorRushGame/],
     ['games list',       fe('data', 'games.js'),                 /slug:\s*'color-rush'/],
-    ['navbar',           fe('components', 'Navbar.jsx'),         /\/game\/color-rush/],
+    // Not the navbar: its game list lived only in the hamburger drawer and
+    // went with it when that became the bottom bar.
     ['sidebar list',     fe('components', 'LeftSidebar.jsx'),    /\/game\/color-rush/],
     ['sidebar key map',  fe('components', 'LeftSidebar.jsx'),    /'\/game\/color-rush':\s*'color-rush'/],
     ['quick match',      fe('pages', 'QuickMatch.jsx'),          /queueKey: 'color-rush'/],

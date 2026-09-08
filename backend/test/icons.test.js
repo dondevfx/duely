@@ -86,6 +86,8 @@ test('the coin flip icon is the coin from the game, not the C Coin', () => {
 
 test('every menu entry has a drawn icon', () => {
   const ui = fe('components', 'UiIcon.jsx');
+  // 'tip' is still drawn — the profile popup uses it — it is simply no longer
+  // a menu entry, since tipping belongs on the person you are tipping.
   for (const name of ['home', 'games', 'rewards', 'profile', 'leaderboard', 'wallet', 'tip', 'rakeback']) {
     assert.match(ui, new RegExp(`^  ${name}: `, 'm'), `no menu icon for ${name}`);
   }
@@ -93,8 +95,9 @@ test('every menu entry has a drawn icon', () => {
   // the whole reason the active state reads as active.
   assert.match(ui, /stroke: 'currentColor'/);
 
-  // And both menus must actually ask for them.
-  for (const f of [['components', 'LeftSidebar.jsx'], ['components', 'Navbar.jsx']]) {
+  // And every menu must actually ask for them. Navbar is off this list because
+  // it no longer HAS a menu — its hamburger drawer became the bottom bar.
+  for (const f of [['components', 'LeftSidebar.jsx'], ['components', 'BottomNav.jsx']]) {
     assert.match(fe(...f), /<UiIcon name=\{item\.ui\}/, `${f[1]} still draws its own menu icons`);
   }
 });
@@ -150,7 +153,7 @@ test('the diamond currency is drawn, not an emoji, wherever it labels an amount'
 
 // ── Ordering ────────────────────────────────────────────────────────────────
 
-test('the games are in the same order in all three places they are listed', () => {
+test('the games are in the same order everywhere they are listed', () => {
   const ORDER = ['quick-match', 'block-blast', 'car-dash', 'coin-flip', 'color-rush', 'tower', 'scrabble', 'blackjack'];
 
   const grid = [...fe('data', 'games.js').matchAll(/slug:\s*'([a-z-]+)'/g)].map(m => m[1]);
@@ -161,8 +164,11 @@ test('the games are in the same order in all three places they are listed', () =
   const side = routes(fe('components', 'LeftSidebar.jsx'), /route: '\/game\/([a-z-]+)'/g);
   assert.deepEqual(side, ORDER, 'the sidebar is out of order');
 
-  const nav = routes(fe('components', 'Navbar.jsx'), /to: '\/game\/([a-z-]+)'/g);
-  assert.deepEqual(nav, ORDER, 'the navbar game list is out of order');
+  // The navbar used to be the third place. Its list lived only in the
+  // hamburger drawer, and went with it — a list nothing renders is one more
+  // thing to keep in step for no reason.
+  assert.ok(!/to: '\/game\//.test(fe('components', 'Navbar.jsx')),
+    'the navbar has grown a game list again — it has no menu to show one in');
 });
 
 // ── Color Rush audio ────────────────────────────────────────────────────────

@@ -21,12 +21,23 @@
  * aria-hidden and the real name is carried once on the wrapper.
  */
 
+import CoinFaceIcon from './CoinFaceIcon';
+
 // ── Block Burst ────────────────────────────────────────────────────────────
 // The ten colours the falling blocks actually use, running through the
 // spectrum so consecutive letters never repeat.
+// The site's blues rather than the game's neon rainbow. The rainbow was the
+// palette the blocks fall in, but ten saturated hues next to each other read
+// as a toy next to the rest of the interface, which is built out of two blues
+// and a cyan. Ordered light-to-dark and back so adjacent tiles always differ.
 const BLOCK_COLORS = [
-  '#ff2244', '#ff8800', '#ffee00', '#aaff00', '#00ff66',
-  '#00ffee', '#00aaff', '#7755ff', '#cc44ff', '#ff66cc',
+  '#00BFFF',  // accent
+  '#4DA3FF',
+  '#1250B4',  // primary
+  '#8AB8F0',
+  '#0066DD',
+  '#A0D8FF',
+  '#003088',
 ];
 
 // ── Word VS ────────────────────────────────────────────────────────────────
@@ -39,11 +50,6 @@ const WORD_STATES = ['correct', 'absent', 'present', 'absent', 'correct', 'corre
 // ── Color Rush ─────────────────────────────────────────────────────────────
 const RUSH_COLORS = ['#FF4D4D', '#2FD46B', '#2E7BF6'];
 
-// ── Coin Flip ──────────────────────────────────────────────────────────────
-const GOLD_LIGHT = '#FFE08A';
-const GOLD_MID   = '#D4920E';
-const GOLD_DARK  = '#C07800';
-
 // The bet screens pass a queue key, the cards pass a slug, and for two games
 // those disagree. Normalised here so callers do not each need to know.
 const SLUG_ALIASES = {
@@ -53,10 +59,14 @@ const SLUG_ALIASES = {
 
 const words = (title) => title.split(' ');
 
-// A row of words that wraps as a whole rather than mid-word.
+// Words stack, second under first.
+//
+// Not wrapping — stacking. A card is square and a title is two short words, so
+// side by side it runs edge to edge and has to be set small to fit; stacked, it
+// can be half again as large in the same space. One word is unaffected.
 function Words({ children, className = '' }) {
   return (
-    <span className={`inline-flex flex-wrap items-center justify-center gap-x-[0.3em] gap-y-[0.16em] ${className}`}>
+    <span className={`inline-flex flex-col items-center justify-center leading-[1.05] ${className}`}>
       {children}
     </span>
   );
@@ -168,59 +178,54 @@ export default function GameTitle({ slug, title, className = '' }) {
         { dx: '-0.5em', o: 0.16 },
         { dx: '-0.25em', o: 0.34 },
       ];
-      return wrap(
-        <span className="relative inline-block" style={{ transform: 'skewX(-10deg)' }}>
+      // One row per word, each with its own trail — a single trail behind a
+      // stacked pair would streak past the wrong word.
+      const Row = ({ word }) => (
+        <span className="relative inline-block whitespace-nowrap">
           {ghosts.map((g, i) => (
             <span
               key={i}
               aria-hidden="true"
-              className="absolute inset-0 font-black tracking-tighter whitespace-nowrap"
+              className="absolute inset-0 font-black tracking-tighter"
               style={{ transform: `translateX(${g.dx})`, color: '#4DA3FF', opacity: g.o }}
             >
-              {title}
+              {word}
             </span>
           ))}
-          <span className="relative font-black tracking-tighter text-white whitespace-nowrap">
-            {title}
-          </span>
+          <span className="relative font-black tracking-tighter text-white">{word}</span>
+        </span>
+      );
+      return wrap(
+        <span style={{ transform: 'skewX(-10deg)', display: 'inline-block' }}>
+          <Words>
+            {words(title).map((w, i) => <Row key={i} word={w} />)}
+          </Words>
         </span>
       );
     }
 
     // The coin is the letter.
     //
-    // Gold gradient text on its own was muddy — at card size the dark half of
-    // the gradient swallowed the letterforms. The metal now lives in one
-    // object, an actual struck coin standing in for the O, and the type around
-    // it stays plain and legible.
+    // The game's actual coin — the same CoinFaceIcon the bet screen and the
+    // result card use, so the thing in the title is the thing that gets
+    // flipped. It sits at the x-height rather than the cap height and is sized
+    // to a lowercase letter, so it reads as the "o" in Coin rather than as an
+    // icon parked in the middle of a word.
     case 'coin-flip': {
       const idx = title.toLowerCase().indexOf('o');
       const before = idx >= 0 ? title.slice(0, idx) : title;
-      const after  = idx >= 0 ? title.slice(idx + 1) : '';
-      return wrap(
-        <span className="inline-flex items-baseline font-black tracking-tight text-white">
-          {before}
-          {idx >= 0 && (
-            <span
-              className="relative inline-block w-[0.82em] h-[0.82em] rounded-full mx-[0.03em]"
-              style={{
-                transform: 'translateY(0.04em)',
-                background: `radial-gradient(circle at 35% 28%, ${GOLD_LIGHT} 0%, ${GOLD_MID} 55%, ${GOLD_DARK} 100%)`,
-                boxShadow: `inset 0 0 0 0.09em ${GOLD_DARK}, 0 0.04em 0.12em rgba(0,0,0,.6)`,
-              }}
-            >
-              {/* The sheen. A flat disc reads as a dot; this reads as metal. */}
-              <span
-                className="absolute rounded-full"
-                style={{
-                  left: '18%', top: '14%', width: '34%', height: '26%',
-                  background: 'rgba(255,255,255,.75)', filter: 'blur(0.02em)',
-                }}
-              />
-            </span>
-          )}
-          {after}
+      const rest   = idx >= 0 ? title.slice(idx + 1) : '';
+      const [restFirst, ...restWords] = rest.split(' ');
+      const Coin = (
+        <span className="inline-block align-baseline mx-[0.02em]" style={{ transform: 'translateY(0.02em)' }}>
+          <CoinFaceIcon side="heads" size="0.56em" />
         </span>
+      );
+      return wrap(
+        <Words className="font-black tracking-tight text-white">
+          <span className="whitespace-nowrap">{before}{idx >= 0 && Coin}{restFirst}</span>
+          {restWords.length > 0 && <span className="whitespace-nowrap">{restWords.join(' ')}</span>}
+        </Words>
       );
     }
 
@@ -258,10 +263,8 @@ export default function GameTitle({ slug, title, className = '' }) {
     // with the bolt for how fast it happens.
     case 'quick-match':
       return wrap(
-        // Wraps like the tiled ones do. nowrap held "Quick Match" on a single
-        // line and ran it straight off the edge of a phone card.
-        <span className="inline-flex flex-wrap items-center justify-center gap-x-[0.2em] font-black tracking-tight">
-          <span className="inline-flex items-center gap-[0.14em]">
+        <Words className="font-black tracking-tight">
+          <span className="inline-flex items-center gap-[0.14em] whitespace-nowrap">
             <svg viewBox="0 0 24 24" className="w-[0.72em] h-[0.72em] shrink-0" aria-hidden="true"
                  style={{ filter: 'drop-shadow(0 0 0.2em rgba(255,209,71,.7))' }}>
               <path d="M13 2 L4 14h6l-1 8 9-12h-6z" fill="#FFD147" />
@@ -270,6 +273,7 @@ export default function GameTitle({ slug, title, className = '' }) {
           </span>
           {words(title)[1] && (
             <span
+              className="whitespace-nowrap"
               style={{
                 // Two blues meeting, which is the match itself.
                 backgroundImage: 'linear-gradient(90deg,#4DA3FF 0%,#1250B4 100%)',
@@ -279,7 +283,7 @@ export default function GameTitle({ slug, title, className = '' }) {
               {words(title).slice(1).join(' ')}
             </span>
           )}
-        </span>
+        </Words>
       );
 
     default:

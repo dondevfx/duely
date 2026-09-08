@@ -48,11 +48,18 @@ const ICONS = {
       <circle cx="17.9" cy="13.6" r="1" fill="currentColor" stroke="none" />
     </g>
   ),
+  // A present. It was a dartboard — concentric rings around a bullseye — which
+  // reads as targets or accuracy, not as something you are given. Rewards on
+  // this site are a daily gift and a spin, so a wrapped box says what the page
+  // is at a glance and matches the icon in the bottom bar.
   rewards: () => (
     <g {...P}>
-      <circle cx="12" cy="12" r="8.6" />
-      <circle cx="12" cy="12" r="2.1" />
-      <path d="M12 3.4v6.5M12 14.1v6.5M3.4 12h6.5M14.1 12h6.5" />
+      <rect x="3.2" y="10.4" width="17.6" height="9.8" rx="1.2" />
+      <rect x="2.2" y="6.8" width="19.6" height="3.6" rx="1" />
+      <path d="M12 6.8v13.4" />
+      {/* The bow: two loops meeting at the ribbon. */}
+      <path d="M12 6.8c-1.5-1.2-4.6-3.4-5.6-1.6-.9 1.6 2.4 1.6 5.6 1.6z" />
+      <path d="M12 6.8c1.5-1.2 4.6-3.4 5.6-1.6.9 1.6-2.4 1.6-5.6 1.6z" />
     </g>
   ),
   profile: () => (
