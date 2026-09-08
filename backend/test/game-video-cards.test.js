@@ -13,7 +13,14 @@ const read = (...p) => fs.readFileSync(FE(...p), 'utf8');
 // A comment explaining why something is absent still contains the word for
 // it — this file has tripped on that more than once. Anything checking for
 // the ABSENCE of a token strips comments first.
-const strip = (s) => s.split(/\r?\n/).filter(l => !l.trim().startsWith('//')).join('\n');
+//
+// Block comments count too: a JSX {/* ... */} explaining why a button is gone
+// still contains that button's label, and a helper that only drops `//` lines
+// reports the token as present. Same trap, different hat.
+const strip = (s) => s
+  .replace(/\{\s*\/\*[\s\S]*?\*\/\s*\}/g, '')   // {/* JSX comment */}
+  .replace(/\/\*[\s\S]*?\*\//g, '')             // /* block comment */
+  .split(/\r?\n/).filter(l => !l.trim().startsWith('//')).join('\n');
 
 const GAMES_DATA = read('data', 'games.js');
 const CARD       = read('components', 'GameVideoCard.jsx');
@@ -302,4 +309,54 @@ test('the debug slider drives the same clipPosition the real crop uses', () => {
   assert.notEqual(debugAt, -1, 'useCropDebug is gone');
   assert.match(fn.slice(debugAt, debugAt + 200), /clipPosition\s*=\s*`\$\{debugX\}%/,
     'the debug value must overwrite clipPosition itself, not a separate unused variable');
+});
+
+// ── The card is the button ─────────────────────────────────────────────────
+
+test('a card carries its clip and title, and no Play Now button', () => {
+  // The whole card has always navigated on click, so the button was a second
+  // target for the same action, sitting on top of the artwork it covered.
+  const code = strip(CARD);
+  assert.doesNotMatch(code, /Play Now/,
+    'the card still renders a Play Now button over the clip');
+  // The heading specifically. A bare /\{title\}/ also matches the `${title}`
+  // inside the aria-label, so deleting the visible title passed.
+  const h3 = code.match(/<h3[\s\S]*?<\/h3>/);
+  assert.ok(h3, 'the title heading is gone');
+  assert.match(h3[0], /\{title\}/, 'the heading no longer renders the title');
+});
+
+test('the card is reachable by keyboard now that the button is gone', () => {
+  // The button was the only focusable control on the card. A div with an
+  // onClick cannot be tabbed to and is announced as nothing, so removing the
+  // button without this would have taken every game on the home screen away
+  // from anyone not using a mouse.
+  const code = strip(CARD);
+  assert.match(code, /role=\{available \? 'button' : undefined\}/, 'the card is not announced as a control');
+  assert.match(code, /tabIndex=\{available \? 0 : undefined\}/, 'the card cannot be tabbed to');
+  assert.match(code, /onKeyDown=/, 'Enter and Space do nothing');
+  assert.match(code, /e\.key === 'Enter' \|\| e\.key === ' '/, 'both keys must activate it');
+  assert.match(code, /e\.preventDefault\(\)/,
+    'Space scrolls the page unless it is stopped');
+  assert.match(code, /aria-label=/, 'the card has no accessible name');
+  assert.match(code, /focus-visible:ring/,
+    'a keyboard user cannot see which card they are on');
+});
+
+test('an unavailable card is not focusable and says why', () => {
+  // Nothing passes available=false today, but a card identical to a playable
+  // one that does nothing when clicked is worse than a word explaining it.
+  const code = strip(CARD);
+  assert.match(code, /Coming Soon/);
+  // The label must not be a button shape any more.
+  const scrim = code.slice(code.indexOf('absolute inset-x-0 bottom-0'));
+  assert.doesNotMatch(scrim.slice(0, 800), /<button/,
+    'the scrim should hold the title and nothing clickable');
+});
+
+test('the hero Play Now is a separate control and stays', () => {
+  // "Take away the Play Now buttons" was about the cards — the hero pair is a
+  // nav link beside Wallet, not something sitting on a clip.
+  assert.match(strip(HOME), /Play Now/,
+    'the hero call to action was removed along with the card buttons');
 });

@@ -172,9 +172,24 @@ export default function GameVideoCard({ slug, title, route, liveCount = 0, avail
     <div
       ref={containerRef}
       onClick={() => available && navigate(route)}
+      // The card is the only control now that the button is gone, so it has to
+      // BE a control. A div with an onClick cannot be reached by keyboard and
+      // is announced as nothing — removing the button would otherwise have
+      // quietly taken every game on the home screen away from anyone not using
+      // a mouse.
+      role={available ? 'button' : undefined}
+      tabIndex={available ? 0 : undefined}
+      aria-label={available ? `Play ${title}` : `${title} — coming soon`}
+      onKeyDown={(e) => {
+        if (!available) return;
+        // Space scrolls the page unless it is stopped, and Enter is what a
+        // screen reader sends for a role="button".
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(route); }
+      }}
       className={`relative aspect-square rounded-2xl overflow-hidden border transition-all duration-300 ${
         available
-          ? 'border-surfaceLight hover:border-primary/50 hover:shadow-glow cursor-pointer group'
+          ? 'border-surfaceLight hover:border-primary/50 hover:shadow-glow cursor-pointer group ' +
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg'
           : 'border-surfaceLight/50 opacity-60'
       }`}
     >
@@ -262,23 +277,22 @@ export default function GameVideoCard({ slug, title, route, liveCount = 0, avail
         </div>
       )}
 
-      {/* Scrim + title + button, all over the video. from-black/90 at the
-          bottom guarantees the button and title read on any footage. */}
+      {/* Scrim + title over the video. from-black/90 at the bottom guarantees
+          the title reads on any footage.
+
+          No Play Now button: the whole card has always navigated on click, so
+          the button was a second target for the same action sitting on top of
+          the artwork it was covering. The card is the control now — see the
+          keyboard handling on the root, which the button used to provide. */}
       <div className="absolute inset-x-0 bottom-0 pt-10 pb-2.5 px-2.5 md:pb-4 md:px-4 bg-gradient-to-t from-black/90 via-black/50 to-transparent">
-        <h3 className="text-sm md:text-xl font-bold text-white mb-1.5 md:mb-3 leading-tight drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">
+        <h3 className="text-sm md:text-xl font-bold text-white leading-tight drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">
           {title}
         </h3>
-        {available ? (
-          <button
-            onClick={(e) => { e.stopPropagation(); navigate(route); }}
-            className="w-full text-xs md:text-base py-1.5 md:py-2.5 rounded-lg md:rounded-xl bg-primary hover:bg-blue-500 text-white font-bold transition-all"
-          >
-            Play Now
-          </button>
-        ) : (
-          <div className="w-full text-center text-xs md:text-sm text-muted py-1.5 md:py-2 border border-white/20 rounded-lg">
-            Coming Soon
-          </div>
+        {!available && (
+          // A label, not a button shape. Nothing passes available=false today,
+          // but a card that looks identical to a playable one and does nothing
+          // when clicked is worse than a word saying why.
+          <p className="mt-1 text-xs md:text-sm text-muted">Coming Soon</p>
         )}
       </div>
     </div>
