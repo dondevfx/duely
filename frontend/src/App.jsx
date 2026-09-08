@@ -38,6 +38,7 @@ import Tip from './pages/Tip';
 import BlockBlastGame from './pages/BlockBlastGame';
 import QuickMatch from './pages/QuickMatch';
 import Tournaments from './pages/Tournaments';
+import TournamentBracket from './pages/TournamentBracket';
 import AddFriend from './pages/AddFriend';
 import WordleGame from './pages/WordleGame';
 import CoinFlipGame from './pages/CoinFlipGame';
@@ -257,6 +258,7 @@ function Shell() {
           <Route path="/tip"                element={<Tip />} />
           <Route path="/game/block-blast"   element={<BlockBlastGame />} />
           <Route path="/tournaments"        element={<Tournaments />} />
+          <Route path="/tournaments/:id"    element={<TournamentBracket />} />
           {/* Quick Match kept its route: Tournaments took its place in the
               grid and the sidebar, but a link somebody saved still works. */}
           <Route path="/game/quick-match"   element={<QuickMatch />} />

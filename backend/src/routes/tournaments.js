@@ -144,6 +144,18 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
     res.json({ pool: mine ? publicPool(mine) : null });
   });
 
+  // One pool, by id — what the bracket screen polls.
+  //
+  // Public rather than requireAuth: a player watching a bracket they were
+  // knocked out of is still watching a bracket, and there is nothing here that
+  // is not already on everyone else's screen.
+  router.get('/:id', (req, res) => {
+    if (!pools) return res.status(404).json({ error: 'Not found' });
+    const pool = pools.get(req.params.id);
+    if (!pool) return res.status(404).json({ error: 'That tournament has finished or never started.' });
+    res.json({ pool: publicPool(pool) });
+  });
+
   return router;
 };
 

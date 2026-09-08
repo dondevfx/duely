@@ -1,27 +1,37 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useShowBottomBar } from '../components/BottomNav';
 import GameTitle from '../components/GameTitle';
 import GameHelp from '../components/GameHelp';
 import CoinIcon from '../components/CoinIcon';
+import BetSlider from '../components/BetSlider';
 import { api } from '../utils/api';
 
 /**
  * The tournament bet screen.
  *
- * Three fixed stakes rather than a slider: sixteen players have to agree on
- * one number, and a free choice would split the queue into sixteen pools of
- * one. Picking a stake shows what each of the three paid places wins at it.
+ * Built out of the same pieces as every other bet screen — the shared
+ * BetSlider, the same panel, the same button — so it does not read as a
+ * different product. The one difference is what it has to show: three places
+ * are paid, so a single "You win" figure cannot say what is at stake. That is
+ * what BetSlider's `payout` slot is for; growing a second slider here is the
+ * exact thing that component exists to prevent.
+ *
+ * Three stops on the slider rather than a free range: sixteen players have to
+ * agree on one number, and a free choice would split the queue into sixteen
+ * pools of one.
  *
  * Every figure comes from the server, from the same module that pays the
  * prizes out. Writing the split here as well would be a prize table that can
- * disagree with the one actually paid — a support ticket per tournament, and
- * nobody would notice until the split changed.
+ * disagree with the one actually paid.
  */
 export default function Tournaments() {
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  // `session`, not `user`. AuthContext has never exposed a `user` — reading
+  // one gave undefined, so the screen showed "Login to Play" to a signed-in
+  // player and the bot button sent them to the login page.
+  const { session, profile } = useAuth();
   useShowBottomBar(true);
 
   const [schedule, setSchedule] = useState(null);
@@ -38,14 +48,15 @@ export default function Tournaments() {
     return () => { alive = false; };
   }, []);
 
-  // One ticking clock for the whole screen. The countdown is derived from an
-  // absolute instant the server sent, so a tab that slept catches up on its
-  // next tick rather than counting down from wherever it left off.
+  // One ticking clock. The countdown is derived from an absolute instant the
+  // server sent, so a tab that slept catches up on its next tick rather than
+  // resuming from wherever it left off.
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
 
+  const fees = useMemo(() => schedule?.stakes.map(s => s.entryFee) || [1, 5, 10], [schedule]);
   const stake = useMemo(
     () => schedule?.stakes.find(s => s.entryFee === entryFee) || null,
     [schedule, entryFee]);
@@ -57,7 +68,7 @@ export default function Tournaments() {
   const secondsLeft = Math.max(0, Math.ceil((countdownTo - now) / 1000));
 
   async function enter(vsBot) {
-    if (!user) return navigate('/login');
+    if (!session) return navigate('/login');
     setBusy(true);
     setError(null);
     try {
@@ -72,8 +83,32 @@ export default function Tournaments() {
   const balance = parseFloat(profile?.c_coins) || 0;
   const canAfford = balance >= entryFee;
 
+  const PLACES = [
+    { label: '1st', color: '#FFD147' },
+    { label: '2nd', color: '#C0C6CF' },
+    { label: '3rd', color: '#C07800' },
+  ];
+
   return (
-    <div className="w-full max-w-md animate-slide-up">
+    <div className="w-full max-w-md animate-slide-up pt-4 sm:pt-6">
+      {/* The clock, as the first thing on the screen and as type rather than a
+          panel. It is the one fact that decides whether to enter now or come
+          back, so it reads before the title rather than sitting in a box below
+          the stake competing with it. */}
+      <div className="text-center mb-2 sm:mb-3">
+        <div className="text-[0.625rem] sm:text-xs uppercase tracking-widest text-muted font-bold">
+          {!schedule ? ' ' : joinOpen ? 'Entry closes in' : 'Next tournament in'}
+        </div>
+        <div
+          className={`font-mono font-black leading-none text-4xl sm:text-5xl ${
+            joinOpen ? 'text-primary' : 'text-white'
+          }`}
+          style={joinOpen ? { textShadow: '0 0 18px rgba(18,80,180,0.55)' } : undefined}
+        >
+          {schedule ? fmt(secondsLeft) : '—:—'}
+        </div>
+      </div>
+
       <div className="relative">
         <div className="absolute top-0 right-0 z-10">
           <GameHelp gameType="tournament" placement="top-right" />
@@ -83,94 +118,68 @@ export default function Tournaments() {
         </h1>
       </div>
 
-      {/* ── The stake ── */}
+      {/* ── Entry ── the same panel every other bet screen uses */}
       <div className="mb-1.5 sm:mb-4 bg-surface border border-border rounded-2xl p-2.5 sm:p-5">
-        <div className="flex items-center justify-between mb-2 sm:mb-4">
-          <span className="text-base font-bold text-white">Entry</span>
+        <div className="flex items-center justify-between mb-1.5 sm:mb-4">
+          <span className="text-base font-bold text-white">Your Bet</span>
           <span className="text-xs text-muted">
             {schedule ? `${schedule.poolSize} players · ${schedule.rounds} rounds` : ' '}
           </span>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 mb-3 sm:mb-4">
-          {(schedule?.stakes || [{ entryFee: 1 }, { entryFee: 5 }, { entryFee: 10 }]).map(s => (
-            <button
-              key={s.entryFee}
-              onClick={() => setEntryFee(s.entryFee)}
-              aria-pressed={entryFee === s.entryFee}
-              className={`py-2.5 rounded-xl font-black text-lg border transition-all inline-flex items-center justify-center gap-1.5 ${
-                entryFee === s.entryFee
-                  ? 'bg-primary border-primary text-white shadow-glow'
-                  : 'bg-bg border-border text-muted hover:text-white hover:border-primary/50'
-              }`}
-            >
-              {s.entryFee} <CoinIcon size="0.8em" />
-            </button>
-          ))}
-        </div>
-
-        {/* What the three paid places win, at the chosen stake. */}
-        <div className="rounded-xl bg-bg border border-border overflow-hidden">
-          {['1st', '2nd', '3rd'].map((place, i) => (
-            <div
-              key={place}
-              className={`flex items-center justify-between px-3 py-2 text-sm ${
-                i > 0 ? 'border-t border-border' : ''
-              }`}
-            >
-              <span className={`font-bold ${
-                i === 0 ? 'text-[#FFD147]' : i === 1 ? 'text-[#C0C6CF]' : 'text-[#C07800]'
-              }`}>{place}</span>
-              <span className="font-mono font-bold text-white inline-flex items-center gap-1">
-                {stake ? stake.prizes[i].toFixed(2) : '—'} <CoinIcon size="0.75em" />
-              </span>
+        <BetSlider
+          fees={fees}
+          entryFee={entryFee}
+          setEntryFee={setEntryFee}
+          currLabel={<CoinIcon size="0.9em" />}
+          payout={
+            <div>
+              <div className="text-[0.625rem] sm:text-xs uppercase tracking-widest text-muted font-bold text-center">
+                You win
+              </div>
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mt-0.5">
+                {PLACES.map((p, i) => (
+                  <div key={p.label} className="text-center">
+                    <div className="text-[0.625rem] sm:text-xs font-bold" style={{ color: p.color }}>
+                      {p.label}
+                    </div>
+                    <div className="text-lg sm:text-2xl font-black text-success inline-flex items-center gap-0.5 leading-none"
+                         style={{ textShadow: '0 0 14px rgba(34,197,94,0.4)' }}>
+                      {stake ? fmtCoins(stake.prizes[i]) : '—'}
+                      <CoinIcon size="0.6em" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
-        </div>
+          }
+        />
+
         {stake && (
-          <p className="mt-2 text-center text-[0.6875rem] text-muted">
-            {stake.pot.toFixed(2)} pot · {(schedule.feeRate * 100).toFixed(0)}% fee
+          <p className="mt-1.5 sm:mt-2 text-center text-[0.6875rem] text-muted">
+            {fmtCoins(stake.pot)} pot · {(schedule.feeRate * 100).toFixed(0)}% fee
           </p>
         )}
       </div>
 
-      {/* ── When ── */}
-      <div className="mb-1.5 sm:mb-4 bg-surface border border-border rounded-2xl px-3 py-2.5 text-center">
-        {!schedule ? (
-          <span className="text-sm text-muted">Loading…</span>
-        ) : joinOpen ? (
-          <span className="text-sm text-white">
-            Entry closes in{' '}
-            <span className="font-mono font-bold text-primary">{fmt(secondsLeft)}</span>
-          </span>
-        ) : (
-          <span className="text-sm text-muted">
-            Next tournament in{' '}
-            <span className="font-mono font-bold text-white">{fmt(secondsLeft)}</span>
-          </span>
-        )}
-      </div>
-
-      {error && (
-        <p className="mb-2 text-center text-sm text-danger">{error}</p>
-      )}
+      {error && <p className="mb-2 text-center text-sm text-danger">{error}</p>}
 
       <button
         onClick={() => enter(false)}
-        disabled={busy || (user && !canAfford)}
+        disabled={busy || (session && !canAfford)}
         className="w-full py-3.5 rounded-xl bg-primary hover:bg-blue-500 text-white font-black text-lg
                    shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {!user ? 'Login to Play'
+        {!session ? 'Login to Play'
           : !canAfford ? `Need ${entryFee} coins`
           : busy ? 'Entering…'
           : 'Play'}
       </button>
 
-      {/* Testing only, and labelled as such rather than hidden behind a flag
-          nobody remembers: the bots always lose and the tournament pays
-          nothing out, so it is a way to walk the bracket end to end without
-          sixteen people or any money moving. */}
+      {/* Testing, and labelled rather than hidden behind a flag nobody
+          remembers: the bots always lose and nothing is paid out, so the
+          bracket can be walked end to end without sixteen people or any money
+          moving. */}
       <button
         onClick={() => enter(true)}
         disabled={busy}
@@ -182,6 +191,13 @@ export default function Tournaments() {
       </button>
     </div>
   );
+}
+
+// Whole numbers stay whole: "76" rather than "76.00", which is how every other
+// figure on the site is written.
+function fmtCoins(n) {
+  const v = Number(n) || 0;
+  return v % 1 === 0 ? v.toLocaleString() : v.toFixed(2);
 }
 
 function fmt(seconds) {

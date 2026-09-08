@@ -1,0 +1,189 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { useShowBottomBar } from '../components/BottomNav';
+import Avatar from '../components/Avatar';
+import GameIcon from '../components/GameIcon';
+
+/**
+ * The screen a player waits on: who is in, and how the bracket stands.
+ *
+ * Two states, one screen. While the pool is filling it is a lobby — the seats
+ * taken so far, and how many are left. Once it starts it is the bracket, with
+ * the current round marked and results filling in behind it. Keeping them as
+ * one screen means the player is not moved anywhere when it begins; the same
+ * faces are simply arranged into pairs.
+ *
+ * Polled rather than pushed, for now. A socket is the right answer for the
+ * live rounds and will replace this, but polling is honest about what exists
+ * today and does not pretend to a liveness it does not have.
+ */
+export default function TournamentBracket() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { session } = useAuth();
+  useShowBottomBar(true);
+
+  const [pool, setPool] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    let timer = null;
+
+    const tick = async () => {
+      try {
+        const { pool: p } = await (await fetch(`/api/tournaments/${id}`)).json();
+        if (!alive) return;
+        if (!p) { setError('That tournament has finished or never started.'); return; }
+        setPool(p);
+      } catch {
+        if (alive) setError('Lost contact with the tournament.');
+      }
+      if (alive) timer = setTimeout(tick, 2000);
+    };
+    tick();
+    return () => { alive = false; clearTimeout(timer); };
+  }, [id]);
+
+  const byId = useMemo(() => {
+    const m = new Map();
+    for (const p of pool?.players || []) m.set(p.userId, p);
+    return m;
+  }, [pool]);
+
+  if (error) {
+    return (
+      <div className="w-full max-w-md animate-slide-up pt-6 text-center">
+        <p className="text-muted mb-4">{error}</p>
+        <button onClick={() => navigate('/tournaments')}
+                className="px-5 py-2.5 rounded-xl bg-primary text-white font-bold">
+          Back to tournaments
+        </button>
+      </div>
+    );
+  }
+
+  if (!pool) {
+    return <div className="w-full max-w-md pt-6 text-center text-muted">Loading…</div>;
+  }
+
+  const filling = pool.state === 'filling';
+  const seatsLeft = pool.size - pool.players.length;
+  const game = pool.roundGames?.[pool.round];
+
+  return (
+    <div className="w-full max-w-lg animate-slide-up pt-4 sm:pt-6">
+      <div className="text-center mb-4">
+        <div className="text-[0.625rem] sm:text-xs uppercase tracking-widest text-muted font-bold">
+          {filling ? 'Waiting for players' : `Round ${pool.round + 1} of ${pool.roundGames?.length ?? 4}`}
+        </div>
+        <div className="text-3xl sm:text-4xl font-black text-white leading-tight">
+          {filling
+            ? `${pool.players.length} / ${pool.size}`
+            : <span className="inline-flex items-center gap-2">
+                <GameIcon game={game} size={28} />{titleOf(game)}
+              </span>}
+        </div>
+        <div className="text-xs text-muted mt-1">
+          {pool.entryFee} coin entry
+          {filling && seatsLeft > 0 && ` · ${seatsLeft} seat${seatsLeft === 1 ? '' : 's'} left`}
+        </div>
+      </div>
+
+      {filling ? (
+        // The lobby: everyone in so far, and the empty seats, so the screen
+        // shows the pool filling rather than a list that silently grows.
+        <div className="grid grid-cols-4 gap-2 sm:gap-3">
+          {Array.from({ length: pool.size }).map((_, i) => {
+            const p = pool.players[i];
+            return (
+              <div key={i}
+                   className={`rounded-xl border p-2 flex flex-col items-center gap-1 ${
+                     p ? 'bg-surface border-border' : 'bg-bg border-border/50 border-dashed'
+                   }`}>
+                {p ? (
+                  <>
+                    <Avatar username={p.username} url={p.avatarUrl} size={32} />
+                    <span className="text-[0.625rem] text-white truncate w-full text-center">
+                      {p.username}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-8 h-8 rounded-full bg-surfaceLight/40" />
+                    <span className="text-[0.625rem] text-muted">…</span>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        // The bracket. Every round is drawn from the start so the shape does
+        // not change under the player between matches.
+        <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-2">
+          {pool.bracket.map((round, r) => (
+            <div key={r} className="flex-1 min-w-[8.5rem] flex flex-col justify-around gap-2">
+              <div className="text-[0.625rem] uppercase tracking-widest text-muted font-bold text-center">
+                {roundName(r, pool.bracket.length)}
+              </div>
+              {round.map((m, i) => (
+                <div key={i}
+                     className={`rounded-lg border overflow-hidden ${
+                       r === pool.round && !m.winner
+                         ? 'border-primary shadow-glow' : 'border-border'
+                     }`}>
+                  {['a', 'b'].map(side => {
+                    const uid = m[side];
+                    const p = uid ? byId.get(uid) : null;
+                    const won = m.winner && m.winner === uid;
+                    const lost = m.winner && uid && m.winner !== uid;
+                    return (
+                      <div key={side}
+                           className={`flex items-center gap-1.5 px-1.5 py-1 text-[0.6875rem] ${
+                             won ? 'bg-primary/20 text-white font-bold'
+                                 : lost ? 'bg-surface text-muted line-through'
+                                 : 'bg-surface text-white'
+                           } ${side === 'a' ? 'border-b border-border' : ''}`}>
+                        {p
+                          ? <Avatar username={p.username} url={p.avatarUrl} size={16} />
+                          : <div className="w-4 h-4 rounded-full bg-surfaceLight/40 shrink-0" />}
+                        <span className="truncate">
+                          {p ? p.username : (uid === null && m.winner ? 'bye' : '—')}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="mt-4 text-center text-xs text-muted">
+        {filling
+          ? 'The bracket is drawn as soon as the last seat is taken.'
+          : 'Rounds play automatically. This screen follows along.'}
+      </p>
+    </div>
+  );
+}
+
+function roundName(index, total) {
+  const fromEnd = total - index;
+  if (fromEnd === 1) return 'Final';
+  if (fromEnd === 2) return 'Semis';
+  if (fromEnd === 3) return 'Quarters';
+  return `Round ${index + 1}`;
+}
+
+const TITLES = {
+  'block-blast': 'Block Burst',
+  'car-dash': 'Rush Hour',
+  'color-rush': 'Color Rush',
+  tower: 'Tower',
+  scrabble: 'Word VS',
+};
+const titleOf = (slug) => TITLES[slug] || slug || '';

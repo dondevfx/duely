@@ -31,8 +31,13 @@ function applySliderDOM(rawIdx, fees, isDiamonds, thumb, fill, display, payout, 
  *   setEntryFee fn         — called once on pointer release with snapped fee
  *   currLabel   ReactNode  — coin icon or '💎' to show next to amount
  *   isDiamonds  bool       — controls payout formula (2x vs 1.9x)
+ *   payout      ReactNode  — replaces the single "You win" figure. Tournaments
+ *                            pay three places, so one number cannot say what
+ *                            is at stake; this keeps them on the ONE slider
+ *                            rather than growing a second implementation,
+ *                            which is what this component exists to prevent.
  */
-export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDiamonds = false, payoutMult = 0.95 }) {
+export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDiamonds = false, payoutMult = 0.95, payout = null }) {
   const hitRef     = useRef(null);
   const trackRef   = useRef(null);
   const thumbRef   = useRef(null);
@@ -111,7 +116,9 @@ export default function BetSlider({ fees, entryFee, setEntryFee, currLabel, isDi
           playing in the most prominent place on the screen. Updates live during
           the drag; on a phone the figure and its currency share one line, since
           stacking them costs about 20px the action buttons need. */}
-      {entryFee > 0 && (
+      {payout !== null ? (
+        <div className="mb-1.5 sm:mb-3">{payout}</div>
+      ) : entryFee > 0 && (
         <div className="mb-1.5 sm:mb-3 text-center">
           {/* Labelled, because the payout now sits directly under the panel
               heading. Unlabelled it read as the heading's value — a big green
