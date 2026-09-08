@@ -942,3 +942,81 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS rakeback_claimed_total numeric DEF
 --   SELECT count(*) FILTER (WHERE rakeback_claimed_total > 0) AS have_claimed,
 --          coalesce(sum(rakeback_claimed_total), 0)           AS total_claimed
 --     FROM profiles;
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 22. Take the money functions away from the browser.  ** RUN THIS FIRST **
+-- ─────────────────────────────────────────────────────────────────────────────
+--
+-- This is how an account came to hold 9,990 coins it never earned and withdrew
+-- $10 of real money against them.
+--
+-- The tables were protected — an anon client is refused on UPDATE profiles and
+-- on INSERT transactions. The FUNCTIONS were not. Every balance-moving RPC was
+-- executable by `anon` and `authenticated`, and the anon key is shipped in the
+-- frontend bundle where anyone can read it. So this, typed into the browser
+-- console of the live site, mints coins:
+--
+--     supabase.rpc('credit_coins', { user_id: '<your id>', amount: 10000 })
+--
+-- Verified against production with the real anon key: credit_coins,
+-- credit_diamonds, credit_affiliate_c, add_rakeback_* and claim_rakeback_* all
+-- executed. They write no transaction row, which is exactly why the account had
+-- a balance with no history behind it.
+--
+-- credit_affiliate_c and add_rakeback_* matter twice over: those two totals are
+-- counted as legitimate sources by the withdrawal check, so minting through
+-- them produces coins that look properly earned.
+--
+-- Safe to run. The backend holds the service_role key, which is exempt from
+-- these grants, and the frontend never calls an RPC or reads a table — it uses
+-- Supabase for authentication only (verified: zero supabase.from and zero
+-- supabase.rpc calls in the entire frontend).
+
+REVOKE EXECUTE ON FUNCTION public.credit_coins(uuid, numeric)            FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.deduct_coins(uuid, numeric)            FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.credit_diamonds(uuid, numeric)         FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.deduct_diamonds(uuid, numeric)         FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.credit_affiliate_c(uuid, numeric)      FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.credit_fee_balance(uuid, numeric)      FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.add_rakeback_instant(uuid, numeric)    FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.add_rakeback_daily(uuid, numeric)      FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.add_rakeback_weekly(uuid, numeric)     FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.claim_rakeback_instant(uuid)           FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.claim_rakeback_daily(uuid)             FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.claim_rakeback_weekly(uuid)            FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.claim_daily_bonus(uuid)                FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.increment_win(uuid)                    FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.increment_loss(uuid)                   FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.update_win_streak(uuid, boolean)       FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.increment_qualifying_wagered(uuid, numeric) FROM anon, authenticated;
+
+-- Belt and braces: every function in the schema, whatever its signature, and
+-- whatever gets added later. The argument types above are a guess at each
+-- signature and a REVOKE against the wrong one silently does nothing; this
+-- catches any it missed, and the DEFAULT PRIVILEGES line means the next
+-- function somebody writes is not granted to the browser the day it ships.
+DO $$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT n.nspname, p.proname, pg_get_function_identity_arguments(p.oid) AS args
+      FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+     WHERE n.nspname = 'public'
+  LOOP
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION %I.%I(%s) FROM anon, authenticated',
+                   r.nspname, r.proname, r.args);
+  END LOOP;
+END $$;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM anon, authenticated;
+
+-- The same reasoning for reading. An anon client can currently SELECT every
+-- profile — usernames and balances — and the frontend has no use for it.
+REVOKE SELECT ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE SELECT ON TABLES FROM anon, authenticated;
+
+-- Check (run as anon, or just re-run scripts/check-anon-access.js):
+--   both of these must now fail with "permission denied"
+--     SELECT credit_coins('<any uuid>'::uuid, 1);
+--     SELECT * FROM profiles LIMIT 1;
