@@ -978,9 +978,18 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS rakeback_claimed_total numeric DEF
 -- Deliberately NOT a list of named signatures. REVOKE names a function by its
 -- exact argument types, a wrong guess raises "function does not exist", and in
 -- the SQL editor that aborts the whole script — so the safe-looking explicit
--- version is the one that half-applies and leaves the hole open. Four of the
--- functions this was first written against turned out not to exist under the
--- names assumed for them.
+-- version is the one that half-applies and leaves the hole open.
+--
+-- REVOKE FROM PUBLIC, not just from anon and authenticated. This is the whole
+-- point and the first attempt got it wrong: CREATE FUNCTION grants EXECUTE to
+-- PUBLIC by default, every role inherits that, and taking it away from anon
+-- while PUBLIC still holds it changes nothing. Measured — after revoking from
+-- anon and authenticated alone, all thirteen money functions were still
+-- callable with the anon key.
+--
+-- And GRANT back to service_role in the same breath. PUBLIC includes
+-- service_role, so revoking from PUBLIC without this takes the backend's own
+-- access away and stops the site.
 DO $$
 DECLARE r record;
 BEGIN
@@ -988,11 +997,14 @@ BEGIN
     SELECT n.nspname, p.proname, pg_get_function_identity_arguments(p.oid) AS args
       FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
      WHERE n.nspname = 'public'
+       AND p.prokind = 'f'          -- plain functions; not aggregates or procs
   LOOP
     -- Per function, so one that cannot be revoked — an extension's, say, owned
     -- by another role — does not abort the run and leave the rest granted.
     BEGIN
-      EXECUTE format('REVOKE EXECUTE ON FUNCTION %I.%I(%s) FROM anon, authenticated',
+      EXECUTE format('REVOKE EXECUTE ON FUNCTION %I.%I(%s) FROM PUBLIC, anon, authenticated',
+                     r.nspname, r.proname, r.args);
+      EXECUTE format('GRANT EXECUTE ON FUNCTION %I.%I(%s) TO service_role',
                      r.nspname, r.proname, r.args);
     EXCEPTION WHEN OTHERS THEN
       RAISE NOTICE 'skipped %.%(%): %', r.nspname, r.proname, r.args, SQLERRM;
@@ -1000,7 +1012,10 @@ BEGIN
   END LOOP;
 END $$;
 
+-- The next function somebody writes, on the day it ships.
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM anon, authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO service_role;
 
 -- The same reasoning for reading. An anon client can currently SELECT every
 -- profile — usernames and balances — and the frontend has no use for it.
