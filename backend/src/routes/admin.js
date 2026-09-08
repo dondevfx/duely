@@ -1115,14 +1115,51 @@ module.exports = function adminRoutes(supabase, io) {
     res.json({ success: true, decision });
   });
 
+  // Zeroing a balance is moving money, so it leaves a row like everything else.
+  //
+  // These two endpoints set c_coins to 0 and recorded nothing at all. When a
+  // balance went from 9.55 to 0 there was no withdrawal, no match, no
+  // transaction — the only way to work out what had happened was to read the
+  // codebase and eliminate everything that could not have done it.
+  //
+  // On a platform where this table IS the record of what players are owed, an
+  // admin action that changes a balance invisibly is the one thing that must
+  // not be possible. amount_c is the amount REMOVED, positive, with the type
+  // and note carrying the direction — the admin aggregations all filter on
+  // specific types, so these rows cannot distort any total.
+  //
+  // Best-effort: the row must never stop the action the admin asked for, and a
+  // failed insert is logged rather than thrown.
+  async function recordCoinRemoval(targetId, before, actorId) {
+    if (!(before > 0)) return;                    // nothing was removed
+    const self = targetId === actorId;
+    const { error } = await supabase.from('transactions').insert({
+      user_id:  targetId,
+      type:     'admin_adjustment',
+      amount_c: before,
+      status:   'confirmed',
+      notes:    `admin cleared coin balance: ${before} -> 0` +
+                (self ? ' (own account)' : `, by admin ${actorId}`),
+    });
+    if (error) console.error('[admin] coin removal not recorded:', error.message);
+  }
+
   // ── Clear admin coins ─────────────────────────────────────────────────
   router.post('/clear-coins', requireAuth, requireAdmin, async (req, res) => {
+    const target = process.env.ADMIN_USER_ID;
+    // Read before writing, or there is nothing left to record.
+    const { data: before } = await supabase
+      .from('profiles').select('c_coins').eq('id', target).maybeSingle();
+    const had = parseFloat(before?.c_coins) || 0;
+
     const { error } = await supabase
       .from('profiles')
       .update({ c_coins: 0 })
-      .eq('id', process.env.ADMIN_USER_ID);
+      .eq('id', target);
     if (error) return res.status(500).json({ error: error.message });
-    res.json({ success: true });
+
+    await recordCoinRemoval(target, had, req.user.id);
+    res.json({ success: true, removed: had });
   });
 
   // ── Add 5M diamonds to admin account ─────────────────────────────────
@@ -1212,12 +1249,18 @@ module.exports = function adminRoutes(supabase, io) {
 
   // ── Remove admin's own coin balance ──────────────────────────────────
   router.post('/remove-coins', requireAuth, requireAdmin, async (req, res) => {
+    const { data: before } = await supabase
+      .from('profiles').select('c_coins').eq('id', req.user.id).maybeSingle();
+    const had = parseFloat(before?.c_coins) || 0;
+
     const { error } = await supabase
       .from('profiles')
       .update({ c_coins: 0 })
       .eq('id', req.user.id);
     if (error) return res.status(500).json({ error: error.message });
-    return res.json({ success: true });
+
+    await recordCoinRemoval(req.user.id, had, req.user.id);
+    return res.json({ success: true, removed: had });
   });
 
   // ── Collect accumulated platform fees into admin's coin balance ──────
