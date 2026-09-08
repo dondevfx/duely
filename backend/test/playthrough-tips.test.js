@@ -16,35 +16,42 @@ const assert = require('node:assert/strict');
 // getWithdrawable reads: the profile, deposit rows, tip_received rows, and the
 // entry fees of matches on both sides. Nothing else.
 function db({ balance, deposits = [], tips = [], spins = [], rakeback = null,
+              affiliate = 0, matchWins = [], matchLosses = [], withdrawals = [],
               stakes = [], wins = 1, losses = 1 }) {
+  // One ledger, the way the code now reads it: every confirmed coin row in a
+  // single query, classified by type. The previous fake answered a separate
+  // query per type, which meant it could not represent winnings at all — and
+  // winnings are exactly what tells an earned balance from an invented one.
+  const rows = [
+    ...deposits.map(a => ({ type: 'deposit', amount_c: a })),
+    ...tips.map(a => ({ type: 'tip_received', amount_c: a })),
+    ...spins.map(a => ({ type: 'rewards_spin', amount_c: a })),
+    ...matchWins.map(a => ({ type: 'match_win', amount_c: a })),
+    ...matchLosses.map(a => ({ type: 'match_loss', amount_c: a })),
+    ...withdrawals.map(a => ({ type: 'withdrawal', amount_c: a })),
+  ];
   return {
     from(table) {
       const q = { table, filters: {} };
       const api = {
-        select: () => api,
+        select: (cols) => { q.cols = cols || ''; return api; },
         eq: (col, val) => { q.filters[col] = val; return api; },
         gt: () => api,
         single: async () => ({ data: { c_coins: balance, wins, losses } }),
-        // rakeback lives in a profiles column, read on its own query. null
-        // means the migration has not run, which must error rather than
-        // return 0 — that is the case the code has to survive.
+        // The rakeback/affiliate columns are read on their own query. null
+        // rakeback means the migration has not run, which must error rather
+        // than return 0 — that is the case the code has to survive.
         maybeSingle: async () => {
           // Answers for THIS user only. Ignoring the id would make a query
           // against the wrong account look identical to a correct one.
           if (q.filters.id !== 'u') return { data: null, error: null };
           return rakeback === null
             ? { data: null, error: { message: 'column profiles.rakeback_claimed_total does not exist' } }
-            : { data: { rakeback_claimed_total: rakeback }, error: null };
+            : { data: { rakeback_claimed_total: rakeback, affiliate_earnings_c: affiliate }, error: null };
         },
         then: (resolve) => resolve({
-          // Answers by the type actually asked for. Returning `tips` for any
-          // non-deposit type would make reading tip_SENT look identical to
-          // reading tip_received — and that mix-up would lock the sender's
-          // balance and leave the recipient's free, which is the exploit with
-          // an extra step.
           data: q.table === 'transactions'
-            ? ({ deposit: deposits, tip_received: tips, rewards_spin: spins }[q.filters.type] || [])
-                .map(a => ({ amount_c: a }))
+            ? rows
             : (q.filters.player1_id ? stakes.map(a => ({ entry_fee_c: a })) : []),
         }),
       };
@@ -99,20 +106,24 @@ test('deposits and tips both count toward the same requirement', async () => {
 // ── The rules that already worked, which must keep working ─────────────────
 
 test('a fully wagered deposit unlocks the whole balance, winnings included', async () => {
-  const r = await check({ balance: 200, deposits: [20], stakes: [20] });
+  const r = await check({ balance: 200, deposits: [20], stakes: [20],
+    // 20 in, 20 staked, 200 on the books: the 200 is winnings, and the
+    // ledger has to say so or it is a balance from nowhere.
+    matchWins: [200] });
   assert.equal(r.withdrawable, 200,
     'winnings above the deposit were never locked and must not become so');
 });
 
 test('a partly wagered deposit holds back only the unwagered part', async () => {
   // $20 in, $10 wagered across two $5 games, balance $29 after winning both.
-  const r = await check({ balance: 29, deposits: [20], stakes: [5, 5] });
+  const r = await check({ balance: 29, deposits: [20], stakes: [5, 5],
+    matchWins: [9.5, 9.5] });
   assert.equal(r.unplayedDeposits, 10);
   assert.equal(r.withdrawable, 19, 'the wagered amount plus winnings comes out; $10 stays');
 });
 
 test('a balance built purely from winnings is never locked', async () => {
-  const r = await check({ balance: 50, stakes: [10] });
+  const r = await check({ balance: 50, stakes: [10], matchWins: [50] });
   assert.equal(r.withdrawable, 50);
 });
 
@@ -121,7 +132,7 @@ test('diamond tips carry no obligation', async () => {
   // recorded with amount_c 0 (the amount rides on crypto_amount), so summing
   // amount_c counts coin tips and nothing else — but if that ever changes,
   // this fails rather than locking coins against a diamond gift.
-  const r = await check({ balance: 20, tips: [0, 0, 0] });
+  const r = await check({ balance: 20, tips: [0, 0, 0], matchWins: [20] });
   assert.equal(r.unplayedDeposits, 0);
   assert.equal(r.withdrawable, 20);
 });
@@ -148,7 +159,8 @@ test('the refusal names tips when tips are the reason', async () => {
 
 test('the refusal says how much can be withdrawn right now', async () => {
   const m = load();
-  const r = await m.getWithdrawable(db({ balance: 29, deposits: [20], stakes: [5, 5] }), 'u');
+  const r = await m.getWithdrawable(db({ balance: 29, deposits: [20], stakes: [5, 5],
+    matchWins: [9.5, 9.5] }), 'u');
   assert.match(m.playthroughMessage(r), /withdraw \$19\.00 right now/);
 });
 
@@ -178,8 +190,9 @@ test('sending a tip does not lock the sender', async () => {
         maybeSingle: async () => ({ data: { rakeback_claimed_total: 0 }, error: null }),
         then: (res) => res({
           data: table === 'transactions'
-            // This account SENT $20 and received nothing.
-            ? (q.filters.type === 'tip_sent' ? [{ amount_c: 20 }] : [])
+            // Won 70, gave 20 away: a balance of 50 with a history behind it.
+            // The tip they SENT is the row under test.
+            ? [{ type: 'match_win', amount_c: 70 }, { type: 'tip_sent', amount_c: 20 }]
             : [],
         }),
       };
@@ -209,7 +222,7 @@ test('a wagered wheel prize is released', async () => {
 test('diamond spins carry nothing', async () => {
   // A diamond spin records amount_c 0 — the prize rides on crypto_amount — so
   // summing amount_c counts coin prizes and nothing else.
-  const r = await check({ balance: 20, spins: [0, 0], stakes: [5] });
+  const r = await check({ balance: 20, spins: [0, 0], stakes: [5], matchWins: [20] });
   assert.equal(r.lifetimeSpun, 0);
   assert.equal(r.withdrawable, 20);
 });
@@ -229,7 +242,14 @@ test('a missing rakeback column does not break withdrawals', async () => {
   // query and every withdrawal on the site stops until the migration lands.
   const r = await check({ balance: 104, deposits: [100], rakeback: null, stakes: [100] });
   assert.equal(r.lifetimeRakeback, 0, 'a missing column must degrade to zero');
-  assert.equal(r.withdrawable, 104, 'withdrawals must keep working');
+  // Withdrawals keep working — the deposit is still withdrawable, which is the
+  // thing that must not break.
+  assert.equal(r.withdrawable, 100, 'the explained balance must still come out');
+  // But the 4 coins of rakeback now have no record anywhere, so they cannot be
+  // accounted for and are held. That is the honest consequence of the column
+  // being missing, and the reason to run the migration rather than a reason to
+  // treat unknown money as explained.
+  assert.equal(r.unexplained, 4);
 });
 
 test('the refusal lists only the sources the player actually has', async () => {
@@ -267,4 +287,123 @@ test('rakeback is read for the player being checked', async () => {
   const m = load();
   const r = await m.getWithdrawable(db({ balance: 104, deposits: [100], rakeback: 4, stakes: [100] }), 'u');
   assert.equal(r.lifetimeRakeback, 4);
+});
+
+// ── Money with no history ──────────────────────────────────────────────────
+//
+// The rule only ever asked what portion of a balance was LOCKED and let
+// everything else out, which inverts the safe default: a balance arriving by
+// any route it did not know about had nothing locked against it, so all of it
+// was withdrawable the moment the account had one win to its name.
+//
+// An account did exactly that — no deposit, no tip, no spin, no rakeback, no
+// match row of any kind, 9,990 coins written straight onto the profile, and
+// $10 of real money withdrawn against them.
+
+test('coins that appear from nowhere cannot be withdrawn', async () => {
+  // The account, as it actually was: one win on the profile, nothing else.
+  const r = await check({ balance: 9990, wins: 1, losses: 0 });
+  assert.equal(r.explainedBalance, 0, 'nothing in the ledger accounts for this');
+  assert.equal(r.unexplained, 9990);
+  assert.equal(r.withdrawable, 0,
+    'a balance with no history was fully withdrawable after a single win');
+});
+
+test('a win on the profile is not a substitute for a ledger', async () => {
+  // hasPlayed is the only gate a granted balance ever had to pass, and one win
+  // clears it forever. It is an absolute gate, never an accounting of funds.
+  const r = await check({ balance: 500, wins: 40, losses: 40 });
+  assert.equal(r.hasPlayed, true, 'the old gate still passes');
+  assert.equal(r.withdrawable, 0, 'and it must no longer be enough on its own');
+});
+
+test('only the unexplained part is held, not the whole balance', async () => {
+  // Someone with a real history who is also holding granted coins keeps what
+  // they earned. Freezing the lot would punish the wrong half.
+  const r = await check({ balance: 300, deposits: [100], stakes: [100], matchWins: [150] });
+  assert.equal(r.explainedBalance, 250);
+  assert.equal(r.unexplained, 50);
+  assert.equal(r.withdrawable, 250);
+});
+
+test('an admin grant is not explained money', async () => {
+  // admin_adjustment is written both for grants and for removals with nothing
+  // to tell them apart, so counting it would reopen the hole through the admin
+  // panel. A grant that is meant to be withdrawable should be a deposit row.
+  const m = load();
+  const granted = {
+    from(table) {
+      const q = { filters: {} };
+      const api = {
+        select: () => api,
+        eq: (c, v) => { q.filters[c] = v; return api; },
+        gt: () => api,
+        single: async () => ({ data: { c_coins: 10000, wins: 1, losses: 0 } }),
+        maybeSingle: async () => ({ data: { rakeback_claimed_total: 0, affiliate_earnings_c: 0 }, error: null }),
+        then: (res) => res({
+          data: table === 'transactions'
+            ? [{ type: 'admin_adjustment', amount_c: 10000 }]
+            : [],
+        }),
+      };
+      return api;
+    },
+  };
+  const r = await m.getWithdrawable(granted, 'u');
+  assert.equal(r.withdrawable, 0, 'an admin grant was treated as accounted-for money');
+});
+
+test('affiliate earnings are explained, and withdrawable', async () => {
+  // Credited by an RPC that writes no transaction row; the running total lives
+  // on the profile. Miss it and an affiliate's earnings look like money from
+  // nowhere and get frozen — the false positive this control must not have.
+  const r = await check({ balance: 40, affiliate: 40, rakeback: 0, stakes: [5] });
+  assert.equal(r.lifetimeAffiliate, 40);
+  assert.equal(r.unexplained, 0, 'affiliate earnings were treated as unaccounted');
+  assert.equal(r.withdrawable, 40);
+});
+
+test('what a player is told when the balance does not reconcile', async () => {
+  const m = load();
+  const r = await m.getWithdrawable(db({ balance: 9990, wins: 1, losses: 0 }), 'u');
+  const msg = m.playthroughMessage(r);
+  assert.match(msg, /review/i, 'the refusal has to say something');
+  // Not the shortfall. The exact number is a hint about how close a probe got,
+  // and it belongs in the admin queue rather than on the player's screen.
+  assert.doesNotMatch(msg, /9990|9,990/, 'the message quotes the unexplained amount back');
+});
+
+test('the check runs even with the playthrough switch off', async () => {
+  // That switch relaxes a house policy. This one answers whether the money
+  // exists at all, so it is not the same question and not the same switch.
+  const m = load(false);
+  const r = await m.getWithdrawable(db({ balance: 9990, wins: 1, losses: 0 }), 'u');
+  assert.equal(r.withdrawable, 0, 'turning off playthrough re-opened the hole');
+});
+
+test('money already withdrawn does not keep explaining a balance', async () => {
+  // Deposit 100, withdraw all 100, then be granted 50. Counting only the
+  // credits leaves 100 of "explained" history sitting there with nothing
+  // behind it, and the 50 walks straight back out — the same hole reached by
+  // depositing and withdrawing once first.
+  const r = await check({
+    balance: 50, deposits: [100], withdrawals: [100], stakes: [100],
+    matchWins: [], wins: 1, losses: 1,
+  });
+  assert.equal(r.ledgerOut, 100, 'the withdrawal was not counted against them');
+  assert.equal(r.explainedBalance, 0);
+  assert.equal(r.withdrawable, 0, 'a spent history was reused to explain new coins');
+});
+
+test('a partly reconciled balance still does not quote the shortfall', async () => {
+  // The branch where the player CAN withdraw something. The earlier test only
+  // exercised the fully blocked wording, so a leak here went unseen.
+  const m = load();
+  const r = await m.getWithdrawable(
+    db({ balance: 300, deposits: [100], stakes: [100], matchWins: [150] }), 'u');
+  assert.equal(r.unexplained, 50);
+  assert.ok(r.withdrawable > 0, 'this test needs the partial branch');
+  const msg = m.playthroughMessage(r);
+  assert.match(msg, /withdraw \$250\.00 right now/, 'it must say what they CAN take');
+  assert.doesNotMatch(msg, /\$50\.00/, 'the message quotes the unexplained amount back');
 });

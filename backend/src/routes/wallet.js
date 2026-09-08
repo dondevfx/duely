@@ -416,6 +416,16 @@ module.exports = function walletRoutes(supabase, io) {
       // The numbers ride along so the page can show a progress bar without
       // parsing the sentence.
       const blocked = playthroughMessage(src);
+      // A balance that does not reconcile is an active fraud signal, not a
+      // policy refusal — somebody is trying to withdraw money the ledger has
+      // no record of arriving. The player is told something deliberately
+      // vague; this is the half that has to reach whoever is watching.
+      if (blocked && (src.unexplained || 0) > 0.005) {
+        console.error(
+          `[withdraw] BLOCKED unexplained funds user=${req.user.id} ` +
+          `balance=${src.balance} explained=${src.explainedBalance} ` +
+          `unexplained=${src.unexplained} requested=${amount}`);
+      }
       if (blocked && (!src.hasPlayed || amount > src.withdrawable)) {
         return res.status(403).json({
           error: blocked,
@@ -821,6 +831,16 @@ module.exports = function walletRoutes(supabase, io) {
       // The numbers ride along so the page can show a progress bar without
       // parsing the sentence.
       const blocked = playthroughMessage(src);
+      // A balance that does not reconcile is an active fraud signal, not a
+      // policy refusal — somebody is trying to withdraw money the ledger has
+      // no record of arriving. The player is told something deliberately
+      // vague; this is the half that has to reach whoever is watching.
+      if (blocked && (src.unexplained || 0) > 0.005) {
+        console.error(
+          `[withdraw] BLOCKED unexplained funds user=${req.user.id} ` +
+          `balance=${src.balance} explained=${src.explainedBalance} ` +
+          `unexplained=${src.unexplained} requested=${amount}`);
+      }
       if (blocked && (!src.hasPlayed || amount > src.withdrawable)) {
         return res.status(403).json({
           error: blocked,

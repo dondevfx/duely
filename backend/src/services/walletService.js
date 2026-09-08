@@ -437,6 +437,20 @@ const usd = (n) => `$${(Number(n) || 0).toFixed(2)}`;
  * player actually needs in order to act.
  */
 function playthroughMessage(src) {
+  // Unexplained money first, and regardless of the playthrough switch — it is
+  // the more fundamental refusal, and quoting a playthrough figure to someone
+  // whose balance has no history would send them off to wager money that was
+  // never going to be withdrawable anyway.
+  //
+  // Deliberately vague to the player. The exact shortfall is in the admin
+  // queue; "your balance does not reconcile, here is the number" is a hint
+  // about how close a probe got.
+  if ((src.unexplained || 0) > 0.005) {
+    return src.withdrawable > 0
+      ? `Part of your balance is still being reviewed. You can withdraw ` +
+        `${usd(src.withdrawable)} right now — contact support about the rest.`
+      : 'Your balance is under review and cannot be withdrawn yet. Please contact support.';
+  }
   if (!REQUIRE_PLAYTHROUGH) return null;
   if (!src.hasPlayed) {
     return 'Play at least one match before withdrawing.';
@@ -475,28 +489,28 @@ async function getWithdrawable(supabase, userId) {
   const balance   = parseFloat(profile.c_coins) || 0;
   const hasPlayed = ((profile.wins ?? 0) + (profile.losses ?? 0)) > 0;
 
-  const [{ data: deposits }, { data: tips }, { data: spins },
-         { data: matchesAsP1 }, { data: matchesAsP2 }] =
+  const [{ data: ledger }, { data: matchesAsP1 }, { data: matchesAsP2 }] =
     await Promise.all([
-      supabase.from('transactions').select('amount_c')
-        .eq('user_id', userId).eq('type', 'deposit').eq('status', 'confirmed'),
-      // Tips and wheel wins carry the same obligation — see the note below.
-      supabase.from('transactions').select('amount_c')
-        .eq('user_id', userId).eq('type', 'tip_received').eq('status', 'confirmed'),
-      supabase.from('transactions').select('amount_c')
-        .eq('user_id', userId).eq('type', 'rewards_spin').eq('status', 'confirmed'),
+      // The whole coin ledger in one query, classified below. It was three
+      // queries by type; the balance check added below needs every row anyway.
+      supabase.from('transactions').select('type, amount_c, crypto_symbol')
+        .eq('user_id', userId).eq('status', 'confirmed'),
       supabase.from('matches').select('entry_fee_c').eq('player1_id', userId).gt('entry_fee_c', 0),
       supabase.from('matches').select('entry_fee_c').eq('player2_id', userId).gt('entry_fee_c', 0),
     ]);
 
-  const lifetimeDeposited = (deposits || []).reduce((s, r) => s + (parseFloat(r.amount_c) || 0), 0);
-  // Diamond tips are recorded with amount_c 0 (the amount rides on
-  // crypto_amount), so summing amount_c counts coin tips and nothing else.
-  // Diamonds are not withdrawable, so they carry no obligation to begin with.
-  const lifetimeTipped = (tips || []).reduce((s, r) => s + (parseFloat(r.amount_c) || 0), 0);
-  // Wheel coins, same rule. A diamond spin records amount_c 0, so this counts
-  // coin prizes and nothing else.
-  const lifetimeSpun = (spins || []).reduce((s, r) => s + (parseFloat(r.amount_c) || 0), 0);
+  // Coins only. A diamond row records amount_c 0 (the amount rides on
+  // crypto_amount), so this both filters and, for anything it misses, adds
+  // nothing. Diamonds are not withdrawable, so they carry no obligation and
+  // count toward no balance.
+  const coinRows = (ledger || []).filter(r => r.crypto_symbol !== 'diamonds');
+  const sumOf = (...types) => coinRows
+    .filter(r => types.includes(r.type))
+    .reduce((s, r) => s + (parseFloat(r.amount_c) || 0), 0);
+
+  const lifetimeDeposited = sumOf('deposit');
+  const lifetimeTipped    = sumOf('tip_received');
+  const lifetimeSpun      = sumOf('rewards_spin');
 
   // Rakeback claimed, read on its own and allowed to fail.
   //
@@ -511,9 +525,11 @@ async function getWithdrawable(supabase, userId) {
   // ran. On its own it degrades to zero, which is the behaviour before this
   // existed.
   let lifetimeRakeback = 0;
+  let lifetimeAffiliate = 0;
   {
     const { data: rb, error: rbErr } = await supabase
-      .from('profiles').select('rakeback_claimed_total').eq('id', userId).maybeSingle();
+      .from('profiles').select('rakeback_claimed_total, affiliate_earnings_c')
+      .eq('id', userId).maybeSingle();
     if (rbErr) {
       // Once per process, not once per withdrawal check.
       if (!_rakebackColumnWarned) {
@@ -523,7 +539,11 @@ async function getWithdrawable(supabase, userId) {
           `(${rbErr.message})`);
       }
     } else {
-      lifetimeRakeback = parseFloat(rb?.rakeback_claimed_total) || 0;
+      lifetimeRakeback  = parseFloat(rb?.rakeback_claimed_total) || 0;
+      // Affiliate earnings are credited by an RPC that writes no row either,
+      // and the running total lives here. Without it, an affiliate's earnings
+      // look like money from nowhere to the check below and would be frozen.
+      lifetimeAffiliate = parseFloat(rb?.affiliate_earnings_c) || 0;
     }
   }
 
@@ -550,17 +570,71 @@ async function getWithdrawable(supabase, userId) {
   const playthroughOwed =
     lifetimeDeposited + lifetimeTipped + lifetimeSpun + lifetimeRakeback;
   const unplayedDeposits = Math.max(0, playthroughOwed - lifetimeWagered);
-  // With the requirement off, the whole balance is withdrawable — including a
-  // deposit that landed a moment ago. unplayedDeposits is still returned, so
-  // nothing that reports on it starts reading zero.
-  const withdrawable = REQUIRE_PLAYTHROUGH
-    ? Math.max(0, balance - unplayedDeposits)
-    : balance;
+
+  // ── Money the ledger cannot account for is not withdrawable ──────────────
+  //
+  // The rule above only ever asked what portion of a balance was LOCKED, and
+  // let everything else out. That inverts the safe default: a balance that
+  // arrives by any route this function does not know about has nothing locked
+  // against it, so the whole of it is withdrawable the moment the account has
+  // one win to its name.
+  //
+  // An account did exactly that. No deposit, no tip, no spin, no rakeback, no
+  // match row of any kind — 9,990 coins written straight onto the profile, and
+  // $10 of real money withdrawn against them across two payouts. Another
+  // account is sitting on a million coins the same way.
+  //
+  // So the question becomes the right way round: how much of this balance can
+  // be shown to have come from somewhere? Every legitimate route leaves a
+  // record —
+  //
+  //   transactions   deposits, winnings, draws, tips in, wheel prizes,
+  //                  referral bonuses, daily bonuses, escrow refunds
+  //   profiles       affiliate_earnings_c, rakeback_claimed_total
+  //                  (both credited by RPCs that write no transaction row)
+  //
+  // — minus what has gone out again. Anything above that total is money with
+  // no history, and it stays put.
+  //
+  // admin_adjustment is deliberately counted as NEITHER. It is written both
+  // for grants and for removals with no sign to tell them apart, and treating
+  // an admin grant as explained money would reopen this whole hole through the
+  // admin panel. A genuine grant meant to be withdrawable should be a
+  // deposit row.
+  //
+  // This is a fraud control, not a playthrough rule, so it applies even with
+  // WITHDRAW_PLAYTHROUGH off — that switch relaxes a house policy, and this
+  // one answers whether the money exists at all.
+  //
+  // Checked against every account holding coins before shipping: it changes
+  // nothing for any real player (their ledgers exceed their balances, as they
+  // should, because entry fees are debited at match start), and caps the two
+  // house accounts and the one that withdrew against nothing.
+  const ledgerIn  = sumOf('deposit', 'match_win', 'match_draw', 'tip_received',
+                          'rewards_spin', 'referral_bonus', 'daily_bonus', 'match_refund')
+                    + lifetimeAffiliate + lifetimeRakeback;
+  const ledgerOut = sumOf('withdrawal', 'match_loss', 'tip_sent');
+  const explainedBalance = ledgerIn - ledgerOut;
+  // Never above the real balance: the ledger over-counts for ordinary players,
+  // because a match entry fee is deducted at the start and only the LOSS is
+  // written as a row. That direction is harmless — it just means the cap does
+  // not bind on them, which is the point.
+  const accounted  = Math.min(balance, explainedBalance);
+  const unexplained = Math.max(0, balance - explainedBalance);
+
+  // With the playthrough requirement off, the whole ACCOUNTED balance is
+  // withdrawable — including a deposit that landed a moment ago.
+  // unplayedDeposits is still returned, so nothing that reports on it starts
+  // reading zero.
+  const withdrawable = Math.max(0, REQUIRE_PLAYTHROUGH
+    ? accounted - unplayedDeposits
+    : accounted);
 
   return {
     withdrawable, balance, hasPlayed, lifetimeDeposited, lifetimeWagered,
-    lifetimeTipped, lifetimeSpun, lifetimeRakeback, playthroughOwed,
-    unplayedDeposits,
+    lifetimeTipped, lifetimeSpun, lifetimeRakeback, lifetimeAffiliate,
+    playthroughOwed, unplayedDeposits,
+    ledgerIn, ledgerOut, explainedBalance, unexplained,
     // So a caller does not have to read the env var to know which rules the
     // numbers above were produced under.
     playthroughRequired: REQUIRE_PLAYTHROUGH,

@@ -24,11 +24,14 @@ const ROUTE = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'walle
 // playthrough-bearing too, the same deposit came back twice and every
 // requirement here silently doubled. A fake that cannot tell two queries apart
 // fails the day a second query is added.
-function db({ coins, wins = 0, losses = 0, deposited, tipped, wagered = 0 }) {
-  const byType = {
-    deposit:      deposited != null ? [{ amount_c: deposited }] : [],
-    tip_received: tipped    != null ? [{ amount_c: tipped }]    : [],
-  };
+function db({ coins, wins = 0, losses = 0, deposited, tipped, won, wagered = 0 }) {
+  // The whole coin ledger in one list, the way the code reads it now. It used
+  // to answer a query per type, which could not express winnings at all — and
+  // winnings are what tell an earned balance from an invented one.
+  const rows = [];
+  if (deposited != null) rows.push({ type: 'deposit',      amount_c: deposited });
+  if (tipped    != null) rows.push({ type: 'tip_received', amount_c: tipped });
+  if (won       != null) rows.push({ type: 'match_win',    amount_c: won });
   return {
     from: (table) => {
       const f = {};
@@ -39,10 +42,13 @@ function db({ coins, wins = 0, losses = 0, deposited, tipped, wagered = 0 }) {
           data: wagered > 0 && f.player1_id ? [{ entry_fee_c: wagered }] : [],
         }),
         single: async () => ({ data: { c_coins: coins, wins, losses } }),
-        // Claimed rakeback is read on its own query — see PENDING_SQL 21.
-        maybeSingle: async () => ({ data: { rakeback_claimed_total: 0 }, error: null }),
+        // Claimed rakeback and affiliate earnings are read on their own query —
+        // both are credited by RPCs that write no transaction row.
+        maybeSingle: async () => ({
+          data: { rakeback_claimed_total: 0, affiliate_earnings_c: 0 }, error: null,
+        }),
         then: (resolve) => Promise.resolve({
-          data: table === 'transactions' ? (byType[f.type] || []) : [],
+          data: table === 'transactions' ? rows : [],
         }).then(resolve),
       };
       return chain;
@@ -68,7 +74,7 @@ test('wagering the deposit unlocks the whole balance, winnings included', async 
   // and 100% playthrough means everything is free once the deposit is played.
   delete process.env.WITHDRAW_PLAYTHROUGH;
   const { getWithdrawable } = load();
-  const w = await getWithdrawable(db({ coins: 80, wins: 1, deposited: 50, wagered: 50 }), 'u1');
+  const w = await getWithdrawable(db({ coins: 80, wins: 1, deposited: 50, wagered: 50, won: 30 }), 'u1');
   assert.equal(w.withdrawable, 80);
   assert.equal(w.unplayedDeposits, 0);
 });

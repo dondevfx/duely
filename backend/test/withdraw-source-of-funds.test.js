@@ -97,25 +97,45 @@ test('an account with zero matches played is blocked outright, not just capped',
 
 // ── The formula itself ──────────────────────────────────────────────────
 
-test('getWithdrawable computes both rules from real, tracked data', () => {
+test('getWithdrawable computes every rule from real, tracked data', () => {
   const src = getWithdrawableSrc();
   assert.match(src, /wins.*losses|losses.*wins/s, 'hasPlayed must read real match history');
-  assert.match(src, /type', 'deposit'\)\.eq\('status', 'confirmed'/,
-    'lifetimeDeposited must only count confirmed deposits');
   assert.match(src, /entry_fee_c/, 'lifetimeWagered must come from real matches, not a guess');
-  assert.match(src, /type', 'tip_received'\)\.eq\('status', 'confirmed'/,
-    'tips carry the same obligation as deposits — without this, deposit, tip to ' +
-    'a second account, withdraw, and the rule is bypassed for free');
-  assert.match(src, /type', 'rewards_spin'\)\.eq\('status', 'confirmed'/,
-    'wheel prizes carry the requirement too — free coins that were never risked');
-  assert.match(src, /rakeback_claimed_total/,
-    'claimed rakeback carries the requirement too');
+
+  // The ledger is read in ONE query and classified in JS, rather than a query
+  // per type. Confirmed rows only — a pending or failed row is not money.
+  assert.match(src, /\.eq\('status', 'confirmed'\)/,
+    'the ledger must only count confirmed rows');
+  assert.match(src, /crypto_symbol !== 'diamonds'/,
+    'diamonds are not withdrawable and must not count toward a coin balance');
+
+  // What carries the playthrough requirement.
+  for (const [type, why] of [
+    ["'deposit'",      'deposits must be wagered before they can be withdrawn'],
+    ["'tip_received'", 'without this: deposit, tip to a second account, withdraw, for free'],
+    ["'rewards_spin'", 'wheel prizes are coins that were never risked'],
+  ]) {
+    assert.ok(src.includes(`sumOf(${type})`), why);
+  }
+  assert.match(src, /rakeback_claimed_total/, 'claimed rakeback carries it too');
   assert.match(src,
     /playthroughOwed =\s+lifetimeDeposited \+ lifetimeTipped \+ lifetimeSpun \+ lifetimeRakeback/,
     'the requirement is deposits plus tips plus wheel prizes plus claimed rakeback');
   assert.match(src, /Math\.max\(0, playthroughOwed - lifetimeWagered\)/,
-    'unplayedDeposits must never go negative — a player who has wagered MORE than they took in must not create a negative cap');
-  assert.match(src, /Math\.max\(0, balance - unplayedDeposits\)/,
+    'unplayedDeposits must never go negative — a player who has wagered MORE than ' +
+    'they took in must not create a negative cap');
+
+  // And the separate question of whether the money exists at all.
+  assert.match(src, /const accounted\s+= Math\.min\(balance, explainedBalance\)/,
+    'a balance can never be more withdrawable than the ledger can explain — ' +
+    'without this, coins written straight onto a profile walk out after one win');
+  assert.match(src, /ledgerOut = sumOf\('withdrawal', 'match_loss', 'tip_sent'\)/,
+    'money already out has to be subtracted, or a spent history explains new coins');
+  assert.match(src, /lifetimeAffiliate/,
+    'affiliate earnings write no transaction row; missing them freezes real earnings');
+  assert.ok(!/'admin_adjustment'/.test(src.slice(src.indexOf('ledgerIn'), src.indexOf('ledgerOut'))),
+    'an admin grant must not count as explained money, or the hole reopens through the panel');
+  assert.match(src, /Math\.max\(0, REQUIRE_PLAYTHROUGH/,
     'withdrawable must never go negative either');
 });
 
