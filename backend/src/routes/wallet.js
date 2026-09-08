@@ -443,6 +443,27 @@ module.exports = function walletRoutes(supabase, io) {
         });
       }
 
+      // Why this withdrawal was allowed, in the numbers it was allowed on.
+      //
+      // The refusals are logged; without the approvals there is no record of
+      // the state a payout was judged against, and an incident is reconstructed
+      // from a balance that has since moved. Every coin leaving the platform
+      // now has a line saying what the ledger said about it at the time: what
+      // came in, what had been wagered, what was still owed, and how much of
+      // the balance the ledger could account for.
+      //
+      // This is the link between a coin and whether it had been wagered. A
+      // per-coin tag would need a ledger row per coin and a rule for which coin
+      // a withdrawal spends; the totals answer the same question — how much of
+      // this balance has met its requirement — and cannot drift from the
+      // history, because they ARE the history.
+      console.log(
+        `[withdraw] allowed user=${req.user.id} amount=${amount} ` +
+        `balance=${src.balance} withdrawable=${src.withdrawable} ` +
+        `in=${src.ledgerIn} out=${src.ledgerOut} explained=${src.explainedBalance} ` +
+        `owed=${src.playthroughOwed} wagered=${src.lifetimeWagered} ` +
+        `unwagered=${src.unplayedDeposits} unexplained=${src.unexplained}`);
+
       // ── Balance check ────────────────────────────────────────────────
       const balance = await getBalance(supabase, req.user.id);
       if (balance < amount) {
@@ -857,6 +878,27 @@ module.exports = function walletRoutes(supabase, io) {
           withdrawable: src.withdrawable,
         });
       }
+
+      // Why this withdrawal was allowed, in the numbers it was allowed on.
+      //
+      // The refusals are logged; without the approvals there is no record of
+      // the state a payout was judged against, and an incident is reconstructed
+      // from a balance that has since moved. Every coin leaving the platform
+      // now has a line saying what the ledger said about it at the time: what
+      // came in, what had been wagered, what was still owed, and how much of
+      // the balance the ledger could account for.
+      //
+      // This is the link between a coin and whether it had been wagered. A
+      // per-coin tag would need a ledger row per coin and a rule for which coin
+      // a withdrawal spends; the totals answer the same question — how much of
+      // this balance has met its requirement — and cannot drift from the
+      // history, because they ARE the history.
+      console.log(
+        `[withdraw] allowed user=${req.user.id} amount=${amount} ` +
+        `balance=${src.balance} withdrawable=${src.withdrawable} ` +
+        `in=${src.ledgerIn} out=${src.ledgerOut} explained=${src.explainedBalance} ` +
+        `owed=${src.playthroughOwed} wagered=${src.lifetimeWagered} ` +
+        `unwagered=${src.unplayedDeposits} unexplained=${src.unexplained}`);
 
       // The only identity gate in the codebase. Bank payouts require a verified
       // person; crypto payouts do not (see withdrawalGuards for why).
