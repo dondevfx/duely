@@ -973,29 +973,14 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS rakeback_claimed_total numeric DEF
 -- Supabase for authentication only (verified: zero supabase.from and zero
 -- supabase.rpc calls in the entire frontend).
 
-REVOKE EXECUTE ON FUNCTION public.credit_coins(uuid, numeric)            FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.deduct_coins(uuid, numeric)            FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.credit_diamonds(uuid, numeric)         FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.deduct_diamonds(uuid, numeric)         FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.credit_affiliate_c(uuid, numeric)      FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.credit_fee_balance(uuid, numeric)      FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.add_rakeback_instant(uuid, numeric)    FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.add_rakeback_daily(uuid, numeric)      FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.add_rakeback_weekly(uuid, numeric)     FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.claim_rakeback_instant(uuid)           FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.claim_rakeback_daily(uuid)             FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.claim_rakeback_weekly(uuid)            FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.claim_daily_bonus(uuid)                FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.increment_win(uuid)                    FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.increment_loss(uuid)                   FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.update_win_streak(uuid, boolean)       FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.increment_qualifying_wagered(uuid, numeric) FROM anon, authenticated;
-
--- Belt and braces: every function in the schema, whatever its signature, and
--- whatever gets added later. The argument types above are a guess at each
--- signature and a REVOKE against the wrong one silently does nothing; this
--- catches any it missed, and the DEFAULT PRIVILEGES line means the next
--- function somebody writes is not granted to the browser the day it ships.
+-- One loop, every function in the schema, whatever its signature.
+--
+-- Deliberately NOT a list of named signatures. REVOKE names a function by its
+-- exact argument types, a wrong guess raises "function does not exist", and in
+-- the SQL editor that aborts the whole script — so the safe-looking explicit
+-- version is the one that half-applies and leaves the hole open. Four of the
+-- functions this was first written against turned out not to exist under the
+-- names assumed for them.
 DO $$
 DECLARE r record;
 BEGIN
@@ -1004,8 +989,14 @@ BEGIN
       FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
      WHERE n.nspname = 'public'
   LOOP
-    EXECUTE format('REVOKE EXECUTE ON FUNCTION %I.%I(%s) FROM anon, authenticated',
-                   r.nspname, r.proname, r.args);
+    -- Per function, so one that cannot be revoked — an extension's, say, owned
+    -- by another role — does not abort the run and leave the rest granted.
+    BEGIN
+      EXECUTE format('REVOKE EXECUTE ON FUNCTION %I.%I(%s) FROM anon, authenticated',
+                     r.nspname, r.proname, r.args);
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'skipped %.%(%): %', r.nspname, r.proname, r.args, SQLERRM;
+    END;
   END LOOP;
 END $$;
 
