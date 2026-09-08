@@ -86,16 +86,39 @@ test('the profile is created before it is fetched', () => {
 
 test('the home page says something without JavaScript', () => {
   // Google's OAuth branding check fetches the home page and does not run JS.
-  // An empty <div id="root"></div> reads as an unresponsive site to it, and it
-  // rejected verification on exactly that. Link previews and search crawlers
-  // read the page the same way.
+  // An empty page reads as an unresponsive site to it, and it rejected
+  // verification on exactly that. Link previews and search crawlers read the
+  // page the same way.
+  //
+  // The visible splash is now just the wordmark, so the text lives in
+  // <noscript> — served to everyone, shown only to a reader with no
+  // JavaScript, who is precisely the audience it is written for. That is the
+  // honest way to do it: nothing is hidden from anyone, and no text is served
+  // to crawlers that a person could not also see by turning JS off.
   const html = fs.readFileSync(
     path.join(__dirname, '..', '..', 'frontend', 'index.html'), 'utf8');
-  const root = html.match(/<div id="root">([\s\S]*?)<\/div>\s*<script/);
-  assert.ok(root, 'no #root, or nothing between it and the app script');
-  const text = root[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const noscript = html.match(/<noscript>([\s\S]*?)<\/noscript>/);
+  assert.ok(noscript, 'nothing is served to a reader without JavaScript');
+  const text = noscript[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   assert.ok(text.length > 200, `only ${text.length} characters render without JS`);
   assert.match(text, /Duely/);
+});
+
+test('the splash a person sees is the wordmark and nothing else', () => {
+  // Asked for directly: no copy on the loading screen. The description moved
+  // to <noscript> rather than being deleted, so this must not quietly grow
+  // text back into the visible half.
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'index.html'), 'utf8');
+  // Comments stripped FIRST. The comment above the splash quotes the literal
+  // string <div id="root"></div> while explaining the bug, so matching before
+  // stripping finds the one inside the comment.
+  const markup = html.replace(/<!--[\s\S]*?-->/g, '');
+  const root = markup.match(/<div id="root">([\s\S]*?)<noscript>/);
+  assert.ok(root, 'the splash markup is gone');
+  const visible = root[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  assert.equal(visible, 'Duely',
+    `the splash shows "${visible}" — it should be the wordmark alone`);
 });
 
 test('the splash says what the product actually is', () => {
@@ -144,9 +167,14 @@ test('the splash reads as a loading screen, not a failed page', () => {
   const html = fs.readFileSync(
     path.join(__dirname, '..', '..', 'frontend', 'index.html'), 'utf8');
   assert.match(html, /class="boot"/);
-  assert.match(html, /boot-spin/, 'no loading indicator');
-  assert.match(html, /aria-label="Loading Duely"/, 'the spinner is unlabelled for a screen reader');
-  assert.match(html, /prefers-reduced-motion/, 'the spinner must respect reduced motion');
+  // The spinner is gone — the splash is the wordmark alone, as asked. The
+  // pulsing dot is what now says "working", and it is the same dot the navbar
+  // carries, so the splash reads as the app starting rather than as a
+  // different page that then changes.
+  assert.match(html, /class="boot-dot"/, 'nothing on screen says the page is doing anything');
+  assert.match(html, /boot-pulse/, 'the dot does not move');
+  assert.match(html, /prefers-reduced-motion/, 'the animation must respect reduced motion');
+  assert.match(html, /#1250B4/, 'the wordmark must carry the brand colour, not a default');
   // The app's stylesheet has not loaded at this point, so the reset has to be
   // here — without it the default 8px body margin made the splash 876px
   // against an 812px viewport and it scrolled.
