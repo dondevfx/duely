@@ -26,6 +26,7 @@ import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import CoinIcon from '../components/CoinIcon';
 import CoinFaceIcon from '../components/CoinFaceIcon';
 import { usePrivateRematch } from '../hooks/usePrivateRematch';
+import GameTitle from '../components/GameTitle';
 
 function fmtFee(fee) {
   if (fee >= 1000) return `${(fee / 1000).toLocaleString()}k`;
@@ -694,7 +695,7 @@ export default function CoinFlipGame() {
 
         {phase === 'lobby' && (
           <div className="text-center mb-0.5 sm:mb-6">
-            <h1 className="text-3xl sm:text-6xl font-black text-white mb-0.5 sm:mb-2 leading-tight flex items-center justify-center gap-3"><GameIcon game="coin-flip" size={48} className="w-9 h-9 sm:w-14 sm:h-14" />Coin Flip</h1>
+            <h1 className="text-3xl sm:text-6xl font-black text-white mb-0.5 sm:mb-2 leading-tight flex items-center justify-center gap-3"><GameIcon game="coin-flip" size={48} className="w-9 h-9 sm:w-14 sm:h-14" /><GameTitle slug="coin-flip" title="Coin Flip" /></h1>
             <p className="text-center text-muted text-sm sm:text-base leading-snug sm:leading-relaxed px-2">Pick heads or tails — you get matched with someone on the opposite side. One flip decides it.</p>
           </div>
         )}

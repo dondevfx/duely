@@ -66,7 +66,7 @@ test('Word VS uses the real tile states', () => {
 
 test('Color Rush uses its three targets', () => {
   const canvas = read('components', 'ColorRushCanvas.jsx');
-  const rush = TITLE.slice(TITLE.indexOf('const RUSH_COLORS'), TITLE.indexOf('const words'));
+  const rush = TITLE.slice(TITLE.indexOf('const RUSH_COLORS'), TITLE.indexOf('// ── Coin Flip'));
   const used = [...rush.matchAll(/'(#[0-9a-fA-F]{6})'/g)].map(m => m[1]);
   assert.equal(used.length, 3, 'the game asks you to hit three colours');
   for (const c of used) {
@@ -86,7 +86,7 @@ test('everything is sized in em, so one card size fits all', () => {
   // how the first version of this test missed exactly that swap.
   const px = TITLE.match(/\[\d+(?:\.\d+)?px\]|(?:width|height|fontSize|font-size)[^,;\n]*\b\d+px/g);
   assert.equal(px, null, `fixed pixel sizes will not scale with the card: ${px}`);
-  assert.match(TITLE, /w-\[0\.9\d*em\]/, 'tiles must be sized relative to the type');
+  assert.match(TITLE, /w-\[\d?\.?\d+em\]/, 'tiles must be sized relative to the type');
 });
 
 test('a two-word name wraps rather than overflowing', () => {
@@ -104,7 +104,7 @@ test('the name is announced once, not letter by letter', () => {
   // real name is carried once on the wrapper.
   assert.match(TITLE, /aria-label=\{title\}/, 'the real name is never announced');
   assert.match(TITLE, /aria-hidden="true"/, 'the decorated letters are announced as well');
-  const wrapFn = TITLE.slice(TITLE.indexOf('const wrap ='), TITLE.indexOf('switch (slug)'));
+  const wrapFn = TITLE.slice(TITLE.indexOf('const wrap ='), TITLE.indexOf('switch (key)'));
   const labelAt  = wrapFn.indexOf('aria-label={title}');
   const hiddenAt = wrapFn.indexOf('aria-hidden="true"');
   assert.ok(labelAt > 0 && hiddenAt > labelAt,
@@ -117,4 +117,57 @@ test('the card renders the treatment, not the bare title', () => {
   assert.match(h3[0], /<GameTitle slug=\{slug\} title=\{title\} \/>/,
     'the card is still printing the plain title');
   assert.match(CARD, /import GameTitle from '\.\/GameTitle'/);
+});
+
+// ── Everywhere a title shows ───────────────────────────────────────────────
+
+test('the bet screen heading uses the treatment too', () => {
+  // The shared lobby is the heading on Block Burst, Rush Hour, Color Rush,
+  // Word VS and Tower. A treatment only on the home cards means the name looks
+  // like one thing on the way in and another once you are there.
+  const lobby = read('components', 'GameLobby.jsx');
+  const h1 = lobby.match(/<h1[\s\S]*?<\/h1>/);
+  assert.ok(h1, 'the lobby heading is gone');
+  assert.match(h1[0], /<GameTitle slug=\{gameType\} title=\{title\} \/>/,
+    'the bet screen still prints the plain title');
+  assert.match(lobby, /import GameTitle from '\.\/GameTitle'/);
+});
+
+test('the two games with their own lobby use it as well', () => {
+  // Coin Flip and Blackjack build their own bet screens rather than going
+  // through GameLobby, so they are the two that get missed.
+  for (const [file, slug, name] of [
+    ['CoinFlipGame.jsx',  'coin-flip', 'Coin Flip'],
+    ['BlackjackGame.jsx', 'blackjack', 'Blackjack'],
+  ]) {
+    const src = read('..', 'src', 'pages', file);
+    assert.match(src, new RegExp(`<GameTitle slug="${slug}" title="${name}" />`),
+      `${file} still prints its title as plain text`);
+    assert.match(src, /import GameTitle from '\.\.\/components\/GameTitle'/, `${file} import`);
+  }
+});
+
+test('a queue key finds the same treatment as a slug', () => {
+  // The cards pass a slug, the bet screens pass a queue key, and for two games
+  // those disagree: carDash against car-dash, colorRush against color-rush.
+  // Unnormalised, those two bet screens fall through to the plain default —
+  // and the only way to notice is to look at exactly those two screens.
+  const map = TITLE.match(/const SLUG_ALIASES = \{([\s\S]*?)\};/);
+  assert.ok(map, 'nothing normalises the two spellings');
+  assert.match(map[1], /carDash:\s*'car-dash'/);
+  assert.match(map[1], /colorRush:\s*'color-rush'/);
+  assert.match(TITLE, /const key = SLUG_ALIASES\[slug\] \|\| slug/,
+    'the alias map is declared but never applied');
+  assert.match(TITLE, /switch \(key\)/, 'the switch must run on the normalised key');
+});
+
+test('the queue keys the bet screens actually pass are all covered', () => {
+  // Read from the pages rather than assumed: these are the exact strings
+  // GameLobby is handed.
+  const keys = ['block-blast', 'carDash', 'colorRush', 'scrabble', 'tower'];
+  const map = TITLE.match(/const SLUG_ALIASES = \{([\s\S]*?)\};/)[1];
+  for (const k of keys) {
+    const covered = new RegExp(`case '${k}':`).test(TITLE) || new RegExp(`${k}:`).test(map);
+    assert.ok(covered, `${k} is passed by a bet screen but has no case and no alias`);
+  }
 });

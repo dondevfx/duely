@@ -27,6 +27,7 @@ import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import { useResumeMatch } from '../hooks/useResumeMatch';
 import CoinIcon from '../components/CoinIcon';
 import { usePrivateRematch } from '../hooks/usePrivateRematch';
+import GameTitle from '../components/GameTitle';
 
 function fmtFee(fee) {
   if (fee >= 1000) return `${(fee / 1000).toLocaleString()}k`;
@@ -1166,7 +1167,7 @@ function BlackjackGame() {
       <div className="w-full max-w-md animate-slide-up">
 
         <div className="text-center mb-1.5 sm:mb-6">
-          <h1 className="text-4xl sm:text-6xl font-black text-white mb-0.5 sm:mb-2 leading-tight flex items-center justify-center gap-3"><GameIcon game="blackjack" size={48} className="w-9 h-9 sm:w-14 sm:h-14" />Blackjack</h1>
+          <h1 className="text-4xl sm:text-6xl font-black text-white mb-0.5 sm:mb-2 leading-tight flex items-center justify-center gap-3"><GameIcon game="blackjack" size={48} className="w-9 h-9 sm:w-14 sm:h-14" /><GameTitle slug="blackjack" title="Blackjack" /></h1>
           <p className="text-center text-muted text-sm sm:text-base leading-snug sm:leading-relaxed px-2">Get closer to 21 than your opponent. Both players act at the same time — no waiting.</p>
         </div>
 
