@@ -15,7 +15,8 @@ const assert = require('node:assert/strict');
 
 // getWithdrawable reads: the profile, deposit rows, tip_received rows, and the
 // entry fees of matches on both sides. Nothing else.
-function db({ balance, deposits = [], tips = [], stakes = [], wins = 1, losses = 1 }) {
+function db({ balance, deposits = [], tips = [], spins = [], rakeback = null,
+              stakes = [], wins = 1, losses = 1 }) {
   return {
     from(table) {
       const q = { table, filters: {} };
@@ -24,6 +25,17 @@ function db({ balance, deposits = [], tips = [], stakes = [], wins = 1, losses =
         eq: (col, val) => { q.filters[col] = val; return api; },
         gt: () => api,
         single: async () => ({ data: { c_coins: balance, wins, losses } }),
+        // rakeback lives in a profiles column, read on its own query. null
+        // means the migration has not run, which must error rather than
+        // return 0 — that is the case the code has to survive.
+        maybeSingle: async () => {
+          // Answers for THIS user only. Ignoring the id would make a query
+          // against the wrong account look identical to a correct one.
+          if (q.filters.id !== 'u') return { data: null, error: null };
+          return rakeback === null
+            ? { data: null, error: { message: 'column profiles.rakeback_claimed_total does not exist' } }
+            : { data: { rakeback_claimed_total: rakeback }, error: null };
+        },
         then: (resolve) => resolve({
           // Answers by the type actually asked for. Returning `tips` for any
           // non-deposit type would make reading tip_SENT look identical to
@@ -31,7 +43,7 @@ function db({ balance, deposits = [], tips = [], stakes = [], wins = 1, losses =
           // balance and leave the recipient's free, which is the exploit with
           // an extra step.
           data: q.table === 'transactions'
-            ? ({ deposit: deposits, tip_received: tips }[q.filters.type] || [])
+            ? ({ deposit: deposits, tip_received: tips, rewards_spin: spins }[q.filters.type] || [])
                 .map(a => ({ amount_c: a }))
             : (q.filters.player1_id ? stakes.map(a => ({ entry_fee_c: a })) : []),
         }),
@@ -126,8 +138,10 @@ test('the refusal names tips when tips are the reason', async () => {
   // matter what, so matching /tips/ passes even when the numbers are missing.
   assert.match(msg, /\$20\.00 in tips/,
     'the message never says how much of the lock is tips');
-  assert.match(msg, /\$0\.00 in deposits/, 'and how much is deposits');
   assert.match(msg, /wagered \$0\.00/);
+  // Sources the player has none of are left out — "$0.00 in deposits" beside
+  // "$20.00 in tips" is a number to read that says nothing.
+  assert.doesNotMatch(msg, /in deposits/);
   assert.doesNotMatch(msg, /^Deposits have to be wagered/,
     'the wording still claims deposits are the only thing locked');
 });
@@ -161,6 +175,7 @@ test('sending a tip does not lock the sender', async () => {
         eq: (c, v) => { q.filters[c] = v; return api; },
         gt: () => api,
         single: async () => ({ data: { c_coins: 50, wins: 1, losses: 1 } }),
+        maybeSingle: async () => ({ data: { rakeback_claimed_total: 0 }, error: null }),
         then: (res) => res({
           data: table === 'transactions'
             // This account SENT $20 and received nothing.
@@ -174,4 +189,82 @@ test('sending a tip does not lock the sender', async () => {
   const r = await m.getWithdrawable(sender, 'u');
   assert.equal(r.lifetimeTipped, 0, 'a tip SENT was counted as one received');
   assert.equal(r.withdrawable, 50);
+});
+
+// ── Wheel prizes and rakeback ──────────────────────────────────────────────
+
+test('wheel coins cannot be withdrawn until they are wagered', async () => {
+  // Free coins that arrived without being risked, which is the whole thing the
+  // requirement is about.
+  const r = await check({ balance: 50, spins: [50] });
+  assert.equal(r.lifetimeSpun, 50);
+  assert.equal(r.withdrawable, 0);
+});
+
+test('a wagered wheel prize is released', async () => {
+  const r = await check({ balance: 50, spins: [50], stakes: [50] });
+  assert.equal(r.withdrawable, 50);
+});
+
+test('diamond spins carry nothing', async () => {
+  // A diamond spin records amount_c 0 — the prize rides on crypto_amount — so
+  // summing amount_c counts coin prizes and nothing else.
+  const r = await check({ balance: 20, spins: [0, 0], stakes: [5] });
+  assert.equal(r.lifetimeSpun, 0);
+  assert.equal(r.withdrawable, 20);
+});
+
+test('claimed rakeback counts toward the requirement', async () => {
+  // $100 deposited and wagered, $4 rakeback claimed: the rakeback is the part
+  // that has not been through a match.
+  const r = await check({ balance: 104, deposits: [100], rakeback: 4, stakes: [100] });
+  assert.equal(r.lifetimeRakeback, 4);
+  assert.equal(r.withdrawable, 100);
+});
+
+test('a missing rakeback column does not break withdrawals', async () => {
+  // The migration is section 21 of PENDING_SQL and may not have been run. The
+  // column is read on its own query for exactly this reason: folded into the
+  // main profile select, a missing column makes PostgREST reject the WHOLE
+  // query and every withdrawal on the site stops until the migration lands.
+  const r = await check({ balance: 104, deposits: [100], rakeback: null, stakes: [100] });
+  assert.equal(r.lifetimeRakeback, 0, 'a missing column must degrade to zero');
+  assert.equal(r.withdrawable, 104, 'withdrawals must keep working');
+});
+
+test('the refusal lists only the sources the player actually has', async () => {
+  // "deposits $0.00, tips $0.00, rakeback $4.00" is three numbers to read, two
+  // of which are noise.
+  const m = load();
+  const r = await m.getWithdrawable(db({ balance: 50, spins: [50] }), 'u');
+  const msg = m.playthroughMessage(r);
+  assert.match(msg, /\$50\.00 from spins/);
+  assert.doesNotMatch(msg, /in tips/, 'listed a source the player has none of');
+  assert.doesNotMatch(msg, /in rakeback/, 'listed a source the player has none of');
+});
+
+test('the missing column is warned about, once', async () => {
+  // Silence would mean rakeback quietly carrying no playthrough for as long as
+  // the migration went unrun — the shape of every bug in this codebase that
+  // took months to find.
+  const warned = [];
+  const realWarn = console.warn;
+  console.warn = (...a) => warned.push(a.join(' '));
+  try {
+    const m = load();
+    const state = { balance: 104, deposits: [100], rakeback: null, stakes: [100] };
+    await m.getWithdrawable(db(state), 'u');
+    await m.getWithdrawable(db(state), 'u');
+    await m.getWithdrawable(db(state), 'u');
+    const hits = warned.filter(w => w.includes('rakeback_claimed_total'));
+    assert.equal(hits.length, 1, `warned ${hits.length} times — once per process, not per check`);
+    assert.match(hits[0], /PENDING_SQL section 21/, 'a warning without the fix is half a warning');
+  } finally { console.warn = realWarn; }
+});
+
+test('rakeback is read for the player being checked', async () => {
+  // Reading another account's total would lock or free the wrong balance.
+  const m = load();
+  const r = await m.getWithdrawable(db({ balance: 104, deposits: [100], rakeback: 4, stakes: [100] }), 'u');
+  assert.equal(r.lifetimeRakeback, 4);
 });

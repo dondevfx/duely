@@ -907,3 +907,38 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS tos_accepted_at timestamptz;
 --   SELECT count(*) FILTER (WHERE tos_accepted_at IS NULL) AS not_yet,
 --          count(*) FILTER (WHERE tos_accepted_at IS NOT NULL) AS accepted
 --     FROM profiles;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 21. Claimed rakeback, so it can carry playthrough
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Deposits and tips have to be wagered before they can be withdrawn. Rakeback
+-- and wheel prizes now do too — they are coins that arrived without being
+-- risked, which is the whole thing the requirement is about.
+--
+-- Wheel prizes needed nothing: they already write a 'rewards_spin' row with
+-- the amount on it. Rakeback writes nothing at all — claim_rakeback_instant,
+-- _daily and _weekly are Postgres functions that credit coins atomically and
+-- record no transaction — and transactions.type has a check constraint that
+-- rejects 'rakeback' and every variant of the name. So the total lives here.
+
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS rakeback_claimed_total numeric DEFAULT 0;
+
+-- NO backfill, because there is nothing to backfill FROM: rakeback claimed
+-- before this column existed left no record anywhere. Everyone starts at zero,
+-- which is the generous direction — past rakeback stays freely withdrawable
+-- rather than retroactively locking balances people already hold.
+--
+-- Until this section is run, getWithdrawable reads the column, gets an error,
+-- warns ONCE per process and treats claimed rakeback as zero. Withdrawals keep
+-- working exactly as they did; rakeback simply carries no playthrough yet. The
+-- column is read on its own query for that reason — folded into the main
+-- profile select, a missing column would make PostgREST reject the whole query
+-- and take every withdrawal on the site down until this ran.
+--
+--   [wallet] profiles.rakeback_claimed_total is missing — claimed rakeback
+--   carries no playthrough until PENDING_SQL section 21 is run.
+
+-- Check:
+--   SELECT count(*) FILTER (WHERE rakeback_claimed_total > 0) AS have_claimed,
+--          coalesce(sum(rakeback_claimed_total), 0)           AS total_claimed
+--     FROM profiles;

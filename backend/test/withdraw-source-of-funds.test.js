@@ -106,8 +106,13 @@ test('getWithdrawable computes both rules from real, tracked data', () => {
   assert.match(src, /type', 'tip_received'\)\.eq\('status', 'confirmed'/,
     'tips carry the same obligation as deposits — without this, deposit, tip to ' +
     'a second account, withdraw, and the rule is bypassed for free');
-  assert.match(src, /playthroughOwed = lifetimeDeposited \+ lifetimeTipped/,
-    'the requirement is deposits plus tips');
+  assert.match(src, /type', 'rewards_spin'\)\.eq\('status', 'confirmed'/,
+    'wheel prizes carry the requirement too — free coins that were never risked');
+  assert.match(src, /rakeback_claimed_total/,
+    'claimed rakeback carries the requirement too');
+  assert.match(src,
+    /playthroughOwed =\s+lifetimeDeposited \+ lifetimeTipped \+ lifetimeSpun \+ lifetimeRakeback/,
+    'the requirement is deposits plus tips plus wheel prizes plus claimed rakeback');
   assert.match(src, /Math\.max\(0, playthroughOwed - lifetimeWagered\)/,
     'unplayedDeposits must never go negative — a player who has wagered MORE than they took in must not create a negative cap');
   assert.match(src, /Math\.max\(0, balance - unplayedDeposits\)/,

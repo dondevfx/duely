@@ -39,6 +39,8 @@ function db({ coins, wins = 0, losses = 0, deposited, tipped, wagered = 0 }) {
           data: wagered > 0 && f.player1_id ? [{ entry_fee_c: wagered }] : [],
         }),
         single: async () => ({ data: { c_coins: coins, wins, losses } }),
+        // Claimed rakeback is read on its own query — see PENDING_SQL 21.
+        maybeSingle: async () => ({ data: { rakeback_claimed_total: 0 }, error: null }),
         then: (resolve) => Promise.resolve({
           data: table === 'transactions' ? (byType[f.type] || []) : [],
         }).then(resolve),
@@ -91,7 +93,10 @@ test('the refusal says how much is left to wager', async () => {
     hasPlayed: true, lifetimeDeposited: 50, lifetimeWagered: 20,
     unplayedDeposits: 30, withdrawable: 15,
   });
-  assert.match(m, /deposited \$50\.00/);
+  // Deposits are one of four sources now — tips, wheel prizes and claimed
+  // rakeback carry the same requirement — so the sentence lists what the
+  // player actually has rather than leading with the word "deposited".
+  assert.match(m, /\$50\.00 in deposits/);
   assert.match(m, /wagered \$20\.00/);
   assert.match(m, /\$30\.00 still needs to be wagered/);
   assert.match(m, /withdraw \$15\.00 right now/);

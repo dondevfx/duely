@@ -423,6 +423,9 @@ async function recordWithdrawal(supabase, userId, amount, source) {
 // a balance is unplayed even when it is not blocking anything.
 const REQUIRE_PLAYTHROUGH = process.env.WITHDRAW_PLAYTHROUGH !== 'false';
 
+// So a missing migration is said once, not on every withdrawal check.
+let _rakebackColumnWarned = false;
+
 const usd = (n) => `$${(Number(n) || 0).toFixed(2)}`;
 
 /**
@@ -443,14 +446,22 @@ function playthroughMessage(src) {
   // Name tips explicitly when there are any. Telling someone who has only ever
   // been tipped that "you have deposited $0.00" and still owes $20 reads as a
   // bug, and they cannot act on a number that does not add up.
-  const tipped = Math.max(0, src.lifetimeTipped || 0);
-  const received = tipped > 0
-    ? `You have received ${usd(src.lifetimeDeposited)} in deposits and ` +
-      `${usd(tipped)} in tips, and wagered ${usd(src.lifetimeWagered)}`
-    : `You have deposited ${usd(src.lifetimeDeposited)} and wagered ${usd(src.lifetimeWagered)}`;
+  // List only the sources this player actually has. "Deposits $0.00, tips
+  // $0.00, rakeback $4.00" is four numbers to read three of which are noise.
+  const parts = [
+    ['in deposits', src.lifetimeDeposited],
+    ['in tips',     src.lifetimeTipped],
+    ['from spins',  src.lifetimeSpun],
+    ['in rakeback', src.lifetimeRakeback],
+  ].filter(([, v]) => (Number(v) || 0) > 0).map(([label, v]) => `${usd(v)} ${label}`);
+
+  const received = parts.length > 1
+    ? `You have received ${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}, ` +
+      `and wagered ${usd(src.lifetimeWagered)}`
+    : `You have received ${parts[0] || usd(0)}, and wagered ${usd(src.lifetimeWagered)}`;
   const head =
-    `Deposits and tips have to be wagered before they can be withdrawn. ` +
-    `${received}, so ${usd(left)} still needs to be wagered.`;
+    `Deposits, tips, rakeback and prizes have to be wagered before they can be ` +
+    `withdrawn. ${received}, so ${usd(left)} still needs to be wagered.`;
   return src.withdrawable > 0
     ? `${head} You can withdraw ${usd(src.withdrawable)} right now.`
     : head;
@@ -464,13 +475,16 @@ async function getWithdrawable(supabase, userId) {
   const balance   = parseFloat(profile.c_coins) || 0;
   const hasPlayed = ((profile.wins ?? 0) + (profile.losses ?? 0)) > 0;
 
-  const [{ data: deposits }, { data: tips }, { data: matchesAsP1 }, { data: matchesAsP2 }] =
+  const [{ data: deposits }, { data: tips }, { data: spins },
+         { data: matchesAsP1 }, { data: matchesAsP2 }] =
     await Promise.all([
       supabase.from('transactions').select('amount_c')
         .eq('user_id', userId).eq('type', 'deposit').eq('status', 'confirmed'),
-      // Tips carry the same obligation — see the note below.
+      // Tips and wheel wins carry the same obligation — see the note below.
       supabase.from('transactions').select('amount_c')
         .eq('user_id', userId).eq('type', 'tip_received').eq('status', 'confirmed'),
+      supabase.from('transactions').select('amount_c')
+        .eq('user_id', userId).eq('type', 'rewards_spin').eq('status', 'confirmed'),
       supabase.from('matches').select('entry_fee_c').eq('player1_id', userId).gt('entry_fee_c', 0),
       supabase.from('matches').select('entry_fee_c').eq('player2_id', userId).gt('entry_fee_c', 0),
     ]);
@@ -480,6 +494,38 @@ async function getWithdrawable(supabase, userId) {
   // crypto_amount), so summing amount_c counts coin tips and nothing else.
   // Diamonds are not withdrawable, so they carry no obligation to begin with.
   const lifetimeTipped = (tips || []).reduce((s, r) => s + (parseFloat(r.amount_c) || 0), 0);
+  // Wheel coins, same rule. A diamond spin records amount_c 0, so this counts
+  // coin prizes and nothing else.
+  const lifetimeSpun = (spins || []).reduce((s, r) => s + (parseFloat(r.amount_c) || 0), 0);
+
+  // Rakeback claimed, read on its own and allowed to fail.
+  //
+  // It lives in a profiles column rather than a transactions row because the
+  // claim is a Postgres RPC that credits coins atomically and writes no row,
+  // and transactions.type has a check constraint that rejects every name for
+  // it. Adding the column is section 21 of PENDING_SQL.
+  //
+  // Selected SEPARATELY on purpose: a column that does not exist yet makes
+  // PostgREST reject the whole query, and folding it into the profile select
+  // above would take every withdrawal on the site down until the migration
+  // ran. On its own it degrades to zero, which is the behaviour before this
+  // existed.
+  let lifetimeRakeback = 0;
+  {
+    const { data: rb, error: rbErr } = await supabase
+      .from('profiles').select('rakeback_claimed_total').eq('id', userId).maybeSingle();
+    if (rbErr) {
+      // Once per process, not once per withdrawal check.
+      if (!_rakebackColumnWarned) {
+        _rakebackColumnWarned = true;
+        console.warn('[wallet] profiles.rakeback_claimed_total is missing — claimed ' +
+          'rakeback carries no playthrough until PENDING_SQL section 21 is run. ' +
+          `(${rbErr.message})`);
+      }
+    } else {
+      lifetimeRakeback = parseFloat(rb?.rakeback_claimed_total) || 0;
+    }
+  }
 
   const lifetimeWagered = [...(matchesAsP1 || []), ...(matchesAsP2 || [])]
     .reduce((s, r) => s + (parseFloat(r.entry_fee_c) || 0), 0);
@@ -501,7 +547,8 @@ async function getWithdrawable(supabase, userId) {
   //
   // Match winnings are still untouched: they are not deposits and not tips, so
   // they stay fully and immediately withdrawable.
-  const playthroughOwed = lifetimeDeposited + lifetimeTipped;
+  const playthroughOwed =
+    lifetimeDeposited + lifetimeTipped + lifetimeSpun + lifetimeRakeback;
   const unplayedDeposits = Math.max(0, playthroughOwed - lifetimeWagered);
   // With the requirement off, the whole balance is withdrawable — including a
   // deposit that landed a moment ago. unplayedDeposits is still returned, so
@@ -512,7 +559,7 @@ async function getWithdrawable(supabase, userId) {
 
   return {
     withdrawable, balance, hasPlayed, lifetimeDeposited, lifetimeWagered,
-    lifetimeTipped, playthroughOwed,
+    lifetimeTipped, lifetimeSpun, lifetimeRakeback, playthroughOwed,
     unplayedDeposits,
     // So a caller does not have to read the env var to know which rules the
     // numbers above were produced under.

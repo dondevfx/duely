@@ -78,6 +78,33 @@ module.exports = function rakebackRoutes(supabase) {
     }
   });
 
+  // Claimed rakeback is playthrough-bearing, so the total has to be kept.
+  //
+  // The claim itself is a Postgres RPC that credits coins atomically and
+  // writes nothing else, and transactions.type has a check constraint that
+  // rejects every name for rakeback — so this is a counter on the profile
+  // rather than a row. PENDING_SQL section 21 adds the column.
+  //
+  // Best-effort and deliberately so: the money is already credited by the time
+  // this runs, and failing the request afterwards would tell the player their
+  // claim failed when it did not. An unrecorded claim means that much rakeback
+  // carries no playthrough, which is the behaviour before this existed.
+  async function recordClaim(userId, amount) {
+    const amt = parseFloat(amount) || 0;
+    if (amt <= 0) return;
+    const { data: p, error: readErr } = await supabase
+      .from('profiles').select('rakeback_claimed_total').eq('id', userId).maybeSingle();
+    if (readErr) {
+      console.warn(`[rakeback] claim of ${amt} not recorded — ` +
+        `profiles.rakeback_claimed_total missing? (${readErr.message})`);
+      return;
+    }
+    const total = (parseFloat(p?.rakeback_claimed_total) || 0) + amt;
+    const { error } = await supabase
+      .from('profiles').update({ rakeback_claimed_total: total }).eq('id', userId);
+    if (error) console.warn(`[rakeback] claim of ${amt} not recorded: ${error.message}`);
+  }
+
   // POST /api/rakeback/claim/instant — atomic via Postgres RPC (no race condition)
   router.post('/claim/instant', requireAuth, async (req, res) => {
     try {
@@ -89,6 +116,7 @@ module.exports = function rakebackRoutes(supabase) {
         if (msg.includes('cooldown_active')) return res.status(400).json({ error: 'Instant rakeback on cooldown' });
         return res.status(500).json({ error: msg });
       }
+      await recordClaim(req.user.id, amount);
       return res.json({ claimed: amount });
     } catch (e) {
       return res.status(500).json({ error: e.message });
@@ -106,6 +134,7 @@ module.exports = function rakebackRoutes(supabase) {
         if (msg.includes('cooldown_active')) return res.status(400).json({ error: 'Daily rakeback not yet claimable' });
         return res.status(500).json({ error: msg });
       }
+      await recordClaim(req.user.id, amount);
       return res.json({ claimed: amount });
     } catch (e) {
       return res.status(500).json({ error: e.message });
@@ -123,6 +152,7 @@ module.exports = function rakebackRoutes(supabase) {
         if (msg.includes('cooldown_active')) return res.status(400).json({ error: 'Weekly rakeback not yet claimable' });
         return res.status(500).json({ error: msg });
       }
+      await recordClaim(req.user.id, amount);
       return res.json({ claimed: amount });
     } catch (e) {
       return res.status(500).json({ error: e.message });
