@@ -34,9 +34,11 @@ test('nothing is stranded by removing the hamburger', () => {
   // lives on the profile page.
   assert.ok(!/aria-label="Menu"/.test(NAVBAR), 'the hamburger is still there');
   assert.ok(!/mobileMenuOpen/.test(NAVBAR), 'the drawer state outlived the drawer');
-  assert.match(NAVBAR, /aria-label=\{profile \? 'Your profile' : 'Sign in'\}/,
+  // Signed in, the account is the avatar in the top-right corner. Signed out
+  // there is nothing to reach — that corner holds Login and Sign up already.
+  assert.match(NAVBAR, /aria-label="Your profile"/,
     'nothing in the top bar reaches the account any more');
-  assert.match(NAVBAR, /to=\{profile \? '\/profile' : '\/login'\}/);
+  assert.match(NAVBAR, /to="\/profile"/);
 });
 
 test('the drawer left nothing behind', () => {
@@ -108,24 +110,32 @@ test('rewards is a present, not a dartboard', () => {
 
 // ── One account control, not two ───────────────────────────────────────────
 
-test('the phone shows the account once, on the left', () => {
-  // The avatar in the slot the hamburger vacated is the phone's account
-  // control. The one on the right is the desktop's. Both visible at once is
-  // two pictures of the same person in one bar, and one of them is ignored.
+test('the phone shows the account once, in the top right', () => {
+  // Two avatars: the phone's and the desktop's. Both visible at once is two
+  // pictures of the same person in one bar, and one of them is ignored.
+  //
+  // It started in the slot the hamburger vacated, on the LEFT — which is where
+  // a menu lives, not a person. A phone puts the account in the right-hand
+  // corner, so that is where it went.
   const right = NAVBAR.slice(NAVBAR.indexOf('{/* Right — avatar'));
   assert.match(right, /<Link to="\/profile" className="hidden md:flex/,
-    'the right-hand avatar still shows on phones');
-  // And the left one is still there to replace it.
-  assert.match(NAVBAR, /md:hidden[\s\S]{0,400}aria-label=\{profile \? 'Your profile'/,
-    'nothing on a phone reaches the account');
+    'the desktop avatar still shows on phones');
+  const phone = NAVBAR.slice(NAVBAR.indexOf('{/* The account, top right.'),
+                             NAVBAR.indexOf('{/* Right — avatar'));
+  assert.match(phone, /md:hidden/, 'the phone avatar shows on desktop too');
+  assert.match(phone, /aria-label="Your profile"/, 'nothing on a phone reaches the account');
+  // After the logo, or it renders on the left again.
+  assert.ok(NAVBAR.indexOf('{/* The account, top right.') > NAVBAR.indexOf('{/* Logo'),
+    'the phone avatar is back before the logo, which puts it on the left');
 });
 
 test('the avatar is passed the props Avatar actually takes', () => {
   // It takes avatarUrl and a className. Passed url and size — which is what
   // the first version did — it renders the fallback initial at the default
   // size and silently never shows anyone's picture.
-  const left = NAVBAR.slice(NAVBAR.indexOf("aria-label={profile ? 'Your profile'"));
-  const tag = left.slice(left.indexOf('<Avatar'), left.indexOf('/>', left.indexOf('<Avatar')));
+  const phone = NAVBAR.slice(NAVBAR.indexOf('{/* The account, top right.'),
+                             NAVBAR.indexOf('{/* Right — avatar'));
+  const tag = phone.slice(phone.indexOf('<Avatar'), phone.indexOf('/>', phone.indexOf('<Avatar')));
   assert.match(tag, /avatarUrl=\{profile\.avatar_url\}/, 'the picture never loads');
   assert.match(tag, /className=/, 'no size — Avatar has no size prop');
   assert.ok(!/\bsize=\{/.test(tag), 'size is not a prop Avatar reads');

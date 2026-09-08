@@ -85,6 +85,30 @@ export default function GameLobby({
   gameType,
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
+
+  // Opening the panel has to bring it into view.
+  //
+  // The toggle sits near the bottom of the screen, so on a phone the options it
+  // reveals unfold BELOW the fold: the arrow flips, the layout grows, and
+  // nothing appears to have happened. The one thing the control is for is the
+  // one thing you cannot see.
+  //
+  // block:'end' rather than 'start' — the panel is the last thing on the
+  // screen, so aligning its bottom edge shows all of it without throwing the
+  // stake away off the top.
+  const moreRef = useRef(null);
+  useEffect(() => {
+    if (!moreOpen) return;
+    // A frame, so the panel has laid out and has a height to scroll to.
+    const id = requestAnimationFrame(() => {
+      const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      moreRef.current?.scrollIntoView({
+        behavior: reduced ? 'auto' : 'smooth',
+        block: 'end',
+      });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [moreOpen]);
   const [privateMode, setPrivateMode] = useState(null);
   const [shortfall, setShortfall] = useState(false);
   const [joinCode, setJoinCode]       = useState('');
@@ -317,7 +341,7 @@ export default function GameLobby({
                 <MoreWaysToggle open={moreOpen} onToggle={() => setMoreOpen(o => !o)} />
 
                 {moreOpen && (
-                  <div className="flex flex-col gap-2 animate-fade-in">
+                  <div ref={moreRef} className="flex flex-col gap-2 animate-fade-in">
                     {/* Diamond bet-vs-bot gets its own full-width row — the
                         label is too long to share a row with the other two. */}
                     {/* Never disabled for balance. A dead button tells the

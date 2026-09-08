@@ -134,20 +134,6 @@ export default function Navbar() {
               touch-action: manipulation drops the double-tap-zoom wait, so the
               tap registers immediately rather than after the browser has
               decided it was not a gesture. */}
-          {/* Where the hamburger was. The four places people actually go are
-              in the bottom bar now, one tap each, and this slot is where a
-              phone expects its account — the only thing that menu held which
-              the bar does not carry. Sign out lives on the profile page. */}
-          <Link
-            to={profile ? '/profile' : '/login'}
-            className="md:hidden relative z-10 shrink-0 w-9 h-9 flex items-center justify-center rounded-full text-white hover:bg-surfaceLight transition-colors"
-            style={{ touchAction: 'manipulation' }}
-            aria-label={profile ? 'Your profile' : 'Sign in'}
-          >
-            {profile
-              ? <Avatar username={profile.username} avatarUrl={profile.avatar_url} color={profile.profile_color} className="w-8 h-8" textClassName="text-xs" />
-              : <UiIcon name="profile" size={22} />}
-          </Link>
 
           {/* Logo — left-aligned (in flex flow) so a large balance can't overlap it */}
           <div className="relative shrink-0 lg:w-56 flex justify-start pointer-events-auto">
@@ -433,6 +419,28 @@ export default function Navbar() {
                 )}
               </div>
             </div>
+          )}
+
+          {/* The account, top right.
+              A phone puts the account in the right-hand corner — it was on the
+              left where the hamburger used to be, which is where a MENU lives,
+              not a person. The bottom bar carries everything that menu held, so
+              this slot is free for the one thing the bar does not. Sign out
+              lives on the profile page. */}
+          {/* Only when signed in. Signed out, the corner already holds Login
+              and Sign up, and an avatar-shaped third way to reach the same
+              place just crowds them — it rendered mid-bar, between the balance
+              slot and those buttons, which is not a corner at all. */}
+          {profile && (
+            <Link
+              to="/profile"
+              className="md:hidden relative z-10 shrink-0 w-9 h-9 flex items-center justify-center rounded-full text-white hover:bg-surfaceLight transition-colors"
+              style={{ touchAction: 'manipulation' }}
+              aria-label="Your profile"
+            >
+              <Avatar username={profile.username} avatarUrl={profile.avatar_url}
+                      color={profile.profile_color} className="w-8 h-8" textClassName="text-xs" />
+            </Link>
           )}
 
           {/* Right — avatar + sign out / auth */}

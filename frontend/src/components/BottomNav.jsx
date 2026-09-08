@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import UiIcon from './UiIcon';
 
 /**
@@ -26,6 +26,20 @@ const ITEMS = [
 ];
 
 export default function BottomNav() {
+  const { pathname } = useLocation();
+
+  // Never over a game.
+  //
+  // It is fixed to the bottom of the viewport at z-40, so on a game screen it
+  // sits on top of the thing being played — over Block Burst's board, over the
+  // tap target in Color Rush — and on a bet screen it covers the buttons the
+  // screen exists for. A game is somewhere you go into and come back from; the
+  // way back is the game's own control, not a bar laid across it.
+  //
+  // Matched on the /game/ prefix rather than a list of slugs, so a game added
+  // later is covered the day it ships rather than the day somebody notices.
+  if (/^\/game(\/|$)/.test(pathname)) return null;
+
   return (
     <nav
       aria-label="Main"
