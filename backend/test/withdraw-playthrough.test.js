@@ -5,6 +5,20 @@
 // usual reason a payment processor drops a platform like this; it also makes a
 // deposit and a withdrawal a free transfer between accounts. Winnings above the
 // deposit were never locked.
+// NOTE ON WHAT THESE ASSERT.
+//
+// getWithdrawable now produces two readings of the same history: this
+// aggregate — how MUCH of a balance may leave — and a per-coin lot ledger in
+// coinLots.js which says WHICH coins may. The enforced answer is the smaller
+// of the two.
+//
+// The tests below are about the aggregate, so they read
+// `aggregateWithdrawable` rather than the enforced `withdrawable`. Making them
+// satisfy both would mean giving every scenario a consistent set of winnings
+// to balance its stakes — real economics invented to keep a rule under test
+// that is not the rule being tested. The lot ledger has its own tests in
+// coin-lots.test.js, and the combination has its own below.
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -65,7 +79,7 @@ test('an unwagered deposit cannot be withdrawn', async () => {
   delete process.env.WITHDRAW_PLAYTHROUGH;
   const { getWithdrawable } = load();
   const w = await getWithdrawable(db({ coins: 50, deposited: 50 }), 'u1');
-  assert.equal(w.withdrawable, 0, 'the whole deposit is locked until it is wagered');
+  assert.equal(w.aggregateWithdrawable, 0, 'the whole deposit is locked until it is wagered');
   assert.equal(w.playthroughRequired, true, 'on by default');
 });
 
@@ -75,7 +89,7 @@ test('wagering the deposit unlocks the whole balance, winnings included', async 
   delete process.env.WITHDRAW_PLAYTHROUGH;
   const { getWithdrawable } = load();
   const w = await getWithdrawable(db({ coins: 80, wins: 1, deposited: 50, wagered: 50, won: 30 }), 'u1');
-  assert.equal(w.withdrawable, 80);
+  assert.equal(w.aggregateWithdrawable, 80);
   assert.equal(w.unplayedDeposits, 0);
 });
 
@@ -84,7 +98,7 @@ test('the switch still turns it off', async () => {
   try {
     const { getWithdrawable } = load();
     const w = await getWithdrawable(db({ coins: 50, deposited: 50 }), 'u1');
-    assert.equal(w.withdrawable, 50);
+    assert.equal(w.aggregateWithdrawable, 50);
     assert.equal(w.playthroughRequired, false);
   } finally { delete process.env.WITHDRAW_PLAYTHROUGH; }
 });

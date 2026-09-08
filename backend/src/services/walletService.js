@@ -428,6 +428,10 @@ let _rakebackColumnWarned = false;
 
 const usd = (n) => `$${(Number(n) || 0).toFixed(2)}`;
 
+const { getCoinLots } = require('./coinLots');
+// Deduped disagreement reports — see the note at the log site.
+const _disagreeLogged = new Map();
+
 /**
  * Why a withdrawal is being refused, in the player's own numbers.
  *
@@ -626,15 +630,63 @@ async function getWithdrawable(supabase, userId) {
   // withdrawable — including a deposit that landed a moment ago.
   // unplayedDeposits is still returned, so nothing that reports on it starts
   // reading zero.
-  const withdrawable = Math.max(0, REQUIRE_PLAYTHROUGH
+  const aggregate = Math.max(0, REQUIRE_PLAYTHROUGH
     ? accounted - unplayedDeposits
     : accounted);
+
+  // ── The same question, per coin ──────────────────────────────────────────
+  //
+  // The aggregate above says how MUCH may leave. The lot ledger says WHICH
+  // coins may — money arrives in lots, each knowing what it is and what it
+  // owes, wagers pay down obligations oldest-first, and withdrawals spend
+  // oldest-first. See coinLots.js.
+  //
+  // Both run, and the SMALLER wins. They are two readings of one history and
+  // should agree; where they do not, one of them is wrong, and on a withdrawal
+  // the safe direction is obvious. A disagreement is logged rather than
+  // averaged away, because it means an assumption in one of them is false and
+  // that is worth finding out about while the money is still here.
+  let perCoin = null;
+  let withdrawable = aggregate;
+  try {
+    const lots = await getCoinLots(supabase, userId);
+    perCoin = lots;
+    const lotFree = Math.max(0, Math.min(balance, lots.free));
+    const chosen = REQUIRE_PLAYTHROUGH ? Math.min(aggregate, lotFree) : aggregate;
+    if (Math.abs(lotFree - aggregate) > 0.01 && REQUIRE_PLAYTHROUGH) {
+      // Once per account per half hour. This runs on every balance check, not
+      // only on a withdrawal, and an account that disagrees does so on every
+      // one of them — which would bury everything else in the log rather than
+      // reporting anything.
+      const key = `${userId}:${aggregate.toFixed(2)}:${lotFree.toFixed(2)}`;
+      const last = _disagreeLogged.get(key) || 0;
+      if (Date.now() - last >= 30 * 60 * 1000) {
+        _disagreeLogged.set(key, Date.now());
+        console.warn(
+          `[wallet] lot ledger and aggregate disagree for ${userId}: ` +
+          `aggregate=${aggregate.toFixed(2)} lots=${lotFree.toFixed(2)} ` +
+          `balance=${balance} — taking ${chosen.toFixed(2)}`);
+      }
+    }
+    withdrawable = chosen;
+  } catch (e) {
+    // Never block a withdrawal on the newer of the two readings. The aggregate
+    // is what has been enforcing this, and it already blocks money the ledger
+    // cannot account for.
+    console.error(`[wallet] lot ledger failed for ${userId} (${e.message}) — using the aggregate`);
+  }
 
   return {
     withdrawable, balance, hasPlayed, lifetimeDeposited, lifetimeWagered,
     lifetimeTipped, lifetimeSpun, lifetimeRakeback, lifetimeAffiliate,
     playthroughOwed, unplayedDeposits,
     ledgerIn, ledgerOut, explainedBalance, unexplained,
+    // The per-coin reading: which lots are left, what each still owes, and how
+    // much is free. null if it could not be built.
+    lots: perCoin?.lots || null,
+    lotsFree: perCoin ? perCoin.free : null,
+    lotsLocked: perCoin ? perCoin.lockedCoins : null,
+    aggregateWithdrawable: aggregate,
     // So a caller does not have to read the env var to know which rules the
     // numbers above were produced under.
     playthroughRequired: REQUIRE_PLAYTHROUGH,

@@ -10,6 +10,20 @@
 //
 // The deposit leaves the platform without a single match being played, which
 // is the exact pattern the requirement exists to stop.
+// NOTE ON WHAT THESE ASSERT.
+//
+// getWithdrawable now produces two readings of the same history: this
+// aggregate — how MUCH of a balance may leave — and a per-coin lot ledger in
+// coinLots.js which says WHICH coins may. The enforced answer is the smaller
+// of the two.
+//
+// The tests below are about the aggregate, so they read
+// `aggregateWithdrawable` rather than the enforced `withdrawable`. Making them
+// satisfy both would mean giving every scenario a consistent set of winnings
+// to balance its stakes — real economics invented to keep a rule under test
+// that is not the rule being tested. The lot ledger has its own tests in
+// coin-lots.test.js, and the combination has its own below.
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -77,7 +91,7 @@ const check = async (state) => (await load().getWithdrawable(db(state), 'u'));
 
 test('tipped coins cannot be withdrawn until they are wagered', async () => {
   const r = await check({ balance: 20, tips: [20] });
-  assert.equal(r.withdrawable, 0,
+  assert.equal(r.aggregateWithdrawable, 0,
     'a tipped balance was withdrawable without a single match — deposit, tip to ' +
     'a second account, withdraw, and the playthrough rule is bypassed entirely');
   assert.equal(r.unplayedDeposits, 20);
@@ -88,19 +102,19 @@ test('every tip counts, even from someone who had already wagered it', async () 
   // needs a per-coin ledger, and the moment tips of "clean" money are exempt
   // the exploit returns through any account that has played one match.
   const r = await check({ balance: 20, tips: [20], stakes: [] });
-  assert.equal(r.withdrawable, 0);
+  assert.equal(r.aggregateWithdrawable, 0);
 });
 
 test('a tip stops being locked once it has been wagered', async () => {
   const r = await check({ balance: 20, tips: [20], stakes: [20] });
-  assert.equal(r.withdrawable, 20, 'wagering the tip must release it');
+  assert.equal(r.aggregateWithdrawable, 20, 'wagering the tip must release it');
 });
 
 test('deposits and tips both count toward the same requirement', async () => {
   // $20 deposited plus $20 tipped is $40 owed; $20 wagered leaves $20 locked.
   const r = await check({ balance: 40, deposits: [20], tips: [20], stakes: [20] });
   assert.equal(r.playthroughOwed, 40);
-  assert.equal(r.withdrawable, 20);
+  assert.equal(r.aggregateWithdrawable, 20);
 });
 
 // ── The rules that already worked, which must keep working ─────────────────
@@ -110,7 +124,7 @@ test('a fully wagered deposit unlocks the whole balance, winnings included', asy
     // 20 in, 20 staked, 200 on the books: the 200 is winnings, and the
     // ledger has to say so or it is a balance from nowhere.
     matchWins: [200] });
-  assert.equal(r.withdrawable, 200,
+  assert.equal(r.aggregateWithdrawable, 200,
     'winnings above the deposit were never locked and must not become so');
 });
 
@@ -119,12 +133,12 @@ test('a partly wagered deposit holds back only the unwagered part', async () => 
   const r = await check({ balance: 29, deposits: [20], stakes: [5, 5],
     matchWins: [9.5, 9.5] });
   assert.equal(r.unplayedDeposits, 10);
-  assert.equal(r.withdrawable, 19, 'the wagered amount plus winnings comes out; $10 stays');
+  assert.equal(r.aggregateWithdrawable, 19, 'the wagered amount plus winnings comes out; $10 stays');
 });
 
 test('a balance built purely from winnings is never locked', async () => {
   const r = await check({ balance: 50, stakes: [10], matchWins: [50] });
-  assert.equal(r.withdrawable, 50);
+  assert.equal(r.aggregateWithdrawable, 50);
 });
 
 test('diamond tips carry no obligation', async () => {
@@ -134,7 +148,7 @@ test('diamond tips carry no obligation', async () => {
   // this fails rather than locking coins against a diamond gift.
   const r = await check({ balance: 20, tips: [0, 0, 0], matchWins: [20] });
   assert.equal(r.unplayedDeposits, 0);
-  assert.equal(r.withdrawable, 20);
+  assert.equal(r.aggregateWithdrawable, 20);
 });
 
 // ── What the player is told ────────────────────────────────────────────────
@@ -167,7 +181,7 @@ test('the refusal says how much can be withdrawn right now', async () => {
 test('nothing is locked when the requirement is switched off', async () => {
   const m = load(false);
   const r = await m.getWithdrawable(db({ balance: 20, tips: [20] }), 'u');
-  assert.equal(r.withdrawable, 20);
+  assert.equal(r.aggregateWithdrawable, 20);
   assert.equal(r.playthroughRequired, false);
   // The arithmetic still runs, so the admin panel keeps reporting it.
   assert.equal(r.unplayedDeposits, 20);
@@ -201,7 +215,7 @@ test('sending a tip does not lock the sender', async () => {
   };
   const r = await m.getWithdrawable(sender, 'u');
   assert.equal(r.lifetimeTipped, 0, 'a tip SENT was counted as one received');
-  assert.equal(r.withdrawable, 50);
+  assert.equal(r.aggregateWithdrawable, 50);
 });
 
 // ── Wheel prizes and rakeback ──────────────────────────────────────────────
@@ -211,12 +225,12 @@ test('wheel coins cannot be withdrawn until they are wagered', async () => {
   // requirement is about.
   const r = await check({ balance: 50, spins: [50] });
   assert.equal(r.lifetimeSpun, 50);
-  assert.equal(r.withdrawable, 0);
+  assert.equal(r.aggregateWithdrawable, 0);
 });
 
 test('a wagered wheel prize is released', async () => {
   const r = await check({ balance: 50, spins: [50], stakes: [50] });
-  assert.equal(r.withdrawable, 50);
+  assert.equal(r.aggregateWithdrawable, 50);
 });
 
 test('diamond spins carry nothing', async () => {
@@ -224,7 +238,7 @@ test('diamond spins carry nothing', async () => {
   // summing amount_c counts coin prizes and nothing else.
   const r = await check({ balance: 20, spins: [0, 0], stakes: [5], matchWins: [20] });
   assert.equal(r.lifetimeSpun, 0);
-  assert.equal(r.withdrawable, 20);
+  assert.equal(r.aggregateWithdrawable, 20);
 });
 
 test('claimed rakeback counts toward the requirement', async () => {
@@ -232,7 +246,7 @@ test('claimed rakeback counts toward the requirement', async () => {
   // that has not been through a match.
   const r = await check({ balance: 104, deposits: [100], rakeback: 4, stakes: [100] });
   assert.equal(r.lifetimeRakeback, 4);
-  assert.equal(r.withdrawable, 100);
+  assert.equal(r.aggregateWithdrawable, 100);
 });
 
 test('a missing rakeback column does not break withdrawals', async () => {
@@ -244,7 +258,7 @@ test('a missing rakeback column does not break withdrawals', async () => {
   assert.equal(r.lifetimeRakeback, 0, 'a missing column must degrade to zero');
   // Withdrawals keep working — the deposit is still withdrawable, which is the
   // thing that must not break.
-  assert.equal(r.withdrawable, 100, 'the explained balance must still come out');
+  assert.equal(r.aggregateWithdrawable, 100, 'the explained balance must still come out');
   // But the 4 coins of rakeback now have no record anywhere, so they cannot be
   // accounted for and are held. That is the honest consequence of the column
   // being missing, and the reason to run the migration rather than a reason to
@@ -305,7 +319,7 @@ test('coins that appear from nowhere cannot be withdrawn', async () => {
   const r = await check({ balance: 9990, wins: 1, losses: 0 });
   assert.equal(r.explainedBalance, 0, 'nothing in the ledger accounts for this');
   assert.equal(r.unexplained, 9990);
-  assert.equal(r.withdrawable, 0,
+  assert.equal(r.aggregateWithdrawable, 0,
     'a balance with no history was fully withdrawable after a single win');
 });
 
@@ -314,7 +328,7 @@ test('a win on the profile is not a substitute for a ledger', async () => {
   // clears it forever. It is an absolute gate, never an accounting of funds.
   const r = await check({ balance: 500, wins: 40, losses: 40 });
   assert.equal(r.hasPlayed, true, 'the old gate still passes');
-  assert.equal(r.withdrawable, 0, 'and it must no longer be enough on its own');
+  assert.equal(r.aggregateWithdrawable, 0, 'and it must no longer be enough on its own');
 });
 
 test('only the unexplained part is held, not the whole balance', async () => {
@@ -323,7 +337,7 @@ test('only the unexplained part is held, not the whole balance', async () => {
   const r = await check({ balance: 300, deposits: [100], stakes: [100], matchWins: [150] });
   assert.equal(r.explainedBalance, 250);
   assert.equal(r.unexplained, 50);
-  assert.equal(r.withdrawable, 250);
+  assert.equal(r.aggregateWithdrawable, 250);
 });
 
 test('an admin grant is not explained money', async () => {
@@ -350,7 +364,7 @@ test('an admin grant is not explained money', async () => {
     },
   };
   const r = await m.getWithdrawable(granted, 'u');
-  assert.equal(r.withdrawable, 0, 'an admin grant was treated as accounted-for money');
+  assert.equal(r.aggregateWithdrawable, 0, 'an admin grant was treated as accounted-for money');
 });
 
 test('affiliate earnings are explained, and withdrawable', async () => {
@@ -360,7 +374,7 @@ test('affiliate earnings are explained, and withdrawable', async () => {
   const r = await check({ balance: 40, affiliate: 40, rakeback: 0, stakes: [5] });
   assert.equal(r.lifetimeAffiliate, 40);
   assert.equal(r.unexplained, 0, 'affiliate earnings were treated as unaccounted');
-  assert.equal(r.withdrawable, 40);
+  assert.equal(r.aggregateWithdrawable, 40);
 });
 
 test('what a player is told when the balance does not reconcile', async () => {
@@ -378,7 +392,7 @@ test('the check runs even with the playthrough switch off', async () => {
   // exists at all, so it is not the same question and not the same switch.
   const m = load(false);
   const r = await m.getWithdrawable(db({ balance: 9990, wins: 1, losses: 0 }), 'u');
-  assert.equal(r.withdrawable, 0, 'turning off playthrough re-opened the hole');
+  assert.equal(r.aggregateWithdrawable, 0, 'turning off playthrough re-opened the hole');
 });
 
 test('money already withdrawn does not keep explaining a balance', async () => {
@@ -392,7 +406,7 @@ test('money already withdrawn does not keep explaining a balance', async () => {
   });
   assert.equal(r.ledgerOut, 100, 'the withdrawal was not counted against them');
   assert.equal(r.explainedBalance, 0);
-  assert.equal(r.withdrawable, 0, 'a spent history was reused to explain new coins');
+  assert.equal(r.aggregateWithdrawable, 0, 'a spent history was reused to explain new coins');
 });
 
 test('a partly reconciled balance still does not quote the shortfall', async () => {
@@ -402,8 +416,101 @@ test('a partly reconciled balance still does not quote the shortfall', async () 
   const r = await m.getWithdrawable(
     db({ balance: 300, deposits: [100], stakes: [100], matchWins: [150] }), 'u');
   assert.equal(r.unexplained, 50);
-  assert.ok(r.withdrawable > 0, 'this test needs the partial branch');
+  assert.ok(r.aggregateWithdrawable > 0, 'this test needs the partial branch');
   const msg = m.playthroughMessage(r);
-  assert.match(msg, /withdraw \$250\.00 right now/, 'it must say what they CAN take');
+  // The figure the player is quoted must be the one that is actually enforced,
+  // not the aggregate — those differ whenever the lot ledger is stricter, and
+  // quoting a number they cannot then withdraw is worse than quoting none.
+  const shown = `$${r.withdrawable.toFixed(2)}`;
+  assert.ok(msg.includes(`withdraw ${shown} right now`),
+    `the message must offer the enforced ${shown}, not ${msg}`);
   assert.doesNotMatch(msg, /\$50\.00/, 'the message quotes the unexplained amount back');
+});
+
+// ── The two readings together ──────────────────────────────────────────────
+//
+// The aggregate says how MUCH may leave; the lot ledger says WHICH coins may.
+// They are two readings of one history and should agree. Where they do not,
+// one of them is wrong, and on a withdrawal the safe direction is obvious.
+
+// A fake carrying enough history for both readings to run.
+const both = ({ balance, rows = [], stakes = [] }) => ({
+  from(t) {
+    const q = { t, filters: {} };
+    const api = {
+      select: () => api,
+      eq: (c, v) => { q.filters[c] = v; return api; },
+      gt: () => api,
+      single: async () => ({ data: { c_coins: balance, wins: 1, losses: 1 } }),
+      maybeSingle: async () => ({
+        data: { rakeback_claimed_total: 0, affiliate_earnings_c: 0 }, error: null }),
+      then: (r) => r({ data: q.t === 'transactions' ? rows
+        : (q.filters.player1_id ? stakes.map(a => ({ entry_fee_c: a })) : []) }),
+    };
+    return api;
+  },
+});
+
+test('the stricter of the two readings is the one enforced', async () => {
+  const m = load();
+  // Deposit 100, stake it, win 150 back, and hold 300. The aggregate allows
+  // 250; the lot ledger only frees the 150 that was won, because the other 150
+  // has no lot behind it.
+  const r = await m.getWithdrawable(both({
+    balance: 300,
+    rows: [{ type: 'deposit', amount_c: 100 }, { type: 'match_win', amount_c: 150 }],
+    stakes: [100],
+  }), 'u');
+  assert.equal(r.aggregateWithdrawable, 250, 'the aggregate reading changed');
+  assert.equal(r.lotsFree, 150, 'the lot reading changed');
+  assert.equal(r.withdrawable, 150, 'the larger of the two was enforced');
+});
+
+test('both readings agree on a plain, honest account', async () => {
+  // Deposit 20, stake it, win 38. Nothing unexplained, nothing outstanding.
+  const m = load();
+  const r = await m.getWithdrawable(both({
+    balance: 38,
+    rows: [{ type: 'deposit', amount_c: 20 }, { type: 'match_win', amount_c: 38 }],
+    stakes: [20],
+  }), 'u');
+  assert.equal(r.aggregateWithdrawable, 38);
+  assert.equal(r.lotsFree, 38, 'the two readings disagree on a straightforward account');
+  assert.equal(r.withdrawable, 38);
+});
+
+test('a failure in the lot ledger does not block a withdrawal', async () => {
+  // It is the newer of the two readings. The aggregate is what has been
+  // enforcing this and already blocks money the ledger cannot account for, so
+  // falling back to it is safe — while failing closed would strand every
+  // player on one bad query.
+  const m = load();
+  const broken = {
+    from(t) {
+      const q = { t, filters: {} };
+      const api = {
+        select: (cols) => { q.cols = cols || ''; return api; },
+        eq: (c, v) => { q.filters[c] = v; return api; },
+        gt: () => api,
+        single: async () => ({ data: { c_coins: 38, wins: 1, losses: 1 } }),
+        maybeSingle: async () => ({ data: { rakeback_claimed_total: 0, affiliate_earnings_c: 0 }, error: null }),
+        then: (res) => {
+          // created_at is asked for only by the lot ledger, so this breaks
+          // that reading and leaves the aggregate's queries working.
+          if (q.t === 'transactions' && String(q.cols).includes('created_at')) {
+            throw new Error('lot query exploded');
+          }
+          return res({ data: q.t === 'transactions'
+            ? [{ type: 'deposit', amount_c: 20 }, { type: 'match_win', amount_c: 38 }]
+            : (q.filters.player1_id ? [{ entry_fee_c: 20 }] : []) });
+        },
+      };
+      return api;
+    },
+  };
+  const r = await m.getWithdrawable(broken, 'u');
+  assert.equal(r.lotsFree, null, 'this test needs the lot ledger to have failed');
+  assert.equal(r.withdrawable, r.aggregateWithdrawable,
+    'a broken lot ledger must fall back to the aggregate, not to zero');
+  assert.ok(r.withdrawable > 0, 'a working account was blocked');
 });
