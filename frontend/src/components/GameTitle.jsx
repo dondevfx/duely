@@ -255,6 +255,31 @@ export default function GameTitle({ slug, title, className = '' }) {
       );
     }
 
+    // A bracket, and a prize at the top of it.
+    //
+    // The one mode that is not a single match, so it does not borrow another
+    // game's materials: the mark is the shape of the thing itself — three
+    // steps of a podium under the name, in the metals they are named after.
+    case 'tournament':
+      return wrap(
+        <span className="inline-flex items-center gap-[0.22em] font-black tracking-tight">
+          <svg viewBox="0 0 24 18" className="w-[0.9em] h-[0.68em] shrink-0" aria-hidden="true">
+            {/* second, first, third — the order they stand in */}
+            <rect x="1"  y="7"  width="6.6" height="11" rx="1" fill="#C0C6CF" />
+            <rect x="8.7" y="2" width="6.6" height="16" rx="1" fill="#FFD147" />
+            <rect x="16.4" y="10" width="6.6" height="8" rx="1" fill="#C07800" />
+          </svg>
+          <span
+            style={{
+              backgroundImage: 'linear-gradient(180deg,#FFFFFF 0%,#9DC4FF 100%)',
+              WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
+            }}
+          >
+            {title}
+          </span>
+        </span>
+      );
+
     // Two players, matched.
     //
     // The first version was brand-blue text with a glow, which is what every

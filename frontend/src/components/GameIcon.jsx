@@ -32,6 +32,7 @@ const ALIASES = {
   coinflip:      'coin-flip',
   coinFlip:      'coin-flip',
   'quick-match': 'quickMatch',
+  tournaments:   'tournament',
   // The database writes game_type with underscores (profiles' per-game stats
   // read straight off it), so the same game arrives spelled three ways
   // depending on who is asking. Coin Flip's stat card on the profile drew
@@ -189,6 +190,21 @@ function QuickMatch() {
     fill="#FFD24A" stroke="#B8860B" strokeWidth="0.8" strokeLinejoin="round" />;
 }
 
+
+// A podium, the same three steps the tournament title uses, so the icon and
+// the wordmark are recognisably the same mark at two sizes.
+function Tournament({ size, className, title }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className}
+         fill="none" aria-hidden={title ? undefined : true}>
+      {title && <title>{title}</title>}
+      <rect x="1.5"  y="12" width="6" height="9"  rx="1" fill="currentColor" opacity="0.55" />
+      <rect x="9"    y="7"  width="6" height="14" rx="1" fill="currentColor" />
+      <rect x="16.5" y="15" width="6" height="6"  rx="1" fill="currentColor" opacity="0.35" />
+    </svg>
+  );
+}
+
 const ICONS = {
   blockBlast:  BlockBurst,
   'coin-flip': CoinFlip,
@@ -198,6 +214,7 @@ const ICONS = {
   tower:       Tower,
   scrabble:    WordVs,
   quickMatch:  QuickMatch,
+  tournament:  Tournament,
 };
 
 export const hasGameIcon = (game) => !!ICONS[ALIASES[game] || game];

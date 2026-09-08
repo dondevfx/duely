@@ -19,9 +19,12 @@
 // sits near either edge.
 export const GAMES = [
   {
-    slug:  'quick-match',
-    title: 'Quick Match',
-    route: '/game/quick-match',
+    // Tournaments took Quick Match's place at the head of the grid: it is the
+    // headline mode now, and two "play anything" entries side by side is one
+    // too many.
+    slug:  'tournament',
+    title: 'Tournaments',
+    route: '/tournaments',
   },
   {
     slug:     'block-blast',

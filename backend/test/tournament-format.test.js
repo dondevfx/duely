@@ -48,6 +48,38 @@ test('second place beats the entry fee', () => {
   }
 });
 
+test('the split is the split it says it is, to the cent', () => {
+  // Reconciling is not enough. First place absorbs whatever is left over, so
+  // an error in second or third is invisible in the total — and in floating
+  // point 15.2 * 0.3 is 4.5599999999999996, which floors to 4.55. The pool
+  // still balanced; second place was simply paid a cent less than 30%, at
+  // every 1-coin tournament, with nothing anywhere to show it.
+  //
+  // Whenever a share lands exactly on a cent it must be paid exactly.
+  for (const fee of F.ENTRY_FEES) {
+    const { net, prizes } = F.prizesFor(fee);
+    F.PRIZE_SPLIT_PCT.forEach((pct, i) => {
+      const exact = (net * pct) / 100;
+      const isWhole = Math.abs(exact * 100 - Math.round(exact * 100)) < 1e-9;
+      if (isWhole) {
+        assert.equal(prizes[i], Math.round(exact * 100) / 100,
+          `at ${fee}/head place ${i + 1} should be exactly ${pct}% (${exact})`);
+      }
+    });
+  }
+});
+
+test('the arithmetic runs in whole cents', () => {
+  // The rule, not just the result: floats are what made the split wrong while
+  // every total still added up.
+  const src = require('node:fs').readFileSync(
+    require.resolve('../src/services/tournamentFormat.js'), 'utf8');
+  const fn = src.slice(src.indexOf('function prizesFor'), src.indexOf('// ── Schedule'));
+  assert.match(fn, /Math\.round\(entryFee \* poolSize \* 100\)/,
+    'the pot must become cents before anything is taken from it');
+  assert.ok(!/net \* p \* 100/.test(fn), 'a share is still computed as a float');
+});
+
 test('the rounding remainder goes to first, never to the platform', () => {
   // Whatever the split leaves over is a player's, not the house's.
   //

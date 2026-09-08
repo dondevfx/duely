@@ -46,7 +46,9 @@
         var p = location.pathname.replace(/\/+$/, '');
         if (p !== '' && p !== '/games') return;
         // Card order on Home, so the ones above the fold are requested first.
-        var slugs = ['quick-match', 'block-blast', 'car-dash', 'coin-flip',
+        // Card order on Home. Tournaments leads the grid but has no clip —
+        // it is not one game — so there is no poster of it to preload.
+        var slugs = ['block-blast', 'car-dash', 'coin-flip',
                      'color-rush', 'tower', 'scrabble', 'blackjack'];
         for (var i = 0; i < slugs.length; i++) {
           var l = document.createElement('link');
@@ -166,6 +168,8 @@
           <p>Seven games: Block Burst, Rush Hour, Color Rush, Tower, Word VS, Coin Flip
              and Blackjack. Each can be played solo, against a bot, or ranked against
              another player.</p>
+          <p>Tournaments run three times an hour: sixteen players, four rounds, a
+             different game each round, and prizes for the top three.</p>
           <p>Duely needs JavaScript to run. Please enable it, or open
              <a href="https://www.duely.us">www.duely.us</a> in a current browser.</p>
         </div>

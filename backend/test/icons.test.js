@@ -154,14 +154,25 @@ test('the diamond currency is drawn, not an emoji, wherever it labels an amount'
 // ── Ordering ────────────────────────────────────────────────────────────────
 
 test('the games are in the same order everywhere they are listed', () => {
-  const ORDER = ['quick-match', 'block-blast', 'car-dash', 'coin-flip', 'color-rush', 'tower', 'scrabble', 'blackjack'];
+  // Tournaments leads, where Quick Match used to. It is the headline mode now,
+  // and it is the one entry whose route is not under /game/ — it is not a game.
+  const ORDER = ['tournament', 'block-blast', 'car-dash', 'coin-flip', 'color-rush', 'tower', 'scrabble', 'blackjack'];
 
   const grid = [...fe('data', 'games.js').matchAll(/slug:\s*'([a-z-]+)'/g)].map(m => m[1]);
   assert.deepEqual(grid, ORDER, 'the home and games grid is out of order');
 
-  // The sidebar and navbar list routes, so compare on the route's last part.
-  const routes = (src, re) => [...src.matchAll(re)].map(m => m[1]);
-  const side = routes(fe('components', 'LeftSidebar.jsx'), /route: '\/game\/([a-z-]+)'/g);
+  // The sidebar lists routes, so compare on the route's last part. Matched on
+  // any route rather than only /game/ ones, or the entry that does not live
+  // there simply drops out of the comparison and its position stops being
+  // checked at all — which is the one most likely to be moved.
+  // Scoped to the sidebar's GAMES array. Matching routes across the whole file
+  // sweeps in profile, rewards, leaderboard and wallet, which are nav items
+  // rather than games — the first attempt at widening this did exactly that.
+  const sidebarSrc = fe('components', 'LeftSidebar.jsx');
+  const gamesArray = sidebarSrc.slice(sidebarSrc.indexOf('const GAMES = ['),
+                                       sidebarSrc.indexOf('];', sidebarSrc.indexOf('const GAMES = [')));
+  const side = [...gamesArray.matchAll(/route: '\/(?:game\/)?([a-z-]+)'/g)].map(m => m[1])
+    .map(r => (r === 'tournaments' ? 'tournament' : r));
   assert.deepEqual(side, ORDER, 'the sidebar is out of order');
 
   // The navbar used to be the third place. Its list lived only in the

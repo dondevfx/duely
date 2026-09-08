@@ -11,7 +11,7 @@ import RankIcon from './RankIcon';
 // data/games.js, which drives both. Changing it in one place only is how the
 // three lists drift apart.
 const GAMES = [
-  { game: 'quickMatch', label: 'Quick Match',  route: '/game/quick-match', live: true },
+  { game: 'tournament', label: 'Tournaments',  route: '/tournaments',       live: true },
   { game: 'blockBlast', label: 'Block Burst',  route: '/game/block-blast', live: true },
   { game: 'carDash',    label: 'Rush Hour',    route: '/game/car-dash',    live: true },
   { game: 'coin-flip',  label: 'Coin Flip',    route: '/game/coin-flip',   live: true },
@@ -52,7 +52,7 @@ const routeToKey = {
   '/game/car-dash':     'car-dash',
   '/game/color-rush':   'color-rush',
   '/game/tower':        'tower',
-  '/game/quick-match':  null,
+  '/tournaments':       null,
 };
 
 export default function LeftSidebar() {

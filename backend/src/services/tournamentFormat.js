@@ -35,12 +35,19 @@ const ENTRY_FEES = [1, 5, 10];
 // does.
 const FEE_RATE = 0.05;
 
-// How the prize splits across the three paid places.
+// How the prize splits across the three paid places, in whole percent.
 //
 // 50/30/20 of what is left after the fee. Weighted to the winner, but second
 // still returns more than three times the entry at every stake — a bracket
 // where only first place beats the entry fee is one nobody enters twice.
-const PRIZE_SPLIT = [0.5, 0.3, 0.2];
+//
+// Percent rather than 0.5/0.3/0.2 because the whole calculation runs in
+// integer cents. In floating point 15.2 * 0.3 is 4.5599999999999996, so
+// flooring it to the cent pays second place 4.55 instead of 4.56 — the total
+// still reconciles, because first place absorbs whatever is left, so nothing
+// looks wrong anywhere. It is simply not the split it says it is.
+const PRIZE_SPLIT_PCT = [50, 30, 20];
+const PRIZE_SPLIT = PRIZE_SPLIT_PCT.map(p => p / 100);
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -53,13 +60,25 @@ const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
  * prize table that does not sum to the pot is a slow leak that nothing checks.
  */
 function prizesFor(entryFee, poolSize = POOL_SIZE) {
-  const pot = round2(entryFee * poolSize);
-  const fee = round2(pot * FEE_RATE);
-  const net = round2(pot - fee);
+  // Cents, as integers, from here down. Every intermediate in this function
+  // used to be a float and the errors were small enough to hide behind the
+  // reconciliation.
+  const potC = Math.round(entryFee * poolSize * 100);
+  const feeC = Math.round(potC * FEE_RATE);
+  const netC = potC - feeC;
 
-  const lower = PRIZE_SPLIT.slice(1).map(p => Math.floor(net * p * 100) / 100);
-  const first = round2(net - lower.reduce((s, v) => s + v, 0));
-  return { pot, fee, net, prizes: [first, ...lower] };
+  // Floored, so the shares can never sum to more than the pool. The remainder
+  // — at most two cents — goes to first, not into the fee.
+  const lowerC = PRIZE_SPLIT_PCT.slice(1).map(pct => Math.floor((netC * pct) / 100));
+  const firstC = netC - lowerC.reduce((s, v) => s + v, 0);
+
+  const toCoins = (c) => Math.round(c) / 100;
+  return {
+    pot: toCoins(potC),
+    fee: toCoins(feeC),
+    net: toCoins(netC),
+    prizes: [firstC, ...lowerC].map(toCoins),
+  };
 }
 
 // ── Schedule ────────────────────────────────────────────────────────────────
@@ -192,7 +211,7 @@ function placings(bracket) {
 
 module.exports = {
   POOL_SIZE, ROUNDS, PAID_PLACES, TOURNAMENT_GAMES, ENTRY_FEES,
-  FEE_RATE, PRIZE_SPLIT, SLOT_MS, JOIN_WINDOW_MS,
+  FEE_RATE, PRIZE_SPLIT, PRIZE_SPLIT_PCT, SLOT_MS, JOIN_WINDOW_MS,
   prizesFor, slotAt, joinableSlot, pickRoundGames,
   firstRoundPairs, emptyBracket, advanceTo, placings,
 };

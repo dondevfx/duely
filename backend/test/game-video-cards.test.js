@@ -23,6 +23,7 @@ const strip = (s) => s
   .split(/\r?\n/).filter(l => !l.trim().startsWith('//')).join('\n');
 
 const GAMES_DATA = read('data', 'games.js');
+const ICONS_SRC = fs.readFileSync(FE('components', 'GameIcon.jsx'), 'utf8');
 const CARD       = read('components', 'GameVideoCard.jsx');
 const HOME       = read('pages', 'Home.jsx');
 const GAMES_PAGE = read('pages', 'Games.jsx');
@@ -282,9 +283,22 @@ test('every listed game has a poster image on disk', () => {
   // long enough to see as a flash. A poster is a few KB and decodes almost
   // immediately, so it covers that gap — but only for games that have one.
   // Catches a new game shipping with a clip and no poster to go with it.
+  //
+  // Owed by every entry that HAS a clip. Tournaments leads the grid and has
+  // neither: it is not one game, so there is no footage of it to still. The
+  // rule is that a clip without a poster is the gap — not that every card
+  // must have a video.
   const slugs = [...GAMES_DATA.matchAll(/slug:\s*'([a-z-]+)'/g)].map(m => m[1]);
-  const missing = slugs.filter(s => !fs.existsSync(FE('..', 'public', 'game-clips', `${s}.jpg`)));
-  assert.deepEqual(missing, [], `no poster on disk for: ${missing.join(', ')}`);
+  const withClip = slugs.filter(s => fs.existsSync(FE('..', 'public', 'game-clips', `${s}.mp4`)));
+  assert.ok(withClip.length >= 7, `only ${withClip.length} clips found — the check is not looking at anything`);
+  const missing = withClip.filter(s => !fs.existsSync(FE('..', 'public', 'game-clips', `${s}.jpg`)));
+  assert.deepEqual(missing, [], `clip but no poster: ${missing.join(', ')}`);
+
+  // And a card with no clip must still have something to draw.
+  const hasIcon = (g) => ICONS_SRC.includes(`  ${g}:`) || ICONS_SRC.includes(`'${g}':`);
+  for (const s of slugs.filter(x => !withClip.includes(x))) {
+    assert.ok(hasIcon(s), `${s} has no clip AND no icon — its card would be empty`);
+  }
 });
 
 // ── The crop-debug slider ───────────────────────────────────────────────────

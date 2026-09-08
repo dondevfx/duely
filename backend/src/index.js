@@ -17,6 +17,7 @@ const rewardsRoutes = require('./routes/rewards');
 const adminRoutes = require('./routes/admin');
 const webhookRoutes = require('./routes/webhooks');
 const affiliateRoutes = require('./routes/affiliate');
+const tournamentRoutes = require('./routes/tournaments');
 const rakebackRoutes = require('./routes/rakeback');
 const kycRoutes      = require('./routes/kyc');
 const avatarRoutes   = require('./routes/avatar');
@@ -96,6 +97,10 @@ app.use('/api/rewards', rewardsRoutes(supabase));
 app.use('/api/admin', adminRoutes(supabase, io));
 app.use('/api/support', supportRoutes(supabase, io));
 app.use('/api/affiliate', affiliateRoutes(supabase));
+// Tournaments. The pool store is created here and handed to both the routes
+// and the socket layer, so there is one of it rather than one per consumer.
+const tournamentPools = require('./services/tournamentPools').createStore();
+app.use('/api/tournaments', tournamentRoutes(supabase, io, tournamentPools));
 app.use('/api/rakeback', rakebackRoutes(supabase));
 app.use('/api/kyc', kycRoutes(supabase));
 // /api/avatar is mounted above, before express.json() — see the note there.
