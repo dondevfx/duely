@@ -105,3 +105,29 @@ test('rewards is a present, not a dartboard', () => {
   assert.ok(!/<circle/.test(fn), 'the dartboard rings are still there');
   assert.match(fn, /M12 6\.8v13\.4/, 'the ribbon down the front is missing');
 });
+
+// ── One account control, not two ───────────────────────────────────────────
+
+test('the phone shows the account once, on the left', () => {
+  // The avatar in the slot the hamburger vacated is the phone's account
+  // control. The one on the right is the desktop's. Both visible at once is
+  // two pictures of the same person in one bar, and one of them is ignored.
+  const right = NAVBAR.slice(NAVBAR.indexOf('{/* Right — avatar'));
+  assert.match(right, /<Link to="\/profile" className="hidden md:flex/,
+    'the right-hand avatar still shows on phones');
+  // And the left one is still there to replace it.
+  assert.match(NAVBAR, /md:hidden[\s\S]{0,400}aria-label=\{profile \? 'Your profile'/,
+    'nothing on a phone reaches the account');
+});
+
+test('the avatar is passed the props Avatar actually takes', () => {
+  // It takes avatarUrl and a className. Passed url and size — which is what
+  // the first version did — it renders the fallback initial at the default
+  // size and silently never shows anyone's picture.
+  const left = NAVBAR.slice(NAVBAR.indexOf("aria-label={profile ? 'Your profile'"));
+  const tag = left.slice(left.indexOf('<Avatar'), left.indexOf('/>', left.indexOf('<Avatar')));
+  assert.match(tag, /avatarUrl=\{profile\.avatar_url\}/, 'the picture never loads');
+  assert.match(tag, /className=/, 'no size — Avatar has no size prop');
+  assert.ok(!/\bsize=\{/.test(tag), 'size is not a prop Avatar reads');
+  assert.ok(!/\burl=\{/.test(tag), 'the prop is avatarUrl, not url');
+});

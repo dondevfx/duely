@@ -145,7 +145,7 @@ export default function Navbar() {
             aria-label={profile ? 'Your profile' : 'Sign in'}
           >
             {profile
-              ? <Avatar username={profile.username} url={profile.avatar_url} color={profile.profile_color} size={30} />
+              ? <Avatar username={profile.username} avatarUrl={profile.avatar_url} color={profile.profile_color} className="w-8 h-8" textClassName="text-xs" />
               : <UiIcon name="profile" size={22} />}
           </Link>
 
@@ -444,7 +444,10 @@ export default function Navbar() {
                     ⚙
                   </Link>
                 )}
-                <Link to="/profile" className="flex items-center gap-2 group">
+                {/* Desktop only. On a phone the account is the avatar on the
+                    left, where the hamburger used to be — two pictures of the
+                    same person in one bar is one of them being ignored. */}
+                <Link to="/profile" className="hidden md:flex items-center gap-2 group">
                   <div className="relative">
                     <Avatar
                       username={profile.username}

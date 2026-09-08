@@ -218,7 +218,7 @@ export default function GameTitle({ slug, title, className = '' }) {
       const [restFirst, ...restWords] = rest.split(' ');
       const Coin = (
         <span className="inline-block align-baseline mx-[0.02em]" style={{ transform: 'translateY(0.02em)' }}>
-          <CoinFaceIcon side="heads" size="0.56em" />
+          <CoinFaceIcon side="heads" size="0.66em" />
         </span>
       );
       return wrap(
@@ -264,13 +264,10 @@ export default function GameTitle({ slug, title, className = '' }) {
     case 'quick-match':
       return wrap(
         <Words className="font-black tracking-tight">
-          <span className="inline-flex items-center gap-[0.14em] whitespace-nowrap">
-            <svg viewBox="0 0 24 24" className="w-[0.72em] h-[0.72em] shrink-0" aria-hidden="true"
-                 style={{ filter: 'drop-shadow(0 0 0.2em rgba(255,209,71,.7))' }}>
-              <path d="M13 2 L4 14h6l-1 8 9-12h-6z" fill="#FFD147" />
-            </svg>
-            <span className="text-white">{words(title)[0]}</span>
-          </span>
+          {/* No bolt. It was the only treatment carrying a glyph, which made
+              this card the odd one out on a screen of eight — and on the clip
+              it read as a stray icon rather than as part of the name. */}
+          <span className="text-white whitespace-nowrap">{words(title)[0]}</span>
           {words(title)[1] && (
             <span
               className="whitespace-nowrap"

@@ -202,8 +202,12 @@ test('the coin is sized as a lowercase letter, not an icon', () => {
   // in the middle of a word.
   const size = TITLE.match(/<CoinFaceIcon side="heads" size="([\d.]+)em"/);
   assert.ok(size, 'the coin has no size');
-  assert.ok(parseFloat(size[1]) <= 0.65,
-    `${size[1]}em is cap height — a lowercase o is around half the em`);
+  // Bounded both ways. Too small and it reads as a full stop between letters —
+  // 0.56em was, which is why it grew. Too large and it is a cap-height icon
+  // parked mid-word again, which is what it replaced.
+  const em = parseFloat(size[1]);
+  assert.ok(em >= 0.6,  `${em}em is smaller than the lowercase letters beside it`);
+  assert.ok(em <= 0.75, `${em}em is cap height — it stops reading as an "o"`);
 });
 
 // ── Where the title sits on the card ───────────────────────────────────────
@@ -228,4 +232,13 @@ test('the bet screens show the title without a game icon beside it', () => {
     assert.ok(own, `${f} has no heading`);
     assert.ok(!/<GameIcon/.test(own[0]), `${f} still shows a game icon in its heading`);
   }
+});
+
+test('Quick Match is type alone, with no glyph', () => {
+  // It carried a lightning bolt, which made it the only treatment on a screen
+  // of eight with an icon in it — and over the clip that read as a stray mark
+  // rather than as part of the name.
+  const fn = TITLE.slice(TITLE.indexOf("case 'quick-match':"), TITLE.indexOf('default:'));
+  assert.ok(!/<svg/.test(fn), 'the Quick Match title still draws an icon');
+  assert.match(fn, /words\(title\)\[0\]/, 'the first word must still be there');
 });
