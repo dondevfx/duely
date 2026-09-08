@@ -103,8 +103,13 @@ test('getWithdrawable computes both rules from real, tracked data', () => {
   assert.match(src, /type', 'deposit'\)\.eq\('status', 'confirmed'/,
     'lifetimeDeposited must only count confirmed deposits');
   assert.match(src, /entry_fee_c/, 'lifetimeWagered must come from real matches, not a guess');
-  assert.match(src, /Math\.max\(0, lifetimeDeposited - lifetimeWagered\)/,
-    'unplayedDeposits must never go negative — a player who has wagered MORE than they deposited must not create a negative cap');
+  assert.match(src, /type', 'tip_received'\)\.eq\('status', 'confirmed'/,
+    'tips carry the same obligation as deposits — without this, deposit, tip to ' +
+    'a second account, withdraw, and the rule is bypassed for free');
+  assert.match(src, /playthroughOwed = lifetimeDeposited \+ lifetimeTipped/,
+    'the requirement is deposits plus tips');
+  assert.match(src, /Math\.max\(0, playthroughOwed - lifetimeWagered\)/,
+    'unplayedDeposits must never go negative — a player who has wagered MORE than they took in must not create a negative cap');
   assert.match(src, /Math\.max\(0, balance - unplayedDeposits\)/,
     'withdrawable must never go negative either');
 });

@@ -14,25 +14,37 @@ const SERVICE = path.join(__dirname, '..', 'src', 'services', 'walletService.js'
 const ROUTE = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'wallet.js'), 'utf8');
 
 // A profile with a deposit and no matches: the exact case that was blocked.
-function db({ coins, wins = 0, losses = 0, deposited, wagered = 0 }) {
+//
+// Answers transactions BY TYPE, which means actually tracking the filters
+// rather than reading the first .eq()'s value — the type arrives on the SECOND
+// call, after user_id.
+//
+// It used to return the deposit rows for any query against that table, which
+// was fine while deposits were the only thing read. Once tips became
+// playthrough-bearing too, the same deposit came back twice and every
+// requirement here silently doubled. A fake that cannot tell two queries apart
+// fails the day a second query is added.
+function db({ coins, wins = 0, losses = 0, deposited, tipped, wagered = 0 }) {
+  const byType = {
+    deposit:      deposited != null ? [{ amount_c: deposited }] : [],
+    tip_received: tipped    != null ? [{ amount_c: tipped }]    : [],
+  };
   return {
-    from: (table) => ({
-      select: () => ({
-        eq: (col, val) => {
-          const rows = table === 'profiles'
-            ? { data: { c_coins: coins, wins, losses } }
-            : { data: deposited != null && table === 'transactions'
-                ? [{ amount_c: deposited }] : [] };
-          const chain = {
-            eq: () => chain,
-            gt: () => Promise.resolve({ data: wagered > 0 && col === 'player1_id' ? [{ entry_fee_c: wagered }] : [] }),
-            single: async () => rows,
-            then: (r) => Promise.resolve(rows).then(r),
-          };
-          return chain;
-        },
-      }),
-    }),
+    from: (table) => {
+      const f = {};
+      const chain = {
+        select: () => chain,
+        eq: (col, val) => { f[col] = val; return chain; },
+        gt: () => Promise.resolve({
+          data: wagered > 0 && f.player1_id ? [{ entry_fee_c: wagered }] : [],
+        }),
+        single: async () => ({ data: { c_coins: coins, wins, losses } }),
+        then: (resolve) => Promise.resolve({
+          data: table === 'transactions' ? (byType[f.type] || []) : [],
+        }).then(resolve),
+      };
+      return chain;
+    },
   };
 }
 

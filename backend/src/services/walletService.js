@@ -440,10 +440,17 @@ function playthroughMessage(src) {
   }
   const left = Math.max(0, src.unplayedDeposits || 0);
   if (left <= 0) return null;
+  // Name tips explicitly when there are any. Telling someone who has only ever
+  // been tipped that "you have deposited $0.00" and still owes $20 reads as a
+  // bug, and they cannot act on a number that does not add up.
+  const tipped = Math.max(0, src.lifetimeTipped || 0);
+  const received = tipped > 0
+    ? `You have received ${usd(src.lifetimeDeposited)} in deposits and ` +
+      `${usd(tipped)} in tips, and wagered ${usd(src.lifetimeWagered)}`
+    : `You have deposited ${usd(src.lifetimeDeposited)} and wagered ${usd(src.lifetimeWagered)}`;
   const head =
-    `Deposits have to be wagered before they can be withdrawn. ` +
-    `You have deposited ${usd(src.lifetimeDeposited)} and wagered ${usd(src.lifetimeWagered)}, ` +
-    `so ${usd(left)} still needs to be wagered.`;
+    `Deposits and tips have to be wagered before they can be withdrawn. ` +
+    `${received}, so ${usd(left)} still needs to be wagered.`;
   return src.withdrawable > 0
     ? `${head} You can withdraw ${usd(src.withdrawable)} right now.`
     : head;
@@ -457,18 +464,45 @@ async function getWithdrawable(supabase, userId) {
   const balance   = parseFloat(profile.c_coins) || 0;
   const hasPlayed = ((profile.wins ?? 0) + (profile.losses ?? 0)) > 0;
 
-  const [{ data: deposits }, { data: matchesAsP1 }, { data: matchesAsP2 }] = await Promise.all([
-    supabase.from('transactions').select('amount_c')
-      .eq('user_id', userId).eq('type', 'deposit').eq('status', 'confirmed'),
-    supabase.from('matches').select('entry_fee_c').eq('player1_id', userId).gt('entry_fee_c', 0),
-    supabase.from('matches').select('entry_fee_c').eq('player2_id', userId).gt('entry_fee_c', 0),
-  ]);
+  const [{ data: deposits }, { data: tips }, { data: matchesAsP1 }, { data: matchesAsP2 }] =
+    await Promise.all([
+      supabase.from('transactions').select('amount_c')
+        .eq('user_id', userId).eq('type', 'deposit').eq('status', 'confirmed'),
+      // Tips carry the same obligation — see the note below.
+      supabase.from('transactions').select('amount_c')
+        .eq('user_id', userId).eq('type', 'tip_received').eq('status', 'confirmed'),
+      supabase.from('matches').select('entry_fee_c').eq('player1_id', userId).gt('entry_fee_c', 0),
+      supabase.from('matches').select('entry_fee_c').eq('player2_id', userId).gt('entry_fee_c', 0),
+    ]);
 
   const lifetimeDeposited = (deposits || []).reduce((s, r) => s + (parseFloat(r.amount_c) || 0), 0);
+  // Diamond tips are recorded with amount_c 0 (the amount rides on
+  // crypto_amount), so summing amount_c counts coin tips and nothing else.
+  // Diamonds are not withdrawable, so they carry no obligation to begin with.
+  const lifetimeTipped = (tips || []).reduce((s, r) => s + (parseFloat(r.amount_c) || 0), 0);
+
   const lifetimeWagered = [...(matchesAsP1 || []), ...(matchesAsP2 || [])]
     .reduce((s, r) => s + (parseFloat(r.entry_fee_c) || 0), 0);
 
-  const unplayedDeposits = Math.max(0, lifetimeDeposited - lifetimeWagered);
+  // Tips are playthrough-bearing, exactly like deposits.
+  //
+  // Without this the rule had a hole wide enough to make it pointless: deposit
+  // $20, tip it to a second account, withdraw $20 from there having wagered
+  // nothing. The deposit leaves the platform without a single match being
+  // played, which is the precise pattern the requirement exists to stop — and
+  // it was free to run, since a tip costs nothing.
+  //
+  // EVERY tip, not only tips of unwagered money. It means the same $20 can
+  // carry the obligation twice — once for the depositor, again for whoever
+  // they tip it to — and that is deliberate: tracking whether a particular
+  // coin had already been wagered would need a per-coin ledger, and the moment
+  // tips of "clean" money are exempt, the exploit comes back through any
+  // account that has played a single match.
+  //
+  // Match winnings are still untouched: they are not deposits and not tips, so
+  // they stay fully and immediately withdrawable.
+  const playthroughOwed = lifetimeDeposited + lifetimeTipped;
+  const unplayedDeposits = Math.max(0, playthroughOwed - lifetimeWagered);
   // With the requirement off, the whole balance is withdrawable — including a
   // deposit that landed a moment ago. unplayedDeposits is still returned, so
   // nothing that reports on it starts reading zero.
@@ -478,6 +512,7 @@ async function getWithdrawable(supabase, userId) {
 
   return {
     withdrawable, balance, hasPlayed, lifetimeDeposited, lifetimeWagered,
+    lifetimeTipped, playthroughOwed,
     unplayedDeposits,
     // So a caller does not have to read the env var to know which rules the
     // numbers above were produced under.
