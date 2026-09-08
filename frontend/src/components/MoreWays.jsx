@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 /**
  * The "more ways to play" toggle, shared by every betting screen.
  *
@@ -46,6 +47,41 @@ function WideChevron({ up }) {
       />
     </svg>
   );
+}
+
+/**
+ * A ref for the panel the toggle reveals, which scrolls itself into view.
+ *
+ * The toggle sits near the bottom of a bet screen, so on a phone the options
+ * it reveals unfold BELOW the fold: the arrow flips, the layout grows, and
+ * nothing appears to have happened. The one thing the control is for is the
+ * one thing you cannot see.
+ *
+ * A hook rather than three copies of the effect. There are three bet screens —
+ * the shared GameLobby, and Coin Flip and Blackjack which build their own —
+ * and the first version of this fix went into GameLobby alone, so the screen
+ * that prompted it was the one screen still broken. The same two get missed
+ * every time; sharing the behaviour is the only thing that stops it.
+ *
+ *   const panelRef = useRevealOnOpen(moreOpen);
+ *   ...
+ *   {moreOpen && <div ref={panelRef}>…</div>}
+ */
+export function useRevealOnOpen(open) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;                 // closing it must not scroll too
+    // A frame, so the panel has laid out and has a height to scroll to.
+    const id = requestAnimationFrame(() => {
+      const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      // block:'end' rather than 'start' — the panel is the last thing on the
+      // screen, so aligning its bottom shows all of it without throwing the
+      // stake off the top.
+      ref.current?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'end' });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [open]);
+  return ref;
 }
 
 export function MoreWaysToggle({ open, onToggle, className = '' }) {

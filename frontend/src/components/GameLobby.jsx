@@ -10,7 +10,7 @@ import GameIcon from './GameIcon';
 import CreateRoomModal from './CreateRoomModal';
 import JoinRoomModal from './JoinRoomModal';
 import { LockIcon } from './UiIcon';
-import { MoreWaysToggle } from './MoreWays';
+import { MoreWaysToggle, useRevealOnOpen } from './MoreWays';
 import InsufficientModal from './InsufficientModal';
 import GameTitle from './GameTitle';
 
@@ -86,29 +86,8 @@ export default function GameLobby({
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
 
-  // Opening the panel has to bring it into view.
-  //
-  // The toggle sits near the bottom of the screen, so on a phone the options it
-  // reveals unfold BELOW the fold: the arrow flips, the layout grows, and
-  // nothing appears to have happened. The one thing the control is for is the
-  // one thing you cannot see.
-  //
-  // block:'end' rather than 'start' — the panel is the last thing on the
-  // screen, so aligning its bottom edge shows all of it without throwing the
-  // stake away off the top.
-  const moreRef = useRef(null);
-  useEffect(() => {
-    if (!moreOpen) return;
-    // A frame, so the panel has laid out and has a height to scroll to.
-    const id = requestAnimationFrame(() => {
-      const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-      moreRef.current?.scrollIntoView({
-        behavior: reduced ? 'auto' : 'smooth',
-        block: 'end',
-      });
-    });
-    return () => cancelAnimationFrame(id);
-  }, [moreOpen]);
+  // Shared with Coin Flip and Blackjack, which build their own bet screens.
+  const moreRef = useRevealOnOpen(moreOpen);
   const [privateMode, setPrivateMode] = useState(null);
   const [shortfall, setShortfall] = useState(false);
   const [joinCode, setJoinCode]       = useState('');

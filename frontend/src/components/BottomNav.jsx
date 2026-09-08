@@ -25,6 +25,21 @@ const ITEMS = [
   { ui: 'wallet',      label: 'Wallet',      to: '/wallet' },
 ];
 
+// Whether the bar is showing, for a given path.
+//
+// Exported because App.jsx has to reserve the bar's height in the scroll area
+// and must not decide that separately. It did, and the two disagreed: main is
+// `bottom-14` on phones, so on a game route it held back 56px for a bar that
+// no longer renders while every game page still asked for
+// min-h-[calc(100dvh-3.5rem)] — a page 56px taller than the box it sits in.
+// That is why the bet screen showed a clipped title above and clipped buttons
+// below. Measured after: scrollHeight equals clientHeight on a 390x844 phone.
+export function showsBottomNav(pathname) {
+  // Matched on the /game/ prefix rather than a list of slugs, so a game added
+  // later is covered the day it ships. /games is a normal page and keeps it.
+  return !/^\/game(\/|$)/.test(pathname);
+}
+
 export default function BottomNav() {
   const { pathname } = useLocation();
 
@@ -38,7 +53,7 @@ export default function BottomNav() {
   //
   // Matched on the /game/ prefix rather than a list of slugs, so a game added
   // later is covered the day it ships rather than the day somebody notices.
-  if (/^\/game(\/|$)/.test(pathname)) return null;
+  if (!showsBottomNav(pathname)) return null;
 
   return (
     <nav

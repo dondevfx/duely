@@ -7,7 +7,7 @@ import { holdBalance } from '../utils/balanceHold';
 import { useSocket } from '../context/SocketContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { COIN_FEES, DIAMOND_FEES, SMALL_BTN } from '../components/GameLobby';
-import { MoreWaysToggle } from '../components/MoreWays';
+import { MoreWaysToggle, useRevealOnOpen } from '../components/MoreWays';
 import BetSlider from '../components/BetSlider';
 import ResultScreen from '../components/ResultScreen';
 import GameHelp from '../components/GameHelp';
@@ -227,6 +227,8 @@ export default function CoinFlipGame() {
   const [privateCode, setPrivateCode] = useState('');
   // Collapsed on load — see MoreWays.
   const [moreOpen, setMoreOpen] = useState(false);
+  // The panel unfolds below the fold on a phone; this brings it into view.
+  const moreRef = useRevealOnOpen(moreOpen);
   const [privateMode, setPrivateMode] = useState(null);
   const [shortfall, setShortfall] = useState(false);
   const [invitedFriend, setInvitedFriend] = useState(null);
@@ -825,7 +827,7 @@ export default function CoinFlipGame() {
                         match; a bot game and a join code are one tap from here. */}
                     <MoreWaysToggle open={moreOpen} onToggle={() => setMoreOpen(o => !o)} />
                     {moreOpen && (
-                      <div className="flex flex-col gap-2 animate-fade-in">
+                      <div ref={moreRef} className="flex flex-col gap-2 animate-fade-in">
                         {/* Diamond bet-vs-bot gets its own full-width row — too long to share */}
                         {isDiamonds && (
                           <button

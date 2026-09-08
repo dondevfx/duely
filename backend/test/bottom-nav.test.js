@@ -53,8 +53,14 @@ test('the drawer left nothing behind', () => {
 test('the bar sits below the scroll area, not over the end of it', () => {
   // Page padding would leave the last row under a translucent bar on any page
   // that forgot to add it. Shortening the scroll container cannot be forgotten.
-  assert.match(APP, /bottom-14 md:bottom-0/,
-    'main must stop where the bar starts, on phones only');
+  // Only where the bar actually renders. It is unconditional no longer: on a
+  // game route the bar is hidden, and reserving its 56px anyway made every
+  // game page — all asking for min-h-[calc(100dvh-3.5rem)] — taller than the
+  // box it sits in, which is what clipped the bet screen at both ends.
+  assert.match(APP, /\? 'bottom-14' : 'bottom-0'\} md:bottom-0/,
+    'main must stop where the bar starts, on phones, and only when there is one');
+  assert.match(APP, /showsBottomNav\(location\.pathname\)/,
+    'the inset must ask the same function the bar does');
   assert.match(APP, /<BottomNav \/>/, 'the bar is never mounted');
 });
 
