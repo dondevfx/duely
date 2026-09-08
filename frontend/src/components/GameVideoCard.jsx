@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GameIcon from './GameIcon';
+import GameTitle from './GameTitle';
 
 // A square card: a looping gameplay clip fills the whole thing, and the title
 // and Play button sit directly on top of it, over a gradient scrim so they
@@ -286,7 +287,7 @@ export default function GameVideoCard({ slug, title, route, liveCount = 0, avail
           keyboard handling on the root, which the button used to provide. */}
       <div className="absolute inset-x-0 bottom-0 pt-10 pb-2.5 px-2.5 md:pb-4 md:px-4 bg-gradient-to-t from-black/90 via-black/50 to-transparent">
         <h3 className="text-sm md:text-xl font-bold text-white leading-tight drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">
-          {title}
+          <GameTitle slug={slug} title={title} />
         </h3>
         {!available && (
           // A label, not a button shape. Nothing passes available=false today,
