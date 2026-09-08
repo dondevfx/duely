@@ -1,0 +1,298 @@
+// Pools: who is in which tournament.
+//
+// Every function takes `now`, so the whole twenty-minute lifecycle — fill,
+// close, play, settle — runs here in milliseconds instead of being something
+// nobody can test without waiting for the clock.
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { createStore, seededRng, nextPowerOfTwo, MIN_TO_RUN } = require('../src/services/tournamentPools');
+const F = require('../src/services/tournamentFormat');
+
+const at = (h, m, s = 0) => Date.UTC(2026, 0, 1, h, m, s);
+const OPEN = at(9, 1);          // inside the join window
+const CLOSED = at(9, 6);        // after it
+
+const fill = (store, n, { entryFee = 1, now = OPEN, from = 0 } = {}) => {
+  const out = [];
+  for (let i = from; i < from + n; i++) {
+    out.push(store.join({ userId: `u${i}`, username: `p${i}`, entryFee, now }));
+  }
+  return out;
+};
+
+// ── Joining ────────────────────────────────────────────────────────────────
+
+test('the first player to queue opens a pool', () => {
+  const s = createStore();
+  const { pool, already } = s.join({ userId: 'u1', username: 'a', entryFee: 1, now: OPEN });
+  assert.equal(already, false);
+  assert.equal(pool.state, 'filling');
+  assert.equal(pool.players.length, 1);
+  assert.equal(pool.entryFee, 1);
+});
+
+test('the next player joins the same pool, not a second one', () => {
+  const s = createStore();
+  fill(s, 2);
+  assert.equal(s.pools.size, 1, 'two players made two pools');
+  assert.equal([...s.pools.values()][0].players.length, 2);
+});
+
+test('a seventeenth player opens a second pool', () => {
+  // As many pools as needed, sixteen to a bracket.
+  const s = createStore();
+  fill(s, 17);
+  assert.equal(s.pools.size, 2);
+  const sizes = [...s.pools.values()].map(p => p.players.length).sort((a, b) => b - a);
+  assert.deepEqual(sizes, [16, 1]);
+});
+
+test('only one pool at a stake is ever taking entries', () => {
+  // A pool starts the instant it reaches sixteen, so it stops being a
+  // candidate the moment it is full. That is what keeps everyone funnelling
+  // into one bracket rather than spreading across a dozen half-empty ones —
+  // and it is why there is no "pick the fullest" rule to get wrong.
+  const s = createStore();
+  fill(s, 16);                                  // fills and starts
+  fill(s, 3, { from: 100 });                    // the next pool opens
+  const filling = [...s.pools.values()].filter(p => p.state === 'filling');
+  assert.equal(filling.length, 1, 'two pools were taking entries at once');
+  assert.equal(filling[0].players.length, 3);
+
+  s.join({ userId: 'u200', username: 'x', entryFee: 1, now: OPEN });
+  assert.equal(filling[0].players.length, 4, 'a new pool was opened beside a half-full one');
+});
+
+test('the rotation a pool actually gets comes from its own id', () => {
+  // Not Math.random. Every client has to be told the same game for the same
+  // round; drawn per process, a reconnecting player is handed a different
+  // tournament from the one still being played.
+  const s = createStore();
+  const pool = fill(s, 2)[0].pool;
+  assert.deepEqual(pool.roundGames, F.pickRoundGames(F.ROUNDS, seededRng(pool.id)),
+    "a pool's rotation is not reproducible from its id");
+});
+
+test('the three stakes never share a pool', () => {
+  const s = createStore();
+  s.join({ userId: 'a', username: 'a', entryFee: 1,  now: OPEN });
+  s.join({ userId: 'b', username: 'b', entryFee: 5,  now: OPEN });
+  s.join({ userId: 'c', username: 'c', entryFee: 10, now: OPEN });
+  assert.equal(s.pools.size, 3);
+  assert.deepEqual([...s.pools.values()].map(p => p.entryFee).sort((x, y) => x - y), [1, 5, 10]);
+});
+
+test('an unknown stake is refused', () => {
+  const s = createStore();
+  assert.throws(() => s.join({ userId: 'a', username: 'a', entryFee: 3, now: OPEN }),
+    /entry fee must be one of/);
+});
+
+test('a player cannot enter the same slot twice', () => {
+  // Two seats in one slot means being asked to play two games in the same
+  // three minutes — and one of those seats belonged to a real entrant.
+  const s = createStore();
+  const first = s.join({ userId: 'u1', username: 'a', entryFee: 1, now: OPEN });
+  const again = s.join({ userId: 'u1', username: 'a', entryFee: 1, now: OPEN });
+  assert.equal(again.already, true);
+  assert.equal(again.pool.id, first.pool.id, 'a second click made a second entry');
+  assert.equal(again.pool.players.length, 1);
+});
+
+test('nor at a different stake in the same slot', () => {
+  const s = createStore();
+  s.join({ userId: 'u1', username: 'a', entryFee: 1, now: OPEN });
+  const other = s.join({ userId: 'u1', username: 'a', entryFee: 10, now: OPEN });
+  assert.equal(other.already, true, 'entering twice was allowed by changing stake');
+  assert.equal(other.pool.entryFee, 1, 'and it moved them to the other bracket');
+});
+
+test('queueing after the window puts you in the next slot', () => {
+  const s = createStore();
+  const { pool } = s.join({ userId: 'u1', username: 'a', entryFee: 1, now: CLOSED });
+  assert.equal(new Date(pool.slotStart).getUTCMinutes(), 20,
+    'a late player joined a tournament that had already started');
+});
+
+// ── Starting ───────────────────────────────────────────────────────────────
+
+test('a pool starts the moment it is full, without waiting for the clock', () => {
+  const s = createStore();
+  const joins = fill(s, 16);
+  const pool = joins[0].pool;
+  assert.equal(pool.state, 'running');
+  assert.equal(pool.bracket.length, F.ROUNDS);
+  assert.equal(pool.bracket[0].length, 8);
+});
+
+test('everyone is seated, and the pairs are adjacent', () => {
+  const s = createStore();
+  const pool = fill(s, 16)[0].pool;
+  const seated = pool.bracket[0].flatMap(m => [m.a, m.b]);
+  assert.equal(new Set(seated).size, 16, 'someone was seated twice or not at all');
+  assert.equal(pool.bracket[0][0].a, 'u0');
+  assert.equal(pool.bracket[0][0].b, 'u1');
+});
+
+test('a pool that never fills starts at the window close, with byes', () => {
+  const s = createStore();
+  fill(s, 5);
+  const { started, refunded } = s.closeWindow(CLOSED);
+  assert.equal(started.length, 1);
+  assert.equal(refunded.length, 0);
+  const pool = started[0];
+  assert.equal(pool.state, 'running');
+  // Five players pad to eight, so three of the first-round matches are byes.
+  assert.equal(pool.bracket[0].length, 4);
+  const byes = pool.bracket[0].filter(m => m.winner);
+  assert.equal(byes.length, 3, 'a player drawn against nobody must go through');
+});
+
+test('too few players is a refund, not a walkover', () => {
+  // Three places cannot be paid out of a pool of two, and a tournament won by
+  // turning up is not what anybody entered.
+  const s = createStore();
+  fill(s, MIN_TO_RUN - 1);
+  const { started, refunded } = s.closeWindow(CLOSED);
+  assert.equal(started.length, 0);
+  assert.equal(refunded.length, 1);
+  assert.equal(refunded[0].state, 'refunded');
+});
+
+test('the window does not close early', () => {
+  const s = createStore();
+  fill(s, 5);
+  const { started, refunded } = s.closeWindow(at(9, 4, 59));
+  assert.equal(started.length, 0, 'entry closed before the five minutes were up');
+  assert.equal(refunded.length, 0);
+});
+
+test('closing twice does not start a pool twice', () => {
+  const s = createStore();
+  fill(s, 5);
+  s.closeWindow(CLOSED);
+  const second = s.closeWindow(CLOSED + 1000);
+  assert.equal(second.started.length, 0);
+  assert.equal(second.refunded.length, 0);
+});
+
+// ── The rotation ───────────────────────────────────────────────────────────
+
+test('a pool draws four different games, fixed when it opens', () => {
+  const s = createStore();
+  const pool = fill(s, 2)[0].pool;
+  assert.equal(pool.roundGames.length, F.ROUNDS);
+  assert.equal(new Set(pool.roundGames).size, F.ROUNDS);
+});
+
+test('the rotation is the same every time it is derived', () => {
+  // Every client is told the same game for the same round. Drawn from
+  // Math.random on each server, that is two different tournaments.
+  const a = F.pickRoundGames(4, seededRng('pool-abc'));
+  const b = F.pickRoundGames(4, seededRng('pool-abc'));
+  assert.deepEqual(a, b);
+  const c = F.pickRoundGames(4, seededRng('pool-xyz'));
+  assert.notDeepEqual(a, c, 'every pool got the same rotation');
+});
+
+// ── Playing it out ─────────────────────────────────────────────────────────
+
+function playToTheEnd(store, pool, winnerOf = (a) => a) {
+  for (let guard = 0; guard < 10 && pool.state === 'running'; guard++) {
+    for (const { m, i } of store.pendingMatches(pool)) {
+      store.reportResult(pool.id, pool.round, i, winnerOf(m.a, m.b));
+    }
+    if (!store.advanceRound(pool)) break;
+  }
+  return pool;
+}
+
+test('a winner advances, and the bracket resolves to one champion', () => {
+  const s = createStore();
+  const pool = fill(s, 16)[0].pool;
+  playToTheEnd(s, pool);
+  assert.equal(pool.state, 'complete');
+  const places = F.placings(pool.bracket);
+  assert.equal(places.first, 'u0', 'the always-winning first seat did not win');
+  assert.ok(places.second && places.third);
+  assert.notEqual(places.second, places.third);
+});
+
+test('a result for a decided match is ignored, not applied twice', () => {
+  // Two clients reporting the same finish is the normal case.
+  const s = createStore();
+  const pool = fill(s, 16)[0].pool;
+  const first = s.reportResult(pool.id, 0, 0, 'u0');
+  assert.equal(first.already, false);
+  const dup = s.reportResult(pool.id, 0, 0, 'u1');
+  assert.equal(dup.already, true);
+  assert.equal(pool.bracket[0][0].winner, 'u0', 'a duplicate report changed the winner');
+  assert.equal(pool.bracket[1][0].a, 'u0');
+});
+
+test('a result naming someone not in the match is refused', () => {
+  const s = createStore();
+  const pool = fill(s, 16)[0].pool;
+  assert.equal(s.reportResult(pool.id, 0, 0, 'u9'), null,
+    'a player from another match was declared the winner');
+  assert.equal(pool.bracket[0][0].winner, null);
+});
+
+test('the round does not advance until every match in it is done', () => {
+  const s = createStore();
+  const pool = fill(s, 16)[0].pool;
+  s.reportResult(pool.id, 0, 0, 'u0');
+  assert.equal(s.advanceRound(pool), false, 'the round moved on with matches unplayed');
+  assert.equal(pool.round, 0);
+  for (const { i, m } of s.pendingMatches(pool)) s.reportResult(pool.id, 0, i, m.a);
+  assert.equal(s.advanceRound(pool), true);
+  assert.equal(pool.round, 1);
+});
+
+test('a bye does not need reporting to let the round finish', () => {
+  const s = createStore();
+  fill(s, 5);
+  const pool = s.closeWindow(CLOSED).started[0];
+  // One real match, three byes already decided.
+  const pending = s.pendingMatches(pool);
+  assert.equal(pending.length, 1);
+  s.reportResult(pool.id, 0, pending[0].i, pending[0].m.a);
+  assert.equal(s.advanceRound(pool), true, 'byes blocked the round from advancing');
+});
+
+// ── Shutdown ───────────────────────────────────────────────────────────────
+
+test('a restart hands back every pool that owes money', () => {
+  // A tournament does not survive a deploy. Losing it is acceptable; keeping
+  // the entry fees is not.
+  const s = createStore();
+  fill(s, 16);                       // running
+  fill(s, 2, { from: 500 });         // still filling
+  const owing = s.drainForShutdown();
+  assert.equal(owing.length, 2, 'a pool holding entry fees was not handed back');
+  assert.ok(owing.every(p => p.state === 'abandoned'));
+});
+
+test('a finished tournament owes nothing on restart', () => {
+  const s = createStore();
+  const pool = fill(s, 16)[0].pool;
+  playToTheEnd(s, pool);
+  assert.equal(s.drainForShutdown().length, 0,
+    'a settled tournament was refunded a second time');
+});
+
+// ── Shape ──────────────────────────────────────────────────────────────────
+
+test('any number of entrants makes a real bracket', () => {
+  for (const n of [4, 5, 7, 8, 9, 11, 16]) {
+    const s = createStore();
+    fill(s, n);
+    const pool = s.closeWindow(CLOSED).started[0] || [...s.pools.values()][0];
+    const size = nextPowerOfTwo(n);
+    assert.equal(pool.bracket[0].length, size / 2, `${n} players made a broken first round`);
+    const seated = pool.bracket[0].flatMap(m => [m.a, m.b]).filter(Boolean);
+    assert.equal(seated.length, n, `${n} players, ${seated.length} seated`);
+    playToTheEnd(s, pool);
+    assert.equal(pool.state, 'complete', `${n} players never reached a champion`);
+  }
+});

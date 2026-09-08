@@ -1,0 +1,279 @@
+/**
+ * Pools: who is in which tournament.
+ *
+ * A player picks a stake and clicks Play. This finds them a pool for the next
+ * startable slot at that stake, or opens one, and holds them there until it
+ * fills. When it fills — or when the join window closes with enough players —
+ * the bracket is drawn and play begins.
+ *
+ * State lives in memory. A tournament is a twenty-minute object: it is created,
+ * played and settled inside one slot, and a process restart mid-tournament is a
+ * refund, not a resume. Persisting it would mean keeping a bracket, sixteen
+ * socket identities and four rounds of in-flight game state consistent across a
+ * restart, which is a great deal of machinery for a thing whose whole life is
+ * shorter than a deploy takes.
+ *
+ * What that costs is stated rather than hidden: see `drainForShutdown`, which
+ * is how the refund happens, and the note on it.
+ *
+ * The rules — schedule, prizes, rotation, bracket shape — are in
+ * tournamentFormat.js and are pure. This is the part that holds state, so it is
+ * kept as small as it can be and every function takes `now` rather than reading
+ * a clock, so the whole lifecycle can be tested without waiting twenty minutes.
+ */
+const F = require('./tournamentFormat');
+
+// Fewer than this at the close and there is no tournament: three places cannot
+// be paid out of a pool of two, and a "tournament" someone wins by turning up
+// is not what anybody entered. They are refunded.
+const MIN_TO_RUN = 4;
+
+let _seq = 0;
+const nextId = () => `t${Date.now().toString(36)}${(_seq++).toString(36)}`;
+
+/**
+ * A deterministic 0..1 generator from a string seed.
+ *
+ * The game rotation has to be reproducible from something every server agrees
+ * on — the pool's own id — so that two processes, or a reconnecting client,
+ * are told the same game for the same round. Math.random would give each of
+ * them a different tournament.
+ */
+function seededRng(seed) {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return () => {
+    h += 0x6D2B79F5;
+    let t = h;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function createStore() {
+  /** @type {Map<string, object>} */
+  const pools = new Map();
+
+  const openPoolsFor = (slotStart, entryFee) =>
+    [...pools.values()].filter(p =>
+      p.state === 'filling' && p.slotStart === slotStart && p.entryFee === entryFee);
+
+  /** Is this player already entered in this slot, at any stake? */
+  function entryIn(slotStart, userId) {
+    for (const p of pools.values()) {
+      if (p.slotStart !== slotStart) continue;
+      if (p.players.some(x => x.userId === userId)) return p;
+    }
+    return null;
+  }
+
+  function createPool(slotStart, entryFee, now) {
+    const id = nextId();
+    const pool = {
+      id,
+      slotStart,
+      entryFee,
+      state: 'filling',
+      players: [],
+      createdAt: now,
+      // Drawn once, from the id, so every client is told the same rotation.
+      roundGames: F.pickRoundGames(F.ROUNDS, seededRng(id)),
+      bracket: null,
+      round: 0,
+      startedAt: null,
+    };
+    pools.set(id, pool);
+    return pool;
+  }
+
+  /**
+   * Put a player in a pool, opening one if every pool at that stake is full.
+   *
+   * Returns { pool, already } — `already` when they were in one, so a second
+   * click lands them back on the same bracket rather than entering twice or
+   * being refused.
+   */
+  function join({ userId, username, avatarUrl, entryFee, isBot = false, now }) {
+    if (!F.ENTRY_FEES.includes(entryFee)) {
+      throw new Error(`entry fee must be one of ${F.ENTRY_FEES.join(', ')}`);
+    }
+    const slot = F.joinableSlot(now);
+
+    // One entry per player per slot, at any stake. Without this a player can
+    // sit in three brackets at once and be asked to play three games in the
+    // same three minutes — and two of those seats are ones a real entrant
+    // could have had.
+    const existing = entryIn(slot.startsAt, userId);
+    if (existing) return { pool: existing, already: true };
+
+    // At most one pool per stake per slot is ever filling, because a pool
+    // starts the instant it reaches sixteen and stops being a candidate. So
+    // there is nothing to choose between and no ordering to get right — which
+    // is also what makes "as many pools as needed" work: the seventeenth
+    // player opens the next one and everyone after joins that.
+    const open = openPoolsFor(slot.startsAt, entryFee).filter(p => p.players.length < F.POOL_SIZE);
+    const pool = open[0] || createPool(slot.startsAt, entryFee, now);
+
+    pool.players.push({ userId, username, avatarUrl: avatarUrl || null, isBot, joinedAt: now });
+    if (pool.players.length >= F.POOL_SIZE) startPool(pool, now);
+    return { pool, already: false };
+  }
+
+  /**
+   * Move a winner into their next slot.
+   *
+   * Shared by reported results AND by byes. Byes used to set a winner without
+   * advancing them — the only code that advanced anyone was the result
+   * handler — so with five players the three players drawn against nobody won
+   * their first round and never appeared in the second. The bracket sat with
+   * an empty round two and no match left to report, and the tournament stopped
+   * dead with nothing to say what had gone wrong.
+   */
+  function advanceWinner(pool, roundIndex, matchIndex, winnerId) {
+    const next = F.advanceTo(roundIndex, matchIndex);
+    if (next.round < pool.bracket.length) {
+      pool.bracket[next.round][next.match][next.side] = winnerId;
+    } else {
+      pool.state = 'complete';
+    }
+  }
+
+  /** Draw the bracket and begin. */
+  function startPool(pool, now) {
+    if (pool.state !== 'filling') return pool;
+    const n = pool.players.length;
+    const size = nextPowerOfTwo(n);
+    pool.bracket = F.emptyBracket(size);
+
+    // Byes are SPREAD, one per match, not appended as padding.
+    //
+    // Padding the seat list to a power of two and pairing off adjacent seats
+    // puts every bye at the end, so five players in an eight-bracket produce
+    // three real seats, one bye — and one match with nobody in it at all. That
+    // match can never be reported, so its round never completes and the
+    // tournament stops dead on the first round.
+    //
+    // Giving the first `byes` matches a single player each guarantees every
+    // match has at least one. It always fits: size is the next power of two
+    // above n, so byes = size - n is always fewer than the size/2 matches.
+    const ids = pool.players.map(p => p.userId);
+    const matches = size / 2;
+    const byes = size - n;
+    let k = 0;
+    for (let i = 0; i < matches; i++) {
+      const slot = pool.bracket[0][i];
+      if (i < byes) {
+        slot.a = ids[k++] ?? null;
+        slot.b = null;
+        // Drawn against nobody: through without playing, and advanced now —
+        // nothing will ever report this match.
+        if (slot.a) { slot.winner = slot.a; advanceWinner(pool, 0, i, slot.a); }
+      } else {
+        slot.a = ids[k++] ?? null;
+        slot.b = ids[k++] ?? null;
+      }
+    }
+
+    pool.state = 'running';
+    pool.round = 0;
+    pool.startedAt = now;
+    return pool;
+  }
+
+  /**
+   * Close entry on every pool whose window has passed.
+   *
+   * Returns what happened to each, because the caller has to refund the ones
+   * that never filled and nothing else knows they existed.
+   */
+  function closeWindow(now) {
+    const started = [];
+    const refunded = [];
+    for (const pool of pools.values()) {
+      if (pool.state !== 'filling') continue;
+      if (now < pool.slotStart + F.JOIN_WINDOW_MS) continue;
+      if (pool.players.length >= MIN_TO_RUN) {
+        startPool(pool, now);
+        started.push(pool);
+      } else {
+        pool.state = 'refunded';
+        refunded.push(pool);
+      }
+    }
+    return { started, refunded };
+  }
+
+  /**
+   * Record a result and advance the winner.
+   *
+   * Idempotent on the match: a duplicate report of a match already decided is
+   * ignored rather than advancing the same player twice, because two clients
+   * reporting the same finish is the normal case, not the exceptional one.
+   */
+  function reportResult(poolId, roundIndex, matchIndex, winnerId, scores = null) {
+    const pool = pools.get(poolId);
+    if (!pool || pool.state !== 'running') return null;
+    const match = pool.bracket[roundIndex]?.[matchIndex];
+    if (!match) return null;
+    if (match.winner) return { pool, match, already: true };
+    if (winnerId !== match.a && winnerId !== match.b) return null;
+
+    match.winner = winnerId;
+    match.scores = scores;
+
+    advanceWinner(pool, roundIndex, matchIndex, winnerId);
+    return { pool, match, already: false };
+  }
+
+  /** Every match in the current round that still needs playing. */
+  function pendingMatches(pool) {
+    const round = pool.bracket?.[pool.round] || [];
+    return round
+      .map((m, i) => ({ m, i }))
+      .filter(({ m }) => !m.winner && m.a && m.b);
+  }
+
+  /** Move to the next round once every match in this one is decided. */
+  function advanceRound(pool) {
+    const round = pool.bracket?.[pool.round] || [];
+    if (round.some(m => !m.winner)) return false;
+    if (pool.round + 1 >= pool.bracket.length) { pool.state = 'complete'; return false; }
+    pool.round += 1;
+    return true;
+  }
+
+  /**
+   * Everything still live, for a restart.
+   *
+   * A tournament does not survive a deploy: its bracket, its sockets and its
+   * in-flight rounds are all in this process. Rather than pretend otherwise,
+   * this hands back every pool that has taken money and not paid it out, so the
+   * caller can refund entries before the process goes. Losing the tournament is
+   * acceptable; keeping the entry fee is not.
+   */
+  function drainForShutdown() {
+    const owing = [...pools.values()].filter(p => p.state === 'filling' || p.state === 'running');
+    for (const p of owing) p.state = 'abandoned';
+    return owing;
+  }
+
+  return {
+    pools,
+    join, startPool, closeWindow, reportResult, pendingMatches, advanceRound,
+    drainForShutdown, entryIn,
+    get: (id) => pools.get(id) || null,
+    clear: () => pools.clear(),
+  };
+}
+
+function nextPowerOfTwo(n) {
+  let p = 1;
+  while (p < n) p *= 2;
+  return Math.max(2, p);
+}
+
+module.exports = { createStore, seededRng, nextPowerOfTwo, MIN_TO_RUN };
