@@ -71,13 +71,40 @@ export function useRevealOnOpen(open) {
   const ref = useRef(null);
   useEffect(() => {
     if (!open) return;                 // closing it must not scroll too
+
     // A frame, so the panel has laid out and has a height to scroll to.
     const id = requestAnimationFrame(() => {
+      const el = ref.current;
+      if (!el) return;
       const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-      // block:'end' rather than 'start' — the panel is the last thing on the
-      // screen, so aligning its bottom shows all of it without throwing the
-      // stake off the top.
-      ref.current?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'end' });
+      const behavior = reduced ? 'auto' : 'smooth';
+
+      // Scroll the CONTAINER to its end rather than asking the panel to bring
+      // itself into view.
+      //
+      // scrollIntoView works from measured geometry, and App wraps
+      // non-interactive pages in a CSS `zoom` container. Zoom is not part of
+      // the transform pipeline the scroll math accounts for, so the browser
+      // computes an offset in unzoomed pixels and lands somewhere else — the
+      // panel opens and nothing appears to move. Scrolling to the end asks for
+      // no geometry at all and cannot be thrown off by it.
+      //
+      // The end is the right target because this panel is the last thing on
+      // the bet screen by construction. If something is ever added below it,
+      // this reveals that instead, which is still not nothing.
+      let box = el.parentElement;
+      while (box && box !== document.body) {
+        const oy = getComputedStyle(box).overflowY;
+        if ((oy === 'auto' || oy === 'scroll') && box.scrollHeight > box.clientHeight) break;
+        box = box.parentElement;
+      }
+
+      if (box && box !== document.body) {
+        box.scrollTo({ top: box.scrollHeight, behavior });
+      } else {
+        // No scrolling ancestor: the page itself is the scroller.
+        window.scrollTo({ top: document.documentElement.scrollHeight, behavior });
+      }
     });
     return () => cancelAnimationFrame(id);
   }, [open]);

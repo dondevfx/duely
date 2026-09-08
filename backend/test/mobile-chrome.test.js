@@ -108,10 +108,26 @@ test('opening the panel brings it into view, on every bet screen', () => {
   assert.match(MORE, /export function useRevealOnOpen/, 'the behaviour is not shared');
 
   const hook = MORE.slice(MORE.indexOf('export function useRevealOnOpen'));
-  assert.match(hook, /^\s*ref\.current\?\.scrollIntoView\(\{/m,
-    'nothing scrolls, or the call is disabled in place');
-  assert.match(hook, /block: 'end'/,
-    "block:'start' would push the stake off the top; the panel is the last thing on screen");
+  // Scrolls the CONTAINER to its end, rather than asking the panel to bring
+  // itself into view.
+  //
+  // It used scrollIntoView, which works from measured geometry — and App wraps
+  // non-interactive pages in a CSS `zoom` container. Zoom is not part of the
+  // transform pipeline that scroll math accounts for, so the browser computes
+  // an offset in unzoomed pixels and lands somewhere else: the panel opens and
+  // nothing appears to move. Scrolling to the end asks for no geometry at all.
+  // Comments stripped: the note explaining why scrollIntoView was dropped
+  // names it, and a search over the prose finds its own explanation.
+  const hookCode = hook
+    .split(String.fromCharCode(10))
+    .filter(l => !l.trim().startsWith('//'))
+    .join(' ');
+  assert.ok(!/scrollIntoView/.test(hookCode),
+    'scrollIntoView is measured against a zoomed ancestor and lands short');
+  assert.match(hook, /scrollTo\(\{ top: box\.scrollHeight/,
+    'nothing scrolls the container that actually holds the panel');
+  assert.match(hook, /overflowY/,
+    'it must find the scrolling ancestor rather than assume one');
   assert.match(hook, /requestAnimationFrame/,
     'without a frame the panel has no height yet and the scroll lands short');
   assert.match(hook, /if \(!open\) return/, 'closing it must not scroll too');
