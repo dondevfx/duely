@@ -49,7 +49,20 @@ const INTERMISSION_MS = 8000;
 // arrive before it is forfeited.
 const CONNECT_GRACE_MS = 20 * 1000;
 
-function createRunner({ io, supabase, pools, engines = ENGINES, log = console } = {}) {
+// The clock, in one place and overridable.
+//
+// Not for tuning — these are the spec — but because the deadline is three
+// minutes long and a test that cannot reach it cannot check what happens when
+// it passes. That path decides matches and pays out of them, so it is not one
+// to leave unexercised.
+const DEFAULT_TIMINGS = {
+  match: MATCH_MS, sudden: SUDDEN_MS, pick: PICK_MS,
+  intermission: INTERMISSION_MS, grace: CONNECT_GRACE_MS,
+  ready: 6000, overrun: 3000,
+};
+
+function createRunner({ io, supabase, pools, engines = ENGINES, log = console, timings = {} } = {}) {
+  const T = { ...DEFAULT_TIMINGS, ...timings };
   /** poolId → runtime state that is not part of the bracket itself */
   const live = new Map();
 
@@ -126,7 +139,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console } 
     }
 
     pushPool(pool, { started: true });
-    scheduleRound(pool, PICK_MS);
+    scheduleRound(pool, T.pick);
   }
 
   function scheduleRound(pool, delay) {
@@ -184,7 +197,16 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console } 
 
   function startMatch(pool, index, match, game, { sudden = false } = {}) {
     const st = stateOf(pool.id);
-    const key = `${pool.round}:${index}${sudden ? ':sd' : ''}`;
+    // The round is fixed HERE, not read again when a timer fires.
+    //
+    // Every callback below outlives the round that started it — a deadline
+    // three minutes out, a grace period, a bot's pause. Reading pool.round at
+    // that point gives whatever round the tournament has since reached, so a
+    // timeout from round one arriving during round two would decide a round
+    // two match that nobody had played yet. It is the same reason onResult
+    // takes a round rather than assuming the current one.
+    const round = pool.round;
+    const key = `${round}:${index}${sudden ? ':sd' : ''}`;
     if (st.matches.has(key)) return;
 
     const a = playerOf(pool, match.a);
@@ -196,12 +218,17 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console } 
     // around the player over the course of the round rather than the whole
     // round completing the instant it starts.
     if (a.isBot && b.isBot) {
-      st.matches.set(key, { bots: true });
-      const span = sudden ? SUDDEN_MS : MATCH_MS;
-      const wait = sudden ? 4000 : 25000 + Math.floor(Math.random() * 45000);
+      const rec = { bots: true, done: false };
+      st.matches.set(key, rec);
+      const span = sudden ? T.sudden : T.match;
+      const wait = sudden ? Math.min(4000, span) : 25000 + Math.floor(Math.random() * 45000);
       later(pool.id, () => {
+        // Unlike a played match there is no engine to say it is over, so this
+        // is the only thing that stops a bot result landing on a match the
+        // bracket has already decided some other way — a forfeit, most often.
+        if (rec.done) return;
         const winner = Math.random() < 0.5 ? a.userId : b.userId;
-        onResult({ poolId: pool.id, round: pool.round, match: index, winnerId: winner, isDraw: false, sudden });
+        onResult({ poolId: pool.id, round, match: index, winnerId: winner, isDraw: false, sudden });
       }, Math.max(2000, Math.min(wait, span - 5000)));
       return;
     }
@@ -212,7 +239,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console } 
     const sa = socketsOf(a.userId)[0] || null;
     const sb = socketsOf(b.userId)[0] || null;
     if ((!a.isBot && !sa) || (!b.isBot && !sb)) {
-      st.matches.set(key, { waitingFor: Date.now() + CONNECT_GRACE_MS });
+      st.matches.set(key, { waitingFor: Date.now() + T.grace });
       later(pool.id, () => {
         st.matches.delete(key);
         const stillA = a.isBot || socketsOf(a.userId).length > 0;
@@ -220,15 +247,15 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console } 
         if (stillA && stillB) return startMatch(pool, index, match, game, { sudden });
         // Both gone: a coin flip is the only thing left that ends it.
         const winner = stillA ? a.userId : stillB ? b.userId : (Math.random() < 0.5 ? a.userId : b.userId);
-        onResult({ poolId: pool.id, round: pool.round, match: index, winnerId: winner, isDraw: false, sudden });
-      }, CONNECT_GRACE_MS);
+        onResult({ poolId: pool.id, round, match: index, winnerId: winner, isDraw: false, sudden });
+      }, T.grace);
       return;
     }
 
     const engine = engines[game];
     if (!engine) {
       log.error('[tournament] no engine for', game);
-      return onResult({ poolId: pool.id, round: pool.round, match: index, winnerId: a.userId, isDraw: false, sudden });
+      return onResult({ poolId: pool.id, round, match: index, winnerId: a.userId, isDraw: false, sudden });
     }
 
     const p1 = seatFor(pool, a.userId, sa?.id || `bot_${a.userId}`);
@@ -250,15 +277,15 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console } 
     // so deliberately rather than by omission.
     const room = engine.room?.(roomId);
     if (room) {
-      room.tournament = { poolId: pool.id, round: pool.round, match: index };
+      room.tournament = { poolId: pool.id, round, match: index };
       room.soloRun = false;
       if (room.isSolo) room.demoWin = true;
       room.feesDeducted = true;
     }
 
-    hook.register(roomId, { poolId: pool.id, round: pool.round, match: index, a: a.userId, b: b.userId, sudden });
+    hook.register(roomId, { poolId: pool.id, round, match: index, a: a.userId, b: b.userId, sudden });
 
-    const deadline = Date.now() + (sudden ? SUDDEN_MS : MATCH_MS);
+    const deadline = Date.now() + (sudden ? T.sudden : T.match);
     const rec = { roomId, game, deadline, sudden, begun: false, done: false };
     st.matches.set(key, rec);
 
@@ -275,14 +302,14 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console } 
     if (sa) {
       sa.join(roomId);
       sa.emit('tournament_match', {
-        poolId: pool.id, round: pool.round, match: index, game, roomId,
+        poolId: pool.id, round, match: index, game, roomId,
         sudden, deadline, opponent: seen(p2, b.isBot),
       });
     }
     if (sb) {
       sb.join(roomId);
       sb.emit('tournament_match', {
-        poolId: pool.id, round: pool.round, match: index, game, roomId,
+        poolId: pool.id, round, match: index, game, roomId,
         sudden, deadline, opponent: seen(p1, a.isBot),
       });
     }
@@ -302,12 +329,12 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console } 
     };
     // If a screen never reports in, start anyway. The deadline is the real
     // guarantee, and a player who is not there loses on it.
-    later(pool.id, go, 6000);
+    later(pool.id, go, T.ready);
 
     later(pool.id, () => {
       if (rec.done) return;
-      forceMatch(pool, index, key, engine, roomId, a, b, sudden);
-    }, (sudden ? SUDDEN_MS : MATCH_MS) + 3000);
+      forceMatch(pool, round, index, key, engine, roomId, a, b, sudden);
+    }, (sudden ? T.sudden : T.match) + T.overrun);
   }
 
   /** Somebody's game screen has loaded and is listening. */
@@ -324,7 +351,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console } 
    * exactly this reason — and on a draw when it knows nothing, which sends it
    * to sudden death like any other draw.
    */
-  function forceMatch(pool, index, key, engine, roomId, a, b, sudden) {
+  function forceMatch(pool, round, index, key, engine, roomId, a, b, sudden) {
     let winner = null;
     try {
       const room = engine.room?.(roomId);
@@ -344,7 +371,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console } 
     try { engine.del?.(roomId); } catch { /* the room may already be gone */ }
     io.to(roomId).emit('tournament_match_expired', { roomId });
     onResult({
-      poolId: pool.id, round: pool.round, match: index,
+      poolId: pool.id, round, match: index,
       winnerId: winner, isDraw: !winner, sudden, forced: true,
     });
   }
@@ -353,7 +380,6 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console } 
   function onResult({ poolId, round, match, winnerId, isDraw, sudden = false, forced = false }) {
     const pool = pools.get(poolId);
     if (!pool || pool.state !== 'running') return;
-    if (round !== pool.round) return;      // a result from a round already left behind
 
     const st = stateOf(poolId);
     const rec = st.matches.get(`${round}:${match}${sudden ? ':sd' : ''}`);
@@ -367,7 +393,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console } 
       // and a bracket that cannot resolve a tie is a bracket that never pays.
       if (!sudden) {
         broadcast(pool, 'tournament_sudden_death', {
-          poolId, round, match, seconds: SUDDEN_MS / 1000, players: [m.a, m.b],
+          poolId, round, match, seconds: Math.round(T.sudden / 1000), players: [m.a, m.b],
         });
         return startMatch(pool, match, m, pool.roundGames[round], { sudden: true });
       }
@@ -389,7 +415,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console } 
     const moved = pools.advanceRound(pool);
     if (moved) {
       st.matches.clear();
-      return scheduleRound(pool, INTERMISSION_MS);
+      return scheduleRound(pool, T.intermission);
     }
     if (pool.state === 'complete') settle(pool);
   }
@@ -520,7 +546,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console } 
   return {
     tick, ready, onResult, beginPool, startRound, settle,
     _live: live,
-    MATCH_MS, SUDDEN_MS, INTERMISSION_MS, PICK_MS,
+    timings: T,
   };
 }
 

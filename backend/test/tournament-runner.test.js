@@ -244,6 +244,71 @@ test('a result for a round already finished is ignored', () => {
   assert.equal(JSON.stringify(pool.bracket[1]), snapshot, 'a stale result changed the next round');
 });
 
+test('a timeout from a finished round cannot decide the round after it', async () => {
+  // The dangerous case, and the reason both startMatch and onResult carry a
+  // round rather than reading the current one. A deadline set in round one
+  // fires three minutes later, by which time the tournament is in round two —
+  // and the match at that index in round two has not been played.
+  const pools = createStore();
+  const io = fakeIo();
+  const engines = fakeEngines();
+  const runner = createRunner({ io, supabase: null, pools, engines, log: { error() {} } });
+
+  const pool = fill(pools, 16, { entryFee: 1 });
+  for (const p of pool.players) io._connect(p.userId);
+  runner.startRound(pool);
+  for (let i = 0; i < 8; i++) {
+    runner.onResult({ poolId: pool.id, round: 0, match: i, winnerId: pool.bracket[0][i].a, isDraw: false });
+  }
+  assert.equal(pool.round, 1, 'the bracket did not move on');
+
+  // The straggler lands now, naming the round it belonged to.
+  runner.onResult({ poolId: pool.id, round: 0, match: 2, winnerId: pool.bracket[0][2].b, isDraw: false, forced: true });
+
+  assert.ok(!pool.bracket[1][2].winner, 'a stale timeout decided an unplayed match');
+});
+
+test('a deadline decides the match it was set for, not whichever round is current', async () => {
+  // The dangerous case. A deadline set in round one fires three minutes later,
+  // by which time the tournament is in round two — and reading the round at
+  // that moment would decide a round-two match nobody had played. The round is
+  // fixed when the match starts, which is why startMatch captures it.
+  const pools = createStore();
+  const io = fakeIo();
+  const engines = fakeEngines();
+  const runner = createRunner({
+    io, supabase: null, pools, engines, log: { error() {} },
+    // Short enough to actually reach, which is the whole point.
+    timings: { match: 40, overrun: 10, ready: 5, intermission: 5, pick: 5 },
+  });
+
+  const pool = fill(pools, 16, { entryFee: 1 });
+  for (const p of pool.players) io._connect(p.userId);
+  runner.startRound(pool);
+
+  // Every match but one is reported at once, so the round is one result away
+  // from advancing when the straggler's deadline lands.
+  for (let i = 1; i < 8; i++) {
+    runner.onResult({ poolId: pool.id, round: 0, match: i, winnerId: pool.bracket[0][i].a, isDraw: false });
+  }
+  assert.equal(pool.round, 0, 'the round advanced with a match still open');
+
+  // The open match has a score on it but no result, which is exactly what a
+  // player who freezes or closes the tab leaves behind. The deadline decides
+  // it on what the room knows.
+  const open = engines._made[0];
+  const room = engines._rooms.get(open.roomId);
+  room.pingScores[open.p1.socketId] = 700;
+  room.pingScores[open.p2.socketId] = 200;
+
+  await new Promise(r => setTimeout(r, 150));
+
+  assert.equal(pool.bracket[0][0].winner, open.p1.userId, 'the deadline did not decide it on the score');
+  assert.equal(pool.round, 1, 'the round did not move on once it was complete');
+  // And nothing in round two was decided by it.
+  assert.equal(pool.bracket[1].filter(m => m.winner).length, 0, 'a deadline decided an unplayed match');
+});
+
 test('the engines are told to start only once both screens have reported in', () => {
   const pools = createStore();
   const io = fakeIo();
