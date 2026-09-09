@@ -14,6 +14,7 @@ const { unlockUser } = require('./lockService');
 const { v4: uuidv4 } = require('uuid');
 const { updateHighscore } = require('./highscoreService');
 const gameEvents = require('./gameEvents');
+const tournamentHook = require('./tournamentHook');
 
 // A score here is a count of blocks, not points, so the numbers are tiny
 // compared with Block Burst and the rate limit can be correspondingly tight.
@@ -394,6 +395,8 @@ async function handleTowerComplete(io, supabase, roomId, socketId, score = 0, ta
 
     io.emit('active_game_ended', { id: roomId });
     gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId) });
+    // A tournament round against a bot. See blockBlastEngine.
+    tournamentHook.settled(roomId, { winnerId: humanWon ? player.userId : (room.players.find(p => p.isBot)?.userId || null), loserId: humanWon ? (room.players.find(p => p.isBot)?.userId || null) : player.userId });
     io.to(roomId).emit('tower_result', {
       isSolo: true,
       vsBot: true,
@@ -517,6 +520,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
 
   io.emit('active_game_ended', { id: roomId });
   gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId) });
+  tournamentHook.settled(roomId, { winnerId: isDraw ? null : winner.userId, loserId: isDraw ? null : loser.userId, isDraw, scores: { [winner.userId]: winnerScore, [loser.userId]: loserScore } });
   io.to(roomId).emit('tower_result', {
     isDraw,
     isSolo: false,

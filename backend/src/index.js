@@ -18,6 +18,7 @@ const adminRoutes = require('./routes/admin');
 const webhookRoutes = require('./routes/webhooks');
 const affiliateRoutes = require('./routes/affiliate');
 const tournamentRoutes = require('./routes/tournaments');
+const { refundPool: refundTournamentPool } = require('./routes/tournaments');
 const rakebackRoutes = require('./routes/rakeback');
 const kycRoutes      = require('./routes/kyc');
 const avatarRoutes   = require('./routes/avatar');
@@ -109,7 +110,27 @@ app.use('/api/reports', reportRoutes(supabase));
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.get('/ping',   (_req, res) => res.send('pong'));
 
-registerSocketHandlers(io, supabase);
+// The thing that actually plays the tournaments. It is created here, with the
+// same pool store the routes use, and ticked once a second: closing entry
+// windows, starting rounds, and paying out.
+//
+// One second is not a coincidence. Everything time-driven inside a tournament
+// hangs off this tick rather than a timer per pool, so a pool that appears
+// between ticks is still picked up, and nothing depends on a timer that a
+// restart threw away.
+const tournamentRunner = require('./services/tournamentRunner').createRunner({
+  io, supabase, pools: tournamentPools,
+});
+const tournamentTick = setInterval(() => {
+  try {
+    tournamentRunner.tick((pool) => refundTournamentPool(supabase, pool));
+  } catch (e) {
+    console.error('[tournament] tick:', e.message);
+  }
+}, 1000);
+if (tournamentTick.unref) tournamentTick.unref();
+
+registerSocketHandlers(io, supabase, { pools: tournamentPools, runner: tournamentRunner });
 
 // JSON 404 for any unmatched API route — prevents Express returning HTML pages
 app.use((_req, res) => res.status(404).json({ error: 'Route not found' }));

@@ -134,7 +134,10 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
     // takes nothing from anyone and pays nothing out, and settlement has to
     // read that from the pool rather than from whoever happened to open it.
     if (vsBot) pool.free = true;
-    if (vsBot || demo) fillWithBots(pool, now, pools);
+    // Play vs Bot is a test button and starts at once. A demo account is a
+    // showcase, so its bracket fills the way a real one does — see below.
+    if (vsBot) fillWithBots(pool, now, pools);
+    else if (demo) fillWithBots(pool, now, pools, { stagger: true, io });
 
     // `started` decides whether the client leaves the bet screen. A bot or
     // demo bracket fills instantly and has something to watch; a real entry
@@ -145,6 +148,7 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
       already: false,
       entryFee: pool.entryFee,
       bots: vsBot || demo,
+      filling: demo && !vsBot,
       free: !!pool.free,
       started: pool.state === 'running',
       players: pool.players.length,
@@ -213,19 +217,45 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
  * They carry ordinary-looking names and no avatar, because the point of a
  * demo account's tournament is that it looks like a real one. `isBot` never
  * leaves the server — see publicPool.
+ *
+ * Seated directly into THIS pool rather than through join(). join() picks
+ * whichever pool at that stake is taking entries, which is not necessarily
+ * this one — so a demo account entering while a real bracket was filling
+ * used to pack fifteen bots into the real players' tournament and start it
+ * early, with the people who were waiting drawn against bots.
  */
-function fillWithBots(pool, now, pools) {
-  while (pool.state === 'filling' && pool.players.length < F.POOL_SIZE) {
-    pools.join({
-      userId: `bot:${pool.id}:${pool.players.length}`,
-      username: randomFunnyName(),
-      avatarUrl: null,
-      entryFee: pool.entryFee,
-      isBot: true,
-      free: true,
-      now,
-    });
+function fillWithBots(pool, now, pools, { stagger = false, io = null } = {}) {
+  const one = () => pools.seat(pool, {
+    userId: `bot:${pool.id}:${pool.players.length}`,
+    username: randomFunnyName(),
+    avatarUrl: null,
+    isBot: true,
+    now: Date.now(),
+  });
+
+  if (!stagger) {
+    while (pool.state === 'filling' && pool.players.length < F.POOL_SIZE) one();
+    return;
   }
+
+  // Arriving one at a time, over about eight seconds.
+  //
+  // Sixteen players appearing in the same instant does not read as a
+  // tournament filling up; it reads as a list being printed. A demo account is
+  // there to be shown the real thing, and the real thing is other people
+  // turning up one after another — so they do, at an uneven pace, and the
+  // bracket is drawn at the moment the sixteenth arrives exactly as it would
+  // be for anyone else.
+  const seatNext = () => {
+    if (pool.state !== 'filling' || pool.players.length >= F.POOL_SIZE) return;
+    one();
+    if (io) io.emit('tournament_filling', { poolId: pool.id, players: pool.players.length, size: F.POOL_SIZE });
+    if (pool.players.length < F.POOL_SIZE) {
+      const t = setTimeout(seatNext, 250 + Math.floor(Math.random() * 700));
+      if (t.unref) t.unref();
+    }
+  };
+  seatNext();
 }
 
 async function refund(supabase, userId, amount) {
@@ -261,3 +291,12 @@ function publicPool(p) {
 }
 
 module.exports.publicPool = publicPool;
+// Exported for the runner's clock, which is what discovers a pool that never
+// filled — the routes never see that moment.
+module.exports.refundPool = async function refundPool(supabase, pool) {
+  if (pool.free || !(pool.entryFee > 0)) return;
+  for (const p of pool.players) {
+    if (p.isBot) continue;
+    await refund(supabase, p.userId, pool.entryFee);
+  }
+};

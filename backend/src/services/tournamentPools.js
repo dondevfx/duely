@@ -118,9 +118,27 @@ function createStore() {
     const open = openPoolsFor(slot.startsAt, entryFee).filter(p => p.players.length < F.POOL_SIZE);
     const pool = open[0] || createPool(slot.startsAt, entryFee, now);
 
+    seat(pool, { userId, username, avatarUrl, isBot, now });
+    return { pool, already: false };
+  }
+
+  /**
+   * Put a player in THIS pool.
+   *
+   * join() chooses a pool; this one is told which. That distinction matters
+   * for the bots that top up a demo bracket: join() hands back whichever pool
+   * at that stake is currently taking entries, which is not necessarily the
+   * one the demo account just opened — so filling with bots through join()
+   * packed fifteen of them into whatever real bracket happened to be waiting,
+   * started it early, and drew the people who were waiting against bots.
+   */
+  function seat(pool, { userId, username, avatarUrl = null, isBot = false, now }) {
+    if (pool.state !== 'filling') return pool;
+    if (pool.players.length >= F.POOL_SIZE) return pool;
+    if (pool.players.some(p => p.userId === userId)) return pool;
     pool.players.push({ userId, username, avatarUrl: avatarUrl || null, isBot, joinedAt: now });
     if (pool.players.length >= F.POOL_SIZE) startPool(pool, now);
-    return { pool, already: false };
+    return pool;
   }
 
   /**
@@ -314,7 +332,7 @@ function createStore() {
 
   return {
     pools,
-    join, leave, startPool, closeWindow, reportResult, pendingMatches, advanceRound,
+    join, seat, leave, startPool, closeWindow, reportResult, pendingMatches, advanceRound,
     drainForShutdown, entryIn,
     get: (id) => pools.get(id) || null,
     clear: () => pools.clear(),

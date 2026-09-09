@@ -25,6 +25,7 @@ const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings } =
 const { updateHighscorePair } = require('./highscoreService');
 const gameEvents = require('./gameEvents');
 const { v4: uuidv4 } = require('uuid');
+const tournamentHook = require('./tournamentHook');
 
 const MAX_RUN_MS = 15 * 60_000; // sanity ceiling — no run is 15 minutes
 // A live client pings progress ~3x/second. If pings stop while the player is
@@ -473,6 +474,11 @@ async function _resolveFromTimes(io, supabase, roomId) {
       unlockUser(human.userId);
       io.emit('active_game_ended', { id: roomId });
       gameEvents.emit('game_ended', { socketIds: [human.socketId] });
+      // Practice never happens inside a bracket — see tournamentRunner,
+      // which clears soloRun on the rooms it makes. Reported as a draw if
+      // it somehow does, so the round goes to sudden death rather than
+      // waiting out its deadline.
+      tournamentHook.settled(roomId, { isDraw: true });
       setTimeout(() => deleteCarDashRoom(roomId), 5_000);
       io.to(roomId).emit('car_dash_result', { soloRun: true, ms, score });
     }
@@ -564,6 +570,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
 
   io.emit('active_game_ended', { id: roomId });
   gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId).filter(Boolean) });
+  tournamentHook.settled(roomId, { winnerId: isDraw ? null : winner.userId, loserId: isDraw ? null : loser.userId, isDraw });
   // Drop the room shortly after settling so finished rooms can't accumulate and
   // can't be re-resolved by a late event.
   setTimeout(() => deleteCarDashRoom(roomId), 5_000);

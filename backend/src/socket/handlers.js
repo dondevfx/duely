@@ -100,7 +100,7 @@ const { lockUser, unlockUser, isLocked } = require('../services/lockService');
 const { updateElo: _updateElo } = require('../services/eloService');
 const { verifyToken } = require('../middleware/auth');
 
-module.exports = function registerSocketHandlers(io, supabase) {
+module.exports = function registerSocketHandlers(io, supabase, tournaments = null) {
   // ── Shared private-room registry (all game types) ─────────────
   const pendingPrivateRooms = new Map(); // code → { gameType, p1, createdAt }
 
@@ -400,6 +400,21 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
   io.on('connection', (socket) => {
     let authenticatedUser = null;
+
+    /**
+     * A tournament game screen has mounted and is listening.
+     *
+     * The runner sends `tournament_match` to move the bracket screen onto the
+     * game, and the game's own match_found — the one the game screen actually
+     * listens for — has to arrive AFTER that screen exists. Rather than guess
+     * how long a route change takes, the countdown waits for both players to
+     * say they are there. If one never does, the runner starts anyway after a
+     * few seconds and the match deadline settles it.
+     */
+    socket.on('tournament_ready', ({ poolId, roomId } = {}) => {
+      if (!authenticatedUser || !tournaments?.runner) return;
+      tournaments.runner.ready(poolId, roomId, authenticatedUser.userId);
+    });
 
     // Send current player counts snapshot to new connection
     socket.emit('player_counts', { counts: _buildPlayerCounts() });

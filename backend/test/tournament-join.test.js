@@ -145,17 +145,37 @@ test('a bot tournament fills and starts immediately', async () => {
   } finally { server.close(); }
 });
 
-test('a demo account fills up straight away, without asking for bots', async () => {
+test('a demo account fills up on its own, one entrant at a time', async () => {
   // A demo account is a showcase. Sitting in a queue for fifteen minutes
-  // waiting for fifteen real people is the opposite of one.
+  // waiting for fifteen real people is the opposite of one — but sixteen
+  // players appearing in the same instant does not read as a tournament
+  // filling up either, it reads as a list being printed. So they arrive one
+  // after another, and the bracket is drawn on the sixteenth exactly as it
+  // would be for anyone else.
   const { server, port, pools } = boot({ demo: true });
   try {
     const res = await join(port, { entryFee: 1 });
     const pool = pools.get(res.body.poolId);
-    assert.equal(pool.players.length, F.POOL_SIZE);
+    assert.ok(pool.players.length >= 2, 'nobody had arrived by the time it answered');
+    assert.ok(pool.players.length < F.POOL_SIZE, 'the whole bracket appeared at once');
+    assert.equal(pool.state, 'filling');
+
+    const filled = await waitFor(() => pool.players.length === F.POOL_SIZE, 15000);
+    assert.ok(filled, `only reached ${pool.players.length}`);
     assert.equal(pool.state, 'running');
   } finally { server.close(); }
 });
+
+// Polls rather than sleeping a fixed amount: the pace is deliberately uneven,
+// so any single sleep is either flaky or slow.
+async function waitFor(cond, ms) {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+    if (cond()) return true;
+    await new Promise(r => setTimeout(r, 25));
+  }
+  return false;
+}
 
 test('a demo account still pays its entry — only the filling is faked', async () => {
   // The bracket filling instantly is a convenience; not charging would make

@@ -7,6 +7,7 @@ const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settl
 const { unlockUser } = require('./lockService');
 const { updateHighscore } = require('./highscoreService');
 const gameEvents = require('./gameEvents');
+const tournamentHook = require('./tournamentHook');
 
 const MAX_GUESSES  = 6;
 const WORD_LENGTH  = 5;
@@ -554,6 +555,7 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
   io.to(p2.socketId).emit('wordle_result', resultFor(p2));
 
   gameEvents.emit('game_ended', { socketIds: [p1.socketId, p2.socketId] });
+  tournamentHook.settled(room.roomId, { winnerId: winnerPlayer?.userId || null, loserId: loserPlayer?.userId || null, isDraw });
 
   if (fee > 0 && winner) {
     const payout = currency === 'diamonds' ? fee * 2 * 0.95 : parseFloat((fee * 2 * 0.95).toFixed(4));

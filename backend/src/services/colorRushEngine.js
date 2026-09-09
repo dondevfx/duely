@@ -35,6 +35,7 @@ const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings } =
 const { updateHighscore } = require('./highscoreService');
 const gameEvents = require('./gameEvents');
 const { v4: uuidv4 } = require('uuid');
+const tournamentHook = require('./tournamentHook');
 
 const MAX_RUN_MS = 15 * 60_000; // sanity ceiling — no run is 15 minutes
 const STALL_MS   = 15_000;
@@ -395,6 +396,8 @@ async function _resolveFromTimes(io, supabase, roomId) {
       unlockUser(human.userId);
       io.emit('active_game_ended', { id: roomId });
       gameEvents.emit('game_ended', { socketIds: [human.socketId] });
+      // See carDashEngine: a bracket room is never a practice run.
+      tournamentHook.settled(roomId, { isDraw: true });
       setTimeout(() => deleteColorRushRoom(roomId), 5_000);
       io.to(roomId).emit('color_rush_result', { soloRun: true, ms, score });
     }
@@ -522,6 +525,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
 
   io.emit('active_game_ended', { id: roomId });
   gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId).filter(Boolean) });
+  tournamentHook.settled(roomId, { winnerId: isDraw ? null : winner.userId, loserId: isDraw ? null : loser.userId, isDraw });
   setTimeout(() => deleteColorRushRoom(roomId), 5_000);
   // Streaks are resolved BEFORE the result goes out.
   //

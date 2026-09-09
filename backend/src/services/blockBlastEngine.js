@@ -23,6 +23,7 @@ const MAX_DELTA_PER_PING = 150_000;
 // exploit while leaving legitimate bursty play (refilled bucket) untouched.
 const SCORE_REFILL_PER_MS = 200; // 200k points/sec sustained ceiling
 const gameEvents = require('./gameEvents');
+const tournamentHook = require('./tournamentHook');
 
 const blockBlastRooms = new Map();
 const blockBlastQueue = [];
@@ -417,6 +418,9 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
       }
       io.emit('active_game_ended', { id: roomId });
       gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId) });
+      // A tournament round played against a bot. Reported here rather than
+      // in _resolve, because a bot room never reaches it.
+      tournamentHook.settled(roomId, { winnerId: humanWon ? player.userId : (room.players.find(p => p.isBot)?.userId || null), loserId: humanWon ? (room.players.find(p => p.isBot)?.userId || null) : player.userId });
       io.to(roomId).emit('block_blast_result', {
         isSolo:      true,
         newElo:      humanNewElo,
@@ -452,6 +456,7 @@ async function _forceResolve(io, supabase, roomId) {
     room.state = 'finished';
     io.emit('active_game_ended', { id: roomId });
     gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId) });
+    tournamentHook.settled(roomId, { isDraw: true });
     // isDraw, the same name every other draw uses. This path predates the
     // score-tie draw and had invented its own flag, so the page was reading
     // two different fields for one outcome.
@@ -534,6 +539,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
   // Emit result immediately after wallet settles — don't wait for ELO/stats DB writes
   io.emit('active_game_ended', { id: roomId });
   gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId) });
+  tournamentHook.settled(roomId, { winnerId: isDraw ? null : winner.userId, loserId: isDraw ? null : loser.userId, isDraw, scores: { [winner.userId]: winnerScore, [loser.userId]: loserScore } });
   // Streaks are resolved BEFORE the result goes out.
   //
   // The payload below carried a hard-coded winnerStreak: 0 while the real
