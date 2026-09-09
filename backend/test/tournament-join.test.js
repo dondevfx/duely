@@ -221,7 +221,10 @@ test('a real entry that is still waiting reports as not started', async () => {
     assert.equal(res.body.started, false, 'one player was told the bracket had begun');
     assert.equal(res.body.players, 1);
     assert.equal(res.body.size, F.POOL_SIZE);
-    assert.ok(res.body.startsAt > 0, 'nothing says when it will start');
+    // When entry CLOSES. There is no start time to report: it starts when
+    // the bracket is full, and one that has not filled by then is refunded.
+    assert.ok(res.body.closesAt > 0, 'nothing says when entry closes');
+    assert.equal(res.body.startsAt, undefined, 'the window is being sold as a start time');
   } finally { server.close(); }
 });
 
@@ -235,7 +238,7 @@ test('a second click reports the same state, not a blank one', async () => {
     assert.equal(again.body.already, true);
     assert.equal(again.body.started, false);
     assert.equal(again.body.players, 1, 'the second click lost the seat count');
-    assert.ok(again.body.startsAt > 0);
+    assert.ok(again.body.closesAt > 0);
   } finally { server.close(); }
 });
 

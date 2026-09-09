@@ -5,7 +5,7 @@
 // nobody can test without waiting for the clock.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createStore, seededRng, nextPowerOfTwo, MIN_TO_RUN } = require('../src/services/tournamentPools');
+const { createStore, seededRng, nextPowerOfTwo } = require('../src/services/tournamentPools');
 const F = require('../src/services/tournamentFormat');
 
 const at = (h, m, s = 0) => Date.UTC(2026, 0, 1, h, m, s);
@@ -134,46 +134,55 @@ test('everyone is seated, and the pairs are adjacent', () => {
   assert.equal(pool.bracket[0][0].b, 'u1');
 });
 
-test('a pool that never fills starts at the window close, with byes', () => {
+test('a pool that never fills is refunded, not started short', () => {
+  // A tournament starts when the bracket is full. That is the only thing that
+  // starts one — the window is when a seat can be taken and when it can no
+  // longer be.
+  //
+  // This used to start whatever had turned up, padded out with byes. It made
+  // the clock look like a start time, and it paid three places out of five
+  // entries.
   const s = createStore();
   fill(s, 5);
-  const { started, refunded } = s.closeWindow(CLOSED);
-  assert.equal(started.length, 1);
-  assert.equal(refunded.length, 0);
-  const pool = started[0];
-  assert.equal(pool.state, 'running');
-  // Five players pad to eight, so three of the first-round matches are byes.
-  assert.equal(pool.bracket[0].length, 4);
-  const byes = pool.bracket[0].filter(m => m.winner);
-  assert.equal(byes.length, 3, 'a player drawn against nobody must go through');
-});
-
-test('too few players is a refund, not a walkover', () => {
-  // Three places cannot be paid out of a pool of two, and a tournament won by
-  // turning up is not what anybody entered.
-  const s = createStore();
-  fill(s, MIN_TO_RUN - 1);
-  const { started, refunded } = s.closeWindow(CLOSED);
-  assert.equal(started.length, 0);
+  const { refunded } = s.closeWindow(CLOSED);
   assert.equal(refunded.length, 1);
   assert.equal(refunded[0].state, 'refunded');
+  assert.equal(refunded[0].bracket, null, 'a bracket was drawn for a tournament that never ran');
+});
+
+test('a bracket that fills starts there and then, whenever that is', () => {
+  // Not at the close, and not at the top of the slot. The sixteenth seat is
+  // what starts it.
+  const s = createStore();
+  fill(s, 15);
+  const pool = [...s.pools.values()][0];
+  assert.equal(pool.state, 'filling', 'fifteen was enough to start it');
+
+  fill(s, 1, { from: 15 });
+  assert.equal(pool.state, 'running', 'the sixteenth seat did not start it');
+  assert.ok(pool.bracket, 'no bracket was drawn');
+  assert.equal(pool.startedAt, OPEN, 'it started at the window rather than when it filled');
+
+  // And the close has nothing left to do with it.
+  const { refunded } = s.closeWindow(CLOSED);
+  assert.equal(refunded.length, 0, 'a running tournament was refunded');
+  assert.equal(pool.state, 'running');
 });
 
 test('the window does not close early', () => {
   const s = createStore();
   fill(s, 5);
-  const { started, refunded } = s.closeWindow(at(9, 4, 59));
-  assert.equal(started.length, 0, 'entry closed before the five minutes were up');
-  assert.equal(refunded.length, 0);
+  const { refunded } = s.closeWindow(at(9, 4, 59));
+  assert.equal(refunded.length, 0, 'entry closed before the five minutes were up');
+  assert.equal([...s.pools.values()][0].state, 'filling');
 });
 
-test('closing twice does not start a pool twice', () => {
+test('closing twice refunds a pool once', () => {
   const s = createStore();
   fill(s, 5);
   s.closeWindow(CLOSED);
   const second = s.closeWindow(CLOSED + 1000);
-  assert.equal(second.started.length, 0);
-  assert.equal(second.refunded.length, 0);
+  assert.equal(second.refunded.length, 0, 'the same entry would be paid back twice');
 });
 
 // ── The rotation ───────────────────────────────────────────────────────────
@@ -250,9 +259,14 @@ test('the round does not advance until every match in it is done', () => {
 });
 
 test('a bye does not need reporting to let the round finish', () => {
+  // Byes cannot arise from ordinary play any more — sixteen is a power of two,
+  // and sixteen is the only size that starts. startPool still has to handle a
+  // short bracket correctly, because it is the one thing standing between a
+  // partial pool and a round that can never complete.
   const s = createStore();
   fill(s, 5);
-  const pool = s.closeWindow(CLOSED).started[0];
+  const pool = [...s.pools.values()][0];
+  s.startPool(pool, OPEN);
   // One real match, three byes already decided.
   const pending = s.pendingMatches(pool);
   assert.equal(pending.length, 1);
@@ -287,7 +301,8 @@ test('any number of entrants makes a real bracket', () => {
   for (const n of [4, 5, 7, 8, 9, 11, 16]) {
     const s = createStore();
     fill(s, n);
-    const pool = s.closeWindow(CLOSED).started[0] || [...s.pools.values()][0];
+    const pool = [...s.pools.values()][0];
+    s.startPool(pool, OPEN);
     const size = nextPowerOfTwo(n);
     assert.equal(pool.bracket[0].length, size / 2, `${n} players made a broken first round`);
     const seated = pool.bracket[0].flatMap(m => [m.a, m.b]).filter(Boolean);

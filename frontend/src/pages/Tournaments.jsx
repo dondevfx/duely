@@ -144,7 +144,10 @@ export default function Tournaments() {
           with the stake. */}
       <div className="text-center -mt-1 mb-3 sm:mb-5">
         <div className="text-[0.625rem] sm:text-xs uppercase tracking-widest text-muted font-bold">
-          {!schedule ? ' ' : joinOpen ? 'Entry closes in' : 'Next tournament in'}
+          {/* Both halves of the clock are about ENTRY. It never counts down
+              to a tournament starting, because nothing schedules that: a
+              tournament starts when its bracket fills. */}
+          {!schedule ? ' ' : joinOpen ? 'Entry closes in' : 'Entry opens in'}
         </div>
         <div
           className={`font-mono font-black leading-none text-4xl sm:text-5xl ${
@@ -213,11 +216,16 @@ export default function Tournaments() {
           <p className="text-sm font-bold text-white">
             You are in — {entered.players} of {entered.size} seats taken
           </p>
+          {/* The clock is not a start time and must not be written as one.
+              A tournament starts when the bracket is full — that is the only
+              thing that starts one. The window says when a seat can still be
+              taken, and a bracket that has not filled by then is refunded. */}
           <p className="text-xs text-muted mt-0.5">
-            {entered.startsAt && entered.startsAt > now
-              ? <>Starts in <span className="font-mono font-bold text-primary">
-                  {fmt(Math.ceil((entered.startsAt - now) / 1000))}</span>, or as soon as it fills.</>
-              : 'Starting as soon as it fills.'}
+            It starts the moment the bracket is full.
+            {entered.closesAt && entered.closesAt > now && (
+              <> Entry closes in <span className="font-mono font-bold text-primary">
+                {fmt(Math.ceil((entered.closesAt - now) / 1000))}</span>.</>
+            )}
           </p>
           <button
             onClick={() => navigate(`/tournaments/${entered.poolId}`)}

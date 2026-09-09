@@ -50,6 +50,10 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
   /**
    * Enter the next tournament.
    *
+   * The slot's window is when a seat can be taken and when it can no longer
+   * be. It is not a start time — a tournament starts when its bracket is
+   * full, and one that has not filled by the close is refunded.
+   *
    * The entry fee is taken BEFORE the seat is given. Seating first and charging
    * after leaves a player in a bracket they have not paid for if the deduction
    * fails, and there is no way to tell that from a player who has.
@@ -78,7 +82,10 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
           started: existing.state === 'running',
           players: existing.players.length,
           size: F.POOL_SIZE,
-          startsAt: existing.slotStart + F.JOIN_WINDOW_MS,
+          // When entry CLOSES, not when it starts. Nothing schedules a start:
+          // a tournament begins the moment the bracket is full, and a bracket
+          // that is not full when this passes is refunded.
+          closesAt: existing.slotStart + F.JOIN_WINDOW_MS,
         });
       }
       // A DIFFERENT stake, and nothing has started: move them.
@@ -153,7 +160,7 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
       started: pool.state === 'running',
       players: pool.players.length,
       size: F.POOL_SIZE,
-      startsAt: pool.slotStart + F.JOIN_WINDOW_MS,
+      closesAt: pool.slotStart + F.JOIN_WINDOW_MS,
     });
   });
 

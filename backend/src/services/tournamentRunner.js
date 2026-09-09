@@ -541,17 +541,22 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
    */
   function tick(onRefund) {
     const now = Date.now();
-    const { started, refunded } = pools.closeWindow(now);
-    for (const pool of started) beginPool(pool).catch(e => log.error('[tournament] begin:', e.message));
+
+    // Entry closing does not start anything. A pool that filled has already
+    // started — that is the only thing that starts one — and a pool that has
+    // not filled by the time the window shuts never will.
+    const { refunded } = pools.closeWindow(now);
     for (const pool of refunded) {
       broadcast(pool, 'tournament_cancelled', {
         poolId: pool.id,
-        reason: 'Not enough players — your entry has been returned.',
+        reason: 'The bracket did not fill in time — your entry has been returned.',
       });
       if (onRefund) onRefund(pool);
     }
-    // A pool that filled early runs immediately rather than waiting for its
-    // slot: sixteen people are already there.
+
+    // The full ones, picked up here rather than from the seat that filled them,
+    // so a pool is started by one thing whether it filled from the route, from
+    // a demo account's bots, or from a test.
     for (const pool of pools.pools.values()) {
       if (pool.state === 'running' && stateOf(pool.id).phase === 'idle') {
         beginPool(pool).catch(e => log.error('[tournament] begin:', e.message));

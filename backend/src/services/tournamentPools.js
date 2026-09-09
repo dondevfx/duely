@@ -23,10 +23,17 @@
  */
 const F = require('./tournamentFormat');
 
-// Fewer than this at the close and there is no tournament: three places cannot
-// be paid out of a pool of two, and a "tournament" someone wins by turning up
-// is not what anybody entered. They are refunded.
-const MIN_TO_RUN = 4;
+// A tournament starts when the bracket is full. That is the only thing that
+// starts one.
+//
+// The slot and its window are about JOINING and nothing else: they say when a
+// seat can be taken and when it can no longer be. A pool that has not filled
+// by the time entry closes is not a smaller tournament — it is a tournament
+// that did not happen, and everyone in it is refunded.
+//
+// It used to start short brackets at the close, padding them out with byes.
+// That made the clock look like a start time, which it is not, and it meant a
+// bracket of five paid three places out of five entries.
 
 let _seq = 0;
 const nextId = () => `t${Date.now().toString(36)}${(_seq++).toString(36)}`;
@@ -205,24 +212,23 @@ function createStore() {
   /**
    * Close entry on every pool whose window has passed.
    *
-   * Returns what happened to each, because the caller has to refund the ones
-   * that never filled and nothing else knows they existed.
+   * Closing entry is all this does. A pool that filled during the window has
+   * already started — seat() starts it the moment the sixteenth seat is taken,
+   * which is the only way a tournament ever begins. Anything still filling
+   * when the window shuts never will, so it is refunded.
+   *
+   * Returns the refunds, because the caller has to pay them and nothing else
+   * knows those pools existed.
    */
   function closeWindow(now) {
-    const started = [];
     const refunded = [];
     for (const pool of pools.values()) {
       if (pool.state !== 'filling') continue;
       if (now < pool.slotStart + F.JOIN_WINDOW_MS) continue;
-      if (pool.players.length >= MIN_TO_RUN) {
-        startPool(pool, now);
-        started.push(pool);
-      } else {
-        pool.state = 'refunded';
-        refunded.push(pool);
-      }
+      pool.state = 'refunded';
+      refunded.push(pool);
     }
-    return { started, refunded };
+    return { refunded };
   }
 
   /**
@@ -345,4 +351,4 @@ function nextPowerOfTwo(n) {
   return Math.max(2, p);
 }
 
-module.exports = { createStore, seededRng, nextPowerOfTwo, MIN_TO_RUN };
+module.exports = { createStore, seededRng, nextPowerOfTwo };
