@@ -70,13 +70,25 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
     const slot = F.joinableSlot(now);
     const existing = pools.entryIn(slot.startsAt, req.user.id);
     if (existing) {
-      return res.json({
-        poolId: existing.id, already: true,
-        started: existing.state === 'running',
-        players: existing.players.length,
-        size: F.POOL_SIZE,
-        startsAt: existing.slotStart + F.JOIN_WINDOW_MS,
-      });
+      // Same stake, or it has already started: they are where they belong.
+      if (existing.entryFee === entryFee || existing.state !== 'filling') {
+        return res.json({
+          poolId: existing.id, already: true,
+          entryFee: existing.entryFee,
+          started: existing.state === 'running',
+          players: existing.players.length,
+          size: F.POOL_SIZE,
+          startsAt: existing.slotStart + F.JOIN_WINDOW_MS,
+        });
+      }
+      // A DIFFERENT stake, and nothing has started: move them.
+      //
+      // One entry per slot at any stake means picking a new amount used to
+      // hand back the seat they already had — so the screen said "5 coin
+      // entry" however the slider was set, and the only way out was to wait
+      // twenty minutes for the slot to pass.
+      const left = pools.leave(existing.id, req.user.id);
+      if (left.ok && left.refund) await refund(supabase, req.user.id, left.entryFee);
     }
 
     const { data: profile } = await supabase
@@ -131,6 +143,7 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
     res.json({
       poolId: pool.id,
       already: false,
+      entryFee: pool.entryFee,
       bots: vsBot || demo,
       free: !!pool.free,
       started: pool.state === 'running',
@@ -163,6 +176,20 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
               || [...pools.pools.values()].find(p =>
                    p.state === 'running' && p.players.some(x => x.userId === req.user.id));
     res.json({ pool: mine ? publicPool(mine) : null });
+  });
+
+  /**
+   * Give up a seat.
+   *
+   * Before it starts this is a refund; after it starts it is a forfeit and the
+   * opponent goes through. The rule lives in the pool store — see leave().
+   */
+  router.post('/:id/leave', requireAuth, async (req, res) => {
+    if (!pools) return res.status(503).json({ error: 'Tournaments are not available right now.' });
+    const result = pools.leave(req.params.id, req.user.id);
+    if (!result.ok) return res.status(400).json({ error: 'You are not in that tournament.' });
+    if (result.refund) await refund(supabase, req.user.id, result.entryFee);
+    res.json({ ok: true, refunded: !!result.refund, forfeited: result.state === 'running' });
   });
 
   // One pool, by id — what the bracket screen polls.

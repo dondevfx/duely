@@ -105,12 +105,38 @@ test('all three places are labelled and shown', () => {
 
 // ── The clock ──────────────────────────────────────────────────────────────
 
-test('the countdown is type at the top, not another panel', () => {
-  const top = CODE.slice(0, CODE.indexOf('<h1'));
-  assert.ok(/text-4xl|text-5xl/.test(top), 'the timer is not large text');
-  assert.ok(!/bg-surface/.test(top),
-    'the timer is in a panel again — it should be type, above the title');
-  assert.ok(top.indexOf('font-mono') > 0, 'a countdown that is not monospaced jitters as it ticks');
+test('the countdown is type under the title, not another panel', () => {
+  // It sits with the name rather than in a panel further down competing with
+  // the stake — it is the one fact that decides whether to enter now or come
+  // back. Large, monospaced, and not boxed.
+  const titleAt = CODE.indexOf('<h1');
+  const clockAt = CODE.indexOf('Entry closes in');
+  assert.ok(titleAt > 0 && clockAt > titleAt,
+    'the clock is above the title again');
+
+  // Scoped to the clock's OWN wrapper. A window of a few hundred characters
+  // either side reaches into the stake panel below it, whose bg-surface then
+  // reads as the clock being boxed.
+  const wrapAt = CODE.indexOf('text-center -mt-1');
+  assert.ok(wrapAt > 0, 'the clock has no wrapper of its own');
+  const openTag = CODE.slice(CODE.lastIndexOf('<div', wrapAt), CODE.indexOf('>', wrapAt));
+  assert.ok(!/bg-surface|border/.test(openTag), `the timer is in a panel again: ${openTag}`);
+
+  const clock = CODE.slice(wrapAt, CODE.indexOf('Your Bet', wrapAt));
+  assert.ok(/text-4xl|text-5xl/.test(clock), 'the timer is not large text');
+  assert.ok(/font-mono/.test(clock), 'a countdown that is not monospaced jitters as it ticks');
+});
+
+test('the clock rolls over to the next slot without a reload', () => {
+  // The schedule names ONE slot with fixed instants in it. Left alone the
+  // countdown reaches 0:00 and stays there: the window has closed, the next
+  // tournament has opened, and the screen still describes the old one.
+  assert.match(CODE, /const \[epoch, setEpoch\] = useState\(0\)/,
+    'nothing triggers a refetch');
+  assert.match(CODE, /\}, \[epoch\]\);/, 'the schedule is still fetched once, on mount');
+  assert.match(CODE, /if \(now < schedule\.slot\.nextStartsAt\) return;/,
+    'nothing notices the slot has passed');
+  assert.match(CODE, /setEpoch\(e => e \+ 1\)/);
 });
 
 test('there is room above the title', () => {

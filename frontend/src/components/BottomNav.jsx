@@ -12,17 +12,21 @@ import UiIcon from './UiIcon';
  * Phones only. On md and up the left sidebar is permanently visible and already
  * does this job.
  *
- * FOUR, not more. A bar of eight is a menu lying down — the point is that each
- * target is wide enough to hit without looking. Profile is the one thing that
- * used to live in the hamburger and is not here: it moved to the avatar in the
- * top bar, which is where a profile belongs and where people already tap for
- * it. Sign out lives on the profile page.
+ * FIVE, and that is the ceiling. A bar of eight is a menu lying down — the
+ * point is that each target is wide enough to hit without looking. At five,
+ * on the narrowest phone still in use, each one is about 65px across, which
+ * is comfortably past the 44px a fingertip needs.
+ *
+ * Profile is in the bar AND on the avatar in the top bar. That is deliberate
+ * duplication rather than an oversight: the avatar is a 30px target in a
+ * corner, and the bar is where people look for their own things.
  */
 const ITEMS = [
   { ui: 'home',        label: 'Home',        to: '/' },
   { ui: 'rewards',     label: 'Rewards',     to: '/rewards' },
   { ui: 'leaderboard', label: 'Leaderboard', to: '/leaderboard' },
   { ui: 'wallet',      label: 'Wallet',      to: '/wallet' },
+  { ui: 'profile',     label: 'Profile',     to: '/profile' },
 ];
 
 // Whether the bar shows, and how a bet screen asks for it back.

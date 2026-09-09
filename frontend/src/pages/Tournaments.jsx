@@ -42,13 +42,29 @@ export default function Tournaments() {
   const [entered, setEntered] = useState(null);
   const [now, setNow] = useState(() => Date.now());
 
+  // Refetched whenever the slot it describes has passed, not once on mount.
+  //
+  // The schedule names one slot with fixed instants in it. Left alone the
+  // countdown reaches 0:00 and stays there — the window has closed, the next
+  // tournament has opened, and the screen still describes the old one until
+  // somebody reloads. `epoch` bumps when the clock crosses the boundary, which
+  // re-runs this.
+  const [epoch, setEpoch] = useState(0);
   useEffect(() => {
     let alive = true;
     api.get('/tournaments/schedule')
-      .then(d => { if (alive) setSchedule(d); })
+      .then(d => { if (alive) { setSchedule(d); setError(null); } })
       .catch(() => { if (alive) setError('Could not load the tournament schedule.'); });
     return () => { alive = false; };
-  }, []);
+  }, [epoch]);
+
+  // One place decides the schedule is stale: the moment the tick passes the
+  // end of the slot it was describing.
+  useEffect(() => {
+    if (!schedule) return;
+    if (now < schedule.slot.nextStartsAt) return;
+    setEpoch(e => e + 1);
+  }, [now, schedule]);
 
   // One ticking clock. The countdown is derived from an absolute instant the
   // server sent, so a tab that slept catches up on its next tick rather than
@@ -63,6 +79,7 @@ export default function Tournaments() {
     () => schedule?.stakes.find(s => s.entryFee === entryFee) || null,
     [schedule, entryFee]);
 
+  // Derived from the tick, so it flips at the boundary without a reload.
   const joinOpen = schedule ? now < schedule.slot.closesAt : false;
   const countdownTo = schedule
     ? (joinOpen ? schedule.slot.closesAt : schedule.slot.nextStartsAt)
@@ -112,13 +129,22 @@ export default function Tournaments() {
 
   return (
     <div className="w-full max-w-md animate-slide-up pt-4 sm:pt-6">
-      {/* The clock, as the first thing on the screen and as type rather than a
-          panel. It is the one fact that decides whether to enter now or come
-          back, so it reads before the title rather than sitting in a box below
-          the stake competing with it. */}
-      <div className="text-center mb-2 sm:mb-3">
+      <div className="relative">
+        <div className="absolute top-0 right-0 z-10">
+          <GameHelp gameType="tournament" placement="top-right" />
+        </div>
+        <h1 className="text-4xl sm:text-6xl font-black text-white text-center mb-4 sm:mb-6 leading-tight px-10 flex items-center justify-center">
+          <GameTitle slug="tournament" title="Tournaments" />
+        </h1>
+      </div>
+
+      {/* The clock, directly under the name.
+          It is the one fact that decides whether to enter now or come back, so
+          it sits with the title rather than in a panel further down competing
+          with the stake. */}
+      <div className="text-center -mt-1 mb-3 sm:mb-5">
         <div className="text-[0.625rem] sm:text-xs uppercase tracking-widest text-muted font-bold">
-          {!schedule ? ' ' : joinOpen ? 'Entry closes in' : 'Next tournament in'}
+          {!schedule ? ' ' : joinOpen ? 'Entry closes in' : 'Next tournament in'}
         </div>
         <div
           className={`font-mono font-black leading-none text-4xl sm:text-5xl ${
@@ -128,15 +154,6 @@ export default function Tournaments() {
         >
           {schedule ? fmt(secondsLeft) : '—:—'}
         </div>
-      </div>
-
-      <div className="relative">
-        <div className="absolute top-0 right-0 z-10">
-          <GameHelp gameType="tournament" placement="top-right" />
-        </div>
-        <h1 className="text-4xl sm:text-6xl font-black text-white text-center mb-4 sm:mb-6 leading-tight px-10 flex items-center justify-center">
-          <GameTitle slug="tournament" title="Tournaments" />
-        </h1>
       </div>
 
       {/* ── Entry ── the same panel every other bet screen uses */}

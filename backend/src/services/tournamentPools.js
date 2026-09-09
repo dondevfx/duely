@@ -247,6 +247,57 @@ function createStore() {
   }
 
   /**
+   * Take a player out.
+   *
+   * What that means depends on whether anything has started:
+   *
+   *   filling   The seat is given back and so is the entry fee. The pool
+   *             returns to taking entries, and the seat it frees is the next
+   *             one somebody else takes — which is also what happens when a
+   *             full pool loses someone before it begins.
+   *
+   *   running   A forfeit. The stake stays with the pool and whoever they were
+   *             drawn against goes through. Refunding here would make quitting
+   *             a losing bracket free, and the opponent has already spent
+   *             their round waiting for a game that will not happen.
+   *
+   * Returns what was done, because the caller has to pay the refund and only
+   * this knows whether one is owed.
+   */
+  function leave(poolId, userId) {
+    const pool = pools.get(poolId);
+    if (!pool) return { ok: false };
+
+    const idx = pool.players.findIndex(p => p.userId === userId);
+    if (idx === -1) return { ok: false };
+
+    if (pool.state === 'filling') {
+      pool.players.splice(idx, 1);
+      // If everyone has gone, the pool goes with them rather than sitting
+      // empty until the window closes and it is "refunded" a second time.
+      if (pool.players.length === 0) pools.delete(poolId);
+      return { ok: true, refund: !pool.free, entryFee: pool.entryFee, state: 'filling' };
+    }
+
+    if (pool.state !== 'running') return { ok: false };
+
+    // Running: forfeit every match they are still in. Only ever one — a player
+    // is in exactly one live match at a time — but walking the round is how it
+    // finds which, and it costs nothing.
+    let forfeited = null;
+    const round = pool.bracket[pool.round] || [];
+    round.forEach((m, i) => {
+      if (m.winner) return;
+      if (m.a !== userId && m.b !== userId) return;
+      const opponent = m.a === userId ? m.b : m.a;
+      if (!opponent) return;         // nobody to advance; leave it for the sweep
+      reportResult(poolId, pool.round, i, opponent, { forfeit: userId });
+      forfeited = { match: i, winner: opponent };
+    });
+    return { ok: true, refund: false, state: 'running', forfeited };
+  }
+
+  /**
    * Everything still live, for a restart.
    *
    * A tournament does not survive a deploy: its bracket, its sockets and its
@@ -263,7 +314,7 @@ function createStore() {
 
   return {
     pools,
-    join, startPool, closeWindow, reportResult, pendingMatches, advanceRound,
+    join, leave, startPool, closeWindow, reportResult, pendingMatches, advanceRound,
     drainForShutdown, entryIn,
     get: (id) => pools.get(id) || null,
     clear: () => pools.clear(),

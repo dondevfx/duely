@@ -255,24 +255,28 @@ export default function GameTitle({ slug, title, className = '' }) {
       );
     }
 
-    // A bracket, and a prize at the top of it.
+    // Struck metal, and nothing else.
     //
-    // The one mode that is not a single match, so it does not borrow another
-    // game's materials: the mark is the shape of the thing itself — three
-    // steps of a podium under the name, in the metals they are named after.
+    // It had a little podium beside it, which at card size read as an emoji
+    // stuck to the front of the word rather than as part of the title — three
+    // coloured bars next to eight letters. The name carries it alone now: a
+    // gold-to-white face with a dark edge under it, the way a trophy plate is
+    // engraved, so it reads as the prize rather than as another blue heading.
+    //
+    // The edge is not decoration. Gold on a bright frame of a game clip has
+    // almost no contrast, and the card's scrim only darkens the bottom of the
+    // image; without the shadow the word disappears on the pale clips.
     case 'tournament':
       return wrap(
-        <span className="inline-flex items-center gap-[0.22em] font-black tracking-tight">
-          <svg viewBox="0 0 24 18" className="w-[0.9em] h-[0.68em] shrink-0" aria-hidden="true">
-            {/* second, first, third — the order they stand in */}
-            <rect x="1"  y="7"  width="6.6" height="11" rx="1" fill="#C0C6CF" />
-            <rect x="8.7" y="2" width="6.6" height="16" rx="1" fill="#FFD147" />
-            <rect x="16.4" y="10" width="6.6" height="8" rx="1" fill="#C07800" />
-          </svg>
+        <span className="inline-block font-black tracking-tight">
           <span
             style={{
-              backgroundImage: 'linear-gradient(180deg,#FFFFFF 0%,#9DC4FF 100%)',
-              WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
+              backgroundImage:
+                'linear-gradient(180deg,#FFF6D8 0%,#FFD147 42%,#E0A312 62%,#FFEFA8 100%)',
+              WebkitBackgroundClip: 'text',
+              backgroundClip: 'text',
+              color: 'transparent',
+              filter: 'drop-shadow(0 0.035em 0.03em rgba(0,0,0,.95))',
             }}
           >
             {title}

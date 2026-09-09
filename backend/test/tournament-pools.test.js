@@ -296,3 +296,104 @@ test('any number of entrants makes a real bracket', () => {
     assert.equal(pool.state, 'complete', `${n} players never reached a champion`);
   }
 });
+
+// ── Leaving ────────────────────────────────────────────────────────────────
+
+test('leaving before it starts frees the seat and owes a refund', () => {
+  const s = createStore();
+  fill(s, 3);
+  const pool = [...s.pools.values()][0];
+  const r = s.leave(pool.id, 'u1');
+  assert.equal(r.ok, true);
+  assert.equal(r.refund, true, 'the entry fee is owed back');
+  assert.equal(r.entryFee, 1);
+  assert.equal(pool.players.length, 2, 'the seat was not freed');
+  assert.ok(!pool.players.some(p => p.userId === 'u1'));
+});
+
+test('the freed seat is the next one somebody takes', () => {
+  // A full pool that loses someone before it begins goes back to taking
+  // entries rather than starting a player short.
+  const s = createStore();
+  fill(s, 16);
+  const pool = [...s.pools.values()][0];
+  assert.equal(pool.state, 'running');
+
+  // One leaves a pool that has not started.
+  const s2 = createStore();
+  fill(s2, 15);
+  const p2 = [...s2.pools.values()][0];
+  s2.leave(p2.id, 'u0');
+  assert.equal(p2.state, 'filling');
+  assert.equal(p2.players.length, 14);
+  s2.join({ userId: 'newcomer', username: 'n', entryFee: 1, now: OPEN });
+  assert.equal(p2.players.length, 15, 'the newcomer opened a second pool instead');
+});
+
+test('the last player leaving takes the pool with them', () => {
+  // Otherwise it sits empty until the window closes and is "refunded" a
+  // second time, to nobody.
+  const s = createStore();
+  const { pool } = s.join({ userId: 'solo', username: 'a', entryFee: 1, now: OPEN });
+  s.leave(pool.id, 'solo');
+  assert.equal(s.pools.size, 0);
+});
+
+test('leaving a running tournament is a forfeit, not a refund', () => {
+  // Refunding here would make quitting a losing bracket free, and the opponent
+  // has already spent their round waiting for a game that will not happen.
+  const s = createStore();
+  const pool = fill(s, 16)[0].pool;
+  const opponent = pool.bracket[0][0].b;
+  const r = s.leave(pool.id, pool.bracket[0][0].a);
+  assert.equal(r.ok, true);
+  assert.equal(r.refund, false, 'a forfeit was refunded');
+  assert.equal(pool.bracket[0][0].winner, opponent, 'the opponent did not go through');
+  assert.equal(pool.bracket[1][0].a, opponent, 'and was not advanced');
+});
+
+test('a forfeit is recorded as one, not as a played result', () => {
+  const s = createStore();
+  const pool = fill(s, 16)[0].pool;
+  const quitter = pool.bracket[0][0].a;
+  s.leave(pool.id, quitter);
+  assert.deepEqual(pool.bracket[0][0].scores, { forfeit: quitter });
+});
+
+test('leaving a tournament you are not in changes nothing', () => {
+  const s = createStore();
+  const pool = fill(s, 3)[0].pool;
+  assert.equal(s.leave(pool.id, 'someone-else').ok, false);
+  assert.equal(pool.players.length, 3);
+});
+
+test('leaving a pool that does not exist is not a crash', () => {
+  const s = createStore();
+  assert.equal(s.leave('nope', 'u1').ok, false);
+});
+
+test('a free bracket owes nothing when someone leaves it', () => {
+  // Nothing was taken, so nothing goes back.
+  const s = createStore();
+  const { pool } = s.join({ userId: 'u1', username: 'a', entryFee: 1, now: OPEN });
+  pool.free = true;
+  assert.equal(s.leave(pool.id, 'u1').refund, false);
+});
+
+test('a tournament that is over cannot be left', () => {
+  // Not filling and not running: there is no seat to give back and no match to
+  // forfeit. Answering "ok" would tell the client it had done something.
+  const s = createStore();
+  const pool = fill(s, 16)[0].pool;
+  playToTheEnd(s, pool);
+  assert.equal(pool.state, 'complete');
+  assert.equal(s.leave(pool.id, 'u0').ok, false, 'a finished tournament was left');
+
+  // Same for one that never ran.
+  const s2 = createStore();
+  fill(s2, 2);
+  const p2 = [...s2.pools.values()][0];
+  s2.closeWindow(CLOSED);
+  assert.equal(p2.state, 'refunded');
+  assert.equal(s2.leave(p2.id, 'u0').ok, false, 'an already-refunded pool was left again');
+});

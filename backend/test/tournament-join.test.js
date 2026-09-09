@@ -218,3 +218,62 @@ test('a second click reports the same state, not a blank one', async () => {
     assert.ok(again.body.startsAt > 0);
   } finally { server.close(); }
 });
+
+// ── Changing your mind about the stake ─────────────────────────────────────
+
+
+test('picking a different stake moves you and refunds the first', async () => {
+  const { server, port, pools, calls } = boot();
+  try {
+    const first = await join(port, { entryFee: 5 });
+    const second = await join(port, { entryFee: 1 });
+    assert.notEqual(second.body.poolId, first.body.poolId, 'it kept the old pool');
+    assert.equal(second.body.entryFee, 1, 'the new stake was not applied');
+    assert.deepEqual(calls.deducted, [5, 1], 'the new stake was not charged');
+    assert.deepEqual(calls.credited, [5], 'the first entry was not refunded');
+    assert.equal(pools.get(first.body.poolId), null, 'the abandoned pool was left behind');
+  } finally { server.close(); }
+});
+
+test('picking the SAME stake twice still charges once', async () => {
+  const { server, port, calls } = boot();
+  try {
+    const a = await join(port, { entryFee: 5 });
+    const b = await join(port, { entryFee: 5 });
+    assert.equal(b.body.poolId, a.body.poolId);
+    assert.deepEqual(calls.deducted, [5]);
+    assert.deepEqual(calls.credited, []);
+  } finally { server.close(); }
+});
+
+test('the response says which stake was actually taken', async () => {
+  // The screen showed a stake the server had not charged, and neither knew.
+  const { server, port } = boot();
+  try {
+    const res = await join(port, { entryFee: 10 });
+    assert.equal(res.body.entryFee, 10);
+  } finally { server.close(); }
+});
+
+test('leaving gives the entry back before it starts', async () => {
+  const { server, port, calls } = boot();
+  try {
+    const res = await join(port, { entryFee: 5 });
+    const out = await fetch(`http://127.0.0.1:${port}/api/tournaments/${res.body.poolId}/leave`,
+      { method: 'POST' }).then(r => r.json());
+    assert.equal(out.ok, true);
+    assert.equal(out.refunded, true);
+    assert.deepEqual(calls.credited, [5]);
+  } finally { server.close(); }
+});
+
+test('leaving after it starts refunds nothing', async () => {
+  const { server, port, calls } = boot();
+  try {
+    const res = await join(port, { entryFee: 5, vsBot: true });
+    const out = await fetch(`http://127.0.0.1:${port}/api/tournaments/${res.body.poolId}/leave`,
+      { method: 'POST' }).then(r => r.json());
+    assert.equal(out.forfeited, true);
+    assert.deepEqual(calls.credited, [], 'a forfeit was refunded');
+  } finally { server.close(); }
+});

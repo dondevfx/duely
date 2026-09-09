@@ -16,9 +16,22 @@ const NAVBAR = fe('components', 'Navbar.jsx');
 const APP    = fe('App.jsx');
 const SIDE   = fe('components', 'LeftSidebar.jsx');
 
-test('the bar carries the four destinations, in order', () => {
-  const items = [...NAV.matchAll(/to: '([^']+)'/g)].map(m => m[1]);
-  assert.deepEqual(items, ['/', '/rewards', '/leaderboard', '/wallet']);
+test('the bar carries five destinations, in order', () => {
+  // Five, and that is the ceiling. On the narrowest phone in use each target
+  // is still about 65px across, comfortably past the 44px a fingertip needs;
+  // a sixth would take it under.
+  //
+  // Profile is here AND on the avatar in the top bar. That duplication is
+  // deliberate: the avatar is a 30px target in a corner, and this is where
+  // people look for their own things.
+  const items = [...NAV.matchAll(/\{ ui: '([a-z]+)',\s+label: '([^']+)',\s+to: '([^']+)' \}/g)]
+    .map(m => ({ ui: m[1], label: m[2], to: m[3] }));
+  assert.deepEqual(items.map(i => i.ui),
+    ['home', 'rewards', 'leaderboard', 'wallet', 'profile'],
+    'the bar changed shape');
+  assert.deepEqual(items.map(i => i.to),
+    ['/', '/rewards', '/leaderboard', '/wallet', '/profile']);
+  assert.ok(items.length <= 5, 'a sixth target takes each one under a fingertip');
 });
 
 test('it is phones only', () => {

@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useShowBottomBar } from '../components/BottomNav';
 import Avatar from '../components/Avatar';
 import GameIcon from '../components/GameIcon';
+import Bracket from '../components/Bracket';
 import { api } from '../utils/api';
 
 /**
@@ -84,7 +85,10 @@ export default function TournamentBracket() {
 
   const filling = pool.state === 'filling';
   const seatsLeft = pool.size - pool.players.length;
-  const game = pool.roundGames?.[pool.round];
+  // Not while it is still filling. The round's game is drawn when the round
+  // starts, and naming it on the waiting screen tells everyone what is coming
+  // before the bracket even exists.
+  const game = filling ? null : pool.roundGames?.[pool.round];
 
   return (
     <div className="w-full max-w-lg animate-slide-up pt-4 sm:pt-6">
@@ -95,9 +99,11 @@ export default function TournamentBracket() {
         <div className="text-3xl sm:text-4xl font-black text-white leading-tight">
           {filling
             ? `${pool.players.length} / ${pool.size}`
-            : <span className="inline-flex items-center gap-2">
-                <GameIcon game={game} size={28} />{titleOf(game)}
-              </span>}
+            : game
+              ? <span className="inline-flex items-center gap-2">
+                  <GameIcon game={game} size={28} />{titleOf(game)}
+                </span>
+              : 'Drawing the game…'}
         </div>
         <div className="text-xs text-muted mt-1">
           {pool.entryFee} coin entry
@@ -134,46 +140,13 @@ export default function TournamentBracket() {
           })}
         </div>
       ) : (
-        // The bracket. Every round is drawn from the start so the shape does
-        // not change under the player between matches.
-        <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-2">
-          {pool.bracket.map((round, r) => (
-            <div key={r} className="flex-1 min-w-[8.5rem] flex flex-col justify-around gap-2">
-              <div className="text-[0.625rem] uppercase tracking-widest text-muted font-bold text-center">
-                {roundName(r, pool.bracket.length)}
-              </div>
-              {round.map((m, i) => (
-                <div key={i}
-                     className={`rounded-lg border overflow-hidden ${
-                       r === pool.round && !m.winner
-                         ? 'border-primary shadow-glow' : 'border-border'
-                     }`}>
-                  {['a', 'b'].map(side => {
-                    const uid = m[side];
-                    const p = uid ? byId.get(uid) : null;
-                    const won = m.winner && m.winner === uid;
-                    const lost = m.winner && uid && m.winner !== uid;
-                    return (
-                      <div key={side}
-                           className={`flex items-center gap-1.5 px-1.5 py-1 text-[0.6875rem] ${
-                             won ? 'bg-primary/20 text-white font-bold'
-                                 : lost ? 'bg-surface text-muted line-through'
-                                 : 'bg-surface text-white'
-                           } ${side === 'a' ? 'border-b border-border' : ''}`}>
-                        {p
-                          ? <Avatar username={p.username} url={p.avatarUrl} size={16} />
-                          : <div className="w-4 h-4 rounded-full bg-surfaceLight/40 shrink-0" />}
-                        <span className="truncate">
-                          {p ? p.username : (uid === null && m.winner ? 'bye' : '—')}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
+        // One drawn bracket rather than columns of bordered cards. See
+        // components/Bracket.jsx for why: the shape is in the connectors.
+        <Bracket
+          bracket={pool.bracket}
+          players={pool.players}
+          currentRound={pool.round}
+        />
       )}
 
       <p className="mt-4 text-center text-xs text-muted">
