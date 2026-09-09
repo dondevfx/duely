@@ -162,6 +162,40 @@ require('./services/escrowService').refundAbandonedEscrows(supabase).catch(e =>
   console.error('[escrow] startup sweep error:', e.message)
 );
 
+/**
+ * A tournament does not survive a deploy — and must not keep the money.
+ *
+ * Its bracket, its rooms and its in-flight rounds are all in this process, so
+ * a restart loses them however carefully it is handled. Losing the tournament
+ * is acceptable; keeping the entry fees is not. This hands back every pool
+ * that has taken money and not paid it out, and only then lets the process go.
+ *
+ * Best effort with a deadline: a platform that is killing us will not wait
+ * forever, so the refunds get a few seconds and then we exit either way. A
+ * refund that does not make it is logged loudly enough to be paid by hand.
+ */
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[shutdown] ${signal} — refunding live tournaments`);
+  clearInterval(tournamentTick);
+  try {
+    const owing = tournamentPools.drainForShutdown();
+    await Promise.race([
+      Promise.all(owing.map(pool => refundTournamentPool(supabase, pool))),
+      new Promise(r => setTimeout(r, 8000)),
+    ]);
+    if (owing.length) console.log(`[shutdown] ${owing.length} tournament(s) refunded`);
+  } catch (e) {
+    console.error('[shutdown] tournament refunds FAILED:', e.message);
+  }
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 2000).unref();
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`React Duel backend running on port ${PORT}`);

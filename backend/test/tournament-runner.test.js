@@ -396,3 +396,31 @@ test('an ordinary match is not a tournament match', () => {
   createRunner({ io: fakeIo(), supabase: null, pools, engines: fakeEngines(), log: { error() {} } });
   assert.equal(hook.settled('bb_some_ordinary_room', { winnerId: 'u1' }), false);
 });
+
+test('a tournament that is dropped by a restart gives every entry back', async () => {
+  // Its bracket and its rooms are in this process, so a restart loses them
+  // however carefully it is handled. Losing the tournament is acceptable;
+  // keeping the money is not. Bots are not owed anything and a free bracket
+  // took nothing, so neither is refunded.
+  const { refundPool } = require('../src/routes/tournaments');
+  const pools = createStore();
+  const captured = [];
+  const supabase = fakeSupabase(captured);
+
+  const pool = fill(pools, 16, { entryFee: 5, bots: 4 });
+  const owing = pools.drainForShutdown();
+  assert.equal(owing.length, 1, 'the live pool was not drained');
+  assert.equal(owing[0].state, 'abandoned');
+
+  await refundPool(supabase, owing[0]);
+
+  const refunds = captured.filter(c => c.rpc === 'credit_coins');
+  const humans = pool.players.filter(p => !p.isBot).length;
+  assert.equal(refunds.length, humans, 'not everyone who paid was refunded');
+  assert.ok(refunds.every(r => r.args.amount === 5));
+
+  // And a free bracket has nothing to give back.
+  captured.length = 0;
+  await refundPool(supabase, { ...pool, free: true });
+  assert.equal(captured.length, 0);
+});
