@@ -17,6 +17,7 @@ import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import { useResumeMatch } from '../hooks/useResumeMatch';
 import { playMatchFound, playCountdown, playGo, playTowerPlace, playTowerPerfect } from '../utils/sound';
 import { usePrivateRematch } from '../hooks/usePrivateRematch';
+import useTournamentRound from '../hooks/useTournamentRound';
 
 // Tower — same page shape as every other game: lobby, countdown, play, result.
 // Only the middle bit is game-specific.
@@ -48,6 +49,10 @@ export default function TowerGame() {
   const location = useLocation();
   const { profile, refreshProfile } = useAuth();
   const { socket, authenticated, doAuth, playerCounts } = useSocket();
+  // Playable inside a bracket as well as on its own. See the hook: it says
+  // when this screen is ready to be counted in, and takes the player back
+  // to the bracket once their round is decided.
+  useTournamentRound(socket);
   // Rematch for invite/code matches — same two players, no new code.
   // See usePrivateRematch: the server marks the match private, and both
   // players must accept before anything is staked.

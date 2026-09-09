@@ -35,6 +35,9 @@ const GAME_INFO = {
   tower:         { name: 'Tower' },
   blackjack:     { name: 'Blackjack' },
   coin_flip:     { name: 'Coin Flip' },
+  // One row per tournament entered, so played is entries and won is
+  // championships — not rounds, which are recorded under their own game.
+  tournament:    { name: 'Tournaments' },
 };
 
 // Games with a meaningful personal best. Without a label the best is not shown,

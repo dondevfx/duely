@@ -18,6 +18,7 @@ import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import { useResumeMatch } from '../hooks/useResumeMatch';
 import CoinIcon from '../components/CoinIcon';
 import { usePrivateRematch } from '../hooks/usePrivateRematch';
+import useTournamentRound from '../hooks/useTournamentRound';
 
 // Coin tiers come from the shared list — this page had its own copy, so a tier
 // added anywhere else silently skipped Block Burst.
@@ -161,6 +162,10 @@ export default function BlockBlastGame() {
   const ready = usePageReady();
   const { profile, refreshProfile, updateProfile } = useAuth();
   const { socket, authenticated, doAuth, playerCounts } = useSocket();
+  // Playable inside a bracket as well as on its own. See the hook: it says
+  // when this screen is ready to be counted in, and takes the player back
+  // to the bracket once their round is decided.
+  useTournamentRound(socket);
   // Rematch for invite/code matches — same two players, no new code.
   // See usePrivateRematch: the server marks the match private, and both
   // players must accept before anything is staked.

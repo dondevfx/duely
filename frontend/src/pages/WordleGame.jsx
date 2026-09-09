@@ -15,6 +15,7 @@ import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import { useResumeMatch } from '../hooks/useResumeMatch';
 import { useLeaveGuard } from '../hooks/useLeaveGuard';
 import { usePrivateRematch } from '../hooks/usePrivateRematch';
+import useTournamentRound from '../hooks/useTournamentRound';
 
 const MAX_GUESSES = 6;
 const WORD_LENGTH = 5;
@@ -172,6 +173,10 @@ export default function WordleGame() {
   const navigate   = useNavigate();
   const location   = useLocation();
   const { socket, authenticated, doAuth, playerCounts } = useSocket();
+  // Playable inside a bracket as well as on its own. See the hook: it says
+  // when this screen is ready to be counted in, and takes the player back
+  // to the bracket once their round is decided.
+  useTournamentRound(socket);
   // Rematch for invite/code matches — same two players, no new code.
   // See usePrivateRematch: the server marks the match private, and both
   // players must accept before anything is staked.

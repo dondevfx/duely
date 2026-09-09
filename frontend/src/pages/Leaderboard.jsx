@@ -65,6 +65,11 @@ const GAME_LEADERBOARDS = [
   { id: 'scrabble',      label: 'Word VS', scoreLabel: 'Wins'  },
   { id: 'coinFlip',      label: 'Coin Flip', scoreLabel: 'Wins'  },
   { id: 'blackjack',     label: 'Blackjack', scoreLabel: 'Wins'  },
+  // Tournaments are ranked on tournaments WON, not rounds won. The rounds
+  // inside one are staked at zero and recorded as ordinary matches of
+  // whichever game was drawn; the single row carrying game_type
+  // 'tournament' is the entry itself, and its winner_id is the champion.
+  { id: 'tournament',    label: 'Tournaments', scoreLabel: 'Wins'  },
 ];
 
 // Monday 00:00 Pacific, matching the server's filter exactly. This was Monday

@@ -17,6 +17,7 @@ import ChallengeLinkBox from '../components/ChallengeLinkBox';
 import PrivateWaiting from '../components/PrivateWaiting';
 import { usePrivateRematch } from '../hooks/usePrivateRematch';
 import { useGameScrollLock } from '../hooks/useGameScrollLock';
+import useTournamentRound from '../hooks/useTournamentRound';
 
 function fmtTime(ms) {
   const s = (ms ?? 0) / 1000;
@@ -49,6 +50,10 @@ export default function CarDashGame() {
   const location = useLocation();
   const { profile, refreshProfile, updateProfile } = useAuth();
   const { socket, authenticated, doAuth, playerCounts } = useSocket();
+  // Playable inside a bracket as well as on its own. See the hook: it says
+  // when this screen is ready to be counted in, and takes the player back
+  // to the bracket once their round is decided.
+  useTournamentRound(socket);
   // Rematch for invite/code matches — same two players, no new code.
   // See usePrivateRematch: the server marks the match private, and both
   // players must accept before anything is staked.
