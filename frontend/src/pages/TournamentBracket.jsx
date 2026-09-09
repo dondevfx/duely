@@ -160,12 +160,26 @@ export default function TournamentBracket() {
 
   const filling = pool.state === 'filling';
   const seatsLeft = pool.size - pool.players.length;
-  const rounds = pool.roundGames?.length ?? 4;
-  // Not while it is still filling, and not while the draw is running. The
-  // round's game is revealed by the draw; naming it above the animation gives
-  // away the answer before it lands.
-  const game = filling || drawing ? null : pool.roundGames?.[pool.round];
-  const startsIn = drawing?.at ? Math.max(0, drawing.at - now) : 0;
+  const rounds = pool.rounds ?? 4;
+
+  // The draw comes from the socket when it can and from the pool when it
+  // cannot.
+  //
+  // `tournament_round_starting` fires the instant the round is scheduled,
+  // which for a bot bracket is the instant the player is still navigating here
+  // from the bet screen — so it is missed, and missed for good. The pool
+  // carries the same fact, so a screen that arrived late still shows the draw
+  // instead of sitting on a bracket that never changes.
+  const drawn = drawing?.round === pool.round
+    ? drawing
+    : pool.phase === 'intermission' && pool.roundGames?.[pool.round]
+      ? { round: pool.round, game: pool.roundGames[pool.round], at: pool.nextRoundAt }
+      : null;
+
+  // Named only once the round is actually being played. The server does not
+  // send a round's game before it is drawn, so there is nothing here to leak.
+  const game = pool.phase === 'playing' ? pool.roundGames?.[pool.round] : null;
+  const startsIn = drawn?.at ? Math.max(0, drawn.at - now) : 0;
 
   // Where this player stands, which is the first thing they look for.
   const myMatch = !filling && pool.bracket
@@ -208,11 +222,13 @@ export default function TournamentBracket() {
 
       {over ? (
         <Podium awards={over.awards || []} free={over.free} me={me} />
-      ) : drawing ? (
+      ) : drawn ? (
         <>
-          <GameDraw game={drawing.game} games={pool.roundGames || []} />
+          {/* The reel runs through every game a tournament can draw, not just
+              the ones already played — the point is not knowing which. */}
+          <GameDraw game={drawn.game} games={ALL_GAMES} />
           <p className="text-center text-xs text-muted">
-            {roundName(drawing.round, rounds)} starts in {Math.ceil(startsIn / 1000)}s
+            {roundName(drawn.round, rounds)} starts in {Math.ceil(startsIn / 1000)}s
           </p>
           <div className="mt-4 opacity-60">
             <Bracket bracket={pool.bracket} players={pool.players} currentRound={pool.round} />
@@ -317,6 +333,8 @@ function roundName(index, total) {
   if (fromEnd === 3) return 'Quarter-finals';
   return `Round ${index + 1}`;
 }
+
+const ALL_GAMES = ['block-blast', 'car-dash', 'color-rush', 'tower', 'scrabble'];
 
 const TITLES = {
   'block-blast': 'Block Burst',

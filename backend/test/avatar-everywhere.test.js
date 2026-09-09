@@ -136,3 +136,33 @@ test('the shared component is actually used, not just defined', () => {
     assert.match(src, /import Avatar from/, `${name} is missing the import`);
   }
 });
+
+test('the account avatar carries rank and streak at every width', () => {
+  // Rank and streak ride the avatar. When the account moved to the top-right
+  // corner on a phone, the badges did not move with it — which quietly made
+  // both of them desktop-only features, on the client most people use.
+  //
+  // Navbar has TWO account links by design: one for phones in the corner, one
+  // for desktop with the name beside it. Both have to carry the badges, and
+  // "did the other copy get updated?" is exactly the question this file exists
+  // to answer.
+  const nav = strip(fe('components', 'Navbar.jsx'));
+
+  const mobile = nav.slice(nav.indexOf('className="md:hidden relative z-10 shrink-0 w-9 h-9'));
+  const mobileLink = mobile.slice(0, mobile.indexOf('</Link>'));
+  assert.match(mobileLink, /<RankIcon rank=\{getDisplayRank\(profile\)\}/,
+    'the phone avatar lost its rank badge');
+  assert.match(mobileLink, /current_streak \?\? 0\) >= 1/,
+    'the phone avatar lost its streak badge');
+
+  const desktop = nav.slice(nav.indexOf('to="/profile" className="hidden md:flex'));
+  const desktopLink = desktop.slice(0, desktop.indexOf('</Link>'));
+  assert.match(desktopLink, /<RankIcon rank=\{getDisplayRank\(profile\)\}/);
+  assert.match(desktopLink, /current_streak \?\? 0\) >= 1/);
+
+  // Both badges are positioned against the avatar itself, not the bar, or they
+  // land somewhere else entirely on the narrower slot.
+  for (const [where, link] of [['phone', mobileLink], ['desktop', desktopLink]]) {
+    assert.match(link, /<div className="relative">/, `${where}: nothing for the badges to anchor to`);
+  }
+});

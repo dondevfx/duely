@@ -282,7 +282,23 @@ function publicPool(p) {
     slotStart: p.slotStart,
     size: F.POOL_SIZE,
     round: p.round,
-    roundGames: p.roundGames,
+    rounds: p.roundGames?.length ?? F.ROUNDS,
+    // Where the runner has got to, and when the next round begins. Both are
+    // announced over the socket as they happen; they are here as well because
+    // a client that was mid-navigation when one fired never heard it, and a
+    // bot bracket starts in the same instant the player is still leaving the
+    // bet screen. The socket is the fast path, this is the one always true.
+    phase: p.phase || (p.state === 'filling' ? 'filling' : 'idle'),
+    nextRoundAt: p.nextRoundAt ?? null,
+    // ONLY the rounds that have been drawn.
+    //
+    // The whole rotation is decided when the pool is created, so that every
+    // client is told the same thing and nobody can be shown one game and given
+    // another. Sending all of it meant the bracket could name round three's
+    // game before round one had been played — and the draw, when it came, had
+    // nothing left to reveal. A round the tournament has not reached is not
+    // the client's to know.
+    roundGames: (p.roundGames || []).slice(0, p.state === 'running' ? p.round + 1 : 0),
     players: p.players.map(x => ({
       userId: x.userId, username: x.username, avatarUrl: x.avatarUrl,
     })),

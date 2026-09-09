@@ -438,8 +438,25 @@ export default function Navbar() {
               style={{ touchAction: 'manipulation' }}
               aria-label="Your profile"
             >
-              <Avatar username={profile.username} avatarUrl={profile.avatar_url}
-                      color={profile.profile_color} className="w-8 h-8" textClassName="text-xs" />
+              {/* Rank and streak ride the avatar here exactly as they do on
+                  desktop. They were dropped when the account moved to this
+                  corner, which quietly made rank and a running streak
+                  desktop-only features — on the client most people actually
+                  use. Smaller, because the corner is 36px and a badge that
+                  overhangs the screen edge is a badge nobody can read. */}
+              <div className="relative">
+                <Avatar username={profile.username} avatarUrl={profile.avatar_url}
+                        color={profile.profile_color} className="w-8 h-8" textClassName="text-xs" />
+                <span className="absolute -bottom-0.5 -right-0.5 leading-none" title={getDisplayRank(profile).name}>
+                  <RankIcon rank={getDisplayRank(profile)} size={13} />
+                </span>
+                {(profile.current_streak ?? 0) >= 1 && (
+                  <span className="absolute -top-1 -left-1 flex items-center justify-center min-w-[13px] h-[13px] rounded-full text-[0.5rem] font-black leading-none px-0.5"
+                    style={{ background: 'rgba(0,0,0,0.85)', color: '#fb923c', border: '1px solid rgba(251,146,60,0.4)', textShadow: '0 0 6px rgba(251,146,60,0.6)' }}>
+                    🔥{profile.current_streak}
+                  </span>
+                )}
+              </div>
             </Link>
           )}
 

@@ -118,7 +118,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
   async function beginPool(pool) {
     const st = stateOf(pool.id);
     if (st.phase !== 'idle') return;
-    st.phase = 'starting';
+    setPhase(pool, 'starting');
 
     if (supabase && !pool.free && pool.entryFee > 0) {
       const rows = pool.players.filter(p => !p.isBot).map(p => ({
@@ -142,9 +142,29 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     scheduleRound(pool, T.pick);
   }
 
-  function scheduleRound(pool, delay) {
+  /**
+   * Where the pool is, written onto the pool itself.
+   *
+   * Every one of these moments is also announced over the socket, and the
+   * socket is what makes the screen react immediately. But a client that is
+   * mid-navigation when one fires never hears it, and there is no second
+   * chance: a tournament entered against bots starts in the same instant the
+   * player is still moving from the bet screen to the bracket, so the draw
+   * they were meant to watch happens to nobody.
+   *
+   * So the phase lives on the pool, where /tournaments/:id reads it. The
+   * socket stays the fast path; this is the one that is always true.
+   */
+  function setPhase(pool, phase, extra = {}) {
     const st = stateOf(pool.id);
-    st.phase = 'intermission';
+    st.phase = phase;
+    pool.phase = phase;
+    pool.nextRoundAt = extra.nextRoundAt ?? null;
+    return st;
+  }
+
+  function scheduleRound(pool, delay) {
+    const st = setPhase(pool, 'intermission', { nextRoundAt: Date.now() + delay });
     st.nextRoundAt = Date.now() + delay;
     broadcast(pool, 'tournament_round_starting', {
       poolId: pool.id,
@@ -161,7 +181,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     if (pool.state !== 'running') return;
     if (st.startedRound === pool.round) return;   // never twice
     st.startedRound = pool.round;
-    st.phase = 'playing';
+    setPhase(pool, 'playing');
 
     const game = pool.roundGames[pool.round];
     const pending = pools.pendingMatches(pool);
@@ -435,7 +455,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     const st = stateOf(pool.id);
     if (st.settled) return;
     st.settled = true;
-    st.phase = 'complete';
+    setPhase(pool, 'complete');
     for (const t of st.timers) clearTimeout(t);
 
     // placings() names them; the prize table is ordered. Lined up here once,
