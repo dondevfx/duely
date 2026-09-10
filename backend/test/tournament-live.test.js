@@ -269,3 +269,58 @@ test('a bracket match against a bot reports as PvP, not as a solo run', () => {
     assert.equal(res.payload.entryFee, 0);
   });
 });
+
+test('no game lets a tournament bot beat a real entrant', () => {
+  // The bots fill a bracket nobody else entered. They pay nothing in, so they
+  // must never take a place — in any of the five games, by any route.
+  //
+  // Word VS was the one that did. Every other engine consults demoWin, but its
+  // bot branch applied the solve rule on its own, so a player who ran out of
+  // guesses lost their round to a bot that had not solved anything either.
+  // This asserts the flag is honoured everywhere rather than trusting that it
+  // was noticed in each file.
+  const F = require('../src/services/tournamentFormat');
+  const fs = require('node:fs');
+  const path = require('node:path');
+
+  const FILES = {
+    'block-blast': 'blockBlastEngine.js',
+    'car-dash':    'carDashEngine.js',
+    'color-rush':  'colorRushEngine.js',
+    tower:         'towerEngine.js',
+    scrabble:      'wordleEngine.js',
+  };
+
+  for (const game of F.TOURNAMENT_GAMES) {
+    const code = fs.readFileSync(
+      path.join(__dirname, '..', 'src', 'services', FILES[game]), 'utf8');
+    assert.match(code, /room\.demoWin|room\.tournament/,
+      `${game} decides a bot match without asking whether the bot may win`);
+  }
+});
+
+test('every bracket room holding a bot is flagged so the bot cannot win', () => {
+  // The flag itself, set by the runner on the rooms it makes — the other half
+  // of the rule above.
+  const { runner, pool } = boot({ bots: 8 });
+  const cd = require('../src/services/carDashEngine');
+  const tw = require('../src/services/towerEngine');
+  const wd = require('../src/services/wordleEngine');
+  const lookups = [bb.getBlockBlastRoom, cd.getCarDashRoom, tw.getTowerRoom, wd.getWordleRoom];
+
+  for (const game of ['block-blast', 'car-dash', 'tower', 'scrabble']) {
+    hook._reset();
+    const fresh = boot({ bots: 8 });
+    fresh.pool.roundGames = fresh.pool.roundGames.map(() => game);
+    fresh.runner.startRound(fresh.pool);
+
+    const rooms = [...hook._rooms.keys()]
+      .map(id => lookups.map(f => f(id)).find(Boolean))
+      .filter(r => r && r.players?.some(p => p.isBot) && r.players?.some(p => !p.isBot));
+    assert.ok(rooms.length, `${game}: no human was drawn against a bot`);
+    for (const room of rooms) {
+      assert.ok(room.demoWin || room.tournament,
+        `${game}: a bot could knock a real entrant out`);
+    }
+  }
+});

@@ -394,7 +394,7 @@ export default function ResultScreen({
           {tour ? (
             tour.over ? (
               <>
-                <TournamentFinish award={tour.award} awards={tour.awards} free={tour.free} />
+                <TournamentFinish award={tour.award} free={tour.free} />
                 <button
                   onClick={tour.toLobby}
                   className="w-full mt-3 sm:mt-4 py-3 rounded-xl font-black text-base bg-primary text-white hover:bg-blue-500 transition-all"
@@ -490,63 +490,35 @@ export default function ResultScreen({
  * on this screen rather than back on the bracket, because a bracket that has
  * finished is a page nobody stays on.
  *
- * Everyone sees the podium, including the thirteen who are not on it. Being
- * told where the money went is the difference between a tournament and a
- * match that stopped.
+ * Two lines and a number. It had the full podium under it as well, which
+ * repeated the layout the card already carries and pushed the one figure that
+ * matters — what was won — off the bottom of a phone.
  */
-function TournamentFinish({ award, awards, free }) {
+function TournamentFinish({ award, free }) {
   const place = award?.place;
-  const podium = [2, 1, 3].map(n => awards.find(a => a.place === n) || null);
 
   return (
-    <div className="mt-3 sm:mt-4">
-      <div className="text-center">
-        <div className="text-[0.625rem] uppercase tracking-widest text-muted font-bold">
-          Tournament
-        </div>
-        <div className="text-2xl sm:text-3xl font-black leading-tight"
-             style={{ color: place === 1 ? '#FFFFFF' : undefined }}>
-          {place === 1 ? 'You won the tournament'
-            : place ? `You finished ${ordinal(place)}`
-            : 'Knocked out'}
-        </div>
-        {!free && award && (
-          <div className="mt-1 inline-flex items-center gap-1.5 text-3xl sm:text-4xl font-black text-primary">
-            +{award.amount} <CoinIcon size="0.8em" />
-          </div>
-        )}
-        {free && (
-          <div className="mt-1 text-xs text-muted">A practice bracket — nothing was staked.</div>
-        )}
+    <div className="mt-3 sm:mt-4 text-center">
+      <div className="text-[0.625rem] uppercase tracking-widest text-muted font-bold">
+        Tournament
       </div>
-
-      {/* First in the middle and largest, second to its left — the same
-          arrangement as the bet screen's payouts, so the promise and the
-          result are laid out the same way. */}
-      <div className="grid grid-cols-3 gap-2 items-end mt-3">
-        {podium.map((a, i) => {
-          if (!a) return <div key={i} />;
-          const first = a.place === 1;
-          return (
-            <div key={a.userId}
-                 className={`rounded-xl border p-2 text-center ${
-                   first ? 'bg-primary/10 border-primary/40 py-3' : 'bg-surface border-surfaceLight'
-                 }`}>
-              <div className="text-[0.5rem] uppercase tracking-widest text-muted font-bold">
-                {ordinal(a.place)}
-              </div>
-              <div className={`font-black text-white truncate ${first ? 'text-sm' : 'text-xs'}`}>
-                {a.username}
-              </div>
-              {!free && (
-                <div className={`font-black text-primary ${first ? 'text-lg' : 'text-sm'}`}>
-                  {a.amount}
-                </div>
-              )}
-            </div>
-          );
-        })}
+      <div className="text-2xl sm:text-3xl font-black leading-tight text-white">
+        {place === 1 ? 'You won the tournament'
+          : place ? `You finished ${ordinal(place)}`
+          : 'Knocked out'}
       </div>
+      {/* Green, like every other number on this card that arrived in your
+          balance. It was the interface blue, which is the colour of a control
+          rather than of money coming in. */}
+      {!free && award && (
+        <div className="mt-1 inline-flex items-center gap-1.5 text-3xl sm:text-4xl font-black text-success"
+             style={{ textShadow: '0 0 16px rgba(34,197,94,0.45)' }}>
+          +{award.amount} <CoinIcon size="0.8em" />
+        </div>
+      )}
+      {free && (
+        <div className="mt-1 text-xs text-muted">A practice bracket — nothing was staked.</div>
+      )}
     </div>
   );
 }

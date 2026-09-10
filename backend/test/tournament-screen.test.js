@@ -279,6 +279,20 @@ test('the round clock sits below the bar, not across the balance', () => {
   assert.match(clock, /zIndex: 40/, 'the clock is not below the bar');
   assert.ok(!/zIndex: (5[0-9]|[6-9][0-9])/.test(clock), 'the clock can still cover the bar');
 
+  // Two homes. Block Burst and Word VS leave the centre of the top strip
+  // empty; the other three fill it, so on those it goes to the bottom left.
+  assert.match(clock, /TOP_CENTRE = new Set\(\['block-blast', 'scrabble'\]\)/,
+    'the two games with a free top centre are not the ones using it');
+  assert.match(clock, /bottom: 'calc\(env\(safe-area-inset-bottom/,
+    'there is no bottom placement for the games whose top strip is full');
+
+  // And only while a game is on screen. Leaving a tournament sends no event
+  // that ends the match, so the clock used to count down over the lobby.
+  assert.match(clock, /pathname\?\.startsWith\('\/game\/'\)/,
+    'the clock does not check whether a game is being played');
+  assert.match(clock, /if \(!match \|\| !game\) return null;/,
+    'the clock renders off a game screen');
+
   // Driven by the socket, not by route state: a reloaded game screen has no
   // navigation state and the clock silently never appeared.
   assert.match(clock, /socket\.on\('tournament_match'/, 'the clock only learns from navigation');
@@ -296,4 +310,36 @@ test('no game prints its own name over the board', () => {
     const rendered = code.split(/\r?\n/).filter(l => !l.trim().startsWith('*') && !l.trim().startsWith('//')).join('\n');
     assert.ok(!rendered.includes(`>${label}<`), `${file} still prints "${label}" over the board`);
   }
+});
+
+test('every result card names whose number is whose', () => {
+  // "20 — 2" on one line reads as a scoreline in some other order the moment
+  // the numbers are close or one of them is small. Rush Hour, Colour Rush and
+  // Word VS all named theirs; Block Burst and Tower did not.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const pages = path.join(__dirname, '..', '..', 'frontend', 'src', 'pages');
+
+  for (const [file, mine, theirs] of [
+    ['BlockBlastGame.jsx', 'Your Score',  'Opponent Score'],
+    ['TowerGame.jsx',      'Your Blocks', 'Opponent Blocks'],
+    ['CarDashGame.jsx',    'Your Time',   'Opponent Time'],
+    ['ColorRushGame.jsx',  'Your Diamonds', 'Opponent Diamonds'],
+    ['WordleGame.jsx',     'Your guesses',  'Their guesses'],
+  ]) {
+    const code = fs.readFileSync(path.join(pages, file), 'utf8');
+    assert.ok(code.includes(mine), `${file} does not label your own number`);
+    assert.ok(code.includes(theirs), `${file} does not label the opponent's`);
+  }
+});
+
+test('the tournament payout is the colour of money, not of a button', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const card = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'src', 'components', 'ResultScreen.jsx'), 'utf8');
+  const finish = card.slice(card.indexOf('function TournamentFinish'));
+  assert.match(finish, /text-success/, 'the payout is not green');
+  assert.ok(!/grid-cols-3/.test(finish),
+    'the podium is still repeated under a card that already shows the result');
 });

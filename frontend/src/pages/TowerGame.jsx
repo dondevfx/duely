@@ -356,10 +356,11 @@ export default function TowerGame() {
                     { label: 'Your Blocks', value: (result.playerScore ?? 0).toLocaleString() },
                     { label: 'Bot Blocks',  value: (result.botScore ?? 0).toLocaleString() },
                   ])
-            : [{
-                label: 'Blocks',
-                value: `${(isWinner ? result.winnerScore : result.loserScore) ?? 0} — ${(isWinner ? result.loserScore : result.winnerScore) ?? 0}`,
-              }]}
+            // Named rather than combined — see the note in BlockBlastGame.
+            : [
+                { label: 'Your Blocks',     value: `${(isWinner ? result.winnerScore : result.loserScore) ?? 0}` },
+                { label: 'Opponent Blocks', value: `${(isWinner ? result.loserScore : result.winnerScore) ?? 0}` },
+              ]}
           isPrivate={privateRematch.isPrivate}
           rematchState={privateRematch.rematchState}
           onPrivateRematch={privateRematch.requestRematch}

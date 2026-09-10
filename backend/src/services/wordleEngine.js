@@ -379,6 +379,20 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
       const solved = !!room.pstate[humanP.socketId]?.solved;
       winnerPlayer = solved ? humanP : botP;
       loserPlayer  = solved ? botP : humanP;
+
+      // Except inside a bracket, where a bot may never win.
+      //
+      // The rule above is deliberate and stays: in an ordinary bot match,
+      // solving is the only thing that wins it, demo accounts included — see
+      // the tests in wordvs-bot. A tournament is the one place it does not
+      // hold. The bots there exist to fill a bracket nobody else entered; they
+      // pay nothing in and take nothing out, so a player who runs out of
+      // guesses must not be knocked out of a real tournament by one that never
+      // solved anything either.
+      if (room.tournament) {
+        winnerPlayer = humanP;
+        loserPlayer  = botP;
+      }
     }
   }
 

@@ -894,10 +894,16 @@ export default function BlockBlastGame() {
             isFirstWin={result.isFirstWin}
             profile={profile}
             gameLabel="Block Burst"
-            extraRows={[{
-              label: 'Score',
-              value: `${(isWinner ? (result.winnerScore ?? 0) : (result.loserScore ?? 0)).toLocaleString()} — ${(isWinner ? (result.loserScore ?? 0) : (result.winnerScore ?? 0)).toLocaleString()}`,
-            }]}
+            // Two labelled rows rather than "20 — 2" on one.
+            //
+            // The combined line reads as a scoreline in some other order the
+            // moment the numbers are close or one of them is small, and it is
+            // the only card that did it — Rush Hour, Colour Rush and Word VS
+            // all name whose number is whose.
+            extraRows={[
+              { label: 'Your Score',     value: (isWinner ? (result.winnerScore ?? 0) : (result.loserScore ?? 0)).toLocaleString() },
+              { label: 'Opponent Score', value: (isWinner ? (result.loserScore ?? 0) : (result.winnerScore ?? 0)).toLocaleString() },
+            ]}
             isPrivate={privateRematch.isPrivate}
             rematchState={privateRematch.rematchState}
             onPrivateRematch={privateRematch.requestRematch}

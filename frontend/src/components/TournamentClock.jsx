@@ -19,8 +19,18 @@ import { useSocket } from '../context/SocketContext';
  * fixed to the top centre: each of the five puts its score at the top left and
  * right, and the middle is empty on all of them.
  */
+// Where the clock goes, per game.
+//
+// Block Burst and Word VS have an empty centre at the top of the board — the
+// scores sit either side of it — so the clock lives there. The other three
+// fill that strip: Tower and Rush Hour run their score across it and Colour
+// Rush puts the diamond count in the middle. On those it goes to the bottom
+// left, which is out of the play area on all three and out of the way of the
+// controls, which are centred.
+const TOP_CENTRE = new Set(['block-blast', 'scrabble']);
+
 export default function TournamentClock() {
-  const { state } = useLocation();
+  const { state, pathname } = useLocation();
   const { socket } = useSocket();
   const seeded = state?.tournament?.deadline
     ? { deadline: state.tournament.deadline, sudden: !!state.tournament.sudden }
@@ -60,25 +70,30 @@ export default function TournamentClock() {
     return () => clearInterval(id);
   }, [match]);
 
-  if (!match) return null;
+  // Only on a game screen.
+  //
+  // Leaving a tournament — knocked out, kicked, or simply walking away — sends
+  // no event that ends the match, so the clock carried on counting down over
+  // the lobby. The route is the honest answer to "is a game being played": if
+  // this is not a game screen, there is no round to time.
+  const game = pathname?.startsWith('/game/') ? pathname.slice('/game/'.length) : null;
+  if (!match || !game) return null;
+
   const left = Math.max(0, match.deadline - now);
   const urgent = left <= 30_000;
 
+  const top = TOP_CENTRE.has(game);
+
   return (
     <div
-      className="fixed left-1/2 -translate-x-1/2 pointer-events-none select-none"
-      // BELOW the navbar, which is fixed at the top with a height of 3.5rem
-      // and a z-index of 50. Sitting above it put the clock across the balance
-      // — the one number on the page nobody wants covered.
-      //
-      // Under it, the centre of every game's top strip is free: all five put
-      // their scores at the left and right of that row and leave the middle
-      // empty. z-40 clears the games' own overlays, which live in the 20s and
-      // 30s, without ever reaching the bar.
-      style={{
-        top: 'calc(env(safe-area-inset-top, 0px) + 3.5rem + 0.25rem)',
-        zIndex: 40,
-      }}
+      className={`fixed pointer-events-none select-none ${top ? 'left-1/2 -translate-x-1/2' : 'left-3'}`}
+      // Never above the navbar. It is fixed at the top, 3.5rem tall, at z-50;
+      // sitting over it put the clock across the balance, which is the one
+      // number on the page nobody wants covered. z-40 clears the games' own
+      // overlays, which live in the 20s and 30s, without reaching the bar.
+      style={top
+        ? { top: 'calc(env(safe-area-inset-top, 0px) + 3.5rem + 0.25rem)', zIndex: 40 }
+        : { bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)', zIndex: 40 }}
       aria-live="off"
     >
       <div

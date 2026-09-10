@@ -105,6 +105,24 @@ test('failing to solve loses the bot match, whatever the tiles say', () => {
   assert.ok(override > tiebreak, 'the bot rule must come after the tiebreaker to override it');
 });
 
+test('a bracket is the one place that rule does not hold', () => {
+  // The bots in a tournament fill a bracket nobody else entered. They pay
+  // nothing in and take nothing out, so a player who runs out of guesses must
+  // not be knocked out of a real tournament by one that never solved anything
+  // either. Every other engine already refused to let a bracket bot win; this
+  // was the one that did not.
+  //
+  // Narrow on purpose: `room.tournament`, not demoWin. An ordinary bot match
+  // is still won by solving, demo accounts included — that is the test above.
+  const settle = SRC.slice(SRC.indexOf('const botP = room.players.find(p => p.isBot);'));
+  const branch = settle.slice(0, 1400);
+  assert.match(branch, /if \(room\.tournament\) \{/, 'a bracket bot can still win');
+  assert.ok(!/room\.demoWin/.test(branch),
+    'demoWin is back in the bot branch — an ordinary demo match is won by solving');
+  assert.ok(branch.indexOf('if (room.tournament)') > branch.indexOf('winnerPlayer = solved'),
+    'the bracket rule must come after the solve rule to override it');
+});
+
 test('the demo special case is gone, because the rule now covers it', () => {
   // demoWin forced the demo account to win a bot match. With the bot unable to
   // solve and the player judged only on solving, a demo wins by solving like
