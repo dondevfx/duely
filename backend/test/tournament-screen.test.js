@@ -459,3 +459,28 @@ test('a shortfall is a dialog, not a relabelled button', () => {
   assert.ok(!/session && !canAfford/.test(SCREEN),
     'the button is still disabled by the balance');
 });
+
+test('what the server sends about a match reaches the screen that shows it', () => {
+  // The bug this exists for: the bracket hand-listed the fields it copied into
+  // the game screen's navigation state, so every field the server added had to
+  // be added here too. The first one that was not was `pays` — what the final
+  // and the playoff are worth. The server sent it, the bracket dropped it, and
+  // the result card had nothing to show a champion.
+  //
+  // Asserting the two ends carry it is what the earlier tests did, and both
+  // passed while the middle threw it away. This asserts the middle.
+  const bracket = read('pages', 'TournamentBracket.jsx');
+  const onMatch = bracket.slice(bracket.indexOf('const onMatch'), bracket.indexOf('socket.on(\'tournament_update\''));
+
+  assert.match(onMatch, /tournament: \{ \.\.\.m/,
+    'the bracket picks fields out of the match instead of forwarding it');
+  assert.ok(!/roomId: m\.roomId, round: m\.round/.test(onMatch),
+    'the hand-written field list is back — the next field added will be dropped');
+
+  // And the card can find it without the route, because a reload loses that.
+  const hook = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'src', 'hooks', 'useTournamentResult.js'), 'utf8');
+  assert.match(hook, /socket\.on\('tournament_match', onMatch\)/,
+    'the payout is only ever read from navigation state');
+  assert.match(hook, /m\.pays !== undefined/);
+});

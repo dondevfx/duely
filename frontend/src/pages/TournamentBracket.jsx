@@ -151,11 +151,15 @@ export default function TournamentBracket() {
       setDrawing(null);
       navRef.current(`/game/${m.game}`, {
         state: {
-          tournament: {
-            poolId: id, roomId: m.roomId, round: m.round, match: m.match,
-            game: m.game, deadline: m.deadline, sudden: !!m.sudden,
-            opponent: m.opponent,
-          },
+          // The whole payload, not a hand-picked copy of it.
+          //
+          // This used to list the fields one by one, so every field the server
+          // added had to be added here too — and the first one that was not
+          // was `pays`, what the final and the playoff are worth. The server
+          // sent it, this dropped it, and the result card had nothing to show
+          // a champion. A screen that forwards a message should forward the
+          // message.
+          tournament: { ...m, poolId: id, sudden: !!m.sudden },
         },
       });
     };

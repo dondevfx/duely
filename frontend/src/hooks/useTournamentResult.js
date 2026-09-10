@@ -35,16 +35,27 @@ export default function useTournamentResult() {
   // must not leave on a timer, which is how a winner was carried off the
   // result before the payout had been worked out.
   const [nextRound, setNextRound] = useState(false);
+  // What the match being played is worth, taken from the socket as well as
+  // from the route.
+  //
+  // The route is how it normally arrives, and it is also the thing most easily
+  // lost — a reload, a screen reached another way, or a field somebody forgot
+  // to forward. The socket is where the number came from, so it is asked
+  // directly too.
+  const [pays, setPays] = useState(tournament?.pays || null);
 
   useEffect(() => {
     if (!socket || !poolId) return;
     const onOver = (p) => { if (p?.poolId === poolId) setOver(p); };
     const onNext = (p) => { if (p?.poolId === poolId) setNextRound(true); };
+    const onMatch = (m) => { if (m?.poolId === poolId && m.pays !== undefined) setPays(m.pays); };
     socket.on('tournament_over', onOver);
     socket.on('tournament_round_starting', onNext);
+    socket.on('tournament_match', onMatch);
     return () => {
       socket.off('tournament_over', onOver);
       socket.off('tournament_round_starting', onNext);
+      socket.off('tournament_match', onMatch);
     };
   }, [socket, poolId]);
 
@@ -89,7 +100,7 @@ export default function useTournamentResult() {
     round: tournament.round,
     // What this match itself pays — set only for the final and the playoff for
     // third, where both outcomes have a price the moment the game starts.
-    pays: tournament.pays || null,
+    pays,
     over,
     // Safe to leave on a timer: either the tournament is over, or the next
     // round has been drawn.
