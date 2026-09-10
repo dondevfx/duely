@@ -648,8 +648,17 @@ export default function CoinFlipGame() {
     }
   }
 
+  // The lobby starts at the top; everything else stays centred.
+  //
+  // Centring the bet screen in a full-height column put a large empty band
+  // between the bar and the title on a desktop — the title floated in the
+  // middle of the page while every other bet screen begins near the top. The
+  // flip itself and the result still centre, because those are single objects
+  // that belong in the middle of the screen.
   return (
-    <div className="relative min-h-[calc(100dvh-3.5rem)] bg-bg flex flex-col items-center justify-center px-3 sm:px-4 py-0 sm:py-4"
+    <div className={`relative min-h-[calc(100dvh-3.5rem)] bg-bg flex flex-col items-center px-3 sm:px-4 py-0 sm:py-4 ${
+      phase === 'lobby' ? 'justify-start pt-3 sm:pt-5' : 'justify-center'
+    }`}
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
 
       {/* The help button belongs to the PAGE, not to the flipping block. Nested

@@ -421,8 +421,14 @@ export default function ResultScreen({
               player is still in carries on without them. */}
           {tour ? (
             tour.over ? (
+              // No second panel here.
+              //
+              // It said "You won the tournament" and printed the payout again,
+              // directly under the payout the card had already shown — the
+              // same number twice, one above the other, on the one screen
+              // where the number is the point. The card above says who won and
+              // what it paid; this only has to say where to go next.
               <>
-                <TournamentFinish award={tour.award} free={tour.free} />
                 <button
                   onClick={tour.toLobby}
                   className="w-full mt-3 sm:mt-4 py-3 rounded-xl font-black text-base bg-primary text-white hover:bg-blue-500 transition-all"
@@ -518,45 +524,3 @@ export default function ResultScreen({
   );
 }
 
-/**
- * How the tournament ended, on the last result card of it.
- *
- * The card above already says who won the final game. This says what that was
- * worth, which is the thing the player actually entered for — and it has to be
- * on this screen rather than back on the bracket, because a bracket that has
- * finished is a page nobody stays on.
- *
- * Two lines and a number. It had the full podium under it as well, which
- * repeated the layout the card already carries and pushed the one figure that
- * matters — what was won — off the bottom of a phone.
- */
-function TournamentFinish({ award, free }) {
-  const place = award?.place;
-
-  return (
-    <div className="mt-3 sm:mt-4 text-center">
-      <div className="text-[0.625rem] uppercase tracking-widest text-muted font-bold">
-        Tournament
-      </div>
-      <div className="text-2xl sm:text-3xl font-black leading-tight text-white">
-        {place === 1 ? 'You won the tournament'
-          : place ? `You finished ${ordinal(place)}`
-          : 'Knocked out'}
-      </div>
-      {/* Green, like every other number on this card that arrived in your
-          balance. It was the interface blue, which is the colour of a control
-          rather than of money coming in. */}
-      {!free && award && (
-        <div className="mt-1 inline-flex items-center gap-1.5 text-3xl sm:text-4xl font-black text-success"
-             style={{ textShadow: '0 0 16px rgba(34,197,94,0.45)' }}>
-          +{award.amount} <CoinIcon size="0.8em" />
-        </div>
-      )}
-      {free && (
-        <div className="mt-1 text-xs text-muted">A practice bracket — nothing was staked.</div>
-      )}
-    </div>
-  );
-}
-
-const ordinal = (n) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`);

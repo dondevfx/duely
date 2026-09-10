@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { useShowBottomBar } from '../components/BottomNav';
+import { useGameScrollLock } from '../hooks/useGameScrollLock';
 import Avatar from '../components/Avatar';
 import Bracket from '../components/Bracket';
 import { fmt as fmtClock } from '../components/TournamentClock';
@@ -30,6 +31,15 @@ export default function TournamentBracket() {
   const { session } = useAuth();
   const { socket } = useSocket();
   useShowBottomBar(true);
+  // Pinned, like a game is.
+  //
+  // The bracket is where a player waits, and waiting means scrolling around.
+  // Whatever offset they left it at was still there when the round started and
+  // dropped them into a game — so the board arrived half off the screen, on a
+  // screen they had no reason to think they had moved. Nothing here is taller
+  // than the viewport, so there is nothing to lose by pinning it; the second
+  // argument re-pins on every change of phase, which is what carries the fix
+  // through filling -> playing -> the next round.
 
   const [pool, setPool] = useState(null);
   const [error, setError] = useState(null);
@@ -189,6 +199,8 @@ export default function TournamentBracket() {
     const t = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(t);
   }, []);
+
+  useGameScrollLock(true, `${pool?.state ?? 'load'}:${pool?.phase ?? ''}:${pool?.round ?? ''}`);
 
   const byId = useMemo(() => {
     const m = new Map();

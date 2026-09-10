@@ -194,3 +194,16 @@ html.light { --rh-surround: #ffffff; }
   .tx-filters .tx-row { gap: 4px; }
   .tx-filters .tx-btn { font-size: 12px; padding-left: 0.75rem; padding-right: 0.75rem; }
 }
+
+/* The tournament countdown on the home card, while entry is open.
+   Slower and shallower than Tailwind's animate-pulse: this sits next to a
+   looping gameplay clip, and anything faster reads as an alert rather than as
+   a clock that is currently running. */
+@keyframes tourPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Still blue, still legible, simply not moving. */
+  [style*="tourPulse"] { animation: none !important; }
+}

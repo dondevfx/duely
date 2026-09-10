@@ -11,6 +11,7 @@ import CoinIcon from '../components/CoinIcon';
 import ReferralCard from '../components/ReferralCard';
 import { fmtCoins, fmtExact } from '../utils/format';
 import { GAMES } from '../data/games';
+import useTournamentClock from '../hooks/useTournamentClock';
 import { LockIcon } from '../components/UiIcon';
 import FitText from '../components/FitText';
 
@@ -132,6 +133,9 @@ function DailySpinWidget({ profile }) {
 export default function Home() {
   const { profile } = useAuth();
   const { playerCounts } = useSocket();
+  // One clock for the page, not one per card — only the tournament card shows
+  // it, but the hook polls and ticks and there is no reason to do that twice.
+  const tournamentClock = useTournamentClock();
 
   return (
     <div className="min-h-screen bg-bg pt-2">
@@ -273,6 +277,10 @@ export default function Home() {
                   key={game.slug}
                   {...game}
                   liveCount={game.countKey ? (playerCounts?.[game.countKey] ?? 0) : 0}
+                  // The tournament card is the one with something live to say:
+                  // entry is either open right now or it is not, and both are a
+                  // countdown. See TournamentCountdown.
+                  subtitle={game.slug === 'tournament' ? <TournamentCountdown clock={tournamentClock} /> : null}
                 />
               ))}
               <HowDuelyWorks />
@@ -324,5 +332,31 @@ export default function Home() {
         </div>
       </section>
     </div>
+  );
+}
+
+/**
+ * When the next tournament opens, or how long is left to enter this one.
+ *
+ * Blue and breathing while entry is open, plain white while it is not. The
+ * difference is the only thing a player scanning the page needs from it: one
+ * of the two states is something they can act on right now, and it should be
+ * the one that catches the eye. The pulse is slow on purpose — a fast blink
+ * next to a looping clip is noise, and this is a clock, not an alarm.
+ */
+function TournamentCountdown({ clock }) {
+  if (!clock) return null;
+  return (
+    <p
+      className={`mt-0.5 font-mono font-black tabular-nums leading-none text-sm md:text-base ${
+        clock.joinOpen ? 'text-primary' : 'text-white'
+      }`}
+      style={clock.joinOpen ? {
+        textShadow: '0 0 12px rgba(18,80,180,0.75)',
+        animation: 'tourPulse 2.4s ease-in-out infinite',
+      } : undefined}
+    >
+      {clock.label}
+    </p>
   );
 }

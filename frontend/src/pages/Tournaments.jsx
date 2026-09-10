@@ -149,8 +149,11 @@ export default function Tournaments() {
     { label: '3rd', color: '#C07800', i: 2, big: false },
   ];
 
+  // More air above the title than an ordinary bet screen. This one has no
+  // game art behind it, so the name sits directly under the bar and read as
+  // crowded against it.
   return (
-    <div className="w-full max-w-md animate-slide-up pt-4 sm:pt-6">
+    <div className="w-full max-w-md animate-slide-up pt-8 sm:pt-12">
       <div className="relative">
         <div className="absolute top-0 right-0 z-10">
           <GameHelp gameType="tournament" placement="top-right" />

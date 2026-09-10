@@ -140,7 +140,9 @@ test('the clock rolls over to the next slot without a reload', () => {
 });
 
 test('there is room above the title', () => {
-  assert.match(CODE, /pt-4 sm:pt-6/, 'the screen still starts flush against the bar');
+  // More than a bet screen with game art behind it, because this one has none
+  // and the name sat directly under the bar.
+  assert.match(CODE, /pt-8 sm:pt-12/, 'the screen still starts flush against the bar');
 });
 
 test('the countdown counts to an instant the server sent', () => {
@@ -339,14 +341,9 @@ test('every result card names whose number is whose', () => {
 });
 
 test('the tournament payout is the colour of money, not of a button', () => {
-  const fs = require('node:fs');
-  const path = require('node:path');
-  const card = fs.readFileSync(
-    path.join(__dirname, '..', '..', 'frontend', 'src', 'components', 'ResultScreen.jsx'), 'utf8');
-  const finish = card.slice(card.indexOf('function TournamentFinish'));
-  assert.match(finish, /text-success/, 'the payout is not green');
-  assert.ok(!/grid-cols-3/.test(finish),
-    'the podium is still repeated under a card that already shows the result');
+  const card = read('components', 'ResultScreen.jsx');
+  const row = card.slice(card.indexOf('tour?.pays != null'));
+  assert.match(row.slice(0, 1200), /text-success/, 'the payout is not green');
 });
 
 // ── On a desktop ───────────────────────────────────────────────────────────
@@ -432,7 +429,7 @@ test('the tournament ends in one place, not two', () => {
     'the end of a tournament does not send anyone anywhere');
 
   const card = read('components', 'ResultScreen.jsx');
-  assert.match(card, /TournamentFinish/, 'the card no longer shows how it ended');
+  assert.match(card, /tour\?\.pays != null/, 'the card no longer shows what was won');
   assert.match(card, /\{tour\.settled && <ResultTimer/,
     'the card can still leave before it knows whether anything was won');
 });
@@ -483,4 +480,66 @@ test('what the server sends about a match reaches the screen that shows it', () 
   assert.match(hook, /socket\.on\('tournament_match', onMatch\)/,
     'the payout is only ever read from navigation state');
   assert.match(hook, /m\.pays !== undefined/);
+});
+
+// ── The home card's clock ──────────────────────────────────────────────────
+
+test('the tournament card carries the real clock, in two states', () => {
+  // Blue and breathing while entry is open, plain white while it is not. One
+  // of those two states is something a player can act on right now, and it
+  // should be the one that catches the eye — but slowly: this sits beside a
+  // looping clip, and a fast blink reads as an alert rather than as a clock.
+  const home = read('pages', 'Home.jsx');
+  assert.match(home, /useTournamentClock/, 'the card has no clock');
+  assert.match(home, /game\.slug === 'tournament' \? <TournamentCountdown/,
+    'the clock is on the wrong card, or on all of them');
+  assert.match(home, /clock\.joinOpen \? 'text-primary' : 'text-white'/);
+  assert.match(home, /animation: 'tourPulse/);
+
+  const css = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'src', 'index.css'), 'utf8');
+  assert.match(css, /@keyframes tourPulse/, 'the animation does not exist');
+  assert.match(css, /prefers-reduced-motion[\s\S]*?tourPulse[\s\S]*?animation: none/,
+    'the pulse ignores a reduced-motion preference');
+
+  // Counting to an instant the server sent, not down from a number a sleeping
+  // tab would resume from.
+  const hook = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'src', 'hooks', 'useTournamentClock.js'), 'utf8');
+  assert.match(hook, /schedule\.slot\.closesAt/);
+  assert.match(hook, /schedule\.slot\.nextStartsAt/);
+  assert.match(hook, /setEpoch\(e => e \+ 1\)/, 'the clock stops at zero when the slot passes');
+  assert.match(hook, /if \(!schedule\) return null/,
+    'a failed fetch would render a placeholder instead of nothing');
+});
+
+test('the tournament is not shown its payout twice', () => {
+  // The card already says who won and what it paid. A second panel under it
+  // said "You won the tournament" and printed the same number again — the one
+  // screen where the number is the point, showing it twice.
+  const card = read('components', 'ResultScreen.jsx');
+  assert.ok(!/TournamentFinish/.test(card), 'the second payout panel is back');
+  assert.match(card, /tour\?\.pays != null/, 'the payout row itself has gone with it');
+});
+
+test('the bracket is pinned, so a game does not start half scrolled', () => {
+  // The bracket is where a player waits, and waiting means scrolling. Whatever
+  // offset they left it at was still there when the round dropped them into a
+  // game, so the board arrived part way off the screen.
+  const bracket = read('pages', 'TournamentBracket.jsx');
+  assert.match(bracket, /useGameScrollLock\(true,/, 'the bracket still scrolls');
+  assert.match(bracket, /pool\?\.state[\s\S]{0,60}pool\?\.round/,
+    're-pinning does not follow the phase, so it fires once and never again');
+});
+
+test('the bet screens sit where they should under the bar', () => {
+  // Tournaments has no game art behind the title, so it needs more air above
+  // it than a bet screen that does. Coin Flip had the opposite problem: its
+  // lobby was centred in a full-height column, which floated the title in the
+  // middle of a desktop page.
+  assert.match(SCREEN, /animate-slide-up pt-8 sm:pt-12/, 'the tournament title is still crowded');
+
+  const coin = read('pages', 'CoinFlipGame.jsx');
+  assert.match(coin, /phase === 'lobby' \? 'justify-start pt-3 sm:pt-5' : 'justify-center'/,
+    'the coin flip lobby is still centred vertically');
 });

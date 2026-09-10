@@ -45,7 +45,7 @@ function useCropDebug(slug) {
 let mountOrder = 0;
 const STAGGER_MS = 150;
 
-export default function GameVideoCard({ slug, title, route, liveCount = 0, available = true, clipPosition }) {
+export default function GameVideoCard({ slug, title, route, liveCount = 0, available = true, clipPosition, subtitle = null }) {
   const navigate = useNavigate();
   const containerRef = useRef(null);
   const videoRef = useRef(null);
@@ -289,6 +289,9 @@ export default function GameVideoCard({ slug, title, route, liveCount = 0, avail
         <h3 className="text-center text-base md:text-2xl font-bold text-white leading-tight drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">
           <GameTitle slug={slug} title={title} />
         </h3>
+        {/* One line under the name, for a card that has something live to say
+            about itself. Inside the scrim so it reads on any footage. */}
+        {subtitle}
         {!available && (
           // A label, not a button shape. Nothing passes available=false today,
           // but a card that looks identical to a playable one and does nothing
