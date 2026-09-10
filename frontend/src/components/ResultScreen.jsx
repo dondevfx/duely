@@ -405,7 +405,15 @@ export default function ResultScreen({
               </>
             ) : isWinner ? (
               <>
-                <ResultTimer seconds={8} onTimeout={tour.toBracket} />
+                {/* Only once there is somewhere to go.
+                    Winning the final and winning a quarter-final look
+                    identical on this card; the difference is whether another
+                    round has been drawn or the tournament has been settled,
+                    and both take a moment to arrive. Leaving on a timer before
+                    then carried the champion off their own result — and the
+                    payout, which is the thing they entered for, landed on a
+                    screen they had already been moved past. */}
+                {tour.settled && <ResultTimer seconds={8} onTimeout={tour.toBracket} />}
                 <button
                   onClick={tour.toBracket}
                   className="w-full mt-3 sm:mt-4 py-3 rounded-xl font-black text-base bg-primary text-white hover:bg-blue-500 transition-all"

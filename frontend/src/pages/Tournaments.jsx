@@ -89,12 +89,12 @@ export default function Tournaments() {
     : 0;
   const secondsLeft = Math.max(0, Math.ceil((countdownTo - now) / 1000));
 
-  async function enter(vsBot) {
+  async function enter() {
     if (!session) return navigate('/login');
     setBusy(true);
     setError(null);
     try {
-      const data = await api.post('/tournaments/join', { entryFee, vsBot: !!vsBot });
+      const data = await api.post('/tournaments/join', { entryFee });
 
       // Straight to the bracket, whether it has started or not.
       //
@@ -223,7 +223,7 @@ export default function Tournaments() {
       {error && <p className="mb-2 text-center text-sm text-danger">{error}</p>}
 
       <button
-        onClick={() => enter(false)}
+        onClick={enter}
         disabled={busy || (session && !canAfford) || (tickets && tickets.left <= 0)}
         className="w-full py-3.5 rounded-xl bg-primary hover:bg-blue-500 text-white font-black text-lg
                    shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed"
@@ -249,19 +249,6 @@ export default function Tournaments() {
         </p>
       )}
 
-      {/* Testing, and labelled rather than hidden behind a flag nobody
-          remembers: the bots always lose and nothing is paid out, so the
-          bracket can be walked end to end without sixteen people or any money
-          moving. */}
-      <button
-        onClick={() => enter(true)}
-        disabled={busy}
-        className="mt-2 w-full py-2.5 rounded-xl border border-border bg-surface
-                   text-muted hover:text-white hover:border-primary/50 text-sm font-bold transition-all
-                   disabled:opacity-50"
-      >
-        Play vs Bots — free, no payout
-      </button>
     </div>
   );
 }

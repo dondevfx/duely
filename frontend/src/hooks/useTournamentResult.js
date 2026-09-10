@@ -29,12 +29,23 @@ export default function useTournamentResult() {
   // Set when the whole tournament has finished, which is the difference
   // between "next game" and "you have won it".
   const [over, setOver] = useState(null);
+  // And set when there is demonstrably another round coming. Until ONE of the
+  // two is known, this card does not know whether the player is on their way
+  // back to the bracket or looking at the last screen of a tournament — so it
+  // must not leave on a timer, which is how a winner was carried off the
+  // result before the payout had been worked out.
+  const [nextRound, setNextRound] = useState(false);
 
   useEffect(() => {
     if (!socket || !poolId) return;
     const onOver = (p) => { if (p?.poolId === poolId) setOver(p); };
+    const onNext = (p) => { if (p?.poolId === poolId) setNextRound(true); };
     socket.on('tournament_over', onOver);
-    return () => socket.off('tournament_over', onOver);
+    socket.on('tournament_round_starting', onNext);
+    return () => {
+      socket.off('tournament_over', onOver);
+      socket.off('tournament_round_starting', onNext);
+    };
   }, [socket, poolId]);
 
   // What the pool says, for a card that is on screen either side of
@@ -61,6 +72,9 @@ export default function useTournamentResult() {
           setOver({ poolId, awards: d.pool.awards, free: !!d.pool.free });
           return;
         }
+        // Still running with a round drawn: there is another game coming, and
+        // the card is free to send them back to the bracket for it.
+        if (d?.pool?.state === 'running' && d.pool.phase === 'intermission') setNextRound(true);
       } catch { /* gone, or not ready — the retry covers both */ }
       if (alive && tries < 12) timer = setTimeout(ask, 1000);
     };
@@ -74,6 +88,9 @@ export default function useTournamentResult() {
     poolId,
     round: tournament.round,
     over,
+    // Safe to leave on a timer: either the tournament is over, or the next
+    // round has been drawn.
+    settled: !!over || nextRound,
     // Their own placing, if it is finished. Everyone sees the podium; only the
     // three who placed have a payout to be told about.
     award: over?.awards?.find(a => a.userId === session?.user?.id) || null,

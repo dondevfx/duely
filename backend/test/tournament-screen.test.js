@@ -153,9 +153,14 @@ test('the countdown counts to an instant the server sent', () => {
 
 // ── Bots and demo ──────────────────────────────────────────────────────────
 
-test('the bot button asks for bots', () => {
-  assert.match(CODE, /enter\(true\)/, 'the bot button does not request a bot tournament');
-  assert.match(CODE, /vsBot: !!vsBot/, 'the flag never reaches the server');
+test('there is one way in, and it is a real tournament', () => {
+  // The bot bracket was a labelled testing route on the live screen: free,
+  // paying nothing, sixteen bots. It is gone. Demo accounts still fill their
+  // own bracket with bots — that is what makes a demo a demo — but a real
+  // account has one button and it enters a real tournament.
+  assert.ok(!/enter\(true\)/.test(CODE), 'the bot bracket can still be entered');
+  assert.ok(!/vsBot/.test(CODE), 'the screen still asks the server for bots');
+  assert.ok(!/Play vs Bots/.test(CODE), 'the button is still on the screen');
 });
 
 test('entering navigates to the bracket that was created', () => {
@@ -384,4 +389,50 @@ test('every game clip has a poster, and none is older than its clip', () => {
       `${file} is newer than its poster — the still is from an older cut`);
     assert.ok(fs.statSync(jpg).size > 1024, `${jpg} is too small to be a real frame`);
   }
+});
+
+// ── Leaving, and coming back to nothing ────────────────────────────────────
+
+test('a refresh while waiting lands on the lobby, not the waiting room', () => {
+  // Refreshing while a bracket fills takes the seat back and refunds the
+  // entry — a refresh is indistinguishable from leaving. What used to happen
+  // next is that the screen reloaded, found the pool still filling with other
+  // people in it, and showed the waiting room as though the seat were held.
+  const bracket = read('pages', 'TournamentBracket.jsx');
+  assert.match(bracket, /p\.state === 'filling' && !p\.players\.some\(x => x\.userId === me\)/,
+    'the screen does not notice the seat is gone');
+  assert.match(bracket, /navRef\.current\('\/tournaments', \{ replace: true \}\)/);
+});
+
+test('a refresh mid-round lands on the tournaments page', () => {
+  // Reloading loses the navigation state that says this was a tournament
+  // round, and the server has already taken the player out for disconnecting —
+  // so what came back was an ordinary game lobby offering to queue, with no
+  // sign a tournament had been walked out of.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const hook = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'src', 'hooks', 'useTournamentRound.js'), 'utf8');
+
+  assert.match(hook, /sessionStorage\.setItem\(KEY, poolId\)/,
+    'nothing survives the reload to say a round was being played');
+  assert.match(hook, /navigate\('\/tournaments', \{ replace: true \}\)/);
+  // And it is cleared on every ordinary ending, or the next visit to any game
+  // would bounce.
+  assert.match(hook, /removeItem\('tournamentRound'\)/);
+});
+
+test('the tournament ends in one place, not two', () => {
+  // The result card shows where they came and what they won. The bracket used
+  // to show the podium again one screen later — two endings for one
+  // tournament, and the second arrived after they had stopped reading.
+  const bracket = read('pages', 'TournamentBracket.jsx');
+  assert.ok(!/function Podium/.test(bracket), 'the bracket still has a results screen');
+  assert.match(bracket, /const onOver = \(p\) => \{[\s\S]*?navRef\.current\('\/tournaments'/,
+    'the end of a tournament does not send anyone anywhere');
+
+  const card = read('components', 'ResultScreen.jsx');
+  assert.match(card, /TournamentFinish/, 'the card no longer shows how it ended');
+  assert.match(card, /\{tour\.settled && <ResultTimer/,
+    'the card can still leave before it knows whether anything was won');
 });

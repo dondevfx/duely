@@ -42,7 +42,6 @@ export default function TournamentBracket() {
   const [scores, setScores] = useState(null);
   const [roundEnds, setRoundEnds] = useState(null);
   const [roundSudden, setRoundSudden] = useState(false);
-  const [over, setOver] = useState(null);
   const [now, setNow] = useState(Date.now());
   const navRef = useRef(navigate);
   navRef.current = navigate;
@@ -65,6 +64,20 @@ export default function TournamentBracket() {
         const { pool: p } = await api.get(`/tournaments/${id}`);
         if (!alive) return;
         if (!p) { setError('That tournament has finished or never started.'); return; }
+
+        // A seat given up is a seat gone.
+        //
+        // Refreshing while waiting for a bracket to fill takes the seat back
+        // and refunds the entry — that is what leaving means, and a refresh is
+        // indistinguishable from leaving. What used to happen next is that the
+        // screen reloaded, found the pool still filling with other people in
+        // it, and showed the waiting room as though the seat were still held.
+        // The lobby is where somebody with no seat belongs.
+        if (me && p.state === 'filling' && !p.players.some(x => x.userId === me)) {
+          navRef.current('/tournaments', { replace: true });
+          return;
+        }
+
         setPool(p);
         setError(null);
       } catch (e) {
@@ -78,7 +91,7 @@ export default function TournamentBracket() {
           if (alive) navRef.current('/tournaments', { replace: true });
           return;
         }
-        if (alive && !over) {
+        if (alive) {
           setError(e?.status === 404
             ? 'That tournament has finished or never started.'
             : 'Lost contact with the tournament.');
@@ -88,7 +101,7 @@ export default function TournamentBracket() {
     };
     tick();
     return () => { alive = false; clearTimeout(timer); };
-  }, [id, over]);
+  }, [id, me]);
 
   // ── The socket, on top of it ─────────────────────────────────────────────
   useEffect(() => {
@@ -115,7 +128,17 @@ export default function TournamentBracket() {
       setRoundSudden(!!p.sudden);
     };
     const onSudden = (p) => { if (mine(p)) setSudden(p); };
-    const onOver = (p) => { if (mine(p)) { setDrawing(null); setOver(p); } };
+    // The tournament ending sends everyone still here back to the lobby.
+    //
+    // This used to become a results screen of its own — the podium, again,
+    // one screen after the result card had already shown the player where
+    // they came and what they won. Two endings for one tournament, and the
+    // second one arrived after they had stopped reading.
+    const onOver = (p) => {
+      if (!mine(p)) return;
+      setDrawing(null);
+      navRef.current('/tournaments', { replace: true });
+    };
     const onCancelled = (p) => {
       if (!mine(p)) return;
       setError(p?.reason || 'That tournament was cancelled and your entry returned.');
@@ -211,7 +234,7 @@ export default function TournamentBracket() {
   const myMatch = !filling && pool.bracket
     ? (pool.bracket[pool.round] || []).findIndex(m => m.a === me || m.b === me)
     : -1;
-  const knockedOut = !filling && me && myMatch === -1 && !over;
+  const knockedOut = !filling && me && myMatch === -1;
 
   // Its own screen, not a panel on this one. Everything below — the heading,
   // the bracket, the seats — is what you come back to afterwards.
@@ -233,16 +256,14 @@ export default function TournamentBracket() {
     <div className="w-full max-w-lg animate-slide-up pt-4 sm:pt-6">
       <div className="text-center mb-4">
         <div className="text-[0.625rem] sm:text-xs uppercase tracking-widest text-muted font-bold">
-          {over ? 'Finished'
-            : filling ? 'Waiting for players'
+          {filling ? 'Waiting for players'
             : roundName(pool.round, rounds)}
         </div>
         <div className="text-3xl sm:text-4xl font-black text-white leading-tight">
           {filling
             ? `${pool.players.length} / ${pool.size}`
-            : over ? 'Results'
-            : drawing ? ' '
-            : titleOf(game)}
+            : game ? titleOf(game)
+            : ' '}
         </div>
         <div className="text-xs text-muted mt-1">
           {pool.entryFee} coin entry
@@ -283,9 +304,7 @@ export default function TournamentBracket() {
         </div>
       )}
 
-      {over ? (
-        <Podium awards={over.awards || []} free={over.free} me={me} />
-      ) : filling ? (
+      {filling ? (
         // The lobby: everyone in so far, and the empty seats, so the screen
         // shows the pool filling rather than a list that silently grows.
         <div className="grid grid-cols-4 gap-2 sm:gap-3">
@@ -332,7 +351,7 @@ export default function TournamentBracket() {
       )}
 
 
-      {(over || knockedOut) && (
+      {knockedOut && (
         <div className="mt-4 text-center">
           <button onClick={() => navigate('/tournaments')}
                   className="px-5 py-2.5 rounded-xl bg-primary text-white font-bold">
@@ -340,41 +359,6 @@ export default function TournamentBracket() {
           </button>
         </div>
       )}
-    </div>
-  );
-}
-
-/**
- * First in the middle and largest, second to its left, third to its right —
- * the same arrangement as the bet screen, so the two read as one thing.
- */
-function Podium({ awards, free, me }) {
-  const by = (place) => awards.find(a => a.place === place) || null;
-  const order = [by(2), by(1), by(3)];
-  return (
-    <div className="grid grid-cols-3 gap-2 items-end">
-      {order.map((a, i) => {
-        const first = i === 1;
-        if (!a) return <div key={i} />;
-        return (
-          <div key={a.userId}
-               className={`rounded-2xl border p-3 text-center ${
-                 first ? 'bg-primary/10 border-primary/40 py-5' : 'bg-surface border-border'
-               } ${a.userId === me ? 'ring-1 ring-primary' : ''}`}>
-            <div className="text-[0.625rem] uppercase tracking-widest text-muted font-bold">
-              {a.place === 1 ? '1st' : a.place === 2 ? '2nd' : '3rd'}
-            </div>
-            <div className={`font-black text-white truncate ${first ? 'text-lg' : 'text-sm'}`}>
-              {a.username}
-            </div>
-            {!free && (
-              <div className={`font-black text-primary ${first ? 'text-2xl' : 'text-base'}`}>
-                {a.amount}
-              </div>
-            )}
-          </div>
-        );
-      })}
     </div>
   );
 }
