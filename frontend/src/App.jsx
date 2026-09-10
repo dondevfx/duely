@@ -186,6 +186,17 @@ function Shell() {
   // wrapper does not show what the real game page shows — which makes it
   // useless for the one thing it exists for.
   const isGamePage = location.pathname.startsWith('/game/')
+    // Tournaments belong here too, and not being here is why the bet screen
+    // looked wrong on a desktop.
+    //
+    // tv-scale applies a CSS zoom to every ordinary page on a large monitor.
+    // Every other bet screen lives under /game/ and is exempt, so the
+    // tournament one — at /tournaments — was the only bet screen in the app
+    // being shrunk, and sat at a different size from the seven it is meant to
+    // match. The bracket and the draw go with it: the draw is a fixed
+    // full-screen layer, and a zoomed ancestor is exactly what breaks the
+    // geometry of those.
+    || location.pathname.startsWith('/tournaments')
     || location.pathname.startsWith('/__');
 
   // When MFA is pending and there's no session (saved-login MFA flow),

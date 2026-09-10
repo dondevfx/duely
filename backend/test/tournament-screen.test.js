@@ -343,3 +343,45 @@ test('the tournament payout is the colour of money, not of a button', () => {
   assert.ok(!/grid-cols-3/.test(finish),
     'the podium is still repeated under a card that already shows the result');
 });
+
+// ── On a desktop ───────────────────────────────────────────────────────────
+
+test('the tournament screens are not shrunk the way ordinary pages are', () => {
+  // tv-scale applies a CSS zoom to every ordinary page on a large monitor —
+  // 0.92 at 1080p and less above that. Every other bet screen lives under
+  // /game/ and is exempt, so the tournament one was the only bet screen in the
+  // app being shrunk, sitting at a different size from the seven it is meant
+  // to match.
+  //
+  // The bracket and the draw are exempt with it: the draw is a fixed
+  // full-screen layer, and a zoomed ancestor is what breaks the geometry of
+  // those.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const app = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'src', 'App.jsx'), 'utf8');
+
+  const decl = app.slice(app.indexOf('const isGamePage'), app.indexOf('// When MFA is pending'));
+  assert.match(decl, /startsWith\('\/tournaments'\)/,
+    'the tournament screens are still being scaled with ordinary pages');
+  assert.match(decl, /startsWith\('\/game\/'\)/, 'the game pages lost their exemption');
+  assert.match(app, /isGamePage \? '' : 'tv-scale'/, 'the exemption is no longer what applies tv-scale');
+});
+
+test('every game clip has a poster, and none is older than its clip', () => {
+  // The card shows the poster until the clip loads and then the clip covers
+  // it, both with the same object-position — so a poster from an older cut of
+  // the clip is a still that jumps the moment the video takes over, and a
+  // missing one leaves the card on its fallback icon.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const dir = path.join(__dirname, '..', '..', 'frontend', 'public', 'game-clips');
+
+  for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.mp4'))) {
+    const jpg = path.join(dir, file.replace(/\.mp4$/, '.jpg'));
+    assert.ok(fs.existsSync(jpg), `${file} has no poster`);
+    assert.ok(fs.statSync(jpg).mtimeMs >= fs.statSync(path.join(dir, file)).mtimeMs,
+      `${file} is newer than its poster — the still is from an older cut`);
+    assert.ok(fs.statSync(jpg).size > 1024, `${jpg} is too small to be a real frame`);
+  }
+});
