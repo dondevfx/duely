@@ -154,29 +154,47 @@ async function collectReferralEarnings(supabase, referrerId) {
     // coins with no deposit backing them, so withdrawable balances would grow
     // past the USDC actually held — the bonus would slowly drain the bank. This
     // moves coins that rake already collected, leaving total supply unchanged.
-    const rollback = async (why) => {
+    // Two different failures, treated differently — the distinction is the
+    // whole safety of this loop.
+    //
+    // A bank that is short is a definite NO: pay_referral_from_bank returned
+    // false, nothing moved, and the reward can safely go back to pending to be
+    // collected when the bank has funds.
+    //
+    // An ERROR is not a no. A response lost between this process and Postgres
+    // reports an error for a transfer that committed, and putting the reward
+    // back to pending after a payment that landed pays it twice. So that case
+    // fails closed and is logged for a human, rather than quietly re-arming a
+    // reward that may already be in the referrer's balance.
+    const unclaim = async (why) => {
       await supabase.from('referral_rewards')
         .update({ status: 'pending', paid_at: null })
         .eq('id', row.id).eq('status', 'paid')
         .then().catch(() => {});
-      console.error(`[referral] collect rolled back (${why})`);
+      console.error(`[referral] reward ${row.id} returned to pending (${why})`);
+    };
+    const unresolved = (why) => {
+      console.error(
+        `[referral] PAYMENT UNRESOLVED reward=${row.id} referrer=${referrerId} ` +
+        `amount_c=${row.amount_c} — marked paid and the transfer reported "${why}". ` +
+        `Check the balance before re-granting: it may have landed.`);
     };
 
     try {
       const { data: ok, error } = await supabase.rpc('pay_referral_from_bank', {
         admin_id: adminId, referrer_id: referrerId, amount: row.amount_c,
       });
-      if (error) { await rollback(error.message); continue; }
+      if (error) { unresolved(error.message); continue; }
       if (ok === false) {
-        // Bank is short. Leave the reward collectable rather than overdrawing —
-        // it is owed either way, and paying from an empty bank is what the
-        // whole arrangement exists to prevent.
-        await rollback('platform fee balance too low');
+        // Bank is short. Nothing moved, so this one is safe to re-arm: it is
+        // owed either way, and paying from an empty bank is what the whole
+        // arrangement exists to prevent.
+        await unclaim('platform fee balance too low');
         continue;
       }
       total += parseFloat(row.amount_c) || 0;
     } catch (e) {
-      await rollback(e.message);
+      unresolved(e.message);
     }
   }
 

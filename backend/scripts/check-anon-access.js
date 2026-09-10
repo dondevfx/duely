@@ -51,22 +51,38 @@ const RPCS = [
   ['claim_rakeback_daily',        { p_user_id: NOBODY }],
   ['claim_rakeback_weekly',       { p_user_id: NOBODY }],
   ['claim_daily_bonus',           { p_user_id: NOBODY }],
-  ['increment_win',               { user_id: NOBODY }],
-  ['increment_loss',              { user_id: NOBODY }],
-  ['update_win_streak',           { user_id: NOBODY, won: true }],
-  ['increment_qualifying_wagered', { p_user_id: NOBODY, p_amount: 0 }],
+  // Argument names must match the function EXACTLY.
+  //
+  // PostgREST resolves an RPC by name AND parameter names, so a wrong guess
+  // comes back as "could not find the function" — which this script used to
+  // report as "n/a, no such function" and pass. All four of these were being
+  // probed with the wrong names, so for four money-adjacent functions the
+  // script could never have told an open one from a missing one. They were in
+  // fact locked; the check was not checking.
+  ['increment_win',                { uid: NOBODY }],
+  ['increment_loss',               { uid: NOBODY }],
+  ['update_win_streak',            { p_winner_id: NOBODY, p_loser_id: null }],
+  ['increment_qualifying_wagered', { user_id: NOBODY, amount: 0 }],
+  ['claim_diamond_bonus',          { p_user_id: NOBODY, p_amount: 0 }],
 ];
 
 const TABLES = ['profiles', 'transactions', 'matches', 'deposit_addresses'];
 
-// "permission denied" is the only answer that means locked. A function that
-// does not exist is not a finding; a function that runs and complains about its
-// ARGUMENTS very much is — it ran.
+// "permission denied" is the only answer that means locked.
+//
+// "Could not find the function" is NOT a pass. It means the name or the
+// argument names did not resolve, and a probe that does not resolve tells you
+// nothing about whether the real function is reachable — it is a broken test,
+// not a clean result. Counted separately and reported as inconclusive, and the
+// script exits non-zero on any of them, because a silent [n/a] on the one
+// script that exists to catch the original exploit is how the next one gets
+// missed.
 const isLocked = (error) => !!error && /permission denied/i.test(error.message);
 const isMissing = (error) => !!error &&
   /does not exist|not find the function|schema cache/i.test(error.message);
 
 let open = 0;
+let inconclusive = 0;
 
 (async () => {
   console.log('\nWhat the public anon key can reach\n' + '─'.repeat(52));
@@ -74,7 +90,11 @@ let open = 0;
   console.log('\nFunctions:');
   for (const [fn, args] of RPCS) {
     const { error } = await sb.rpc(fn, args);
-    if (isMissing(error)) { console.log(`  [ n/a  ] ${fn} — no such function`); continue; }
+    if (isMissing(error)) {
+      inconclusive++;
+      console.log(`  [  ??  ] ${fn} — did not resolve; the probe's argument names are wrong, so this proves nothing`);
+      continue;
+    }
     if (isLocked(error))  { console.log(`  [locked] ${fn}`); continue; }
     open++;
     console.log(`  [ OPEN ] ${fn}` + (error ? `  (ran, then: ${error.message.slice(0, 50)})` : '  (succeeded)'));
@@ -106,6 +126,14 @@ let open = 0;
   if (open) {
     console.log(`${open} thing(s) the browser can reach that it should not.`);
     console.log('Run PENDING_SQL section 22.\n');
+    process.exit(1);
+  }
+  if (inconclusive) {
+    // Non-zero on purpose. A probe that did not resolve is a broken check, and
+    // a broken check that exits green is worse than no check — it is exactly
+    // the state this script was in for four functions before anyone looked.
+    console.log(`${inconclusive} probe(s) did not resolve, so nothing was proved about them.`);
+    console.log('Fix the argument names in RPCS to match the real signatures.\n');
     process.exit(1);
   }
   console.log('Nothing reachable. The browser can authenticate and nothing else.\n');

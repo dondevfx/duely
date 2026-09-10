@@ -121,7 +121,19 @@ async function createPayout({ address, coin, amount }) {
 // Cryptomus sends { ...fields, sign: "<md5>" } in the POST body.
 // We rebuild the sign from the body (minus the sign field) and compare.
 function verifyWebhook(body) {
-  const { sign, ...rest } = body;
+  // No key, no trust.
+  //
+  // Without this the signature is computed over `b64 + undefined` — a value an
+  // attacker can produce as easily as we can, because the algorithm is in
+  // Cryptomus's public documentation. The endpoint is mounted unconditionally
+  // and credits a deposit to whatever user id the order_id names, so an
+  // environment missing this one variable would hand balances to anyone who
+  // posted to it. Helius already fails closed this way; this did not.
+  if (!PAYMENT_KEY) {
+    console.error('[cryptomus] CRYPTOMUS_PAYMENT_KEY is not set — rejecting every webhook delivery');
+    return false;
+  }
+  const { sign, ...rest } = body || {};
   if (!sign) return false;
   // Re-sort keys to match Cryptomus canonical order (alphabetical)
   const sorted = Object.keys(rest).sort().reduce((acc, k) => {

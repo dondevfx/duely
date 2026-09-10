@@ -45,19 +45,47 @@ test('the page hardcodes neither', () => {
 
 test('the claim credits the same constant it advertises', () => {
   // Advertising one number and crediting another is the failure this whole
-  // arrangement exists to prevent.
+  // arrangement exists to prevent. The amount is still the server's constant;
+  // it is now passed to the function that also stamps the cooldown.
   const claim = BONUS.slice(BONUS.indexOf("router.post('/diamond-claim'"));
-  assert.match(claim.slice(0, 1400), /credit_diamonds', \{ user_id: req\.user\.id, amount: DIAMOND_BONUS \}/);
+  assert.match(claim.slice(0, 1800),
+    /rpc\('claim_diamond_bonus', \{\s*p_user_id: req\.user\.id,\s*p_amount:\s*DIAMOND_BONUS,/,
+    'the credited amount is no longer the advertised constant');
 });
 
-test('the cooldown is still enforced atomically', () => {
-  // A one-minute cooldown is claimed far more often than a five-minute one, so
-  // the race this guard closes gets a great deal more traffic.
+test('the cooldown and the credit are the same statement', () => {
+  // Stronger than the atomic stamp this replaced, and for a reason that took
+  // an audit to see.
+  //
+  // The old shape stamped the cooldown (correctly, atomically), credited
+  // separately, and cleared the stamp if the credit reported an error. But an
+  // error is not proof that nothing happened — a response lost between the app
+  // and Postgres reports a failure for a statement that committed — so on that
+  // path the diamonds were paid AND the cooldown was cleared, and the next
+  // request paid them again.
+  //
+  // claim_diamond_bonus does both halves in one UPDATE guarded by the
+  // cooldown. There is nothing to roll back and no window to roll it back in.
   const claim = BONUS.slice(BONUS.indexOf("router.post('/diamond-claim'"));
-  assert.match(claim.slice(0, 900), /last_diamond_bonus\.is\.null,last_diamond_bonus\.lt\./,
-    'the cooldown must be part of the UPDATE, or two requests can both claim');
-  assert.match(claim.slice(0, 1200), /if \(!claimed \|\| claimed\.length === 0\)/,
-    'only the request that actually stamped the row may credit');
+  const body = claim.slice(0, 1800);
+
+  assert.match(body, /rpc\('claim_diamond_bonus'/,
+    'the claim is back to stamping and crediting separately');
+  assert.ok(!/last_diamond_bonus: null/.test(body),
+    'the claim clears its own cooldown again, which double-pays a credit that only looked failed');
+  assert.match(body, /already_claimed/,
+    'a second claim inside the cooldown is no longer reported as such');
+
+  // And the function it calls really is one guarded statement.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const schema = fs.readFileSync(path.join(__dirname, '..', '..', 'SCHEMA.sql'), 'utf8');
+  const fn = schema.slice(schema.indexOf('FUNCTION claim_diamond_bonus'));
+  const sql = fn.slice(0, fn.indexOf('$$;'));
+  assert.match(sql, /UPDATE profiles[\s\S]*diamonds\s*=\s*diamonds \+ p_amount[\s\S]*last_diamond_bonus = now\(\)/,
+    'the credit and the stamp are not the same UPDATE');
+  assert.match(sql, /WHERE id = p_user_id[\s\S]*last_diamond_bonus IS NULL[\s\S]*INTERVAL '30 minutes'/,
+    'the cooldown is not in the WHERE, so concurrent claims do not serialise');
 });
 
 test("the claim button shows the icon and a derived amount", () => {

@@ -152,12 +152,25 @@ module.exports = function affiliateRoutes(supabase) {
     try {
       await creditCoins(supabase, req.user.id, earningsC);
     } catch (e) {
-      // Credit failed — restore earnings so they aren't lost
-      await supabase
-        .from('profiles')
-        .update({ affiliate_earnings_c: earningsC })
-        .eq('id', req.user.id);
-      return res.status(500).json({ error: e.message });
+      // NOT restored, and that is deliberate.
+      //
+      // Restoring the earnings looks like the careful thing to do and is the
+      // dangerous one. An error here does not prove the credit failed — a
+      // response lost between this process and Postgres reports an error for a
+      // statement that committed — and putting the earnings back after a
+      // credit that landed lets them be collected a second time. That is a
+      // mint, from a failure mode the attacker only has to wait for.
+      //
+      // So it fails closed and says so loudly. The earnings are recoverable by
+      // hand from this log line; a double credit is recoverable from nothing,
+      // because it looks exactly like a legitimate collection.
+      console.error(
+        `[affiliate] COLLECT UNRESOLVED user=${req.user.id} amount_c=${earningsC} — ` +
+        `earnings were zeroed and the credit reported "${e.message}". ` +
+        `Check the balance before re-granting: the credit may have landed.`);
+      return res.status(500).json({
+        error: 'Your earnings could not be paid out. Support has been notified — nothing has been lost.',
+      });
     }
 
     res.json({ success: true, collected_c: earningsC });

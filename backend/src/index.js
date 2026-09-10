@@ -24,7 +24,11 @@ const kycRoutes      = require('./routes/kyc');
 const avatarRoutes   = require('./routes/avatar');
 const reportRoutes   = require('./routes/reports');
 const supportRoutes = require('./routes/support');
-const { apiLimiter, authLimiter } = require('./middleware/rateLimit');
+// moneyLimiter is per-ACCOUNT and sits in front of everything that can move a
+// balance. Defence in depth: every operation behind it is already safe to
+// repeat, so this makes a burst expensive and visible rather than being the
+// thing that stops it. See the note on it for why per-account and not per-IP.
+const { apiLimiter, authLimiter, moneyLimiter } = require('./middleware/rateLimit');
 const registerSocketHandlers = require('./socket/handlers');
 const swapPoller        = require('./services/swapPoller');
 const blockchainMonitor = require('./services/blockchainMonitor');
@@ -90,19 +94,19 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
   res.json({ ...data, is_admin: req.user.id === process.env.ADMIN_USER_ID, is_demo: isDemo(req.user.id) });
 });
 app.use('/api/auth', authLimiter, authRoutes(supabase));
-app.use('/api/wallet', walletRoutes(supabase, io));
+app.use('/api/wallet', moneyLimiter, walletRoutes(supabase, io));
 app.use('/api/leaderboard', leaderboardRoutes(supabase));
 app.use('/api/match', matchRoutes(supabase));
-app.use('/api/bonus', bonusRoutes(supabase));
-app.use('/api/rewards', rewardsRoutes(supabase));
+app.use('/api/bonus', moneyLimiter, bonusRoutes(supabase));
+app.use('/api/rewards', moneyLimiter, rewardsRoutes(supabase));
 app.use('/api/admin', adminRoutes(supabase, io));
 app.use('/api/support', supportRoutes(supabase, io));
-app.use('/api/affiliate', affiliateRoutes(supabase));
+app.use('/api/affiliate', moneyLimiter, affiliateRoutes(supabase));
 // Tournaments. The pool store is created here and handed to both the routes
 // and the socket layer, so there is one of it rather than one per consumer.
 const tournamentPools = require('./services/tournamentPools').createStore();
-app.use('/api/tournaments', tournamentRoutes(supabase, io, tournamentPools));
-app.use('/api/rakeback', rakebackRoutes(supabase));
+app.use('/api/tournaments', moneyLimiter, tournamentRoutes(supabase, io, tournamentPools));
+app.use('/api/rakeback', moneyLimiter, rakebackRoutes(supabase));
 app.use('/api/kyc', kycRoutes(supabase));
 // /api/avatar is mounted above, before express.json() — see the note there.
 app.use('/api/reports', reportRoutes(supabase));

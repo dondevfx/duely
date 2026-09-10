@@ -205,11 +205,6 @@ module.exports = function rewardsRoutes(supabase) {
       const roll = rollPrize(tier);
       const nextSpinAt = new Date(now.getTime() + COOLDOWN_MS).toISOString();
 
-      // Helper: reset cooldown so user can retry if credit fails
-      async function resetCooldown() {
-        await supabase.from('profiles').update({ [col]: null }).eq('id', req.user.id).then().catch(() => {});
-      }
-
       // credit_diamonds (or creditCoins on the rare coin roll) only — no manual
       // read-add-write fallback. That fallback used to sit here: read the
       // balance, add the prize in JS, write it back. Not row-locked like the
@@ -230,9 +225,23 @@ module.exports = function rewardsRoutes(supabase) {
       }
 
       if (credErr) {
-        console.error(`[rewards] credit failed (${roll.kind}):`, credErr.message || credErr);
-        await resetCooldown();
-        return res.status(500).json({ error: 'Could not credit your prize. Please try again.' });
+        // The cooldown STAYS stamped.
+        //
+        // Clearing it to let the player retry is the obvious kindness and the
+        // hole: an error here does not prove the credit failed. A response lost
+        // between this process and Postgres reports an error for a statement
+        // that committed, so clearing the cooldown after a prize that landed
+        // pays it a second time — and a spin is repeatable, which makes it a
+        // faucet rather than a one-off.
+        //
+        // Fails closed and says so loudly instead. One lost spin is recoverable
+        // by hand from this line; a double credit looks exactly like a
+        // legitimate one and is recoverable from nothing.
+        console.error(
+          `[rewards] SPIN UNRESOLVED user=${req.user.id} tier=${tier} ` +
+          `prize=${roll.amount} ${roll.kind} — the cooldown is stamped and the credit reported ` +
+          `"${credErr.message || credErr}". Check the balance before re-granting: it may have landed.`);
+        return res.status(500).json({ error: 'Could not credit your prize. Support has been notified.' });
       }
 
       supabase

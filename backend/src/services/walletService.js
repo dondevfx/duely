@@ -26,17 +26,43 @@ const VALID_COINS = new Set([
 
 // Validate and normalise a monetary amount.
 // Throws a descriptive error for NaN, Infinity, negative, too small, too large.
+/**
+ * A number, or nothing.
+ *
+ * parseFloat is the wrong tool for a value that decides money: it reads as far
+ * as it understands and discards the rest, so "5abc" is 5, "1,000" is 1, and
+ * "1.0.0" is 1. None of those inflate an amount — the ceiling still applies —
+ * but every one of them turns a request the user did not make into a request
+ * the server carries out silently, and "1,000" costing one coin is a support
+ * ticket rather than a refusal.
+ *
+ * So the whole string has to be a number. Booleans are rejected outright:
+ * Number(true) is 1, which would make `amount: true` a one-coin tip.
+ */
+function toNumber(val) {
+  if (typeof val === 'number') return Number.isFinite(val) ? val : NaN;
+  if (typeof val !== 'string') return NaN;      // booleans, objects, arrays, null
+  const trimmed = val.trim();
+  if (!trimmed) return NaN;
+  // Plain decimal or exponent notation only. No hex, no thousands separators,
+  // no trailing characters, no leading +.
+  if (!/^-?\d+(\.\d+)?([eE][-+]?\d+)?$/.test(trimmed)) return NaN;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : NaN;
+}
+
 function sanitizeAmount(val, min = 0.01, max = MAX_SINGLE_AMOUNT) {
-  const n = parseFloat(val);
-  if (!isFinite(n)) throw new Error(`Invalid amount: ${val}`);
+  const n = toNumber(val);
+  if (!Number.isFinite(n)) throw new Error(`Invalid amount: ${val}`);
   if (n < min)      throw new Error(`Amount too small — minimum is ${min}`);
   if (n > max)      throw new Error(`Amount too large — maximum is ${max}`);
   return parseFloat(n.toFixed(4));
 }
 
 function sanitizeDiamondAmount(val, min = MIN_TIP_DIAMONDS, max = 1_000_000) {
-  const n = Math.floor(parseFloat(val));
-  if (!isFinite(n)) throw new Error(`Invalid diamond amount: ${val}`);
+  const raw = toNumber(val);
+  if (!Number.isFinite(raw)) throw new Error(`Invalid diamond amount: ${val}`);
+  const n = Math.floor(raw);
   if (n < min)      throw new Error(`Diamond amount too small — minimum is ${min}`);
   if (n > max)      throw new Error(`Diamond amount too large — maximum is ${max}`);
   return n;

@@ -174,8 +174,34 @@ test('an underfunded bank defers the reward instead of overdrawing', async () =>
   assert.match(fn, /if \(ok === false\)/,
     'a false return means the bank is short and must be handled');
   const shortBranch = fn.slice(fn.indexOf('if (ok === false)'));
-  assert.match(shortBranch.slice(0, 400), /rollback\(/,
+  assert.match(shortBranch.slice(0, 400), /unclaim\(/,
     'the reward must go back to collectable, not be silently consumed');
+});
+
+test('a transfer whose outcome is unknown is NOT put back', async () => {
+  // The distinction that makes the loop above safe, and the one an audit found
+  // missing.
+  //
+  // `ok === false` is a definite refusal: the bank was short, nothing moved,
+  // and the reward is safe to re-arm. An ERROR is not a refusal — a response
+  // lost between this process and Postgres reports an error for a transfer
+  // that committed — so putting the reward back to pending on that path pays
+  // it a second time. Both used to call the same rollback.
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'services', 'referralService.js'), 'utf8');
+  const fn = src.slice(src.indexOf('async function collectReferralEarnings'),
+                       src.indexOf('/** Cancel a pending reward'));
+
+  assert.match(fn, /if \(error\) \{ unresolved\(error\.message\); continue; \}/,
+    'an errored transfer still re-arms the reward');
+  assert.match(fn, /catch \(e\) \{\s*unresolved\(e\.message\);/,
+    'a thrown transfer still re-arms the reward');
+  assert.match(fn, /PAYMENT UNRESOLVED/,
+    'an unresolved payment leaves no trace for anyone to follow up');
+
+  // And the safe case is still re-armed, or a reward the bank could not cover
+  // would simply vanish.
+  assert.match(fn, /unclaim\('platform fee balance too low'\)/);
 });
 
 test('with no ADMIN_USER_ID nothing is paid and nothing is lost', async () => {

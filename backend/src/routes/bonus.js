@@ -87,33 +87,36 @@ module.exports = function bonusRoutes(supabase) {
   });
 
   router.post('/diamond-claim', requireAuth, async (req, res) => {
-    // Atomic claim: only stamp the cooldown if it has actually elapsed. The
-    // WHERE guard + Postgres row lock serialize concurrent requests, so exactly
-    // one can win — closing the read-check-then-stamp race that let two
-    // simultaneous requests both pass the cooldown and double-credit.
-    const threshold = new Date(Date.now() - DIAMOND_COOLDOWN_MS).toISOString();
-    const { data: claimed, error: stampErr } = await supabase
-      .from('profiles')
-      .update({ last_diamond_bonus: new Date().toISOString() })
-      .eq('id', req.user.id)
-      .or(`last_diamond_bonus.is.null,last_diamond_bonus.lt.${threshold}`)
-      .select('id');
-    if (stampErr) return res.status(500).json({ error: stampErr.message });
-    if (!claimed || claimed.length === 0) {
-      return res.status(400).json({ error: 'Already claimed' });
-    }
-
-    const { error: credErr } = await supabase.rpc('credit_diamonds', { user_id: req.user.id, amount: DIAMOND_BONUS });
-    if (credErr) {
-      // Credit failed — clear the stamp so the user can retry (they got nothing).
-      await supabase.from('profiles').update({ last_diamond_bonus: null }).eq('id', req.user.id).then().catch(() => {});
-      return res.status(500).json({ error: credErr.message });
+    // One statement: stamp the cooldown AND credit, or do neither.
+    //
+    // This used to stamp the cooldown, credit separately, and — if the credit
+    // reported an error — clear the stamp so the player could try again. The
+    // stamp itself was race-safe, but the retry path was not: a credit that
+    // COMMITTED and then failed to report (a dropped response between here and
+    // Postgres is enough) cleared the cooldown on money that had already been
+    // paid, and the next claim paid it a second time. Every claim path in this
+    // codebase had some version of that shape.
+    //
+    // claim_diamond_bonus does both halves in a single UPDATE guarded by the
+    // cooldown, so there is nothing to roll back and no window to roll it back
+    // in. The amount is a server constant; the client sends nothing at all.
+    const { error } = await supabase.rpc('claim_diamond_bonus', {
+      p_user_id: req.user.id,
+      p_amount:  DIAMOND_BONUS,
+    });
+    if (error) {
+      if (/already_claimed/.test(error.message || '')) {
+        return res.status(400).json({ error: 'Already claimed' });
+      }
+      console.error('[bonus] diamond claim failed:', error.message);
+      return res.status(500).json({ error: 'Could not claim the bonus.' });
     }
 
     supabase.from('transactions').insert({
       user_id: req.user.id, type: 'diamond_bonus', amount_c: 0,
       crypto_amount: DIAMOND_BONUS, crypto_symbol: 'diamonds', status: 'confirmed',
     }).then().catch(e => console.error('[tx] diamond bonus insert failed:', e.message));
+
     const { data: updated } = await supabase.from('profiles').select('diamonds').eq('id', req.user.id).single();
     res.json({ success: true, credited: DIAMOND_BONUS, diamonds: updated?.diamonds });
   });

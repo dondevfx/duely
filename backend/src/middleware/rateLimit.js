@@ -26,6 +26,55 @@ const authLimiter = rateLimit({
   message: { error: 'Too many auth attempts, please try again later.' },
 });
 
+/**
+ * The money endpoints, per ACCOUNT rather than per IP.
+ *
+ * Defence in depth and nothing more. Every operation behind this is already
+ * safe to repeat — claims are single conditional statements, deposits dedupe
+ * on the transaction hash, deductions are guarded by the balance in the same
+ * UPDATE — so an attacker who works around this limit gains nothing. It exists
+ * to make a burst expensive and visible rather than to be the thing standing
+ * between anyone and the balance.
+ *
+ * Keyed on the SESSION TOKEN, not the IP and not the user id.
+ *
+ * Not the IP, because a household or a mobile carrier NAT shares one and a
+ * single player hammering claims should not lock out their neighbours.
+ *
+ * Not the user id either, for two reasons. This middleware runs before the
+ * router's own requireAuth, so req.user does not exist yet; and reading the id
+ * out of the token WITHOUT verifying it would let anyone spend a victim's
+ * budget by sending their user id, turning a rate limit into a way to lock
+ * somebody out of their own wallet. The token itself cannot be guessed, so
+ * hashing it gives a per-session bucket with nothing to forge. Hashed rather
+ * than used raw so a credential never becomes a map key or reaches a log.
+ *
+ * Generous on purpose. Sixty in five minutes is far more than any real session
+ * produces — a tip, a claim, a withdrawal are all things a person does once —
+ * and far less than a script needs to be worth writing.
+ */
+const crypto = require('crypto');
+const moneyLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const header = req.headers.authorization || '';
+    if (header.startsWith('Bearer ') && header.length > 20) {
+      return 's:' + crypto.createHash('sha256').update(header.slice(7)).digest('hex').slice(0, 32);
+    }
+    return 'ip:' + req.ip;
+  },
+  message: { error: 'Too many requests. Wait a moment and try again.' },
+  handler: (req, res, _next, options) => {
+    // Logged, because a real player does not reach this and a script does.
+    // This is the signal, not the block.
+    console.warn(`[ratelimit] money endpoint flood ip=${req.ip} path=${req.originalUrl}`);
+    res.status(options.statusCode).json(options.message);
+  },
+});
+
 // Per-socket click rate tracking (in-memory)
 const socketClickTimes = new Map();
 
@@ -42,4 +91,4 @@ function cleanupSocket(socketId) {
   socketClickTimes.delete(socketId);
 }
 
-module.exports = { apiLimiter, authLimiter, checkSocketClickRate, cleanupSocket };
+module.exports = { apiLimiter, authLimiter, moneyLimiter, checkSocketClickRate, cleanupSocket };
