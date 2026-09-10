@@ -6,6 +6,7 @@ import GameTitle from '../components/GameTitle';
 import GameHelp from '../components/GameHelp';
 import CoinIcon from '../components/CoinIcon';
 import BetSlider from '../components/BetSlider';
+import InsufficientModal from '../components/InsufficientModal';
 import { api } from '../utils/api';
 
 /**
@@ -43,6 +44,7 @@ export default function Tournaments() {
   // Held here as {left, per} so the button can say so before it is pressed
   // rather than refusing afterwards.
   const [tickets, setTickets] = useState(null);
+  const [shortfall, setShortfall] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
   // Refetched whenever the slot it describes has passed, not once on mount.
@@ -91,6 +93,12 @@ export default function Tournaments() {
 
   async function enter() {
     if (!session) return navigate('/login');
+    // The button says Play whatever the balance, and answers a shortfall with
+    // a dialog rather than by relabelling itself. See InsufficientModal: a
+    // screen that changes shape depending on your balance moves the thing you
+    // were reaching for, and a button whose label is an error still looks like
+    // the action you wanted until you read it.
+    if (!canAfford) return setShortfall(true);
     setBusy(true);
     setError(null);
     try {
@@ -222,15 +230,16 @@ export default function Tournaments() {
 
       {error && <p className="mb-2 text-center text-sm text-danger">{error}</p>}
 
+      <InsufficientModal currency="coins" open={shortfall} onClose={() => setShortfall(false)} />
+
       <button
         onClick={enter}
-        disabled={busy || (session && !canAfford) || (tickets && tickets.left <= 0)}
+        disabled={busy || (tickets && tickets.left <= 0)}
         className="w-full py-3.5 rounded-xl bg-primary hover:bg-blue-500 text-white font-black text-lg
                    shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {!session ? 'Login to Play'
           : tickets && tickets.left <= 0 ? 'No tickets left'
-          : !canAfford ? `Need ${entryFee} coins`
           : busy ? 'Entering…'
           : 'Play'}
       </button>

@@ -87,6 +87,9 @@ export default function useTournamentResult() {
   return {
     poolId,
     round: tournament.round,
+    // What this match itself pays — set only for the final and the playoff for
+    // third, where both outcomes have a price the moment the game starts.
+    pays: tournament.pays || null,
     over,
     // Safe to leave on a timer: either the tournament is over, or the next
     // round has been drawn.

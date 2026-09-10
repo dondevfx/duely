@@ -32,7 +32,7 @@ const F = require('./tournamentFormat');
 const hook = require('./tournamentHook');
 const ENGINES = require('./tournamentEngines');
 const { creditCoins } = require('./walletService');
-const { seededRng } = require('./tournamentPools');
+const { seededRng, THIRD_PLACE } = require('./tournamentPools');
 
 // How long a round's game is given before it is decided on whatever is known.
 // Three minutes is the spec, and it is also comfortably longer than any of the
@@ -207,6 +207,27 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     if (!pending.length) later(pool.id, () => roundSettled(pool), 50);
   }
 
+  /**
+   * The prizes this pool will pay, by place.
+   *
+   * The pot is what was actually put in, so a pool that started short pays
+   * from what it took. Bots pay nothing in and so count for nothing here.
+   */
+  function prizeTable(pool) {
+    const paying = pool.players.filter(p => !p.isBot).length;
+    return F.prizesFor(pool.entryFee, Math.max(paying, 2)).prizes;
+  }
+
+  /** What winning and losing THIS match is worth, or null. */
+  function prizesForMatch(pool, index) {
+    if (pool.free || !(pool.entryFee > 0)) return null;
+    const isFinalRound = pool.round === pool.bracket.length - 1;
+    if (!isFinalRound) return null;
+    const prizes = prizeTable(pool);
+    if (index === THIRD_PLACE) return { win: prizes[2] ?? 0, lose: 0 };
+    return { win: prizes[0] ?? 0, lose: prizes[1] ?? 0 };
+  }
+
   function playerOf(pool, userId) {
     return pool.players.find(p => p.userId === userId) || null;
   }
@@ -327,6 +348,20 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     const rec = { roomId, game, deadline, sudden, begun: false, done: false };
     st.matches.set(key, rec);
 
+    // What this particular match pays, for the two matches where that is
+    // already known.
+    //
+    // The final is first place against second, and the playoff is third
+    // against fourth — so the moment either starts, both outcomes have a price
+    // on them. Everything before that pays nothing directly; you play the next
+    // round instead.
+    //
+    // Sent with the match rather than worked out after it, because the result
+    // card appears the instant the game ends and settlement takes a moment
+    // longer. Waiting for settlement is what used to leave a champion looking
+    // at a result with no payout on it.
+    const pays = prizesForMatch(pool, index);
+
     const seen = (other, isBot) => ({
       userId: other.userId, username: other.username, elo: other.elo ?? 1000,
       avatarUrl: other.avatarUrl ?? null, profileColor: other.profileColor ?? null, isBot: !!isBot,
@@ -341,14 +376,14 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
       sa.join(roomId);
       sa.emit('tournament_match', {
         poolId: pool.id, round, match: index, game, roomId,
-        sudden, deadline, opponent: seen(p2, false),
+        sudden, deadline, pays, opponent: seen(p2, false),
       });
     }
     if (sb) {
       sb.join(roomId);
       sb.emit('tournament_match', {
         poolId: pool.id, round, match: index, game, roomId,
-        sudden, deadline, opponent: seen(p1, false),
+        sudden, deadline, pays, opponent: seen(p1, false),
       });
     }
 
@@ -623,9 +658,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     const named = F.placings(pool.bracket, pool.thirdPlace);
     const places = [named.first, named.second, named.third];
     const paying = pool.players.filter(p => !p.isBot);
-    // The pot is what was actually put in. A pool that started short — four
-    // entrants rather than sixteen — pays out of four entries, not sixteen.
-    const { prizes } = F.prizesFor(pool.entryFee, Math.max(paying.length, 2));
+    const prizes = prizeTable(pool);
 
     const awards = [];
     for (let i = 0; i < places.length && i < prizes.length; i++) {

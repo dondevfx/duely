@@ -353,6 +353,34 @@ export default function ResultScreen({
               )}
             </div>
             )}
+            {/* What the final, or the playoff for third, just paid.
+                A tournament round is staked at zero, so the ordinary ledger
+                below has nothing to show — the stake was the entry fee and the
+                prize is paid at the end. But the last two matches of a
+                tournament are first against second and third against fourth,
+                so both outcomes already have a price on them, and the player
+                should not have to wait for settlement to be told what they
+                just won. Second place is a payout too, which is why this does
+                not ask who won. */}
+            {tour?.pays != null && (
+              <div className="border-t border-surfaceLight/40 pt-3 mt-1 text-center">
+                <div className="text-xs text-muted mb-1 uppercase tracking-widest font-semibold">
+                  {(isWinner ? tour.pays.win : tour.pays.lose) > 0 ? 'Payout' : 'No payout'}
+                </div>
+                <div
+                  className={`text-4xl font-black ${
+                    (isWinner ? tour.pays.win : tour.pays.lose) > 0 ? 'text-success' : 'text-muted'
+                  }`}
+                  style={(isWinner ? tour.pays.win : tour.pays.lose) > 0
+                    ? { textShadow: '0 0 20px rgba(74,222,128,0.6)' } : undefined}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    {(isWinner ? tour.pays.win : tour.pays.lose) > 0 ? '+' : ''}
+                    {fmt(isWinner ? tour.pays.win : tour.pays.lose)} <CoinIcon size="0.8em" />
+                  </span>
+                </div>
+              </div>
+            )}
             {showLedger && (balanceChange || (isDraw && entryFee > 0) || (!isDraw && entryFee > 0)) && (
               <div className="border-t border-surfaceLight/40 pt-3 mt-1 text-center">
                 <div className="text-xs text-muted mb-1 uppercase tracking-widest font-semibold">

@@ -436,3 +436,26 @@ test('the tournament ends in one place, not two', () => {
   assert.match(card, /\{tour\.settled && <ResultTimer/,
     'the card can still leave before it knows whether anything was won');
 });
+
+test('the last two matches show their payout on the result card', () => {
+  // Second place is a payout too, so the row does not ask who won — it asks
+  // what this outcome was worth.
+  const card = read('components', 'ResultScreen.jsx');
+  assert.match(card, /tour\?\.pays != null/, 'the card ignores what the match pays');
+  assert.match(card, /isWinner \? tour\.pays\.win : tour\.pays\.lose/,
+    'the loser of a final is not shown their second-place prize');
+  assert.match(card, /text-success/, 'the payout is not green');
+});
+
+test('a shortfall is a dialog, not a relabelled button', () => {
+  // Every betting screen answers this the same way: the buttons keep their
+  // shape whatever the balance, and pressing one you cannot cover opens the
+  // dialog. The tournament screen was rewriting its own button instead.
+  assert.match(SCREEN, /InsufficientModal/, 'there is no dialog to open');
+  assert.match(SCREEN, /if \(!canAfford\) return setShortfall\(true\)/,
+    'the button does not open it');
+  assert.ok(!/Need \$\{entryFee\} coins/.test(SCREEN),
+    'the button still relabels itself when short');
+  assert.ok(!/session && !canAfford/.test(SCREEN),
+    'the button is still disabled by the balance');
+});

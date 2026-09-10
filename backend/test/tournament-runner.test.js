@@ -527,3 +527,69 @@ test('settling twice pays once', async () => {
   assert.equal(captured.filter(c => c.rpc === 'credit_coins').length, 3,
     'the prizes were paid more than once');
 });
+
+test('the last two matches carry what they pay, before anything is settled', () => {
+  // The final is first place against second and the playoff is third against
+  // fourth, so both outcomes have a price the moment either starts. Sending it
+  // with the match is what lets the result card show a payout the instant the
+  // game ends — settlement takes a moment longer, and waiting for it is what
+  // left a champion looking at a result with no payout on it.
+  const pools = createStore(); _store = pools;
+  const io = fakeIo();
+  const engines = fakeEngines();
+  const runner = createRunner({ io, supabase: null, pools, engines, log: { error() {} } });
+
+  const pool = fill(pools, 16, { entryFee: 10 });
+  for (const p of pool.players) io._connect(p.userId);
+
+  // Rounds one to three pay nothing directly — you play the next one instead.
+  runner.startRound(pool);
+  const early = io._for(pool.bracket[0][0].a, 'tournament_match')[0];
+  assert.equal(early.payload.pays, null, 'an early round claims to pay out');
+
+  for (let r = 0; r < 3; r++) {
+    for (const { i, m } of pools.pendingMatches(pool)) {
+      runner.onResult({ poolId: pool.id, round: r, match: i, winnerId: m.a, isDraw: false });
+    }
+  }
+  assert.equal(pool.round, 3, 'the bracket never reached the final');
+  runner.startRound(pool);
+
+  const { prizes } = F.prizesFor(10, 16);
+  const finalists = [pool.bracket[3][0].a, pool.bracket[3][0].b];
+  for (const uid of finalists) {
+    const sent = io._for(uid, 'tournament_match').at(-1).payload;
+    assert.deepEqual(sent.pays, { win: prizes[0], lose: prizes[1] },
+      'the final does not say what it is worth');
+  }
+
+  // And the playoff: third place pays, fourth does not.
+  const playoff = [pool.thirdPlace.a, pool.thirdPlace.b];
+  for (const uid of playoff) {
+    const sent = io._for(uid, 'tournament_match').at(-1).payload;
+    assert.deepEqual(sent.pays, { win: prizes[2], lose: 0 },
+      'the playoff for third does not say what it is worth');
+  }
+
+  // What is promised is what is paid.
+  assert.equal(prizes[0] + prizes[1] + prizes[2] > 0, true);
+});
+
+test('a free bracket promises nothing, because it pays nothing', () => {
+  const pools = createStore(); _store = pools;
+  const io = fakeIo();
+  const runner = createRunner({ io, supabase: null, pools, engines: fakeEngines(), log: { error() {} } });
+  const pool = fill(pools, 16, { entryFee: 10 });
+  pool.free = true;
+  for (const p of pool.players) io._connect(p.userId);
+
+  for (let r = 0; r < 3; r++) {
+    runner.startRound(pool);
+    for (const { i, m } of pools.pendingMatches(pool)) {
+      runner.onResult({ poolId: pool.id, round: r, match: i, winnerId: m.a, isDraw: false });
+    }
+  }
+  runner.startRound(pool);
+  const sent = io._for(pool.bracket[3][0].a, 'tournament_match').at(-1).payload;
+  assert.equal(sent.pays, null, 'a practice bracket offered a prize');
+});
