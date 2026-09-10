@@ -300,3 +300,34 @@ test('leaving after it starts refunds nothing', async () => {
     assert.deepEqual(calls.credited, [], 'a forfeit was refunded');
   } finally { server.close(); }
 });
+
+test('a bet that is refused never takes the money', async () => {
+  // Entering while already in a running tournament used to hand back the one
+  // they were in, at whatever stake it had been entered for — so a player who
+  // set the slider to ten and pressed Play was taken to their running one-coin
+  // bracket, which told them it was a one-coin entry. Nothing was wrong with
+  // the bracket; the bet had simply been ignored.
+  const { server, port, pools, calls } = boot();
+  try {
+    const first = await join(port, { entryFee: 1, vsBot: true });
+    const pool = pools.get(first.body.poolId);
+    assert.equal(pool.state, 'running', 'a bot bracket did not start');
+
+    const second = await join(port, { entryFee: 10 });
+    assert.equal(second.status, 400, 'a second entry was accepted while one was running');
+    assert.equal(second.body.inProgress, true);
+    assert.equal(second.body.poolId, pool.id, 'the refusal does not say which one they are in');
+    assert.ok(!calls.deducted.includes(10), 'the refused stake was charged anyway');
+  } finally { server.close(); }
+});
+
+test('a second click on a bracket still filling is not a second entry', async () => {
+  const { server, port, calls } = boot();
+  try {
+    await join(port, { entryFee: 5 });
+    const again = await join(port, { entryFee: 5 });
+    assert.equal(again.status, 200);
+    assert.equal(again.body.already, true);
+    assert.deepEqual(calls.deducted, [5], 'the second click charged again');
+  } finally { server.close(); }
+});

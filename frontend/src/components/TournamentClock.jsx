@@ -32,8 +32,9 @@ const TOP_CENTRE = new Set(['block-blast', 'scrabble']);
 export default function TournamentClock() {
   const { state, pathname } = useLocation();
   const { socket } = useSocket();
-  const seeded = state?.tournament?.deadline
-    ? { deadline: state.tournament.deadline, sudden: !!state.tournament.sudden }
+  const t = state?.tournament;
+  const seeded = t?.deadline
+    ? { deadline: t.deadline, sudden: !!t.sudden, poolId: t.poolId, round: t.round, match: t.match, roomId: t.roomId }
     : null;
 
   const [match, setMatch] = useState(seeded);
@@ -46,21 +47,37 @@ export default function TournamentClock() {
     if (!socket) return;
     const onMatch = (m) => {
       if (!m?.deadline) return;
-      setMatch({ deadline: m.deadline, sudden: !!m.sudden });
+      setMatch({
+        deadline: m.deadline, sudden: !!m.sudden,
+        // Which match this clock belongs to, so somebody else's result does
+        // not stop it.
+        poolId: m.poolId, round: m.round, match: m.match, roomId: m.roomId,
+      });
     };
-    // Anything that ends the match takes the clock with it, so it is never
-    // left counting down over a result card.
-    const clear = () => setMatch(null);
+
+    // MY match ending stops the clock. Not anybody's.
+    //
+    // tournament_result is broadcast to everyone in the pool, so the first of
+    // the eight first-round matches to finish was clearing the clock for the
+    // seven still being played — which is the timer vanishing part way
+    // through, every time.
+    const onResult = (r) => setMatch(m => (
+      m && r?.poolId === m.poolId && r?.round === m.round && r?.match === m.match ? null : m
+    ));
+    const onExpired = (r) => setMatch(m => (
+      m && (!r?.roomId || r.roomId === m.roomId) ? null : m
+    ));
+    const onOver = (r) => setMatch(m => (m && r?.poolId === m.poolId ? null : m));
 
     socket.on('tournament_match', onMatch);
-    socket.on('tournament_result', clear);
-    socket.on('tournament_match_expired', clear);
-    socket.on('tournament_over', clear);
+    socket.on('tournament_result', onResult);
+    socket.on('tournament_match_expired', onExpired);
+    socket.on('tournament_over', onOver);
     return () => {
       socket.off('tournament_match', onMatch);
-      socket.off('tournament_result', clear);
-      socket.off('tournament_match_expired', clear);
-      socket.off('tournament_over', clear);
+      socket.off('tournament_result', onResult);
+      socket.off('tournament_match_expired', onExpired);
+      socket.off('tournament_over', onOver);
     };
   }, [socket]);
 

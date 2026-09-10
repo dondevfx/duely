@@ -437,3 +437,93 @@ test('a tournament that is dropped by a restart gives every entry back', async (
   await refundPool(supabase, { ...pool, free: true });
   assert.equal(captured.length, 0);
 });
+
+// ── A paid PvP tournament, end to end ──────────────────────────────────────
+
+test('sixteen paying players: one wager each, a forfeit, and three paid', async () => {
+  // The whole money path in one go, because the pieces are individually
+  // tested and the thing that actually has to hold is their sum: what is
+  // taken, what is recorded, what a forfeit does to the bracket, and what
+  // comes back out.
+  const pools = createStore(); _store = pools;
+  const io = fakeIo();
+  const engines = fakeEngines();
+  const captured = [];
+  const runner = createRunner({ io, supabase: fakeSupabase(captured), pools, engines, log: { error() {} } });
+
+  const pool = fill(pools, 16, { entryFee: 10 });
+  for (const p of pool.players) io._connect(p.userId);
+  assert.equal(pool.state, 'running', 'sixteen entrants did not start it');
+
+  await runner.beginPool(pool);
+
+  // One wager row per entrant and no more. It is what makes the entry count
+  // towards playthrough — the fee itself is taken with deduct_coins and writes
+  // no row — and the rounds are staked at zero so they add nothing.
+  const wagers = captured.filter(c => c.table === 'matches').flatMap(c => c.rows);
+  assert.equal(wagers.length, 16);
+  assert.ok(wagers.every(r => r.entry_fee_c === 10 && r.player2_id === null));
+  assert.equal(new Set(wagers.map(r => r.player1_id)).size, 16, 'somebody was charged twice');
+
+  // Round one, with one player walking out of it.
+  runner.startRound(pool);
+  const quitter = pool.bracket[0][0].a;
+  const opponent = pool.bracket[0][0].b;
+  io._disconnect(quitter);
+  runner.playerGone(quitter);
+
+  assert.equal(pool.bracket[0][0].winner, opponent, 'leaving did not put the opponent through');
+  assert.ok(pool.kicked.has(quitter), 'the player who left can still open the bracket');
+  assert.equal(pools.entryIn(pool.slotStart, quitter), null,
+    'leaving left them holding an entry they cannot play');
+
+  playOut(runner, pool);
+  assert.equal(pool.state, 'complete');
+  await runner.settle(pool);
+
+  // Third place was played for, not inferred.
+  assert.ok(pool.thirdPlace?.winner, 'the playoff never happened');
+
+  const { prizes } = F.prizesFor(10, 16);
+  const paid = captured.filter(c => c.rpc === 'credit_coins');
+  assert.equal(paid.length, 3, 'the top three were not paid');
+  assert.deepEqual(paid.map(c => c.args.amount), prizes);
+
+  const taken = 16 * 10;
+  const out = paid.reduce((s, c) => s + c.args.amount, 0);
+  assert.ok(out < taken, 'more went out than came in');
+  assert.ok(Math.abs(out - taken * (1 - F.FEE_RATE)) < 0.001,
+    `paid ${out} of ${taken} — the rake is not ${F.FEE_RATE * 100}%`);
+
+  // Everyone who did not place has a row, including the one who walked.
+  const rows = captured.filter(c => c.table === 'transactions').flatMap(c => c.rows);
+  const wins = rows.filter(r => r.type === 'match_win');
+  const losses = rows.filter(r => r.type === 'match_loss');
+  assert.equal(wins.length, 3);
+  assert.ok(wins.every(r => r.stake_c === 10), 'a prize was recorded without its stake');
+  assert.equal(losses.length, 13);
+  assert.ok(losses.some(r => r.user_id === quitter), 'the player who left was not charged');
+
+  // And the champion's own row is the one the leaderboard counts.
+  const champ = captured.find(c => c.table === 'matches' && c.update?.winner_id);
+  assert.ok(champ, 'no tournament win was recorded');
+});
+
+test('settling twice pays once', async () => {
+  // Reached from the last result of the last round and from anything else that
+  // notices the pool is complete.
+  const pools = createStore(); _store = pools;
+  const captured = [];
+  const runner = createRunner({
+    io: fakeIo(), supabase: fakeSupabase(captured), pools,
+    engines: fakeEngines(), log: { error() {} },
+  });
+
+  const pool = fill(pools, 16, { entryFee: 5 });
+  await runner.beginPool(pool);
+  playOut(runner, pool);
+
+  await Promise.all([runner.settle(pool), runner.settle(pool), runner.settle(pool)]);
+  assert.equal(captured.filter(c => c.rpc === 'credit_coins').length, 3,
+    'the prizes were paid more than once');
+});

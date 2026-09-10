@@ -37,21 +37,35 @@ export default function useTournamentResult() {
     return () => socket.off('tournament_over', onOver);
   }, [socket, poolId]);
 
-  // What the pool says, for a card that mounted after the announcement had
-  // already been made. The same race the draw screen loses: settlement and
-  // this screen appear in the same instant.
+  // What the pool says, for a card that is on screen either side of
+  // settlement.
+  //
+  // Asked repeatedly, not once. The final's result card and the settlement
+  // that pays it out happen within the same second, in either order: a single
+  // request made a moment too early found the tournament still running, got
+  // nothing, and never looked again — so the card sat there with no placing
+  // and no payout, which is the one thing the last screen of a tournament has
+  // to show. It stops the moment it has an answer.
   useEffect(() => {
     if (!poolId || over) return;
     let alive = true;
-    api.get(`/tournaments/${poolId}`)
-      .then(d => {
-        if (!alive || !d?.pool) return;
-        if (d.pool.state === 'complete' && d.pool.awards) {
-          setOver({ poolId, awards: d.pool.awards, free: d.pool.entryFee === 0 || d.pool.free });
+    let tries = 0;
+    let timer = null;
+
+    const ask = async () => {
+      tries += 1;
+      try {
+        const d = await api.get(`/tournaments/${poolId}`);
+        if (!alive) return;
+        if (d?.pool?.state === 'complete' && d.pool.awards) {
+          setOver({ poolId, awards: d.pool.awards, free: !!d.pool.free });
+          return;
         }
-      })
-      .catch(() => {});
-    return () => { alive = false; };
+      } catch { /* gone, or not ready — the retry covers both */ }
+      if (alive && tries < 12) timer = setTimeout(ask, 1000);
+    };
+    ask();
+    return () => { alive = false; clearTimeout(timer); };
   }, [poolId, over]);
 
   if (!poolId) return null;

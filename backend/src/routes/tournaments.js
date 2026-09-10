@@ -75,8 +75,24 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
     const slot = F.joinableSlot(now);
     const existing = pools.entryIn(slot.startsAt, req.user.id);
     if (existing) {
-      // Same stake, or it has already started: they are where they belong.
-      if (existing.entryFee === entryFee || existing.state !== 'filling') {
+      // Already playing one. Refused rather than answered with the tournament
+      // they are in.
+      //
+      // It used to hand that one back whatever stake had been asked for, so a
+      // player who set the slider to ten and pressed Play was taken to their
+      // running one-coin bracket, which told them it was a one-coin entry.
+      // Nothing was wrong with the bracket; the bet had simply been ignored,
+      // silently, and the screen looked like it had lost the stake.
+      if (existing.state === 'running') {
+        return res.status(400).json({
+          error: 'You are still in a tournament. Finish it before entering another.',
+          poolId: existing.id,
+          inProgress: true,
+        });
+      }
+      // Same stake, still filling: a second click is the common case, not an
+      // attack, so it lands them back on the seat they already have.
+      if (existing.entryFee === entryFee) {
         return res.json({
           poolId: existing.id, already: true,
           entryFee: existing.entryFee,

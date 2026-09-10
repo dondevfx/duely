@@ -326,10 +326,28 @@ async function handleWordleGuess(io, supabase, roomId, socketId, guessRaw) {
       if (room.failTimer) { clearTimeout(room.failTimer); room.failTimer = null; }
       await _settleWordle(io, supabase, room, null);
     } else {
+      if (room.idleTimer) { clearTimeout(room.idleTimer); room.idleTimer = null; }
+
+      // A match the bot cannot win ends a few seconds after the player's last
+      // guess, with the player winning it.
+      //
+      // The sixty seconds below is the opponent's chance to finish, which only
+      // means something when the opponent might beat them. Against a bot that
+      // is not allowed to win it is a minute of watching a board that has
+      // already decided — and on a tournament round it is a minute of the
+      // three the round has.
+      const botCannotWin = !!(room.tournament || room.demoWin);
+      if (botCannotWin && opp.isBot) {
+        room.failTimer = setTimeout(async () => {
+          if (room.settled) return;
+          await _settleWordle(io, supabase, room, socketId);
+        }, 3000 + Math.floor(Math.random() * 2000));
+        return;
+      }
+
       // Give opponent 60 seconds to finish
       // The fail timer now bounds the match; the inactivity cap would otherwise
       // race it and could settle first.
-      if (room.idleTimer) { clearTimeout(room.idleTimer); room.idleTimer = null; }
       io.to(opp.socketId).emit('wordle_opponent_failed', { timeLimit: FAIL_TIMER_MS / 1000 });
       room.failTimer = setTimeout(async () => {
         if (room.settled) return;
@@ -667,7 +685,16 @@ async function scheduleBotWordleMove(io, supabase, roomId, botSocketId) {
   // the bot takes its second. It fills the board at the player's own pace,
   // which is what makes it read as an opponent rather than a timer, and it can
   // never get ahead because it has nowhere to get ahead from.
-  const behindBy = 1;
+  //
+  // Unless the bot cannot win at all — a demo account's match, or a round of a
+  // tournament. Trailing is what keeps an ordinary bot match honest: the bot
+  // must never be in a position to solve first. When the outcome is already
+  // decided, that is not what the pacing is for, and a board where the
+  // opponent is always a row behind reads as a shadow. Leading by one looks
+  // like being chased, which is the point of showing an opponent at all, and
+  // it costs nothing because the bot never plays the answer.
+  const botCannotWin = !!(room.tournament || room.demoWin);
+  const offset = botCannotWin ? 0 : 1;
 
   while (guessNum < MAX_GUESSES) {
     // Wait until the player is far enough ahead for the bot's next guess to
@@ -683,7 +710,11 @@ async function scheduleBotWordleMove(io, supabase, roomId, botSocketId) {
       // the bot to trail, and the match is about to settle either way.
       if (hs?.finished) return;
       const humanGuesses = hs?.guesses?.length ?? 0;
-      if (humanGuesses - behindBy > guessNum) break;
+      // Trailing: wait until the player is two ahead, so the bot's next guess
+      // still leaves it one behind. Leading: the bot takes its next as soon as
+      // the player has matched its count, which puts it one in front from its
+      // opening guess onward.
+      if (humanGuesses - offset > guessNum || (botCannotWin && humanGuesses >= guessNum)) break;
       await sleep(200);
       // A safety valve, not a pace: without it a player who walks away leaves
       // this loop polling for the life of the room. The room's own idle timer

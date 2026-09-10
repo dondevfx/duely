@@ -105,6 +105,12 @@ export default function Tournaments() {
       // and it becomes the tournament without moving anybody.
       navigate(`/tournaments/${data.poolId}`);
     } catch (e) {
+      // Already in one: the useful thing is the way back to it, not the
+      // refusal. Their stake was not taken and nothing has been lost.
+      if (e?.data?.inProgress && e?.data?.poolId) {
+        navigate(`/tournaments/${e.data.poolId}`);
+        return;
+      }
       setError(e?.data?.error || e?.message || 'Could not enter the tournament.');
       setBusy(false);
     }

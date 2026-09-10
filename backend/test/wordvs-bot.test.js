@@ -53,7 +53,7 @@ test('the bot never plays the answer', async () => {
 });
 
 test('the bot waits for the player instead of a timer', async () => {
-  assert.match(SRC, /if \(humanGuesses - behindBy > guessNum\) break;/);
+  assert.match(SRC, /if \(humanGuesses - offset > guessNum/);
   assert.ok(!/const delay = 1500 \+ Math\.floor\(Math\.random\(\) \* 1500\)/.test(SRC),
     'the free-running clock is what let the bot get ahead');
 });
@@ -170,4 +170,32 @@ test('three columns waits for xl, where the sidebars leave room', () => {
   assert.ok(!/grid-cols-2 (md|lg):grid-cols-3/.test(HOME),
     'three columns before xl makes the cards smaller than a phone gives');
   assert.match(HOME, /max-w-3xl xl:max-w-5xl/, 'and the container has to widen with it');
+});
+
+test('a bot that cannot win leads by one instead of trailing', () => {
+  // Trailing is what keeps an ORDINARY bot match honest — the bot must never
+  // be in a position to solve first. When the outcome is already decided, a
+  // board where the opponent is always a row behind reads as a shadow; leading
+  // looks like being chased, which is the point of showing an opponent at all.
+  // It costs nothing, because the bot never plays the answer.
+  assert.match(SRC, /const botCannotWin = !!\(room\.tournament \|\| room\.demoWin\)/,
+    'the pacing does not know when the outcome is already decided');
+  assert.match(SRC, /const offset = botCannotWin \? 0 : 1/);
+  assert.match(SRC, /botCannotWin && humanGuesses >= guessNum/,
+    'a bot that cannot win still waits to fall behind');
+});
+
+test('a decided match ends seconds after the last guess, not a minute', () => {
+  // The sixty-second wait is the opponent's chance to finish, which only means
+  // something when the opponent might beat them. Against a bot that is not
+  // allowed to win it is a minute watching a board already decided — and on a
+  // tournament round it is a minute of the three the round has.
+  const fail = SRC.slice(SRC.indexOf('if (ps.guesses.length >= MAX_GUESSES)'));
+  const branch = fail.slice(0, 2000);
+  assert.match(branch, /3000 \+ Math\.floor\(Math\.random\(\) \* 2000\)/,
+    'a decided match still waits out the full fail timer');
+  assert.match(branch, /_settleWordle\(io, supabase, room, socketId\)/,
+    'the player is not named the winner of the match they just finished');
+  assert.ok(branch.indexOf('botCannotWin && opp.isBot') < branch.indexOf('FAIL_TIMER_MS / 1000'),
+    'the short path must come before the sixty-second one to take effect');
 });
