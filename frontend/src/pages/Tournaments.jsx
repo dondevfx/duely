@@ -7,6 +7,8 @@ import GameHelp from '../components/GameHelp';
 import CoinIcon from '../components/CoinIcon';
 import BetSlider from '../components/BetSlider';
 import InsufficientModal from '../components/InsufficientModal';
+import GlowButton from '../components/GlowButton';
+import { LockIcon } from '../components/UiIcon';
 import { api } from '../utils/api';
 
 /**
@@ -235,17 +237,28 @@ export default function Tournaments() {
 
       <InsufficientModal currency="coins" open={shortfall} onClose={() => setShortfall(false)} />
 
-      <button
-        onClick={enter}
-        disabled={busy || (tickets && tickets.left <= 0)}
-        className="w-full py-3.5 rounded-xl bg-primary hover:bg-blue-500 text-white font-black text-lg
-                   shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {!session ? 'Login to Play'
-          : tickets && tickets.left <= 0 ? 'No tickets left'
-          : busy ? 'Entering…'
-          : 'Play'}
-      </button>
+      {/* The same button every other bet screen uses, in the same two states.
+          This screen had a hand-rolled one: different padding, different
+          weight, no focus ring, and a Login state with no lock on it — so the
+          one action on the page looked like it belonged to another product. */}
+      {!session ? (
+        <GlowButton onClick={() => navigate('/login')} variant="primary" size="lg"
+                    className="w-full text-lg py-4 border border-transparent">
+          <LockIcon /> Login to Play
+        </GlowButton>
+      ) : (
+        <GlowButton
+          onClick={enter}
+          variant="primary"
+          size="lg"
+          className="w-full text-lg py-4 border border-transparent"
+          disabled={busy || (tickets && tickets.left <= 0)}
+        >
+          {tickets && tickets.left <= 0 ? 'No tickets left'
+            : busy ? 'Entering…'
+            : 'Play'}
+        </GlowButton>
+      )}
 
       {/* What is left, under the button that spends it.
           A go is spent when a bracket you entered STARTS, not when you join

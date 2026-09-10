@@ -45,7 +45,7 @@ export default function Signup() {
 
   if (awaitingConfirmation) {
     return (
-      <div className="min-h-screen bg-bg flex items-center justify-center px-4">
+      <div className="min-h-full bg-bg flex items-center justify-center px-4 py-8">
         <div className="w-full max-w-sm text-center animate-slide-up">
           <div className="text-5xl mb-4">📬</div>
           <h2 className="text-2xl font-black text-white mb-2">Check your email</h2>
@@ -69,7 +69,7 @@ export default function Signup() {
   }
 
   return (
-    <div className="min-h-screen bg-bg flex items-center justify-center px-4" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}>
+    <div className="min-h-full bg-bg flex items-center justify-center px-4 py-8" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}>
       <div className="w-full max-w-sm animate-slide-up">
         <div className="text-center mb-8">
           <Link to="/" className="text-3xl font-black">

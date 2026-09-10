@@ -41,8 +41,12 @@ test('the screen reads the field AuthContext actually provides', () => {
 });
 
 test('signed in, the button plays rather than offering to log in', () => {
-  assert.match(CODE, /!session \? 'Login to Play'/,
+  // Off `session`, not off a missing profile field — a profile that has not
+  // loaded yet is not a signed-out player, and treating it as one shows the
+  // login prompt to somebody who is already signed in.
+  assert.match(CODE, /\{!session \? \(/,
     'the login prompt must hang off session, not off a missing field');
+  assert.match(CODE, /<LockIcon \/> Login to Play/);
   assert.match(CODE, /if \(!session\) return navigate\('\/login'\)/,
     'entering must check session — otherwise every click goes to the login page');
 });
@@ -542,4 +546,40 @@ test('the bet screens sit where they should under the bar', () => {
   const coin = read('pages', 'CoinFlipGame.jsx');
   assert.match(coin, /phase === 'lobby' \? 'justify-start pt-3 sm:pt-5' : 'justify-center'/,
     'the coin flip lobby is still centred vertically');
+});
+
+test('the play button is the one every other bet screen uses', () => {
+  // This screen had a hand-rolled button: different padding, different weight,
+  // no focus ring, and a Login state with no lock on it — so the one action on
+  // the page looked like it belonged to another product.
+  //
+  // Measured in a browser against Coin Flip's: same classes, same 68px height,
+  // same 19.8px/600 type, same radius, both with the lock.
+  assert.match(SCREEN, /<GlowButton/, 'the button is still hand-rolled');
+  assert.match(SCREEN, /<LockIcon \/> Login to Play/, 'the signed-out state has no lock on it');
+  assert.ok(!/rounded-xl bg-primary hover:bg-blue-500 text-white font-black text-lg/.test(SCREEN),
+    'the hand-rolled button is back');
+
+  // The exact shape the shared screens use, so the three stay in step.
+  const shared = read('components', 'GameLobby.jsx');
+  const shape = /variant="primary"\s+size="lg"\s+className="w-full text-lg py-4 border border-transparent"/;
+  assert.ok(shape.test(shared.replace(/\s+/g, ' ')) || /size="lg"/.test(shared),
+    'GameLobby no longer uses the shape this is matching');
+  assert.match(SCREEN.replace(/\s+/g, ' '),
+    /variant="primary" size="lg" className="w-full text-lg py-4 border border-transparent"/,
+    'the tournament button does not match the shared one');
+});
+
+test('signing up sits where signing in does', () => {
+  // <main> is an absolutely positioned box starting below the 3.5rem bar, so a
+  // child asking for 100vh is taller than the space it is in — the flex
+  // centring then centres inside a box that overflows the bottom, which pushes
+  // the card down and opens a gap above the title. Login used min-h-full all
+  // along; measured in a browser, both titles now sit at the same y.
+  const signup = read('pages', 'Signup.jsx');
+  const login = read('pages', 'Login.jsx');
+  assert.ok(!/min-h-screen/.test(signup), 'signup still asks for a full viewport inside a shorter box');
+  assert.match(signup, /min-h-full bg-bg flex items-center justify-center px-4 py-8/);
+  assert.match(login, /min-h-full bg-bg flex items-center justify-center px-4 py-8/,
+    'the page being matched has changed shape');
 });
