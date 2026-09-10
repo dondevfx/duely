@@ -657,11 +657,14 @@ export default function CoinFlipGame() {
   // that belong in the middle of the screen.
   return (
     <div className={`relative min-h-[calc(100dvh-3.5rem)] bg-bg flex flex-col items-center px-3 sm:px-4 py-0 sm:py-4 ${
-      // Tight on a phone, where the screen has to fit without scrolling, and
-      // roomier above that. sm:pt-5 left about 20px between the bar and the
-      // title on a desktop, which reads as the title being stuck to the bar
-      // rather than sitting under it.
-      phase === 'lobby' ? 'justify-start pt-3 sm:pt-10' : 'justify-center'
+      // Tight on a phone, ordinary everywhere else.
+      //
+      // A phone has to fit the whole bet screen without scrolling, so the
+      // lobby starts at the top with barely a gap. A tablet or a desktop has
+      // room to spare, and on those it centres in the space under the bar like
+      // every other bet screen — a top-aligned title with 700px of black
+      // underneath it is not saving anything, it just sits high.
+      phase === 'lobby' ? 'justify-start pt-3 sm:justify-center sm:pt-4' : 'justify-center'
     }`}
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
 
