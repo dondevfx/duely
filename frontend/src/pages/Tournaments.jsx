@@ -39,7 +39,6 @@ export default function Tournaments() {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   // Set once a seat is taken in a tournament that has not started yet.
-  const [entered, setEntered] = useState(null);
   // Two goes per tournament, spent when a bracket you are in actually starts.
   // Held here as {left, per} so the button can say so before it is pressed
   // rather than refusing afterwards.
@@ -94,24 +93,17 @@ export default function Tournaments() {
     if (!session) return navigate('/login');
     setBusy(true);
     setError(null);
-    setEntered(null);
     try {
       const data = await api.post('/tournaments/join', { entryFee, vsBot: !!vsBot });
 
-      // Only leave this screen once there is something to watch.
+      // Straight to the bracket, whether it has started or not.
       //
-      // A bot bracket and a demo account fill instantly, so those go straight
-      // to it. A real entry usually does not: the seat is taken and the pool
-      // waits for the rest of its sixteen, which can be minutes away. Sending
-      // the player to a bracket of empty chairs reads as the tournament being
-      // broken, so they stay here and are told they are in.
-      if (data.started) {
-        navigate(`/tournaments/${data.poolId}`);
-        return;
-      }
-      setEntered(data);
-      if (data.tickets != null) setTickets(t => ({ ...t, left: data.tickets }));
-      setBusy(false);
+      // This used to keep the player here with a panel saying they were in and
+      // a link to go and look — a second click to reach the screen they had
+      // just asked for. The bracket's own waiting state is the better version
+      // of that panel: the same seats-taken count, the faces as they arrive,
+      // and it becomes the tournament without moving anybody.
+      navigate(`/tournaments/${data.poolId}`);
     } catch (e) {
       setError(e?.data?.error || e?.message || 'Could not enter the tournament.');
       setBusy(false);
@@ -224,42 +216,13 @@ export default function Tournaments() {
 
       {error && <p className="mb-2 text-center text-sm text-danger">{error}</p>}
 
-      {/* Seated, waiting for the rest. Said here rather than by moving the
-          player to a bracket of empty chairs, which reads as the tournament
-          being broken rather than as it not having started. */}
-      {entered && (
-        <div className="mb-2 rounded-xl border border-primary/50 bg-primary/10 px-3 py-2.5 text-center">
-          <p className="text-sm font-bold text-white">
-            You are in — {entered.players} of {entered.size} seats taken
-          </p>
-          {/* The clock is not a start time and must not be written as one.
-              A tournament starts when the bracket is full — that is the only
-              thing that starts one. The window says when a seat can still be
-              taken, and a bracket that has not filled by then is refunded. */}
-          <p className="text-xs text-muted mt-0.5">
-            It starts the moment the bracket is full.
-            {entered.closesAt && entered.closesAt > now && (
-              <> Entry closes in <span className="font-mono font-bold text-primary">
-                {fmt(Math.ceil((entered.closesAt - now) / 1000))}</span>.</>
-            )}
-          </p>
-          <button
-            onClick={() => navigate(`/tournaments/${entered.poolId}`)}
-            className="mt-1.5 text-xs font-bold text-primary hover:text-white transition-colors"
-          >
-            Watch the bracket →
-          </button>
-        </div>
-      )}
-
       <button
         onClick={() => enter(false)}
-        disabled={busy || !!entered || (session && !canAfford) || (tickets && tickets.left <= 0)}
+        disabled={busy || (session && !canAfford) || (tickets && tickets.left <= 0)}
         className="w-full py-3.5 rounded-xl bg-primary hover:bg-blue-500 text-white font-black text-lg
                    shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {!session ? 'Login to Play'
-          : entered ? 'Waiting for players…'
           : tickets && tickets.left <= 0 ? 'No tickets left'
           : !canAfford ? `Need ${entryFee} coins`
           : busy ? 'Entering…'

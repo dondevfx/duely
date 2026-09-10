@@ -67,9 +67,18 @@ export default function TournamentClock() {
   return (
     <div
       className="fixed left-1/2 -translate-x-1/2 pointer-events-none select-none"
-      // Above the games, which put overlays and canvases in the 20s and 30s.
-      // A clock behind the board is the same as no clock.
-      style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.375rem)', zIndex: 60 }}
+      // BELOW the navbar, which is fixed at the top with a height of 3.5rem
+      // and a z-index of 50. Sitting above it put the clock across the balance
+      // — the one number on the page nobody wants covered.
+      //
+      // Under it, the centre of every game's top strip is free: all five put
+      // their scores at the left and right of that row and leave the middle
+      // empty. z-40 clears the games' own overlays, which live in the 20s and
+      // 30s, without ever reaching the bar.
+      style={{
+        top: 'calc(env(safe-area-inset-top, 0px) + 3.5rem + 0.25rem)',
+        zIndex: 40,
+      }}
       aria-live="off"
     >
       <div

@@ -1090,7 +1090,11 @@ export default function BlockBlastGame() {
           ) : isSolo && entryFee > 0 ? (
             <span className="text-xs sm:text-sm text-muted">vs <span className="text-accent font-semibold">Bot</span></span>
           ) : (
-            <span className="text-sm sm:text-base font-black text-accent">Score Race</span>
+            /* The game's name is on the card that got you here and in the tab
+               title; a second heading over the board is one the screen does
+               not need, and it is where the tournament clock sits. What stays
+               is the state — whether the opponent is stuck. */
+            null
           )}
           {oppStuck && !isSolo && <span className="text-xs text-warning font-bold ml-2">Opp stuck</span>}
         </div>

@@ -214,14 +214,18 @@ test('the value follows the thumb while it is dragged', () => {
 
 // ── Not started yet ────────────────────────────────────────────────────────
 
-test('a tournament that has not started keeps the player here', () => {
-  assert.match(CODE, /if \(data\.started\) \{/, 'it navigates regardless of whether anything started');
-  assert.match(CODE, /setEntered\(data\)/, 'nothing records that a seat was taken');
-  assert.match(CODE, /You are in/, 'the player is not told they are in');
-});
-
-test('and can still go and watch if they want to', () => {
-  assert.match(CODE, /Watch the bracket/, 'there is no way through to the bracket');
+test('entering takes you to the bracket, started or not', () => {
+  // It used to keep the player here with a panel saying they were in and a
+  // link to go and look — a second click to reach the screen they had just
+  // asked for. The bracket's own waiting state is the better version of that
+  // panel: the same seats-taken count, the faces as they arrive, and it turns
+  // into the tournament without moving anybody.
+  assert.match(CODE, /navigate\(`\/tournaments\/\$\{data\.poolId\}`\)/,
+    'entering does not go to the bracket');
+  assert.ok(!/if \(data\.started\)/.test(CODE),
+    'it still decides whether to leave based on what started');
+  assert.ok(!/Watch the bracket/.test(CODE), 'the second click is still there');
+  assert.ok(!/You are in/.test(CODE), 'the panel it replaced is still rendered');
 });
 
 // ── The help panel ─────────────────────────────────────────────────────────
@@ -257,4 +261,39 @@ test('the bracket asks the backend, not the site that served the page', () => {
 test('a finished tournament is not reported as a network failure', () => {
   const code = strip(BRACKET);
   assert.match(code, /status === 404/, 'every failure reads as lost contact');
+});
+
+// ── The round clock ────────────────────────────────────────────────────────
+
+test('the round clock sits below the bar, not across the balance', () => {
+  // The navbar is fixed at the top, 3.5rem tall, at z-50. The clock started
+  // above it, which put it straight over the balance — the one number on the
+  // page nobody wants covered. Below it, the centre of every game's top strip
+  // is free: all five put their scores at the left and right of that row.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const clock = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'src', 'components', 'TournamentClock.jsx'), 'utf8');
+
+  assert.match(clock, /3\.5rem/, 'the clock does not clear the bar');
+  assert.match(clock, /zIndex: 40/, 'the clock is not below the bar');
+  assert.ok(!/zIndex: (5[0-9]|[6-9][0-9])/.test(clock), 'the clock can still cover the bar');
+
+  // Driven by the socket, not by route state: a reloaded game screen has no
+  // navigation state and the clock silently never appeared.
+  assert.match(clock, /socket\.on\('tournament_match'/, 'the clock only learns from navigation');
+  assert.match(clock, /socket\.on\('tournament_result'/, 'nothing stops it counting after the match');
+});
+
+test('no game prints its own name over the board', () => {
+  // A second heading for a screen with one job, and it is exactly where the
+  // tournament clock sits.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const pages = path.join(__dirname, '..', '..', 'frontend', 'src', 'pages');
+  for (const [file, label] of [['BlockBlastGame.jsx', 'Score Race'], ['WordleGame.jsx', 'Word Race']]) {
+    const code = fs.readFileSync(path.join(pages, file), 'utf8');
+    const rendered = code.split(/\r?\n/).filter(l => !l.trim().startsWith('*') && !l.trim().startsWith('//')).join('\n');
+    assert.ok(!rendered.includes(`>${label}<`), `${file} still prints "${label}" over the board`);
+  }
 });

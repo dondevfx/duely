@@ -538,3 +538,55 @@ test('a bracket with no semi-finals still places third', () => {
   assert.ok(pool.thirdPlace, 'four entrants got no playoff');
   assert.ok(pool.thirdPlace.a && pool.thirdPlace.b);
 });
+
+test('being knocked out frees you to enter another tournament', () => {
+  // Their name stays in the bracket they lost — it has to, it is a record of
+  // who played whom — but that is not an entry. Counting it meant a player who
+  // lost their first round could not spend their second ticket for the rest of
+  // the slot: the screen simply put them back on a bracket they were out of.
+  const s = createStore();
+  const { pool } = s.join({ userId: 'u0', username: 'a', entryFee: 1, now: OPEN });
+  for (let i = 1; i < 16; i++) s.seat(pool, { userId: `b${i}`, username: 'b', isBot: true, now: OPEN });
+
+  assert.equal(s.entryIn(pool.slotStart, 'u0')?.id, pool.id, 'a live entrant is not in their pool');
+
+  const i = pool.bracket[0].findIndex(m => m.a === 'u0' || m.b === 'u0');
+  const m = pool.bracket[0][i];
+  s.reportResult(pool.id, 0, i, m.a === 'u0' ? m.b : m.a);
+
+  assert.equal(s.entryIn(pool.slotStart, 'u0'), null, 'still counted as entered after losing');
+  assert.equal(s.ticketsLeft(pool.slotStart, 'u0'), 1, 'the second ticket went missing');
+});
+
+test('winning a round keeps you in it', () => {
+  const s = createStore();
+  const { pool } = s.join({ userId: 'u0', username: 'a', entryFee: 1, now: OPEN });
+  for (let i = 1; i < 16; i++) s.seat(pool, { userId: `b${i}`, username: 'b', isBot: true, now: OPEN });
+
+  const i = pool.bracket[0].findIndex(m => m.a === 'u0' || m.b === 'u0');
+  s.reportResult(pool.id, 0, i, 'u0');
+  assert.equal(s.entryIn(pool.slotStart, 'u0')?.id, pool.id, 'a winner was let out of their own tournament');
+});
+
+test('being kicked frees you too', () => {
+  // Refreshing takes you out of a running tournament. It must not also take
+  // away the tickets you have left.
+  const s = createStore();
+  const { pool } = s.join({ userId: 'u0', username: 'a', entryFee: 1, now: OPEN });
+  for (let i = 1; i < 16; i++) s.seat(pool, { userId: `b${i}`, username: 'b', isBot: true, now: OPEN });
+
+  s.leave(pool.id, 'u0');
+  (pool.kicked ||= new Set()).add('u0');
+
+  assert.equal(s.entryIn(pool.slotStart, 'u0'), null, 'a kicked player is still holding an entry');
+  assert.equal(s.ticketsLeft(pool.slotStart, 'u0'), 1);
+});
+
+test('a seat in a pool that has not started still counts as an entry', () => {
+  // One at a time while waiting: two brackets filling at once is two games in
+  // the same three minutes, and one of those seats was somebody else's.
+  const s = createStore();
+  const { pool } = s.join({ userId: 'u0', username: 'a', entryFee: 1, now: OPEN });
+  assert.equal(pool.state, 'filling');
+  assert.equal(s.entryIn(pool.slotStart, 'u0')?.id, pool.id);
+});

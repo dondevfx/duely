@@ -114,13 +114,44 @@ function createStore() {
     [...pools.values()].filter(p =>
       p.state === 'filling' && p.slotStart === slotStart && p.entryFee === entryFee);
 
-  /** Is this player already entered in this slot, at any stake? */
+  /**
+   * The tournament this player is still IN, in this slot — or null.
+   *
+   * "In" is not the same as "listed". Their name stays in a bracket they were
+   * knocked out of, and in one they were kicked from, because the bracket has
+   * to keep showing who played whom. Treating that as an entry meant a player
+   * who lost their first round, or who refreshed and was kicked, could not
+   * enter anything else for the rest of the slot — their second ticket was
+   * unspendable and the screen simply put them back on a bracket they had no
+   * part in.
+   *
+   * So: a seat in a pool that has not started counts, and a live place in one
+   * that has. Nothing else does.
+   */
   function entryIn(slotStart, userId) {
     for (const p of pools.values()) {
       if (p.slotStart !== slotStart) continue;
-      if (p.players.some(x => x.userId === userId)) return p;
+      if (!p.players.some(x => x.userId === userId)) continue;
+      if (isLiveIn(p, userId)) return p;
     }
     return null;
+  }
+
+  /** Can this player still win the pool — or still be waiting for it to start? */
+  function isLiveIn(pool, userId) {
+    if (pool.state === 'filling') return true;
+    if (pool.state !== 'running') return false;
+    if (pool.kicked?.has(userId)) return false;
+    // In a match of the round being played that is either undecided or that
+    // they won. Losing one is the end of it; the round advancing carries the
+    // winners into the next.
+    const round = pool.bracket?.[pool.round] || [];
+    const mine = round.find(m => m.a === userId || m.b === userId);
+    if (mine && (!mine.winner || mine.winner === userId)) return true;
+    // Or in the playoff for third, which is played beside the final.
+    const tp = pool.thirdPlace;
+    if (tp && !tp.winner && (tp.a === userId || tp.b === userId)) return true;
+    return false;
   }
 
   function createPool(slotStart, entryFee, now) {
@@ -428,7 +459,7 @@ function createStore() {
 
   return {
     pools,
-    join, seat, leave, startPool, ticketsLeft, spentIn, matchAt, closeWindow, reportResult, pendingMatches, advanceRound,
+    join, seat, leave, startPool, ticketsLeft, spentIn, matchAt, isLiveIn, closeWindow, reportResult, pendingMatches, advanceRound,
     drainForShutdown, entryIn,
     get: (id) => pools.get(id) || null,
     clear: () => pools.clear(),
