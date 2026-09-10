@@ -538,14 +538,6 @@ test('the bracket is pinned, so a game does not start half scrolled', () => {
     're-pinning does not follow the phase, so it fires once and never again');
 });
 
-test('the coin flip lobby starts at the top', () => {
-  // Its lobby was centred in a full-height column, which floated the title in
-  // the middle of a desktop page. The flip and the result still centre —
-  // those are single objects that belong in the middle of the screen.
-  const coin = read('pages', 'CoinFlipGame.jsx');
-  assert.match(coin, /phase === 'lobby' \? 'justify-start pt-3 sm:pt-5' : 'justify-center'/,
-    'the coin flip lobby is centred again');
-});
 
 test('the play button is the one every other bet screen uses', () => {
   // This screen had a hand-rolled button: different padding, different weight,
@@ -612,4 +604,37 @@ test('an iPad stacks the profile the way a phone does', () => {
   assert.match(profile, /absolute top-0 left-full ml-4 w-64 hidden xl:block/,
     'the floating friends panel still appears on an iPad');
   assert.ok(!/mb-6 lg:hidden/.test(profile), 'the lg split is back');
+});
+
+test('the title clears the help button in the corner', () => {
+  // "Tournaments" is ONE word, so it cannot break the way "Block Burst" and
+  // "Color Rush" do. At 60px it measured about 380px inside a 368px box and
+  // ran straight under the ? — the only title on the site that could neither
+  // fit nor wrap.
+  //
+  // Measured after the change: one line, 24px of clearance at 1900 wide and
+  // 16px at 1024, which is an iPad in landscape.
+  assert.match(SCREEN, /text-4xl sm:text-5xl font-black text-white text-center/,
+    'the tournament title is back at a size that does not fit beside the ?');
+  assert.match(SCREEN, /px-10/, 'the title no longer reserves room for the ?');
+
+  // The pages that DO wrap are left alone — two-line titles there are the
+  // intended treatment, and they already clear the button.
+  const lobby = read('components', 'GameLobby.jsx');
+  assert.match(lobby, /text-4xl sm:text-6xl/, 'the shared lobby title changed size too');
+});
+
+test('the coin flip title is not stuck to the bar', () => {
+  // Its lobby starts at the top rather than centring, which is what was asked
+  // for — but sm:pt-5 left about 20px between the bar and the title on a
+  // desktop, so it read as attached to the bar rather than sitting under it.
+  // 40px measured at both 1900 and 1024 wide.
+  const coin = read('pages', 'CoinFlipGame.jsx');
+  assert.match(coin, /phase === 'lobby' \? 'justify-start pt-3 sm:pt-10' : 'justify-center'/,
+    'the desktop gap under the bar is back to being too tight');
+
+  // The two-line title is the treatment, not a wrap: the coin replaces the "o"
+  // and the words stack. Shrinking it would be fixing something that is not
+  // broken.
+  assert.match(coin, /text-3xl sm:text-6xl/, 'the coin flip title was resized');
 });

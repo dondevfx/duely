@@ -166,7 +166,13 @@ export default function Tournaments() {
         <div className="absolute top-0 right-0 z-10">
           <GameHelp gameType="tournament" placement="top-right" />
         </div>
-        <h1 className="text-4xl sm:text-6xl font-black text-white text-center mb-4 sm:mb-6 leading-tight px-10 flex items-center justify-center">
+        {/* text-5xl, not 6xl, and the reason is the ? in the corner.
+            "Tournaments" is one word, so it cannot wrap the way "Block Burst"
+            and "Color Rush" do — at 60px it is about 380px wide inside a
+            368px box and ran straight under the help button. Every other
+            title on the site either fits or breaks between its two words;
+            this is the only one that could do neither. */}
+        <h1 className="text-4xl sm:text-5xl font-black text-white text-center mb-4 sm:mb-6 leading-tight px-10 flex items-center justify-center">
           <GameTitle slug="tournament" title="Tournaments" />
         </h1>
       </div>

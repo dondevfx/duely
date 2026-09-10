@@ -657,7 +657,11 @@ export default function CoinFlipGame() {
   // that belong in the middle of the screen.
   return (
     <div className={`relative min-h-[calc(100dvh-3.5rem)] bg-bg flex flex-col items-center px-3 sm:px-4 py-0 sm:py-4 ${
-      phase === 'lobby' ? 'justify-start pt-3 sm:pt-5' : 'justify-center'
+      // Tight on a phone, where the screen has to fit without scrolling, and
+      // roomier above that. sm:pt-5 left about 20px between the bar and the
+      // title on a desktop, which reads as the title being stuck to the bar
+      // rather than sitting under it.
+      phase === 'lobby' ? 'justify-start pt-3 sm:pt-10' : 'justify-center'
     }`}
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
 
