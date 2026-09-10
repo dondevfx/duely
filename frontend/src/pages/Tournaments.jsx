@@ -151,11 +151,17 @@ export default function Tournaments() {
     { label: '3rd', color: '#C07800', i: 2, big: false },
   ];
 
-  // More air above the title than an ordinary bet screen. This one has no
-  // game art behind it, so the name sits directly under the bar and read as
-  // crowded against it.
+  // Centred in the viewport, which is what every other bet screen does.
+  //
+  // This one pinned itself to the top with a fixed padding — so on the same
+  // phone the tournament title sat 200px above where Tower's did, and the two
+  // screens did not look like the same product. Tower, Block Burst, Rush Hour
+  // and Colour Rush all place their lobby in the middle of the space under the
+  // bar; a fixed padding cannot match that at every height, so this uses the
+  // same column they do rather than a number tuned to one screen.
   return (
-    <div className="w-full max-w-md animate-slide-up pt-8 sm:pt-12">
+    <div className="min-h-[calc(100dvh-3.5rem)] bg-bg flex flex-col items-center justify-center px-3 sm:px-4">
+    <div className="w-full max-w-md animate-slide-up">
       <div className="relative">
         <div className="absolute top-0 right-0 z-10">
           <GameHelp gameType="tournament" placement="top-right" />
@@ -274,6 +280,7 @@ export default function Tournaments() {
         </p>
       )}
 
+    </div>
     </div>
   );
 }

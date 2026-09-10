@@ -1730,10 +1730,18 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* Friends — on mobile this sits directly under the profile card, above
-            the affiliate/stats/history stack. On desktop it is the floating
-            right column instead, so this copy is hidden there. */}
-        <div className="mb-6 lg:hidden">
+        {/* Friends — directly under the profile card, above the
+            affiliate/stats/history stack. On a real desktop it is the floating
+            right column instead, so this copy is hidden there.
+            
+            The split is at xl, not lg, and that is about the sidebars rather
+            than the viewport: this page loses 240px to the left nav from md up
+            and another 320px to world chat from lg up. An iPad in landscape is
+            exactly 1024px — lg — so it qualified for the floating column and
+            then had nowhere to put it, since the column is positioned at
+            left-full and the space beyond the card had already been taken.
+            Home makes the same call for the same reason. */}
+        <div className="mb-6 xl:hidden">
           <FriendsPanel myId={profile.id} myUsername={profile.username} myReferralCode={profile.affiliate_code} activeGames={activeGames} />
         </div>
 
@@ -1881,7 +1889,7 @@ export default function Profile() {
             Support
           </Link>
         </div>
-        <div className="absolute top-0 left-full ml-4 w-64 hidden lg:block">
+        <div className="absolute top-0 left-full ml-4 w-64 hidden xl:block">
           <FriendsPanel myId={profile.id} myUsername={profile.username} myReferralCode={profile.affiliate_code} activeGames={activeGames} />
         </div>
         </div>{/* end relative container */}

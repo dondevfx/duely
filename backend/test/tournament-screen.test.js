@@ -144,9 +144,11 @@ test('the clock rolls over to the next slot without a reload', () => {
 });
 
 test('there is room above the title', () => {
-  // More than a bet screen with game art behind it, because this one has none
-  // and the name sat directly under the bar.
-  assert.match(CODE, /pt-8 sm:pt-12/, 'the screen still starts flush against the bar');
+  // Not a number — the same centring every other bet screen uses, so the two
+  // sit the same way at every viewport height rather than only at the one a
+  // padding was tuned against. See 'the bet screen is centred' below.
+  assert.match(CODE, /flex flex-col items-center justify-center/,
+    'the screen no longer centres itself under the bar');
 });
 
 test('the countdown counts to an instant the server sent', () => {
@@ -536,16 +538,13 @@ test('the bracket is pinned, so a game does not start half scrolled', () => {
     're-pinning does not follow the phase, so it fires once and never again');
 });
 
-test('the bet screens sit where they should under the bar', () => {
-  // Tournaments has no game art behind the title, so it needs more air above
-  // it than a bet screen that does. Coin Flip had the opposite problem: its
-  // lobby was centred in a full-height column, which floated the title in the
-  // middle of a desktop page.
-  assert.match(SCREEN, /animate-slide-up pt-8 sm:pt-12/, 'the tournament title is still crowded');
-
+test('the coin flip lobby starts at the top', () => {
+  // Its lobby was centred in a full-height column, which floated the title in
+  // the middle of a desktop page. The flip and the result still centre —
+  // those are single objects that belong in the middle of the screen.
   const coin = read('pages', 'CoinFlipGame.jsx');
   assert.match(coin, /phase === 'lobby' \? 'justify-start pt-3 sm:pt-5' : 'justify-center'/,
-    'the coin flip lobby is still centred vertically');
+    'the coin flip lobby is centred again');
 });
 
 test('the play button is the one every other bet screen uses', () => {
@@ -582,4 +581,35 @@ test('signing up sits where signing in does', () => {
   assert.match(signup, /min-h-full bg-bg flex items-center justify-center px-4 py-8/);
   assert.match(login, /min-h-full bg-bg flex items-center justify-center px-4 py-8/,
     'the page being matched has changed shape');
+});
+
+test('the bet screen is centred, the way every other one is', () => {
+  // It pinned itself to the top with a fixed padding, so on the same phone the
+  // tournament title sat about 200px above where Tower's did and the two did
+  // not look like the same product. Tower, Block Burst, Rush Hour and Colour
+  // Rush all centre their lobby in the space under the bar; a fixed padding
+  // cannot match that at every height.
+  assert.match(SCREEN, /min-h-\[calc\(100dvh-3\.5rem\)\] bg-bg flex flex-col items-center justify-center/,
+    'the tournament screen still pins itself to the top');
+  assert.ok(!/animate-slide-up pt-8 sm:pt-12/.test(SCREEN), 'the fixed padding is back');
+
+  // The shape it is matching, so the two move together.
+  const tower = read('pages', 'TowerGame.jsx');
+  assert.match(tower, /min-h-\[calc\(100dvh-3\.5rem\)\] bg-bg flex flex-col items-center justify-center/,
+    'the screen being matched has changed shape');
+});
+
+test('an iPad stacks the profile the way a phone does', () => {
+  // The split is at xl, not lg, and that is about the sidebars rather than the
+  // viewport: the page loses 240px to the left nav from md up and another
+  // 320px to world chat from lg up. An iPad in landscape is exactly 1024 —
+  // lg — so it qualified for the floating friends column and then had nowhere
+  // to put it, since that column is positioned at left-full and the space
+  // beyond the card had already been taken.
+  const profile = read('pages', 'Profile.jsx');
+  assert.match(profile, /className="mb-6 xl:hidden"/,
+    'the stacked friends panel still disappears on an iPad');
+  assert.match(profile, /absolute top-0 left-full ml-4 w-64 hidden xl:block/,
+    'the floating friends panel still appears on an iPad');
+  assert.ok(!/mb-6 lg:hidden/.test(profile), 'the lg split is back');
 });
