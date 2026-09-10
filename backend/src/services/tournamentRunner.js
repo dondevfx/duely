@@ -187,6 +187,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     const pending = pools.pendingMatches(pool);
 
     for (const { m, i } of pending) startMatch(pool, i, m, game);
+    startSampling(pool);
 
     // A round with nothing left to play — every match a bye — still has to
     // move on, or the tournament stops on a round it already finished.
@@ -357,6 +358,52 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     }, (sudden ? T.sudden : T.match) + T.overrun);
   }
 
+  /**
+   * What every match in the round currently reads.
+   *
+   * A knocked-out player, and anyone waiting on the round to finish, is
+   * watching a bracket where nothing moves for three minutes. The scores are
+   * already in the rooms — every engine tracks a running one, because it needs
+   * one for its own catch-up and anti-cheat — so this samples them and sends
+   * them out. Read only: nothing here can change a result.
+   */
+  function sampleScores(pool) {
+    const st = stateOf(pool.id);
+    if (st.phase !== 'playing') return null;
+    const out = [];
+    for (const [key, rec] of st.matches) {
+      if (!rec.roomId || rec.done) continue;
+      const engine = engines[rec.game];
+      const room = engine?.room?.(rec.roomId);
+      if (!room || !engine.score) continue;
+      const index = Number(key.split(':')[1]);
+      const m = pool.bracket[pool.round]?.[index];
+      if (!m) continue;
+      const of = (uid) => {
+        const p = (room.players || []).find(x => x.userId === uid);
+        return p ? engine.score(room, p.socketId) : null;
+      };
+      out.push({ match: index, game: rec.game, a: of(m.a), b: of(m.b) });
+    }
+    return out.length ? out : null;
+  }
+
+  function startSampling(pool) {
+    const st = stateOf(pool.id);
+    if (st.sampler) return;
+    st.sampler = setInterval(() => {
+      const scores = sampleScores(pool);
+      if (!scores) return stopSampling(pool);
+      broadcast(pool, 'tournament_scores', { poolId: pool.id, round: pool.round, scores });
+    }, 1500);
+    if (st.sampler.unref) st.sampler.unref();
+  }
+
+  function stopSampling(pool) {
+    const st = stateOf(pool.id);
+    if (st.sampler) { clearInterval(st.sampler); st.sampler = null; }
+  }
+
   /** Somebody's game screen has loaded and is listening. */
   function ready(poolId, roomId, userId) {
     const st = live.get(poolId);
@@ -376,10 +423,14 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     try {
       const room = engine.room?.(roomId);
       if (room) {
+        // The engine's own reading, not a guess at where it keeps it. Every
+        // game stores a running score somewhere different, and reaching past
+        // the adapter for two of the five field names is how this silently
+        // returned zero for the other three.
         const score = (uid) => {
           const p = (room.players || []).find(x => x.userId === uid);
           if (!p) return -1;
-          return room.scores?.[p.socketId] ?? room.pingScores?.[p.socketId] ?? 0;
+          return engine.score ? engine.score(room, p.socketId) : 0;
         };
         const sa = score(a.userId), sb = score(b.userId);
         if (sa > sb) winner = a.userId;
@@ -432,6 +483,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
 
   function roundSettled(pool) {
     const st = stateOf(pool.id);
+    stopSampling(pool);
     const moved = pools.advanceRound(pool);
     if (moved) {
       st.matches.clear();
@@ -456,6 +508,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     if (st.settled) return;
     st.settled = true;
     setPhase(pool, 'complete');
+    stopSampling(pool);
     for (const t of st.timers) clearTimeout(t);
 
     // placings() names them; the prize table is ordered. Lined up here once,
@@ -569,7 +622,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
   });
 
   return {
-    tick, ready, onResult, beginPool, startRound, settle,
+    tick, ready, onResult, beginPool, startRound, settle, sampleScores,
     _live: live,
     timings: T,
   };

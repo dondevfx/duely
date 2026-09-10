@@ -144,3 +144,46 @@ test('a real room against a bot is a match, not a practice run', () => {
     assert.equal(room.demoWin, true, 'a bot could knock a real player out');
   }
 });
+
+test('the bracket carries a live score for every match being played', async () => {
+  // The complaint behind this: between rounds you are looking at a bracket
+  // where nothing moves for three minutes, and the person most likely to be
+  // looking at it is someone who has just been knocked out of it.
+  //
+  // Every engine already tracks a running score — it needs one for its own
+  // catch-up and anti-cheat — but each keeps it somewhere different, which is
+  // why reading it is the adapter's job and not the runner's.
+  const { runner, pool, io } = boot();
+  pool.roundGames = pool.roundGames.map(() => 'block-blast');
+  runner.startRound(pool);
+
+  const roomId = [...hook._rooms.keys()].find(id => hook._rooms.get(id).match === 0);
+  const room = bb.getBlockBlastRoom(roomId);
+  room.state = 'active';
+  room.startTime = Date.now() - 30_000;
+  const [s1, s2] = room.players.map(p => p.socketId);
+  room.pingScores[s1] = 640;
+  room.pingScores[s2] = 310;
+
+  const sampled = runner.sampleScores(pool);
+  assert.ok(sampled, 'nothing was sampled while a round was being played');
+
+  const first = sampled.find(x => x.match === 0);
+  assert.ok(first, 'the live match is not in the sample');
+  assert.equal(first.game, 'block-blast');
+  assert.equal(first.a, 640);
+  assert.equal(first.b, 310);
+
+  // Every match in the round, not just the one being watched.
+  assert.equal(sampled.length, pool.bracket[0].length,
+    'only some of the round was reported');
+});
+
+test('every game a tournament can draw can be read while it is played', () => {
+  // A missing reader is not an error, it is a zero — the bracket would sit at
+  // 0-0 for three minutes and look broken rather than look empty.
+  const F = require('../src/services/tournamentFormat');
+  for (const g of F.TOURNAMENT_GAMES) {
+    assert.equal(typeof ENGINES[g].score, 'function', `${g} has no live score`);
+  }
+});

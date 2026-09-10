@@ -36,6 +36,9 @@ export default function TournamentBracket() {
   // rounds, which is exactly when the draw is worth showing.
   const [drawing, setDrawing] = useState(null);
   const [sudden, setSudden] = useState(null);
+  // What every match in the round currently reads, sampled by the server.
+  // The bracket a knocked-out player is watching has to move.
+  const [scores, setScores] = useState(null);
   const [over, setOver] = useState(null);
   const [now, setNow] = useState(Date.now());
   const navRef = useRef(navigate);
@@ -86,9 +89,11 @@ export default function TournamentBracket() {
     const onRoundStarting = (p) => {
       if (!mine(p)) return;
       setSudden(null);
+      setScores(null);        // last round's numbers are not this round's
       setDrawing({ round: p.round, game: p.game, at: p.at });
     };
     const onResult = (p) => { if (mine(p)) setSudden(null); };
+    const onScores = (p) => { if (mine(p)) setScores(p.scores); };
     const onSudden = (p) => { if (mine(p)) setSudden(p); };
     const onOver = (p) => { if (mine(p)) { setDrawing(null); setOver(p); } };
     const onCancelled = (p) => {
@@ -115,6 +120,7 @@ export default function TournamentBracket() {
     socket.on('tournament_update', onUpdate);
     socket.on('tournament_round_starting', onRoundStarting);
     socket.on('tournament_result', onResult);
+    socket.on('tournament_scores', onScores);
     socket.on('tournament_sudden_death', onSudden);
     socket.on('tournament_over', onOver);
     socket.on('tournament_cancelled', onCancelled);
@@ -123,6 +129,7 @@ export default function TournamentBracket() {
       socket.off('tournament_update', onUpdate);
       socket.off('tournament_round_starting', onRoundStarting);
       socket.off('tournament_result', onResult);
+      socket.off('tournament_scores', onScores);
       socket.off('tournament_sudden_death', onSudden);
       socket.off('tournament_over', onOver);
       socket.off('tournament_cancelled', onCancelled);
@@ -269,6 +276,7 @@ export default function TournamentBracket() {
           bracket={pool.bracket}
           players={pool.players}
           currentRound={pool.round}
+          scores={scores}
         />
       )}
 

@@ -55,6 +55,9 @@ function fakeEngines() {
       return roomId;
     },
     room: (id) => rooms.get(id),
+    // Every real adapter reads its own running score; the fake has to as
+    // well, or the deadline path is tested against a game with no scores.
+    score: (room, sid) => room.scores?.[sid] ?? room.pingScores?.[sid] ?? 0,
     del: (id) => rooms.delete(id),
     begin: () => { one.begun++; },
     begun: 0,

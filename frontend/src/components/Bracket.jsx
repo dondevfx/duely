@@ -16,6 +16,11 @@ import Avatar from './Avatar';
  * gutter between the columns. That is what makes it look like a bracket rather
  * than a table — the shape is in the connectors, not in the borders.
  *
+ * Matches being played right now carry their live score. A bracket where
+ * nothing moves for three minutes reads as a bracket that has stopped, and
+ * the person most likely to be looking at it is someone who has just been
+ * knocked out of it.
+ *
  * And it scales itself. The whole thing is laid out in a fixed coordinate
  * space and drawn as SVG, so it fits the width it is given at any bracket size
  * without a horizontal scrollbar and without the rows shrinking below what can
@@ -27,10 +32,15 @@ const MATCH_GAP = 10;    // between matches in a round
 const COL_W = 96;        // a round's column
 const COL_GAP = 26;      // the gutter the connectors live in
 
-export default function Bracket({ bracket, players, currentRound = 0, className = '' }) {
+export default function Bracket({ bracket, players, currentRound = 0, scores = null, className = '' }) {
   if (!bracket?.length) return null;
 
   const byId = new Map((players || []).map(p => [p.userId, p]));
+  const liveScore = new Map();
+  for (const s of scores || []) {
+    if (s.a != null) liveScore.set(`${s.match}:a`, s.a);
+    if (s.b != null) liveScore.set(`${s.match}:b`, s.b);
+  }
   const rounds = bracket.length;
   const first = bracket[0].length;
 
@@ -102,6 +112,7 @@ export default function Bracket({ bracket, players, currentRound = 0, className 
                   const out = m.winner && uid && m.winner !== uid;
                   const y = c - ROW_H + k * ROW_H;
                   const p = uid ? byId.get(uid) : null;
+                  const score = live ? liveScore.get(`${i}:${side}`) : null;
                   return (
                     <g key={side}>
                       <rect
@@ -124,8 +135,19 @@ export default function Bracket({ bracket, players, currentRound = 0, className 
                         fill={won ? '#FFFFFF' : out ? '#4B5563' : uid ? '#D1D5DB' : '#374151'}
                         style={out ? { textDecoration: 'line-through' } : undefined}
                       >
-                        {clip(name(uid, m), 11)}
+                        {clip(name(uid, m), live && score != null ? 7 : 11)}
                       </text>
+                      {/* Right-aligned so the two in a match line up as a
+                          scoreline rather than trailing their names. */}
+                      {live && score != null && (
+                        <text
+                          x={x + COL_W - 4} y={y + 15}
+                          fontSize="9.5" fontWeight={700} textAnchor="end"
+                          fill="#7FB0FF"
+                        >
+                          {score}
+                        </text>
+                      )}
                     </g>
                   );
                 })}

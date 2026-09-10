@@ -255,24 +255,41 @@ export default function GameTitle({ slug, title, className = '' }) {
       );
     }
 
-    // Struck metal, and nothing else.
+    // An engraved plate, in the site's own metal.
     //
     // It had a little podium beside it, which at card size read as an emoji
     // stuck to the front of the word rather than as part of the title — three
-    // coloured bars next to eight letters. The name carries it alone now: a
-    // gold-to-white face with a dark edge under it, the way a trophy plate is
-    // engraved, so it reads as the prize rather than as another blue heading.
+    // coloured bars next to eight letters. The name carries it alone.
     //
-    // The edge is not decoration. Gold on a bright frame of a game clip has
-    // almost no contrast, and the card's scrim only darkens the bottom of the
-    // image; without the shadow the word disappears on the pale clips.
+    // The first version of that name was solid gold, which is the obvious
+    // answer for a prize and the wrong one here: this interface is built out
+    // of two blues and a cyan, and a block of gold in the middle of it reads
+    // as borrowed from another product. So the plate is cool — white through
+    // to a steel blue taken from the site's primary — and the gold is a single
+    // band across the middle, the way light catches an engraved edge. It still
+    // says trophy; it now says trophy on THIS website.
+    //
+    // The band sits just above the optical centre because that is where the
+    // eye reads a highlight on a struck surface, and because dead centre cuts
+    // the letters in half.
+    //
+    // The dark edge is not decoration. On a bright frame of a game clip the
+    // pale end of the plate has almost no contrast, and the card's scrim only
+    // darkens the bottom of the image; without the shadow the word disappears
+    // on the paler clips.
     case 'tournament':
       return wrap(
         <span className="inline-block font-black tracking-tight">
           <span
             style={{
+              // Five stops, not eight. The same word is set at 56px on the bet
+              // screen and at 22px on a home card, and a gradient with a stop
+              // every few percent turns to mush once a letter is eight pixels
+              // tall. This is: bright top, one warm line where the plate is
+              // struck, blue body, light lip.
               backgroundImage:
-                'linear-gradient(180deg,#FFF6D8 0%,#FFD147 42%,#E0A312 62%,#FFEFA8 100%)',
+                'linear-gradient(180deg,#FFFFFF 0%,#CFE1FA 34%,#E8C56A 50%,'
+                + '#3C74C4 62%,#DCEBFF 100%)',
               WebkitBackgroundClip: 'text',
               backgroundClip: 'text',
               color: 'transparent',
