@@ -61,6 +61,7 @@ const {
 } = require('../services/blackjackEngine');
 const { checkSocketClickRate, cleanupSocket } = require('../middleware/rateLimit');
 const { createBotPlayer, disguiseBot } = require('../services/botService');
+const tournamentHook = require('../services/tournamentHook');
 
 // The same game is known by two names in this codebase: a queue/bet-count key
 // ('block-blast', 'car-dash') and a room id ('blockBlast', 'carDash'). Both are
@@ -2378,8 +2379,17 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         if (room.state === 'finished') { delFn(roomId); continue; }
 
         const leaver = room.players?.find(p => p.socketId === socket.id);
-        // Bots or solo rooms: forfeit immediately, no grace period needed
-        if (!leaver || leaver.isBot) {
+        // Bots or solo rooms: forfeit immediately, no grace period needed.
+        //
+        // And a tournament round, for a different reason. The grace window
+        // exists so a dropped phone can rejoin the match it was playing; a
+        // bracket cannot wait that out. Everyone else in the tournament is
+        // held up by one absent player, and the round behind them has a
+        // deadline of its own. Leaving, refreshing or closing the tab loses
+        // the round and puts the opponent through — which is the rule
+        // everywhere else in a tournament too, so it is at least consistent
+        // with what leaving does from the bracket screen.
+        if (!leaver || leaver.isBot || room.tournament) {
           await _handleForfeit(io, supabase, found, socket.id, delFn, gameType);
           continue;
         }
@@ -2433,6 +2443,20 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
     const leaver = room.players.find(p => p.socketId === leaverSocketId);
     const stayer = room.players.find(p => p.socketId !== leaverSocketId);
+
+    // A forfeit inside a bracket is a result, and the bracket has to hear it
+    // from here.
+    //
+    // Forfeits do not go through the engine's own _resolve — they settle and
+    // emit opponent_disconnected directly — so nothing else reports them. A
+    // tournament match left this way would sit undecided until its three
+    // minutes ran out, with the opponent staring at a game that had already
+    // ended and everyone else waiting on a round that could not finish.
+    if (stayer && leaver) {
+      tournamentHook.settled(roomId, {
+        winnerId: stayer.userId, loserId: leaver.userId, isDraw: false,
+      });
+    }
 
     if (!leaver || !stayer || leaver.isBot) { io.emit('active_game_ended', { id: roomId }); deleteFn(roomId); return; }
 

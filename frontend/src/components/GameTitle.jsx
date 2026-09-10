@@ -255,7 +255,7 @@ export default function GameTitle({ slug, title, className = '' }) {
       );
     }
 
-    // An engraved plate, in the site's own metal.
+    // The name, cut from the site's own blue.
     //
     // It had a little podium beside it, which at card size read as an emoji
     // stuck to the front of the word rather than as part of the title — three
@@ -264,14 +264,13 @@ export default function GameTitle({ slug, title, className = '' }) {
     // The first version of that name was solid gold, which is the obvious
     // answer for a prize and the wrong one here: this interface is built out
     // of two blues and a cyan, and a block of gold in the middle of it reads
-    // as borrowed from another product. So the plate is cool — white through
-    // to a steel blue taken from the site's primary — and the gold is a single
-    // band across the middle, the way light catches an engraved edge. It still
-    // says trophy; it now says trophy on THIS website.
+    // as borrowed from another product. The second kept a gold band across the
+    // middle, which was the same problem in a thinner line — the only warm
+    // thing on a cool page draws the eye straight to it.
     //
-    // The band sits just above the optical centre because that is where the
-    // eye reads a highlight on a struck surface, and because dead centre cuts
-    // the letters in half.
+    // So it is white falling into #1250B4, the primary everything else here is
+    // built from. It reads as a heading belonging to this site that happens to
+    // be lit from above, rather than as a trophy plate stuck onto it.
     //
     // The dark edge is not decoration. On a bright frame of a game clip the
     // pale end of the plate has almost no contrast, and the card's scrim only
@@ -282,14 +281,20 @@ export default function GameTitle({ slug, title, className = '' }) {
         <span className="inline-block font-black tracking-tight">
           <span
             style={{
-              // Five stops, not eight. The same word is set at 56px on the bet
-              // screen and at 22px on a home card, and a gradient with a stop
+              // White into the site's own blue, and nothing else in it.
+              //
+              // #1250B4 is the primary this interface is built on, so the word
+              // is made of the same material as everything around it rather
+              // than of a colour borrowed to mean "prize". The gold band that
+              // used to cross it is gone: one warm stripe was the only warm
+              // thing on the page, and it read as a different product's logo.
+              //
+              // Four stops, not eight. The same word is set at 56px on the bet
+              // screen and 22px on a home card, and a gradient with a stop
               // every few percent turns to mush once a letter is eight pixels
-              // tall. This is: bright top, one warm line where the plate is
-              // struck, blue body, light lip.
+              // tall.
               backgroundImage:
-                'linear-gradient(180deg,#FFFFFF 0%,#CFE1FA 34%,#E8C56A 50%,'
-                + '#3C74C4 62%,#DCEBFF 100%)',
+                'linear-gradient(180deg,#FFFFFF 0%,#BBD4F5 38%,#1250B4 72%,#5E9BEE 100%)',
               WebkitBackgroundClip: 'text',
               backgroundClip: 'text',
               color: 'transparent',

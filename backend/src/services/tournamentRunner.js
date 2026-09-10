@@ -39,12 +39,17 @@ const { seededRng } = require('./tournamentPools');
 // five games actually take.
 const MATCH_MS        = 3 * 60 * 1000;
 const SUDDEN_MS       = 30 * 1000;
-// The game-picker animation runs on the client. The server holds the round
-// back for exactly as long as it takes, so the draw is over before the game is.
-const PICK_MS         = 4000;
-// Between rounds: long enough to read the bracket, short enough that a
-// four-round tournament still fits its slot.
-const INTERMISSION_MS = 8000;
+// The draw is its own screen, and it is two things one after the other: five
+// seconds counting down, then the reel picking the game. The server holds the
+// round back for both, so nobody is dropped into a game while the screen that
+// announces it is still running.
+const COUNTDOWN_MS    = 5000;
+const REEL_MS         = 3500;
+const PICK_MS         = COUNTDOWN_MS + REEL_MS;
+// Between rounds, the same sequence — a new game is drawn for every round, so
+// there is the same thing to show — after a beat on the bracket to read the
+// results that just landed.
+const INTERMISSION_MS = 3000 + PICK_MS;
 // A player who is not connected when their match starts gets this long to
 // arrive before it is forfeited.
 const CONNECT_GRACE_MS = 20 * 1000;
@@ -58,6 +63,7 @@ const CONNECT_GRACE_MS = 20 * 1000;
 const DEFAULT_TIMINGS = {
   match: MATCH_MS, sudden: SUDDEN_MS, pick: PICK_MS,
   intermission: INTERMISSION_MS, grace: CONNECT_GRACE_MS,
+  reel: REEL_MS,
   ready: 6000, overrun: 3000,
 };
 
@@ -160,6 +166,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     st.phase = phase;
     pool.phase = phase;
     pool.nextRoundAt = extra.nextRoundAt ?? null;
+    pool.reelAt = extra.nextRoundAt ? extra.nextRoundAt - T.reel : null;
     return st;
   }
 
@@ -171,6 +178,10 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
       round: pool.round,
       game: pool.roundGames[pool.round],
       at: st.nextRoundAt,
+      // The draw screen is a countdown and then a reel. Both instants are sent
+      // rather than durations, so a tab that slept through part of it lands in
+      // the right place instead of restarting the sequence.
+      reelAt: st.nextRoundAt - T.reel,
     });
     later(pool.id, () => startRound(pool), delay);
   }
@@ -371,6 +382,8 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     const st = stateOf(pool.id);
     if (st.phase !== 'playing') return null;
     const out = [];
+    let latest = 0;
+    let sudden = false;
     for (const [key, rec] of st.matches) {
       if (!rec.roomId || rec.done) continue;
       const engine = engines[rec.game];
@@ -384,8 +397,15 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
         return p ? engine.score(room, p.socketId) : null;
       };
       out.push({ match: index, game: rec.game, a: of(m.a), b: of(m.b) });
+      if (rec.deadline) latest = Math.max(latest, rec.deadline);
+      if (rec.sudden) sudden = true;
     }
-    return out.length ? out : null;
+    if (!out.length) return null;
+    // Carried on the array rather than wrapped in an object, so every existing
+    // reader of `scores` keeps working unchanged.
+    out.endsAt = latest || null;
+    out.sudden = sudden;
+    return out;
   }
 
   function startSampling(pool) {
@@ -394,7 +414,15 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     st.sampler = setInterval(() => {
       const scores = sampleScores(pool);
       if (!scores) return stopSampling(pool);
-      broadcast(pool, 'tournament_scores', { poolId: pool.id, round: pool.round, scores });
+      broadcast(pool, 'tournament_scores', {
+        poolId: pool.id, round: pool.round, scores,
+        // When the round's clock runs out, and whether what is being played is
+        // a sudden-death replay. Everyone waiting on the bracket sees the same
+        // countdown as the players in it — otherwise a bracket in the middle
+        // of a three-minute game looks like a bracket that has stopped.
+        endsAt: scores.endsAt,
+        sudden: scores.sudden,
+      });
     }, 1500);
     if (st.sampler.unref) st.sampler.unref();
   }
@@ -632,4 +660,8 @@ function ordinal(n) {
   return n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`;
 }
 
-module.exports = { createRunner, MATCH_MS, SUDDEN_MS, INTERMISSION_MS, PICK_MS, CONNECT_GRACE_MS };
+module.exports = {
+  createRunner,
+  MATCH_MS, SUDDEN_MS, INTERMISSION_MS, PICK_MS, CONNECT_GRACE_MS,
+  COUNTDOWN_MS, REEL_MS,
+};

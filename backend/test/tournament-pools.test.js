@@ -412,3 +412,64 @@ test('a tournament that is over cannot be left', () => {
   assert.equal(p2.state, 'refunded');
   assert.equal(s2.leave(p2.id, 'u0').ok, false, 'an already-refunded pool was left again');
 });
+
+// ── Tickets ────────────────────────────────────────────────────────────────
+
+test('two goes per tournament, spent when the bracket starts', () => {
+  // Spent on STARTING, not on joining. A pool that never fills is refunded and
+  // nothing was played; charging a go for it would take away a turn at a
+  // tournament that did not happen.
+  const s = createStore();
+  const { pool } = s.join({ userId: 'u0', username: 'a', entryFee: 1, now: OPEN });
+  assert.equal(s.ticketsLeft(pool.slotStart, 'u0'), 2, 'a fresh slot does not start with two');
+
+  for (let i = 1; i < 15; i++) s.seat(pool, { userId: `u${i}`, username: 'x', now: OPEN });
+  assert.equal(pool.state, 'filling');
+  assert.equal(s.ticketsLeft(pool.slotStart, 'u0'), 2, 'joining alone spent a ticket');
+
+  s.seat(pool, { userId: 'u15', username: 'x', now: OPEN });
+  assert.equal(pool.state, 'running');
+  assert.equal(s.ticketsLeft(pool.slotStart, 'u0'), 1, 'starting did not spend one');
+  assert.equal(s.ticketsLeft(pool.slotStart, 'u15'), 1);
+});
+
+test('a bracket that is refunded costs nobody a go', () => {
+  const s = createStore();
+  const { pool } = s.join({ userId: 'u0', username: 'a', entryFee: 1, now: OPEN });
+  s.closeWindow(CLOSED);
+  assert.equal(pool.state, 'refunded');
+  assert.equal(s.ticketsLeft(pool.slotStart, 'u0'), 2, 'a tournament that never ran cost a ticket');
+});
+
+test('the bots in a bracket are not charged a go', () => {
+  // They have no account to charge, and counting them would fill the map with
+  // an entry per bot per tournament forever.
+  const s = createStore();
+  const { pool } = s.join({ userId: 'u0', username: 'a', entryFee: 1, now: OPEN });
+  for (let i = 1; i < 16; i++) s.seat(pool, { userId: `bot:${i}`, username: 'b', isBot: true, now: OPEN });
+  assert.equal(pool.state, 'running');
+  assert.equal(s.spentIn(pool.slotStart, 'bot:1'), 0);
+});
+
+test('tickets come back with the next tournament', () => {
+  // Keyed by slot, so they reset every twenty minutes rather than by the day.
+  const s = createStore();
+  const { pool } = s.join({ userId: 'u0', username: 'a', entryFee: 1, now: OPEN });
+  for (let i = 1; i < 16; i++) s.seat(pool, { userId: `b${i}`, username: 'b', isBot: true, now: OPEN });
+  assert.equal(s.ticketsLeft(pool.slotStart, 'u0'), 1);
+
+  const nextSlot = F.slotAt(at(9, 25)).startsAt;
+  assert.notEqual(nextSlot, pool.slotStart, 'the test is looking at the same slot');
+  assert.equal(s.ticketsLeft(nextSlot, 'u0'), 2, 'the next tournament did not reset them');
+});
+
+test('a bot bracket seats a face, not an empty chair', () => {
+  // The colour is what the avatar falls back to when nobody has uploaded a
+  // picture. Without it every bot drew as the same dark circle, which is what
+  // made a filling bracket look like a list of empty seats.
+  const s = createStore();
+  const { pool } = s.join({ userId: 'u0', username: 'a', entryFee: 1, now: OPEN, profileColor: '#123456' });
+  s.seat(pool, { userId: 'b1', username: 'Bot', isBot: true, profileColor: '#abcdef', now: OPEN });
+  assert.equal(pool.players[0].profileColor, '#123456');
+  assert.equal(pool.players[1].profileColor, '#abcdef');
+});

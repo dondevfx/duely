@@ -5,7 +5,8 @@ import { useSocket } from '../context/SocketContext';
 import { useShowBottomBar } from '../components/BottomNav';
 import Avatar from '../components/Avatar';
 import Bracket from '../components/Bracket';
-import GameDraw from '../components/GameDraw';
+import { fmt as fmtClock } from '../components/TournamentClock';
+import TournamentDraw from './TournamentDraw';
 import { api } from '../utils/api';
 
 /**
@@ -39,6 +40,8 @@ export default function TournamentBracket() {
   // What every match in the round currently reads, sampled by the server.
   // The bracket a knocked-out player is watching has to move.
   const [scores, setScores] = useState(null);
+  const [roundEnds, setRoundEnds] = useState(null);
+  const [roundSudden, setRoundSudden] = useState(false);
   const [over, setOver] = useState(null);
   const [now, setNow] = useState(Date.now());
   const navRef = useRef(navigate);
@@ -90,10 +93,20 @@ export default function TournamentBracket() {
       if (!mine(p)) return;
       setSudden(null);
       setScores(null);        // last round's numbers are not this round's
-      setDrawing({ round: p.round, game: p.game, at: p.at });
+      setRoundEnds(null);
+      setRoundSudden(false);
+      setDrawing({ round: p.round, game: p.game, at: p.at, reelAt: p.reelAt });
     };
     const onResult = (p) => { if (mine(p)) setSudden(null); };
-    const onScores = (p) => { if (mine(p)) setScores(p.scores); };
+    const onScores = (p) => {
+      if (!mine(p)) return;
+      setScores(p.scores);
+      // The round's own clock, so the people waiting see the same
+      // countdown as the people playing. A bracket in the middle of a
+      // three-minute game otherwise looks like a bracket that stopped.
+      setRoundEnds(p.endsAt || null);
+      setRoundSudden(!!p.sudden);
+    };
     const onSudden = (p) => { if (mine(p)) setSudden(p); };
     const onOver = (p) => { if (mine(p)) { setDrawing(null); setOver(p); } };
     const onCancelled = (p) => {
@@ -186,13 +199,28 @@ export default function TournamentBracket() {
   // Named only once the round is actually being played. The server does not
   // send a round's game before it is drawn, so there is nothing here to leak.
   const game = pool.phase === 'playing' ? pool.roundGames?.[pool.round] : null;
-  const startsIn = drawn?.at ? Math.max(0, drawn.at - now) : 0;
 
   // Where this player stands, which is the first thing they look for.
   const myMatch = !filling && pool.bracket
     ? (pool.bracket[pool.round] || []).findIndex(m => m.a === me || m.b === me)
     : -1;
   const knockedOut = !filling && me && myMatch === -1 && !over;
+
+  // Its own screen, not a panel on this one. Everything below — the heading,
+  // the bracket, the seats — is what you come back to afterwards.
+  if (drawn) {
+    return (
+      <TournamentDraw
+        round={drawn.round}
+        rounds={rounds}
+        game={drawn.game}
+        games={ALL_GAMES}
+        reelAt={drawn.reelAt}
+        at={drawn.at}
+        entryFee={pool.entryFee}
+      />
+    );
+  }
 
   return (
     <div className="w-full max-w-lg animate-slide-up pt-4 sm:pt-6">
@@ -215,6 +243,25 @@ export default function TournamentBracket() {
         </div>
       </div>
 
+      {/* What the round has left to run. Only while one is actually being
+          played — between rounds there is nothing to count. */}
+      {roundEnds && roundEnds > now && (
+        <div className="mb-3 flex items-center justify-center gap-2">
+          {roundSudden && (
+            <span className="text-[0.5rem] font-black uppercase tracking-widest text-danger">
+              Sudden death
+            </span>
+          )}
+          <span className="text-[0.625rem] uppercase tracking-widest text-muted font-bold">
+            Round ends in
+          </span>
+          <span className="font-mono font-black tabular-nums text-lg leading-none"
+                style={{ color: roundEnds - now <= 30000 ? '#F87171' : '#FFFFFF' }}>
+            {fmtClock(roundEnds - now)}
+          </span>
+        </div>
+      )}
+
       {sudden && (
         // A draw does not stop a knockout. Said plainly, because the players
         // in it are about to be sent straight back into a game.
@@ -229,18 +276,6 @@ export default function TournamentBracket() {
 
       {over ? (
         <Podium awards={over.awards || []} free={over.free} me={me} />
-      ) : drawn ? (
-        <>
-          {/* The reel runs through every game a tournament can draw, not just
-              the ones already played — the point is not knowing which. */}
-          <GameDraw game={drawn.game} games={ALL_GAMES} />
-          <p className="text-center text-xs text-muted">
-            {roundName(drawn.round, rounds)} starts in {Math.ceil(startsIn / 1000)}s
-          </p>
-          <div className="mt-4 opacity-60">
-            <Bracket bracket={pool.bracket} players={pool.players} currentRound={pool.round} />
-          </div>
-        </>
       ) : filling ? (
         // The lobby: everyone in so far, and the empty seats, so the screen
         // shows the pool filling rather than a list that silently grows.
@@ -254,7 +289,14 @@ export default function TournamentBracket() {
                    }`}>
                 {p ? (
                   <>
-                    <Avatar username={p.username} url={p.avatarUrl} size={32} />
+                    {/* avatarUrl and className, which are the props this
+                        component actually takes. It was being handed `url`
+                        and `size`, so every seat in the lobby — bots and real
+                        players alike — fell back to a bare initial with no
+                        picture and no colour. */}
+                    <Avatar username={p.username} avatarUrl={p.avatarUrl}
+                            color={p.profileColor || '#1250B4'}
+                            className="w-8 h-8" textClassName="text-[0.625rem]" />
                     <span className="text-[0.625rem] text-white truncate w-full text-center">
                       {p.username}
                     </span>
@@ -280,12 +322,6 @@ export default function TournamentBracket() {
         />
       )}
 
-      <p className="mt-4 text-center text-xs text-muted">
-        {over ? (over.free ? 'A practice bracket — nothing was staked.' : 'Prizes have been paid into your balance.')
-          : filling ? 'The bracket is drawn as soon as the last seat is taken.'
-          : knockedOut ? 'You are out of this one. It plays on — this screen follows along.'
-          : 'Rounds play automatically. You will be taken into your game when it starts.'}
-      </p>
 
       {(over || knockedOut) && (
         <div className="mt-4 text-center">

@@ -40,6 +40,10 @@ export default function Tournaments() {
   const [busy, setBusy] = useState(false);
   // Set once a seat is taken in a tournament that has not started yet.
   const [entered, setEntered] = useState(null);
+  // Two goes per tournament, spent when a bracket you are in actually starts.
+  // Held here as {left, per} so the button can say so before it is pressed
+  // rather than refusing afterwards.
+  const [tickets, setTickets] = useState(null);
   const [now, setNow] = useState(() => Date.now());
 
   // Refetched whenever the slot it describes has passed, not once on mount.
@@ -106,12 +110,24 @@ export default function Tournaments() {
         return;
       }
       setEntered(data);
+      if (data.tickets != null) setTickets(t => ({ ...t, left: data.tickets }));
       setBusy(false);
     } catch (e) {
       setError(e?.data?.error || e?.message || 'Could not enter the tournament.');
       setBusy(false);
     }
   }
+
+  // Read on load and again whenever the slot rolls over, because that is
+  // exactly when they come back.
+  useEffect(() => {
+    if (!session) { setTickets(null); return; }
+    let alive = true;
+    api.get('/tournaments/me')
+      .then(d => { if (alive && d?.tickets != null) setTickets({ left: d.tickets, per: d.ticketsPerSlot ?? 2 }); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [session, epoch]);
 
   const balance = parseFloat(profile?.c_coins) || 0;
   const canAfford = balance >= entryFee;
@@ -238,16 +254,31 @@ export default function Tournaments() {
 
       <button
         onClick={() => enter(false)}
-        disabled={busy || !!entered || (session && !canAfford)}
+        disabled={busy || !!entered || (session && !canAfford) || (tickets && tickets.left <= 0)}
         className="w-full py-3.5 rounded-xl bg-primary hover:bg-blue-500 text-white font-black text-lg
                    shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {!session ? 'Login to Play'
           : entered ? 'Waiting for players…'
+          : tickets && tickets.left <= 0 ? 'No tickets left'
           : !canAfford ? `Need ${entryFee} coins`
           : busy ? 'Entering…'
           : 'Play'}
       </button>
+
+      {/* What is left, under the button that spends it.
+          A go is spent when a bracket you entered STARTS, not when you join
+          one — a tournament that never fills is refunded and never played, and
+          charging for it would take away a go at something that did not
+          happen. */}
+      {session && tickets && (
+        <p className="mt-1.5 text-center text-xs text-muted">
+          {tickets.left > 0
+            ? <><span className="font-bold text-white">{tickets.left}</span>
+                {' '}ticket{tickets.left === 1 ? '' : 's'} remaining this tournament</>
+            : 'No tickets left — the next tournament resets them'}
+        </p>
+      )}
 
       {/* Testing, and labelled rather than hidden behind a flag nobody
           remembers: the bots always lose and nothing is paid out, so the

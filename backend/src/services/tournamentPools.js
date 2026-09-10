@@ -23,6 +23,10 @@
  */
 const F = require('./tournamentFormat');
 
+// How many tournaments one account may play per slot. Spent when a bracket
+// starts, never when one is merely joined — see spendTickets.
+const TICKETS_PER_SLOT = 2;
+
 // A tournament starts when the bracket is full. That is the only thing that
 // starts one.
 //
@@ -65,6 +69,43 @@ function createStore() {
   /** @type {Map<string, object>} */
   const pools = new Map();
 
+  /**
+   * Two entries per slot, and the ticket is spent when the bracket STARTS.
+   *
+   * Not when you join. A pool that never fills is refunded and nothing was
+   * played, so charging a ticket for it would take away a go at a tournament
+   * that did not happen — and the twenty-minute slot is short enough that
+   * losing one to a bracket nobody else entered would be most of the window.
+   *
+   * Keyed by slot, so it resets with every tournament rather than by the hour
+   * or by the day: two goes, this tournament, whoever you are.
+   *
+   * @type {Map<number, Map<string, number>>} slotStart → userId → spent
+   */
+  const spent = new Map();
+
+  function spentIn(slotStart, userId) {
+    return spent.get(slotStart)?.get(userId) ?? 0;
+  }
+
+  function ticketsLeft(slotStart, userId) {
+    return Math.max(0, TICKETS_PER_SLOT - spentIn(slotStart, userId));
+  }
+
+  function spendTickets(pool) {
+    let m = spent.get(pool.slotStart);
+    if (!m) spent.set(pool.slotStart, m = new Map());
+    for (const p of pool.players) {
+      if (p.isBot) continue;
+      m.set(p.userId, (m.get(p.userId) ?? 0) + 1);
+    }
+    // Slots older than an hour cannot be joined and cannot be refunded, so
+    // their counts are only memory. Swept here because this is the one place
+    // that runs every time a tournament begins.
+    const cutoff = pool.slotStart - 60 * 60 * 1000;
+    for (const key of spent.keys()) if (key < cutoff) spent.delete(key);
+  }
+
   const openPoolsFor = (slotStart, entryFee) =>
     [...pools.values()].filter(p =>
       p.state === 'filling' && p.slotStart === slotStart && p.entryFee === entryFee);
@@ -104,7 +145,7 @@ function createStore() {
    * click lands them back on the same bracket rather than entering twice or
    * being refused.
    */
-  function join({ userId, username, avatarUrl, entryFee, isBot = false, now }) {
+  function join({ userId, username, avatarUrl, profileColor = null, entryFee, isBot = false, now }) {
     if (!F.ENTRY_FEES.includes(entryFee)) {
       throw new Error(`entry fee must be one of ${F.ENTRY_FEES.join(', ')}`);
     }
@@ -125,7 +166,7 @@ function createStore() {
     const open = openPoolsFor(slot.startsAt, entryFee).filter(p => p.players.length < F.POOL_SIZE);
     const pool = open[0] || createPool(slot.startsAt, entryFee, now);
 
-    seat(pool, { userId, username, avatarUrl, isBot, now });
+    seat(pool, { userId, username, avatarUrl, profileColor, isBot, now });
     return { pool, already: false };
   }
 
@@ -139,11 +180,11 @@ function createStore() {
    * packed fifteen of them into whatever real bracket happened to be waiting,
    * started it early, and drew the people who were waiting against bots.
    */
-  function seat(pool, { userId, username, avatarUrl = null, isBot = false, now }) {
+  function seat(pool, { userId, username, avatarUrl = null, profileColor = null, isBot = false, now }) {
     if (pool.state !== 'filling') return pool;
     if (pool.players.length >= F.POOL_SIZE) return pool;
     if (pool.players.some(p => p.userId === userId)) return pool;
-    pool.players.push({ userId, username, avatarUrl: avatarUrl || null, isBot, joinedAt: now });
+    pool.players.push({ userId, username, avatarUrl: avatarUrl || null, profileColor, isBot, joinedAt: now });
     if (pool.players.length >= F.POOL_SIZE) startPool(pool, now);
     return pool;
   }
@@ -206,6 +247,7 @@ function createStore() {
     pool.state = 'running';
     pool.round = 0;
     pool.startedAt = now;
+    spendTickets(pool);
     return pool;
   }
 
@@ -338,7 +380,7 @@ function createStore() {
 
   return {
     pools,
-    join, seat, leave, startPool, closeWindow, reportResult, pendingMatches, advanceRound,
+    join, seat, leave, startPool, ticketsLeft, spentIn, closeWindow, reportResult, pendingMatches, advanceRound,
     drainForShutdown, entryIn,
     get: (id) => pools.get(id) || null,
     clear: () => pools.clear(),
@@ -351,4 +393,4 @@ function nextPowerOfTwo(n) {
   return Math.max(2, p);
 }
 
-module.exports = { createStore, seededRng, nextPowerOfTwo };
+module.exports = { createStore, seededRng, nextPowerOfTwo, TICKETS_PER_SLOT };

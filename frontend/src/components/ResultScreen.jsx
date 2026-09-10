@@ -4,6 +4,7 @@ import PlayerName from './PlayerName';
 import { OutcomeIcon } from './UiIcon';
 import { getRank, isRanked, placementMatches, getDisplayRank } from '../utils/ranks';
 import CoinIcon from './CoinIcon';
+import useTournamentResult from '../hooks/useTournamentResult';
 import { playWin, playLoss, playDraw } from '../utils/sound';
 
 function fmt(n) {
@@ -126,6 +127,11 @@ export default function ResultScreen({
 }) {
   // onBackToLobby falls back to onPlayAgain for pages that haven't split the two yet
   const goBack = onBackToLobby ?? onPlayAgain;
+  // Null for an ordinary match, which is every match that is not a round of a
+  // tournament. See the hook: the card works this out for itself rather than
+  // being told, because there are a dozen call sites and one of them would
+  // have been missed.
+  const tour = useTournamentResult();
   const elo = isWinner ? newWinnerElo : newLoserElo; // undefined = no ELO data yet
 
   // Which picture belongs to a name. There are only ever two players on this
@@ -374,6 +380,43 @@ export default function ResultScreen({
             )}
           </div>
 
+          {/* ── Inside a bracket ────────────────────────────────────────
+              Everything above this is unchanged: the same scoreline, rating,
+              streak and payout rows an ordinary match shows, because a
+              tournament round IS an ordinary match and hiding half the card
+              would make it look like a lesser one.
+
+              What changes is what comes next. There is no rematch and no
+              playing again — the next thing that happens is the next round —
+              so the two buttons and the lobby link collapse into one. And
+              nothing here says "return to lobby" while a tournament the
+              player is still in carries on without them. */}
+          {tour ? (
+            tour.over ? (
+              <>
+                <TournamentFinish award={tour.award} awards={tour.awards} free={tour.free} />
+                <button
+                  onClick={tour.toLobby}
+                  className="w-full mt-3 sm:mt-4 py-3 rounded-xl font-black text-base bg-primary text-white hover:bg-blue-500 transition-all"
+                  style={{ boxShadow: '0 0 18px rgba(18,80,180,0.35)' }}
+                >
+                  Return to lobby
+                </button>
+              </>
+            ) : (
+              <>
+                <ResultTimer seconds={8} onTimeout={tour.toBracket} />
+                <button
+                  onClick={tour.toBracket}
+                  className="w-full mt-3 sm:mt-4 py-3 rounded-xl font-black text-base bg-primary text-white hover:bg-blue-500 transition-all"
+                  style={{ boxShadow: '0 0 18px rgba(18,80,180,0.35)' }}
+                >
+                  Next game
+                </button>
+              </>
+            )
+          ) : (
+          <>
           {/* Countdown timer — goes back to lobby, not re-queue */}
           <ResultTimer seconds={10} onTimeout={goBack} />
 
@@ -414,8 +457,81 @@ export default function ResultScreen({
           >
             ← Back to lobby
           </button>
+          </>
+          )}
         </div>
       </div>
     </div>
   );
 }
+
+/**
+ * How the tournament ended, on the last result card of it.
+ *
+ * The card above already says who won the final game. This says what that was
+ * worth, which is the thing the player actually entered for — and it has to be
+ * on this screen rather than back on the bracket, because a bracket that has
+ * finished is a page nobody stays on.
+ *
+ * Everyone sees the podium, including the thirteen who are not on it. Being
+ * told where the money went is the difference between a tournament and a
+ * match that stopped.
+ */
+function TournamentFinish({ award, awards, free }) {
+  const place = award?.place;
+  const podium = [2, 1, 3].map(n => awards.find(a => a.place === n) || null);
+
+  return (
+    <div className="mt-3 sm:mt-4">
+      <div className="text-center">
+        <div className="text-[0.625rem] uppercase tracking-widest text-muted font-bold">
+          Tournament
+        </div>
+        <div className="text-2xl sm:text-3xl font-black leading-tight"
+             style={{ color: place === 1 ? '#FFFFFF' : undefined }}>
+          {place === 1 ? 'You won the tournament'
+            : place ? `You finished ${ordinal(place)}`
+            : 'Knocked out'}
+        </div>
+        {!free && award && (
+          <div className="mt-1 inline-flex items-center gap-1.5 text-3xl sm:text-4xl font-black text-primary">
+            +{award.amount} <CoinIcon size="0.8em" />
+          </div>
+        )}
+        {free && (
+          <div className="mt-1 text-xs text-muted">A practice bracket — nothing was staked.</div>
+        )}
+      </div>
+
+      {/* First in the middle and largest, second to its left — the same
+          arrangement as the bet screen's payouts, so the promise and the
+          result are laid out the same way. */}
+      <div className="grid grid-cols-3 gap-2 items-end mt-3">
+        {podium.map((a, i) => {
+          if (!a) return <div key={i} />;
+          const first = a.place === 1;
+          return (
+            <div key={a.userId}
+                 className={`rounded-xl border p-2 text-center ${
+                   first ? 'bg-primary/10 border-primary/40 py-3' : 'bg-surface border-surfaceLight'
+                 }`}>
+              <div className="text-[0.5rem] uppercase tracking-widest text-muted font-bold">
+                {ordinal(a.place)}
+              </div>
+              <div className={`font-black text-white truncate ${first ? 'text-sm' : 'text-xs'}`}>
+                {a.username}
+              </div>
+              {!free && (
+                <div className={`font-black text-primary ${first ? 'text-lg' : 'text-sm'}`}>
+                  {a.amount}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const ordinal = (n) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`);

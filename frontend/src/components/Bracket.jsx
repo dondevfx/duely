@@ -125,8 +125,18 @@ export default function Bracket({ bracket, players, currentRound = 0, scores = n
                         <image href={p.avatarUrl} x={x + 3} y={y + 4} width="14" height="14"
                                clipPath="inset(0 round 7px)" preserveAspectRatio="xMidYMid slice" />
                       )}
+                      {/* No picture uploaded: their colour and their initial,
+                          which is what every other avatar on the site falls
+                          back to. It was a flat dark circle here, so half a
+                          bracket looked like empty seats rather than people. */}
                       {!p?.avatarUrl && uid && (
-                        <circle cx={x + 10} cy={y + 11} r="7" fill="#1A1A1A" />
+                        <>
+                          <circle cx={x + 10} cy={y + 11} r="7" fill={p?.profileColor || '#1A1A1A'} />
+                          <text x={x + 10} y={y + 14.5} fontSize="8" fontWeight={800}
+                                textAnchor="middle" fill="#FFFFFF">
+                            {(p?.username || '?').charAt(0).toUpperCase()}
+                          </text>
+                        </>
                       )}
                       <text
                         x={x + (uid ? 21 : 6)} y={y + 15}

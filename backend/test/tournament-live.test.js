@@ -187,3 +187,43 @@ test('every game a tournament can draw can be read while it is played', () => {
     assert.equal(typeof ENGINES[g].score, 'function', `${g} has no live score`);
   }
 });
+
+test('leaving mid-round loses it there and then, with no reconnect grace', () => {
+  // A dropped phone gets a grace window in an ordinary match so it can rejoin
+  // the game it was playing. A bracket cannot wait that out: everyone else is
+  // held up by one absent player, and the round has a deadline of its own.
+  //
+  // The forfeit path does not go through the engine's _resolve — it settles
+  // and emits opponent_disconnected directly — so without a report of its own
+  // the match would sit undecided until its three minutes ran out.
+  const { runner, pool } = boot();
+  pool.roundGames = pool.roundGames.map(() => 'block-blast');
+  runner.startRound(pool);
+
+  const roomId = [...hook._rooms.keys()].find(id => hook._rooms.get(id).match === 0);
+  const room = bb.getBlockBlastRoom(roomId);
+  const [leaver, stayer] = room.players;
+
+  assert.ok(room.tournament, 'the room does not know it is part of a bracket');
+  assert.deepEqual(
+    { poolId: room.tournament.poolId, round: room.tournament.round },
+    { poolId: pool.id, round: 0 },
+    'the room cannot say which match it is');
+
+  // What _handleForfeit reports.
+  hook.settled(roomId, { winnerId: stayer.userId, loserId: leaver.userId, isDraw: false });
+
+  assert.equal(pool.bracket[0][0].winner, stayer.userId, 'the opponent was not put through');
+});
+
+test('a round tells everyone watching when it ends', () => {
+  // Item eight: the people waiting on the bracket see the same clock as the
+  // people playing, and are told when what is being played is a replay.
+  const { runner, pool } = boot();
+  pool.roundGames = pool.roundGames.map(() => 'block-blast');
+  runner.startRound(pool);
+
+  const sampled = runner.sampleScores(pool);
+  assert.ok(sampled.endsAt > Date.now(), 'no deadline to count down to');
+  assert.equal(sampled.sudden, false);
+});

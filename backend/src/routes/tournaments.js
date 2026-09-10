@@ -11,7 +11,8 @@ const express = require('express');
 const { requireAuth } = require('../middleware/auth');
 const F = require('../services/tournamentFormat');
 const { deductCoins } = require('../services/walletService');
-const { isDemo, randomFunnyName, PROFILE_COLORS } = require('../services/demoAccounts');
+const { isDemo, randomFunnyName, disguisedFace, PROFILE_COLORS } = require('../services/demoAccounts');
+const { TICKETS_PER_SLOT } = require('../services/tournamentPools');
 
 module.exports = function tournamentRoutes(supabase, io, pools) {
   const router = express.Router();
@@ -82,6 +83,7 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
           started: existing.state === 'running',
           players: existing.players.length,
           size: F.POOL_SIZE,
+          tickets: pools.ticketsLeft(slot.startsAt, req.user.id),
           // When entry CLOSES, not when it starts. Nothing schedules a start:
           // a tournament begins the moment the bracket is full, and a bracket
           // that is not full when this passes is refunded.
@@ -98,8 +100,17 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
       if (left.ok && left.refund) await refund(supabase, req.user.id, left.entryFee);
     }
 
+    // Two goes per tournament. Checked before the fee is taken, so a refused
+    // entry never has to be refunded.
+    if (!vsBot && pools.ticketsLeft(slot.startsAt, req.user.id) <= 0) {
+      return res.status(400).json({
+        error: 'You have used both your goes at this tournament. The next one resets them.',
+        tickets: 0,
+      });
+    }
+
     const { data: profile } = await supabase
-      .from('profiles').select('username, avatar_url, c_coins').eq('id', req.user.id).maybeSingle();
+      .from('profiles').select('username, avatar_url, profile_color, c_coins').eq('id', req.user.id).maybeSingle();
 
     // A bot tournament costs nothing and pays nothing. It exists to walk the
     // bracket end to end without sixteen people, so charging for it would make
@@ -124,6 +135,7 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
         userId: req.user.id,
         username: profile?.username || 'Player',
         avatarUrl: profile?.avatar_url || null,
+        profileColor: profile?.profile_color || null,
         entryFee, now, free,
       }));
     } catch (e) {
@@ -160,6 +172,9 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
       started: pool.state === 'running',
       players: pool.players.length,
       size: F.POOL_SIZE,
+      // Read AFTER seating, because a bracket that filled on this entry has
+      // already spent the ticket.
+      tickets: pools.ticketsLeft(pool.slotStart, req.user.id),
       closesAt: pool.slotStart + F.JOIN_WINDOW_MS,
     });
   });
@@ -186,7 +201,11 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
     const mine = pools.entryIn(slot.startsAt, req.user.id)
               || [...pools.pools.values()].find(p =>
                    p.state === 'running' && p.players.some(x => x.userId === req.user.id));
-    res.json({ pool: mine ? publicPool(mine) : null });
+    res.json({
+      pool: mine ? publicPool(mine) : null,
+      tickets: pools.ticketsLeft(slot.startsAt, req.user.id),
+      ticketsPerSlot: TICKETS_PER_SLOT,
+    });
   });
 
   /**
@@ -232,13 +251,21 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
  * early, with the people who were waiting drawn against bots.
  */
 function fillWithBots(pool, now, pools, { stagger = false, io = null } = {}) {
-  const one = () => pools.seat(pool, {
-    userId: `bot:${pool.id}:${pool.players.length}`,
-    username: randomFunnyName(),
-    avatarUrl: null,
-    isBot: true,
-    now: Date.now(),
-  });
+  const one = () => {
+    const username = randomFunnyName();
+    // A colour derived from the name, which is exactly what a real player with
+    // no uploaded picture gets. Without it the bracket drew them as an empty
+    // dark circle — every bot identical, and obviously not a person.
+    const { profileColor } = disguisedFace(username);
+    return pools.seat(pool, {
+      userId: `bot:${pool.id}:${pool.players.length}`,
+      username,
+      avatarUrl: null,
+      profileColor,
+      isBot: true,
+      now: Date.now(),
+    });
+  };
 
   if (!stagger) {
     while (pool.state === 'filling' && pool.players.length < F.POOL_SIZE) one();
@@ -297,6 +324,7 @@ function publicPool(p) {
     // bet screen. The socket is the fast path, this is the one always true.
     phase: p.phase || (p.state === 'filling' ? 'filling' : 'idle'),
     nextRoundAt: p.nextRoundAt ?? null,
+    reelAt: p.reelAt ?? null,
     // ONLY the rounds that have been drawn.
     //
     // The whole rotation is decided when the pool is created, so that every
@@ -308,6 +336,10 @@ function publicPool(p) {
     roundGames: (p.roundGames || []).slice(0, p.state === 'running' ? p.round + 1 : 0),
     players: p.players.map(x => ({
       userId: x.userId, username: x.username, avatarUrl: x.avatarUrl,
+      // The fallback colour for anyone without a picture — real players
+      // included. It was left out, so every seat with no upload drew as the
+      // same dark circle.
+      profileColor: x.profileColor ?? null,
     })),
     bracket: p.bracket,
   };

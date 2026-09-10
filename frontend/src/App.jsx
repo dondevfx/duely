@@ -48,6 +48,7 @@ import ColorRushGame from './pages/ColorRushGame';
 import ColorRushCanvas from './components/ColorRushCanvas';
 import TowerGame from './pages/TowerGame';
 import TowerCanvas from './components/TowerCanvas';
+import TournamentClock from './components/TournamentClock';
 // Dev-only: lets the game be looked at before the lobby and engine exist.
 // Stripped from production builds by the import.meta.env.DEV guard below.
 // Dev-only, same convention as the canvas previews above: the age/terms gate
@@ -306,6 +307,10 @@ function Shell() {
           request is in flight — which is exactly when a new account would have
           slipped the gift in ahead of the age check. */}
       {tosAccepted && <SignupRewardModal />}
+      {/* The tournament round's clock, mounted once for every game rather
+          than added to five game screens. It renders nothing outside a
+          tournament. See the component for why the top centre. */}
+      <TournamentClock />
       {showSaveLogin && <SaveLoginPrompt onDone={() => setShowSaveLogin(false)} />}
     </div>
   );
