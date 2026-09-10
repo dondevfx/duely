@@ -473,3 +473,68 @@ test('a bot bracket seats a face, not an empty chair', () => {
   assert.equal(pool.players[0].profileColor, '#123456');
   assert.equal(pool.players[1].profileColor, '#abcdef');
 });
+
+// ── Third place ────────────────────────────────────────────────────────────
+
+test('third place is played for, not inferred', () => {
+  // It used to be decided by who had beaten whom in the semi-finals, which is
+  // a defensible rule that settles real money on a game neither player was in.
+  // The two who lost the semis meet, alongside the final.
+  const s = createStore();
+  const pool = fill(s, 16)[0].pool;
+
+  for (let r = 0; r < 3; r++) {
+    for (const { i, m } of s.pendingMatches(pool)) s.reportResult(pool.id, r, i, m.a);
+    assert.equal(s.advanceRound(pool), true, `round ${r} did not advance`);
+  }
+
+  assert.ok(pool.thirdPlace, 'no playoff was drawn when the final was reached');
+  const semiLosers = pool.bracket[2].map(m => (m.a === m.winner ? m.b : m.a));
+  assert.deepEqual([pool.thirdPlace.a, pool.thirdPlace.b], semiLosers);
+
+  // Both are offered together, and the final is not over without the playoff.
+  const pending = s.pendingMatches(pool);
+  assert.equal(pending.length, 2, 'the playoff is not being offered with the final');
+  assert.ok(pending.some(x => x.i === -1), 'the playoff has no match index');
+
+  const final = pool.bracket[3][0];
+  s.reportResult(pool.id, 3, 0, final.a);
+  assert.equal(pool.state, 'running', 'the tournament ended with the playoff unplayed');
+
+  s.reportResult(pool.id, 3, -1, pool.thirdPlace.b);
+  assert.equal(pool.state, 'complete');
+
+  const places = F.placings(pool.bracket, pool.thirdPlace);
+  assert.equal(places.first, final.a);
+  assert.equal(places.third, pool.thirdPlace.b, 'third went to the wrong semi-finalist');
+  assert.notEqual(places.third, places.second);
+});
+
+test('nobody advances out of the third-place match', () => {
+  // It decides third and nothing else. Advancing its winner would write them
+  // into a round that does not exist.
+  const s = createStore();
+  const pool = fill(s, 16)[0].pool;
+  for (let r = 0; r < 3; r++) {
+    for (const { i, m } of s.pendingMatches(pool)) s.reportResult(pool.id, r, i, m.a);
+    s.advanceRound(pool);
+  }
+  const before = JSON.stringify(pool.bracket);
+  s.reportResult(pool.id, 3, -1, pool.thirdPlace.a);
+  const after = JSON.parse(JSON.stringify(pool.bracket));
+  assert.equal(JSON.stringify(after), before, 'the playoff wrote into the bracket');
+});
+
+test('a bracket with no semi-finals still places third', () => {
+  // Four entrants: the semi-final losers are the first round's losers, and the
+  // playoff is drawn from them like any other. Smaller than that and there is
+  // nothing to play, so the old rule is the fallback.
+  const s = createStore();
+  fill(s, 4);
+  const pool = [...s.pools.values()][0];
+  s.startPool(pool, OPEN);
+  for (const { i, m } of s.pendingMatches(pool)) s.reportResult(pool.id, 0, i, m.a);
+  s.advanceRound(pool);
+  assert.ok(pool.thirdPlace, 'four entrants got no playoff');
+  assert.ok(pool.thirdPlace.a && pool.thirdPlace.b);
+});

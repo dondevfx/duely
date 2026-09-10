@@ -185,33 +185,61 @@ function advanceTo(roundIndex, matchIndex) {
 /**
  * Where each finisher placed, from the bracket.
  *
- * First and second fall out of the final. THIRD is the loser of whichever
- * semi-final was lost to the eventual champion — there is no third-place
- * playoff, so the two semi-final losers are separated by who beat them: the
- * one who lost to the winner is placed above the one who lost to the runner-up.
- * Without a rule the two are indistinguishable and third place would be
- * whichever the array happened to list first.
+ * First and second fall out of the final. THIRD is played for: the two
+ * semi-final losers meet in a match of their own, alongside the final, and the
+ * winner of it takes third.
+ *
+ * It used to be inferred — whichever semi-finalist had lost to the eventual
+ * champion was placed above the one who lost to the runner-up. That is a
+ * defensible rule and it is still the fallback when no playoff was played, but
+ * it decides real money on a game neither player was in. Third place pays, so
+ * it is played for.
+ *
+ * `thirdPlace` is the separate match, or null. It is kept off the bracket
+ * array deliberately: every round there is half the size of the one before it,
+ * which is what lets advanceTo find where a winner goes, and a final round
+ * holding two matches breaks that arithmetic everywhere it is relied on.
  */
-function placings(bracket) {
+function placings(bracket, thirdPlace = null) {
   const final = bracket[bracket.length - 1]?.[0];
   if (!final?.winner) return null;
   const first  = final.winner;
   const second = final.a === first ? final.b : final.a;
 
-  const semis = bracket[bracket.length - 2] || [];
-  const losers = semis
-    .filter(m => m.winner)
-    .map(m => ({ loser: m.a === m.winner ? m.b : m.a, beatenBy: m.winner }))
-    .filter(x => x.loser);
-
-  const toChampion = losers.find(x => x.beatenBy === first);
-  const third = toChampion ? toChampion.loser : (losers[0]?.loser ?? null);
+  let third = null;
+  if (thirdPlace?.winner) {
+    third = thirdPlace.winner;
+  } else {
+    // No playoff was played — a bracket too small to have semi-finals, or one
+    // where both semis were byes. Fall back to who beat whom.
+    const semis = bracket[bracket.length - 2] || [];
+    const losers = semis
+      .filter(m => m.winner)
+      .map(m => ({ loser: m.a === m.winner ? m.b : m.a, beatenBy: m.winner }))
+      .filter(x => x.loser);
+    const toChampion = losers.find(x => x.beatenBy === first);
+    third = toChampion ? toChampion.loser : (losers[0]?.loser ?? null);
+  }
   return { first, second, third };
+}
+
+/**
+ * The two who lost the semi-finals, in bracket order.
+ *
+ * Null unless there are exactly two of them with somebody in each — a bracket
+ * with byes in the semi-finals has nobody to play the playoff.
+ */
+function semiFinalLosers(bracket) {
+  const semis = bracket[bracket.length - 2];
+  if (!semis || semis.length !== 2) return null;
+  const losers = semis.map(m => (m.winner ? (m.a === m.winner ? m.b : m.a) : null));
+  if (losers.some(x => !x)) return null;
+  return losers;
 }
 
 module.exports = {
   POOL_SIZE, ROUNDS, PAID_PLACES, TOURNAMENT_GAMES, ENTRY_FEES,
   FEE_RATE, PRIZE_SPLIT, PRIZE_SPLIT_PCT, SLOT_MS, JOIN_WINDOW_MS,
   prizesFor, slotAt, joinableSlot, pickRoundGames,
-  firstRoundPairs, emptyBracket, advanceTo, placings,
+  firstRoundPairs, emptyBracket, advanceTo, placings, semiFinalLosers,
 };

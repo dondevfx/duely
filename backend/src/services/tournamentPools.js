@@ -27,6 +27,10 @@ const F = require('./tournamentFormat');
 // starts, never when one is merely joined — see spendTickets.
 const TICKETS_PER_SLOT = 2;
 
+// The third-place playoff's match index. Negative so it can never be confused
+// with a position in a round array — see pendingMatches.
+const THIRD_PLACE = -1;
+
 // A tournament starts when the bracket is full. That is the only thing that
 // starts one.
 //
@@ -203,6 +207,9 @@ function createStore() {
     const next = F.advanceTo(roundIndex, matchIndex);
     if (next.round < pool.bracket.length) {
       pool.bracket[next.round][next.match][next.side] = winnerId;
+    } else if (pool.thirdPlace && !pool.thirdPlace.winner) {
+      // The final is won, but the playoff beside it is still being played and
+      // third place pays. The tournament is not over until both are done.
     } else {
       pool.state = 'complete';
     }
@@ -283,7 +290,7 @@ function createStore() {
   function reportResult(poolId, roundIndex, matchIndex, winnerId, scores = null) {
     const pool = pools.get(poolId);
     if (!pool || pool.state !== 'running') return null;
-    const match = pool.bracket[roundIndex]?.[matchIndex];
+    const match = matchAt(pool, roundIndex, matchIndex);
     if (!match) return null;
     if (match.winner) return { pool, match, already: true };
     if (winnerId !== match.a && winnerId !== match.b) return null;
@@ -291,24 +298,65 @@ function createStore() {
     match.winner = winnerId;
     match.scores = scores;
 
-    advanceWinner(pool, roundIndex, matchIndex, winnerId);
+    // Nobody advances out of the playoff — it decides third and nothing else.
+    if (matchIndex !== THIRD_PLACE) advanceWinner(pool, roundIndex, matchIndex, winnerId);
+    // The final may already be decided, in which case this was the last thing
+    // the tournament was waiting for.
+    else if (pool.bracket[pool.round]?.every(m => m.winner)) pool.state = 'complete';
     return { pool, match, already: false };
   }
 
-  /** Every match in the current round that still needs playing. */
+  /**
+   * Every match in the current round that still needs playing.
+   *
+   * The third-place playoff is one of them, at index -1. It is not in the
+   * round array — every round is half the size of the one before it, and the
+   * whole of advanceTo depends on that — so it is addressed by a match index
+   * that cannot collide with a real one.
+   */
   function pendingMatches(pool) {
     const round = pool.bracket?.[pool.round] || [];
-    return round
+    const out = round
       .map((m, i) => ({ m, i }))
       .filter(({ m }) => !m.winner && m.a && m.b);
+    if (isFinalRound(pool) && pool.thirdPlace && !pool.thirdPlace.winner
+        && pool.thirdPlace.a && pool.thirdPlace.b) {
+      out.push({ m: pool.thirdPlace, i: THIRD_PLACE });
+    }
+    return out;
   }
 
-  /** Move to the next round once every match in this one is decided. */
+  const isFinalRound = (pool) =>
+    !!pool.bracket && pool.round === pool.bracket.length - 1;
+
+  /** The playoff, or null. */
+  function matchAt(pool, roundIndex, matchIndex) {
+    if (matchIndex === THIRD_PLACE) return pool.thirdPlace || null;
+    return pool.bracket?.[roundIndex]?.[matchIndex] || null;
+  }
+
+  /**
+   * Move to the next round once every match in this one is decided.
+   *
+   * Moving into the FINAL also draws the third-place playoff, because that is
+   * the moment both of its players are known. It is played at the same time as
+   * the final and is reported like any other match — see thirdPlace below and
+   * the note on placings().
+   */
   function advanceRound(pool) {
     const round = pool.bracket?.[pool.round] || [];
     if (round.some(m => !m.winner)) return false;
-    if (pool.round + 1 >= pool.bracket.length) { pool.state = 'complete'; return false; }
+    if (pool.round + 1 >= pool.bracket.length) {
+      // The final is not over until the playoff beside it is.
+      if (pool.thirdPlace && !pool.thirdPlace.winner) return false;
+      pool.state = 'complete';
+      return false;
+    }
     pool.round += 1;
+    if (pool.round === pool.bracket.length - 1) {
+      const losers = F.semiFinalLosers(pool.bracket);
+      if (losers) pool.thirdPlace = { a: losers[0], b: losers[1], winner: null, scores: null };
+    }
     return true;
   }
 
@@ -380,7 +428,7 @@ function createStore() {
 
   return {
     pools,
-    join, seat, leave, startPool, ticketsLeft, spentIn, closeWindow, reportResult, pendingMatches, advanceRound,
+    join, seat, leave, startPool, ticketsLeft, spentIn, matchAt, closeWindow, reportResult, pendingMatches, advanceRound,
     drainForShutdown, entryIn,
     get: (id) => pools.get(id) || null,
     clear: () => pools.clear(),
@@ -393,4 +441,4 @@ function nextPowerOfTwo(n) {
   return Math.max(2, p);
 }
 
-module.exports = { createStore, seededRng, nextPowerOfTwo, TICKETS_PER_SLOT };
+module.exports = { createStore, seededRng, nextPowerOfTwo, TICKETS_PER_SLOT, THIRD_PLACE };

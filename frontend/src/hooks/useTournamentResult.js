@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
+import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 
 /**
@@ -35,6 +36,23 @@ export default function useTournamentResult() {
     socket.on('tournament_over', onOver);
     return () => socket.off('tournament_over', onOver);
   }, [socket, poolId]);
+
+  // What the pool says, for a card that mounted after the announcement had
+  // already been made. The same race the draw screen loses: settlement and
+  // this screen appear in the same instant.
+  useEffect(() => {
+    if (!poolId || over) return;
+    let alive = true;
+    api.get(`/tournaments/${poolId}`)
+      .then(d => {
+        if (!alive || !d?.pool) return;
+        if (d.pool.state === 'complete' && d.pool.awards) {
+          setOver({ poolId, awards: d.pool.awards, free: d.pool.entryFee === 0 || d.pool.free });
+        }
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [poolId, over]);
 
   if (!poolId) return null;
 

@@ -63,6 +63,17 @@ const { checkSocketClickRate, cleanupSocket } = require('../middleware/rateLimit
 const { createBotPlayer, disguiseBot } = require('../services/botService');
 const tournamentHook = require('../services/tournamentHook');
 
+// A seat given up before anything started is owed its entry back. The rule
+// lives with the routes, which is the only thing that knows what was charged.
+async function refundTournamentEntry(supabase, userId, amount) {
+  if (!(amount > 0)) return;
+  try {
+    await supabase.rpc('credit_coins', { user_id: userId, amount });
+  } catch (e) {
+    console.error(`[tournament] REFUND FAILED for ${userId} (${amount} coins):`, e.message);
+  }
+}
+
 // The same game is known by two names in this codebase: a queue/bet-count key
 // ('block-blast', 'car-dash') and a room id ('blockBlast', 'carDash'). Both are
 // load-bearing — the counts map is keyed one way and the room switch the other —
@@ -2315,6 +2326,19 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       // Close every room this socket was hosting (not just the first) and pull
       // back the invites tied to them.
       _cancelHostedRooms(socket.id, authenticatedUser?.userId);
+
+      // Out of any running tournament, wherever they were standing.
+      //
+      // Only once every socket is gone — a second tab must not knock somebody
+      // out of a bracket they are still playing in the first one.
+      if (authenticatedUser && tournaments?.runner
+          && _socketsForUser(authenticatedUser.userId).length === 0) {
+        try {
+          tournaments.runner.playerGone(authenticatedUser.userId, (pool, userId, fee) => {
+            refundTournamentEntry(supabase, userId, fee);
+          });
+        } catch (e) { console.error('[tournament] disconnect:', e.message); }
+      }
 
       // Withdraw any rematch offer this player was part of, but only once
       // they have no sockets left — a second tab, or a reconnect mid-result,

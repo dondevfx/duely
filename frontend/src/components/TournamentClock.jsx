@@ -1,54 +1,86 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useSocket } from '../context/SocketContext';
 
 /**
  * The round's clock, over whatever game is being played.
  *
  * A tournament round has three minutes. Nothing on a game screen said so, and
- * a deadline a player cannot see is one they only find out about by losing to
- * it — so it is here, on every game, in the same place on every game.
+ * a deadline a player cannot see is one they find out about by losing to it.
  *
- * Mounted once at the app's root rather than added to five different screens.
- * It is fixed to the top centre and renders nothing at all outside a
- * tournament, so it cannot collide with a game's own layout: each of the five
- * puts its score at the top LEFT and right, and the middle is empty on all of
- * them. Positioned under the header's height and inside the safe area, so it
- * clears a phone's notch.
+ * It listens to the SOCKET rather than reading the route's state. The state is
+ * there — the bracket navigates with it — but a game screen that reloads, or
+ * one reached any other way, has none, and a clock that silently does not
+ * appear is worse than no clock. The socket is where the deadline came from in
+ * the first place, and it is the same on every screen. Route state is still
+ * read, as the value to start from when the match began before this mounted.
  *
- * It goes red under thirty seconds, and it does not claim to be authoritative:
- * the server decides the deadline and the server enforces it. This is a
- * readout of an instant the server sent.
+ * Mounted once at the app's root rather than added to five game screens. It is
+ * fixed to the top centre: each of the five puts its score at the top left and
+ * right, and the middle is empty on all of them.
  */
 export default function TournamentClock() {
   const { state } = useLocation();
-  const t = state?.tournament || null;
+  const { socket } = useSocket();
+  const seeded = state?.tournament?.deadline
+    ? { deadline: state.tournament.deadline, sudden: !!state.tournament.sudden }
+    : null;
+
+  const [match, setMatch] = useState(seeded);
   const [now, setNow] = useState(Date.now());
 
+  // A new match seeds it again — the same screen is reused round after round.
+  useEffect(() => { if (seeded) setMatch(seeded); }, [seeded?.deadline]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
-    if (!t?.deadline) return;
+    if (!socket) return;
+    const onMatch = (m) => {
+      if (!m?.deadline) return;
+      setMatch({ deadline: m.deadline, sudden: !!m.sudden });
+    };
+    // Anything that ends the match takes the clock with it, so it is never
+    // left counting down over a result card.
+    const clear = () => setMatch(null);
+
+    socket.on('tournament_match', onMatch);
+    socket.on('tournament_result', clear);
+    socket.on('tournament_match_expired', clear);
+    socket.on('tournament_over', clear);
+    return () => {
+      socket.off('tournament_match', onMatch);
+      socket.off('tournament_result', clear);
+      socket.off('tournament_match_expired', clear);
+      socket.off('tournament_over', clear);
+    };
+  }, [socket]);
+
+  useEffect(() => {
+    if (!match) return;
     const id = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(id);
-  }, [t?.deadline]);
+  }, [match]);
 
-  if (!t?.deadline) return null;
-
-  const left = Math.max(0, t.deadline - now);
+  if (!match) return null;
+  const left = Math.max(0, match.deadline - now);
   const urgent = left <= 30_000;
 
   return (
     <div
-      className="fixed left-1/2 -translate-x-1/2 z-30 pointer-events-none select-none"
-      style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.375rem)' }}
+      className="fixed left-1/2 -translate-x-1/2 pointer-events-none select-none"
+      // Above the games, which put overlays and canvases in the 20s and 30s.
+      // A clock behind the board is the same as no clock.
+      style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.375rem)', zIndex: 60 }}
       aria-live="off"
     >
       <div
-        className="flex items-center gap-1.5 rounded-full px-2.5 py-1 backdrop-blur-sm"
+        className="flex items-center gap-1.5 rounded-full px-2.5 py-1"
         style={{
-          background: 'rgba(0,0,0,0.72)',
+          background: 'rgba(0,0,0,0.78)',
+          backdropFilter: 'blur(4px)',
           border: `1px solid ${urgent ? 'rgba(239,68,68,0.55)' : 'rgba(255,255,255,0.10)'}`,
         }}
       >
-        {t.sudden && (
+        {match.sudden && (
           <span className="text-[0.5rem] font-black uppercase tracking-widest text-danger">
             Sudden death
           </span>

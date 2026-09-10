@@ -13,8 +13,17 @@ import GameIcon from './GameIcon';
  * everybody in the bracket is looking at the same thing not yet knowing what
  * it is. It always lands on `game`, however long it runs — the animation
  * cannot change the answer, only take its time arriving at it.
+ *
+ * And then it HOLDS on it. The reel used to finish and the screen moved on in
+ * the same breath, so the one frame that mattered was the one nobody got to
+ * look at. The name grows into place when it lands and stays for a beat.
  */
-const EASE = [70, 70, 80, 90, 100, 120, 145, 175, 215, 265, 330, 410, 520, 660];
+// Frame durations, accelerating away and then slowing to a stop. They sum to
+// about 2.4 seconds, which leaves the rest of the server's window as a HOLD on
+// the answer — the reel landing and immediately cutting to a loading screen
+// reads as a glitch rather than as a result, and the moment the game is known
+// is the one worth sitting on.
+const EASE = [60, 60, 70, 80, 95, 115, 140, 175, 220, 280, 355, 450, 570];
 
 export default function GameDraw({ game, games = [], onDone, className = '' }) {
   const [shown, setShown] = useState(games[0] || game);
@@ -51,9 +60,14 @@ export default function GameDraw({ game, games = [], onDone, className = '' }) {
         {settled ? 'This round' : 'Drawing the game'}
       </div>
       <div
-        key={shown}
+        key={settled ? 'landed' : shown}
         className={`flex flex-col items-center gap-2 ${settled ? 'animate-slide-up' : ''}`}
-        style={{ transform: settled ? 'scale(1)' : 'scale(0.92)', transition: 'transform 180ms ease-out' }}
+        style={{
+          // Lands slightly large and settles, so the stop is something that
+          // happened rather than a frame that stopped changing.
+          transform: settled ? 'scale(1)' : 'scale(0.9)',
+          transition: settled ? 'transform 320ms cubic-bezier(.2,1.4,.4,1)' : 'transform 120ms ease-out',
+        }}
       >
         <GameIcon game={shown} size={settled ? 56 : 44} />
         <div className={`font-black leading-none ${settled ? 'text-2xl text-white' : 'text-xl text-muted'}`}>

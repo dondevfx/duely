@@ -44,7 +44,9 @@ const SUDDEN_MS       = 30 * 1000;
 // round back for both, so nobody is dropped into a game while the screen that
 // announces it is still running.
 const COUNTDOWN_MS    = 5000;
-const REEL_MS         = 3500;
+// The reel itself takes about 2.4 seconds; the rest is the hold on the game
+// it landed on, which is the moment the whole screen exists for.
+const REEL_MS         = 4000;
 const PICK_MS         = COUNTDOWN_MS + REEL_MS;
 // Between rounds, the same sequence — a new game is drawn for every round, so
 // there is the same thing to show — after a beat on the bracket to read the
@@ -254,14 +256,18 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
       st.matches.set(key, rec);
       const span = sudden ? T.sudden : T.match;
       const wait = sudden ? Math.min(4000, span) : 25000 + Math.floor(Math.random() * 45000);
-      later(pool.id, () => {
+      // Finishing on their own schedule, unless a real player finishes first —
+      // see finishBotsSoon.
+      rec.finish = () => {
         // Unlike a played match there is no engine to say it is over, so this
         // is the only thing that stops a bot result landing on a match the
         // bracket has already decided some other way — a forfeit, most often.
         if (rec.done) return;
+        rec.done = true;
         const winner = Math.random() < 0.5 ? a.userId : b.userId;
         onResult({ poolId: pool.id, round, match: index, winnerId: winner, isDraw: false, sudden });
-      }, Math.max(2000, Math.min(wait, span - 5000)));
+      };
+      rec.timer = later(pool.id, rec.finish, Math.max(2000, Math.min(wait, span - 5000)));
       return;
     }
 
@@ -335,14 +341,14 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
       sa.join(roomId);
       sa.emit('tournament_match', {
         poolId: pool.id, round, match: index, game, roomId,
-        sudden, deadline, opponent: seen(p2, b.isBot),
+        sudden, deadline, opponent: seen(p2, false),
       });
     }
     if (sb) {
       sb.join(roomId);
       sb.emit('tournament_match', {
         poolId: pool.id, round, match: index, game, roomId,
-        sudden, deadline, opponent: seen(p1, a.isBot),
+        sudden, deadline, opponent: seen(p1, false),
       });
     }
 
@@ -351,8 +357,12 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     const go = () => {
       if (rec.begun || rec.done) return;
       rec.begun = true;
-      if (sa) sa.emit(engine.event, { roomId, opponent: seen(p2, b.isBot), entryFee: 0, currency: 'coins', vsBot: !!b.isBot, tournament: true });
-      if (sb) sb.emit(engine.event, { roomId, opponent: seen(p1, a.isBot), entryFee: 0, currency: 'coins', vsBot: !!a.isBot, tournament: true });
+      // vsBot is deliberately false even when it is one. The bots fill a
+      // bracket nobody else entered and are disguised as players everywhere
+      // else in it; telling the game screen otherwise makes it draw the match
+      // as a practice run against Duely Bot rather than as a round.
+      if (sa) sa.emit(engine.event, { roomId, opponent: seen(p2, false), entryFee: 0, currency: 'coins', vsBot: false, tournament: true });
+      if (sb) sb.emit(engine.event, { roomId, opponent: seen(p1, false), entryFee: 0, currency: 'coins', vsBot: false, tournament: true });
       engine.begin(io, supabase, roomId);
     };
     rec.ready = (userId) => {
@@ -390,7 +400,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
       const room = engine?.room?.(rec.roomId);
       if (!room || !engine.score) continue;
       const index = Number(key.split(':')[1]);
-      const m = pool.bracket[pool.round]?.[index];
+      const m = pools.matchAt(pool, pool.round, index);
       if (!m) continue;
       const of = (uid) => {
         const p = (room.players || []).find(x => x.userId === uid);
@@ -430,6 +440,52 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
   function stopSampling(pool) {
     const st = stateOf(pool.id);
     if (st.sampler) { clearInterval(st.sampler); st.sampler = null; }
+  }
+
+  /**
+   * A player's last socket has gone.
+   *
+   * In a running tournament that is the end of it for them, wherever they were
+   * standing — mid-game, between rounds, or watching the bracket. Refreshing,
+   * closing the tab or losing the connection all look the same from here, and
+   * a bracket cannot hold fifteen people while one of them decides whether to
+   * come back.
+   *
+   * Their current match is forfeited and the opponent goes through; that is
+   * pools.leave's rule and it is the same one that applies to leaving on
+   * purpose. Their ticket is already spent — it was spent when the bracket
+   * started — so nothing is given back.
+   *
+   * A pool still FILLING is the other case, and it is not a forfeit: nothing
+   * has started, so the seat is freed and the entry refunded, exactly as if
+   * they had pressed leave.
+   */
+  function playerGone(userId, onRefund) {
+    for (const pool of pools.pools.values()) {
+      if (pool.state !== 'running' && pool.state !== 'filling') continue;
+      if (!pool.players.some(p => p.userId === userId && !p.isBot)) continue;
+
+      const wasRunning = pool.state === 'running';
+      const result = pools.leave(pool.id, userId);
+      if (!result.ok) continue;
+
+      if (result.refund && onRefund) onRefund(pool, userId, result.entryFee);
+      if (!wasRunning) continue;
+
+      // Marked so the bracket cannot be opened again. They are out, and a
+      // screen that lets them keep watching reads as though they might still
+      // be in it.
+      (pool.kicked ||= new Set()).add(userId);
+      broadcast(pool, 'tournament_update', { pool: require('../routes/tournaments').publicPool(pool) });
+      if (result.forfeited) {
+        onResult({
+          poolId: pool.id, round: pool.round, match: result.forfeited.match,
+          winnerId: result.forfeited.winner, isDraw: false,
+        });
+      } else if (pools.pendingMatches(pool).length === 0) {
+        roundSettled(pool);
+      }
+    }
   }
 
   /** Somebody's game screen has loaded and is listening. */
@@ -484,7 +540,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     const rec = st.matches.get(`${round}:${match}${sudden ? ':sd' : ''}`);
     if (rec) rec.done = true;
 
-    const m = pool.bracket[round]?.[match];
+    const m = pools.matchAt(pool, round, match);
     if (!m || m.winner) return;
 
     if (isDraw || !winnerId) {
@@ -504,9 +560,32 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     if (!res) return;
 
     broadcast(pool, 'tournament_result', { poolId, round, match, winnerId });
+    // A real player has just finished theirs. Everyone else left in the round
+    // is a bot on a timer of its own, and a player watching an empty bracket
+    // tick for another minute is a player who thinks it has hung — so the rest
+    // of the round comes in behind them.
+    if (!rec?.bots) finishBotsSoon(pool);
     pushPool(pool);
 
     if (pools.pendingMatches(pool).length === 0) roundSettled(pool);
+  }
+
+  /**
+   * Bring the round's remaining bot matches in, 2-7 seconds apart.
+   *
+   * Only bot matches, and only once a played one has finished. Staggered
+   * rather than resolved together: eight results landing in the same frame
+   * reads as the bracket being filled in by a script, which for a demo
+   * account is precisely the impression to avoid.
+   */
+  function finishBotsSoon(pool) {
+    const st = stateOf(pool.id);
+    for (const rec of st.matches.values()) {
+      if (!rec.bots || rec.done || rec.hurried) continue;
+      rec.hurried = true;
+      if (rec.timer) clearTimeout(rec.timer);
+      rec.timer = later(pool.id, rec.finish, 2000 + Math.floor(Math.random() * 5000));
+    }
   }
 
   function roundSettled(pool) {
@@ -541,7 +620,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
 
     // placings() names them; the prize table is ordered. Lined up here once,
     // rather than indexing an object by accident.
-    const named = F.placings(pool.bracket);
+    const named = F.placings(pool.bracket, pool.thirdPlace);
     const places = [named.first, named.second, named.third];
     const paying = pool.players.filter(p => !p.isBot);
     // The pot is what was actually put in. A pool that started short — four
@@ -600,13 +679,18 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
       }
     }
 
+    // Kept on the pool as well as announced, because the result card is
+    // mounting at the same moment this fires and a card that missed it had
+    // nothing to show. Same reason the phase lives on the pool.
+    pool.awards = awards.map(a => ({
+      userId: a.userId, username: a.username, place: a.place,
+      amount: pool.free ? 0 : a.amount,
+    }));
+
     broadcast(pool, 'tournament_over', {
       poolId: pool.id,
       placings: places,
-      awards: awards.map(a => ({
-        userId: a.userId, username: a.username, place: a.place,
-        amount: pool.free ? 0 : a.amount,
-      })),
+      awards: pool.awards,
       free: !!pool.free,
     });
     pushPool(pool, { finished: true });
@@ -650,7 +734,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
   });
 
   return {
-    tick, ready, onResult, beginPool, startRound, settle, sampleScores,
+    tick, ready, onResult, beginPool, startRound, settle, sampleScores, playerGone,
     _live: live,
     timings: T,
   };

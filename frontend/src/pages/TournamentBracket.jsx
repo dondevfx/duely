@@ -71,6 +71,13 @@ export default function TournamentBracket() {
         // A 404 means it is genuinely gone; anything else is the network, and
         // saying "lost contact" to someone whose tournament simply ended is a
         // different and more alarming thing than what happened.
+        // 410: they left a running tournament and are out of it. There is
+        // nothing to watch and no way back in, so they are not left sitting on
+        // a bracket that says otherwise.
+        if (e?.status === 410 || e?.data?.kicked) {
+          if (alive) navRef.current('/tournaments', { replace: true });
+          return;
+        }
         if (alive && !over) {
           setError(e?.status === 404
             ? 'That tournament has finished or never started.'
@@ -241,26 +248,28 @@ export default function TournamentBracket() {
           {pool.entryFee} coin entry
           {filling && seatsLeft > 0 && ` · ${seatsLeft} seat${seatsLeft === 1 ? '' : 's'} left`}
         </div>
-      </div>
 
-      {/* What the round has left to run. Only while one is actually being
-          played — between rounds there is nothing to count. */}
-      {roundEnds && roundEnds > now && (
-        <div className="mb-3 flex items-center justify-center gap-2">
-          {roundSudden && (
-            <span className="text-[0.5rem] font-black uppercase tracking-widest text-danger">
-              Sudden death
+        {/* What the round has left to run, directly under the entry line.
+            Only while one is being played — between rounds there is nothing to
+            count, and the people waiting here see the same clock as the people
+            in the games. */}
+        {roundEnds && roundEnds > now && (
+          <div className="mt-1.5 flex items-center justify-center gap-2">
+            {roundSudden && (
+              <span className="text-[0.5rem] font-black uppercase tracking-widest text-danger">
+                Sudden death
+              </span>
+            )}
+            <span className="text-[0.625rem] uppercase tracking-widest text-muted font-bold">
+              Round ends in
             </span>
-          )}
-          <span className="text-[0.625rem] uppercase tracking-widest text-muted font-bold">
-            Round ends in
-          </span>
-          <span className="font-mono font-black tabular-nums text-lg leading-none"
-                style={{ color: roundEnds - now <= 30000 ? '#F87171' : '#FFFFFF' }}>
-            {fmtClock(roundEnds - now)}
-          </span>
-        </div>
-      )}
+            <span className="font-mono font-black tabular-nums text-lg leading-none"
+                  style={{ color: roundEnds - now <= 30000 ? '#F87171' : '#FFFFFF' }}>
+              {fmtClock(roundEnds - now)}
+            </span>
+          </div>
+        )}
+      </div>
 
       {sudden && (
         // A draw does not stop a knockout. Said plainly, because the players

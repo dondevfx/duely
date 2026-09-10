@@ -397,7 +397,33 @@ async function handleTowerComplete(io, supabase, roomId, socketId, score = 0, ta
     gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId) });
     // A tournament round against a bot. See blockBlastEngine.
     tournamentHook.settled(roomId, { winnerId: humanWon ? player.userId : (room.players.find(p => p.isBot)?.userId || null), loserId: humanWon ? (room.players.find(p => p.isBot)?.userId || null) : player.userId });
-    io.to(roomId).emit('tower_result', {
+    // A bracket match is never a solo run.
+    //
+    // A tournament room is staked at zero and its opponent may be a bot, so
+    // it walks straight into the practice branch and the card came out
+    // saying "Solo" — with no opponent, no scoreline and no sign it was a
+    // round of a tournament. The bots are disguised as players everywhere
+    // else in a bracket; the result card is the last place that should give
+    // them away.
+    //
+    // Rating and payout stay absent because they genuinely are: the stake
+    // was the entry fee and the prize is paid at the end.
+    const _tourBot = room.players.find(p => p.isBot);
+    io.to(roomId).emit('tower_result', room.tournament ? {
+      isSolo:         false,
+      vsBot:          false,
+      winnerId:       humanWon ? player.userId : _tourBot?.userId,
+      loserId:        humanWon ? _tourBot?.userId : player.userId,
+      winnerUsername: humanWon ? player.username : _tourBot?.username,
+      loserUsername:  humanWon ? _tourBot?.username : player.username,
+      winnerScore:    humanWon ? verified : botScore,
+      loserScore:     humanWon ? botScore : verified,
+      newWinnerElo:   null,
+      newLoserElo:    null,
+      balanceChange:  null,
+      currency:       'coins',
+      entryFee:       0,
+    } : {
       isSolo: true,
       vsBot: true,
       newElo: humanNewElo,

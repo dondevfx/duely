@@ -421,7 +421,33 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
       // A tournament round played against a bot. Reported here rather than
       // in _resolve, because a bot room never reaches it.
       tournamentHook.settled(roomId, { winnerId: humanWon ? player.userId : (room.players.find(p => p.isBot)?.userId || null), loserId: humanWon ? (room.players.find(p => p.isBot)?.userId || null) : player.userId });
-      io.to(roomId).emit('block_blast_result', {
+      // A bracket match is never a solo run.
+      //
+      // A tournament room is staked at zero and its opponent may be a bot, so
+      // it walks straight into the practice branch and the card came out
+      // saying "Solo" — with no opponent, no scoreline and no sign it was a
+      // round of a tournament. The bots are disguised as players everywhere
+      // else in a bracket; the result card is the last place that should give
+      // them away.
+      //
+      // Rating and payout stay absent because they genuinely are: the stake
+      // was the entry fee and the prize is paid at the end.
+      const _tourBot = room.players.find(p => p.isBot);
+      io.to(roomId).emit('block_blast_result', room.tournament ? {
+        isSolo:         false,
+        vsBot:          false,
+        winnerId:       humanWon ? player.userId : _tourBot?.userId,
+        loserId:        humanWon ? _tourBot?.userId : player.userId,
+        winnerUsername: humanWon ? player.username : _tourBot?.username,
+        loserUsername:  humanWon ? _tourBot?.username : player.username,
+        winnerScore:    humanWon ? verifiedScore : botScore,
+        loserScore:     humanWon ? botScore : verifiedScore,
+        newWinnerElo:   null,
+        newLoserElo:    null,
+        balanceChange:  null,
+        currency:       'coins',
+        entryFee:       0,
+      } : {
         isSolo:      true,
         newElo:      humanNewElo,
         // The rating this was computed FROM — see carDashEngine.

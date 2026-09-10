@@ -846,7 +846,10 @@ export default function WordleGame() {
             <span className="text-xs sm:text-sm text-muted">Solo <span className="text-accent font-semibold">Practice</span></span>
           ) : (
             <>
-              <span className="text-sm sm:text-base font-black text-accent">Word Race</span>
+              {/* The game's name is on the card that got you here and in the
+                  tab title; repeating it over the board was a second heading
+                  for a screen that has one job. What stays is the state — the
+                  opponent's clock, and whether you are waiting on them. */}
               {oppFailed && failSecs !== null && failSecs > 0 && !myDone && (
                 <span className="text-xs font-bold ml-2" style={{ color: failSecs <= 15 ? '#ef4444' : '#f59e0b' }}>
                   {failSecs}s left

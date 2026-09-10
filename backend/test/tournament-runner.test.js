@@ -108,22 +108,32 @@ function fill(pools, n, { entryFee = 5, bots = 0 } = {}) {
   return pool;
 }
 
-/** Play the whole thing out: whoever is `a` in a match wins it. */
+/**
+ * Play the whole thing out: whoever is `a` in a match wins it.
+ *
+ * Through pendingMatches rather than by walking the round array, because the
+ * third-place playoff is not in it — it is offered alongside the final at its
+ * own match index, and a bracket is not finished without it.
+ */
 function playOut(runner, pool, { winner = (m) => m.a } = {}) {
   for (let guard = 0; guard < 200 && pool.state === 'running'; guard++) {
     runner.startRound(pool);
-    const pending = [...(pool.bracket[pool.round] || []).entries()].filter(([, m]) => !m.winner && m.a && m.b);
+    const pending = pools_pending(pool);
     if (!pending.length) break;
-    for (const [i, m] of pending) {
+    for (const { i, m } of pending) {
       runner.onResult({ poolId: pool.id, round: pool.round, match: i, winnerId: winner(m), isDraw: false });
     }
   }
 }
 
+// The store's own view of what is left to play, including the playoff.
+let _store = null;
+const pools_pending = (pool) => _store.pendingMatches(pool);
+
 test.beforeEach(() => hook._reset());
 
 test('a full bracket plays out and pays the top three', async () => {
-  const pools = createStore();
+  const pools = createStore(); _store = pools;
   const io = fakeIo();
   const engines = fakeEngines();
   const captured = [];
@@ -162,7 +172,7 @@ test('the prize pool is what was actually entered, not a full sixteen', async ()
   // A pool that closes short still pays out — from four entries, not sixteen.
   // Paying the sixteen-player table out of a four-player pot would hand out
   // four times what was taken, every time a tournament failed to fill.
-  const pools = createStore();
+  const pools = createStore(); _store = pools;
   const io = fakeIo();
   const captured = [];
   const runner = createRunner({ io, supabase: fakeSupabase(captured), pools, engines: fakeEngines(), log: { error() {} } });
@@ -180,7 +190,7 @@ test('the prize pool is what was actually entered, not a full sixteen', async ()
 });
 
 test('a free bracket pays nobody', async () => {
-  const pools = createStore();
+  const pools = createStore(); _store = pools;
   const captured = [];
   const runner = createRunner({ io: fakeIo(), supabase: fakeSupabase(captured), pools, engines: fakeEngines(), log: { error() {} } });
 
@@ -195,7 +205,7 @@ test('a free bracket pays nobody', async () => {
 });
 
 test('a draw goes to sudden death rather than stopping the round', () => {
-  const pools = createStore();
+  const pools = createStore(); _store = pools;
   const io = fakeIo();
   const engines = fakeEngines();
   const runner = createRunner({ io, supabase: null, pools, engines, log: { error() {} } });
@@ -213,7 +223,7 @@ test('a draw goes to sudden death rather than stopping the round', () => {
 });
 
 test('a drawn sudden death is settled rather than replayed forever', () => {
-  const pools = createStore();
+  const pools = createStore(); _store = pools;
   const io = fakeIo();
   const runner = createRunner({ io, supabase: null, pools, engines: fakeEngines(), log: { error() {} } });
 
@@ -232,7 +242,7 @@ test('a result for a round already finished is ignored', () => {
   // Two clients reporting, a forced deadline landing late, an engine settling
   // twice: all of it arrives after the bracket has moved on, and none of it
   // may write into the round it is now on.
-  const pools = createStore();
+  const pools = createStore(); _store = pools;
   const runner = createRunner({ io: fakeIo(), supabase: null, pools, engines: fakeEngines(), log: { error() {} } });
   const pool = fill(pools, 16, { entryFee: 1 });
 
@@ -252,7 +262,7 @@ test('a timeout from a finished round cannot decide the round after it', async (
   // round rather than reading the current one. A deadline set in round one
   // fires three minutes later, by which time the tournament is in round two —
   // and the match at that index in round two has not been played.
-  const pools = createStore();
+  const pools = createStore(); _store = pools;
   const io = fakeIo();
   const engines = fakeEngines();
   const runner = createRunner({ io, supabase: null, pools, engines, log: { error() {} } });
@@ -276,7 +286,7 @@ test('a deadline decides the match it was set for, not whichever round is curren
   // by which time the tournament is in round two — and reading the round at
   // that moment would decide a round-two match nobody had played. The round is
   // fixed when the match starts, which is why startMatch captures it.
-  const pools = createStore();
+  const pools = createStore(); _store = pools;
   const io = fakeIo();
   const engines = fakeEngines();
   const runner = createRunner({
@@ -313,7 +323,7 @@ test('a deadline decides the match it was set for, not whichever round is curren
 });
 
 test('the engines are told to start only once both screens have reported in', () => {
-  const pools = createStore();
+  const pools = createStore(); _store = pools;
   const io = fakeIo();
   const engines = fakeEngines();
   const runner = createRunner({ io, supabase: null, pools, engines, log: { error() {} } });
@@ -334,7 +344,7 @@ test('the engines are told to start only once both screens have reported in', ()
 test('a bracket room is staked at zero and never settles a second wager', () => {
   // The entry fee is taken once, on the way in. If the rooms carried it too,
   // four rounds would cost a player five entries and pay four extra pots.
-  const pools = createStore();
+  const pools = createStore(); _store = pools;
   const io = fakeIo();
   const engines = fakeEngines();
   const runner = createRunner({ io, supabase: null, pools, engines, log: { error() {} } });
@@ -354,7 +364,7 @@ test('a tournament bot never knocks a real player out', () => {
   // Bots exist to fill a bracket nobody else entered. They pay nothing in, so
   // they must never take a place — which is what demoWin does, and why it is
   // set on every bracket room that has a bot in it.
-  const pools = createStore();
+  const pools = createStore(); _store = pools;
   const io = fakeIo();
   const engines = fakeEngines();
   const runner = createRunner({ io, supabase: null, pools, engines, log: { error() {} } });
@@ -375,7 +385,7 @@ test('a tournament bot never knocks a real player out', () => {
 test('an engine result reaches the bracket through the hook', () => {
   // The engines call tournamentHook.settled and know nothing else about
   // tournaments. This is that path, end to end.
-  const pools = createStore();
+  const pools = createStore(); _store = pools;
   const io = fakeIo();
   const engines = fakeEngines();
   const runner = createRunner({ io, supabase: null, pools, engines, log: { error() {} } });
@@ -395,7 +405,7 @@ test('an engine result reaches the bracket through the hook', () => {
 test('an ordinary match is not a tournament match', () => {
   // settled() is called by every engine on every result, most of which have
   // nothing to do with a bracket. Those must fall straight through.
-  const pools = createStore();
+  const pools = createStore(); _store = pools;
   createRunner({ io: fakeIo(), supabase: null, pools, engines: fakeEngines(), log: { error() {} } });
   assert.equal(hook.settled('bb_some_ordinary_room', { winnerId: 'u1' }), false);
 });
@@ -406,7 +416,7 @@ test('a tournament that is dropped by a restart gives every entry back', async (
   // keeping the money is not. Bots are not owed anything and a free bracket
   // took nothing, so neither is refunded.
   const { refundPool } = require('../src/routes/tournaments');
-  const pools = createStore();
+  const pools = createStore(); _store = pools;
   const captured = [];
   const supabase = fakeSupabase(captured);
 

@@ -38,34 +38,23 @@ export default function useTournamentRound(socket) {
   useEffect(() => {
     if (!socket || !poolId) return;
 
-    const back = (delay) => {
+    // The one case this still handles. Everything else about where the player
+    // goes after a round belongs to the result card, which is the thing on
+    // screen and the only thing that knows whether they won: a winner waits on
+    // the bracket for the next round, a loser is out and goes to the lobby.
+    //
+    // An expired match has no result card at all — the deadline passed with
+    // nobody finishing — so there is nothing to leave this screen otherwise.
+    const onExpired = (r) => {
+      if (r?.roomId && r.roomId !== roomId) return;
       if (wentBack.current) return;
       wentBack.current = true;
-      setTimeout(() => navigate(`/tournaments/${poolId}`, { replace: true }), delay);
+      setTimeout(() => navigate(`/tournaments/${poolId}`, { replace: true }), 1500);
     };
 
-    // Their own match being decided is the cue — not any result in the round,
-    // which would pull them off a game they are still playing the moment
-    // somebody else finished theirs first.
-    const onResult = (r) => {
-      if (r?.poolId !== poolId) return;
-      if (r?.round !== tournament?.round || r?.match !== tournament?.match) return;
-      back(4000);
-    };
-    const onOver = (r) => { if (r?.poolId === poolId) back(4000); };
-    // The deadline passed with nobody having finished. Nothing more is coming
-    // on this screen, so it does not sit there.
-    const onExpired = (r) => { if (!r?.roomId || r.roomId === roomId) back(1500); };
-
-    socket.on('tournament_result', onResult);
-    socket.on('tournament_over', onOver);
     socket.on('tournament_match_expired', onExpired);
-    return () => {
-      socket.off('tournament_result', onResult);
-      socket.off('tournament_over', onOver);
-      socket.off('tournament_match_expired', onExpired);
-    };
-  }, [socket, poolId, roomId, tournament?.round, tournament?.match, navigate]);
+    return () => socket.off('tournament_match_expired', onExpired);
+  }, [socket, poolId, roomId, navigate]);
 
   return tournament;
 }

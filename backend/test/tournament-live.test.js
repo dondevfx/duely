@@ -227,3 +227,45 @@ test('a round tells everyone watching when it ends', () => {
   assert.ok(sampled.endsAt > Date.now(), 'no deadline to count down to');
   assert.equal(sampled.sudden, false);
 });
+
+test('a bracket match against a bot reports as PvP, not as a solo run', () => {
+  // A tournament room is staked at zero and its opponent may be a bot, which
+  // is exactly the shape of a practice run — so the result card came out
+  // saying "Solo", with no opponent and no scoreline. The bots are disguised
+  // as players everywhere else in a bracket; the result is the last place
+  // that should give them away.
+  const { runner, pool } = boot({ bots: 8 });
+  pool.roundGames = pool.roundGames.map(() => 'block-blast');
+  runner.startRound(pool);
+
+  const roomId = [...hook._rooms.keys()].find(id => {
+    const r = bb.getBlockBlastRoom(id);
+    return r?.isSolo;
+  });
+  assert.ok(roomId, 'no human was drawn against a bot');
+  const room = bb.getBlockBlastRoom(roomId);
+  assert.ok(room.tournament, 'the room does not know it is a bracket match');
+
+  const sent = [];
+  const io = {
+    emit: () => {},
+    to: () => ({ emit: (event, payload) => sent.push({ event, payload }) }),
+    sockets: { sockets: new Map() },
+  };
+
+  room.state = 'active';
+  room.startTime = Date.now() - 30_000;
+  const human = room.players.find(p => !p.isBot);
+  room.pingScores[human.socketId] = 500;
+
+  return bb.handleBlockBlastComplete(io, null, roomId, human.socketId, 500).then(() => {
+    const res = sent.find(x => x.event === 'block_blast_result');
+    assert.ok(res, 'no result was emitted');
+    assert.equal(res.payload.isSolo, false, 'reported as a solo run');
+    assert.equal(res.payload.vsBot, false, 'the bot was named as a bot');
+    assert.ok(res.payload.winnerUsername, 'no winner to show');
+    assert.ok(res.payload.loserUsername, 'no opponent to show');
+    assert.equal(res.payload.winnerId, human.userId, 'the bot beat a real entrant');
+    assert.equal(res.payload.entryFee, 0);
+  });
+});

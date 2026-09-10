@@ -8,7 +8,7 @@
  * until the split changes.
  */
 const express = require('express');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, optionalAuth } = require('../middleware/auth');
 const F = require('../services/tournamentFormat');
 const { deductCoins } = require('../services/walletService');
 const { isDemo, randomFunnyName, disguisedFace, PROFILE_COLORS } = require('../services/demoAccounts');
@@ -227,10 +227,15 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
   // Public rather than requireAuth: a player watching a bracket they were
   // knocked out of is still watching a bracket, and there is nothing here that
   // is not already on everyone else's screen.
-  router.get('/:id', (req, res) => {
+  router.get('/:id', optionalAuth, (req, res) => {
     if (!pools) return res.status(404).json({ error: 'Not found' });
     const pool = pools.get(req.params.id);
     if (!pool) return res.status(404).json({ error: 'That tournament has finished or never started.' });
+    // Somebody who left a running tournament is out of it. Letting them back
+    // onto the bracket reads as though they might still be in it.
+    if (req.user && pool.kicked?.has(req.user.id)) {
+      return res.status(410).json({ error: 'You left this tournament, so you are out of it.', kicked: true });
+    }
     res.json({ pool: publicPool(pool) });
   });
 
@@ -342,6 +347,12 @@ function publicPool(p) {
       profileColor: x.profileColor ?? null,
     })),
     bracket: p.bracket,
+    // The third-place playoff, drawn beside the final. Off the bracket array
+    // on purpose — see the note on placings().
+    thirdPlace: p.thirdPlace || null,
+    // Where it finished, so a card that missed the socket announcement can
+    // still say what was won. See useTournamentResult.
+    awards: p.awards || null,
   };
 }
 

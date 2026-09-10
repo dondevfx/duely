@@ -403,7 +403,7 @@ export default function ResultScreen({
                   Return to lobby
                 </button>
               </>
-            ) : (
+            ) : isWinner ? (
               <>
                 <ResultTimer seconds={8} onTimeout={tour.toBracket} />
                 <button
@@ -412,6 +412,23 @@ export default function ResultScreen({
                   style={{ boxShadow: '0 0 18px rgba(18,80,180,0.35)' }}
                 >
                   Next game
+                </button>
+              </>
+            ) : (
+              // Knocked out. A knockout is a knockout: there is no next round
+              // for them and no bracket to go back to, so the card says so and
+              // the only way on is the next tournament.
+              <>
+                <p className="mt-3 text-center text-sm text-muted">
+                  Knocked out of the tournament.
+                </p>
+                <ResultTimer seconds={8} onTimeout={tour.toLobby} />
+                <button
+                  onClick={tour.toLobby}
+                  className="w-full mt-3 sm:mt-4 py-3 rounded-xl font-black text-base bg-primary text-white hover:bg-blue-500 transition-all"
+                  style={{ boxShadow: '0 0 18px rgba(18,80,180,0.35)' }}
+                >
+                  Back to tournaments
                 </button>
               </>
             )
