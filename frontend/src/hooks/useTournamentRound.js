@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { setSudden } from './tournamentSuddenStore';
+import { setSudden, setResult } from './tournamentSuddenStore';
 
 /**
  * The three lines every game screen needs to be playable inside a bracket.
@@ -106,14 +106,17 @@ export default function useTournamentRound(socket) {
   useEffect(() => {
     if (!socket || !poolId) return;
     const onSudden = (p) => { if (p?.poolId === poolId) setSudden(p); };
+    const onDecided = (r) => { if (r?.poolId === poolId) setResult(r); };
     const onMatch = (m) => {
       if (m?.poolId !== poolId || !m.roomId || m.roomId === roomId) return;
       navigate(`/tournaments/${poolId}`, { replace: true, state: { pending: m } });
     };
     socket.on('tournament_sudden_death', onSudden);
+    socket.on('tournament_result', onDecided);
     socket.on('tournament_match', onMatch);
     return () => {
       socket.off('tournament_sudden_death', onSudden);
+      socket.off('tournament_result', onDecided);
       socket.off('tournament_match', onMatch);
     };
   }, [socket, poolId, roomId, navigate]);

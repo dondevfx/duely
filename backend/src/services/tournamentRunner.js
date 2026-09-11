@@ -599,7 +599,11 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     // goes to sudden death exactly as a real one would. The replay is still
     // against a bot, so it still goes to the player. Once per tournament: the
     // point is to show it, not to make every round a coin toss.
-    if (pool.demo && !pool.demoDrawn && !sudden && !isDraw) {
+    // Whether the game reported a win OR a tie. A tie against a bot is the
+    // natural way a demo reaches this, and it used to fall through to the
+    // bot rule below: the player was put straight through, no sudden death
+    // was announced, and the card sat on a draw screen with nothing behind it.
+    if (pool.demo && !pool.demoDrawn && !sudden) {
       const pa = playerOf(pool, m.a), pb = playerOf(pool, m.b);
       if (humanOverBot(pa, pb)) {
         pool.demoDrawn = true;

@@ -770,3 +770,22 @@ test('an ordinary bracket never stages a draw', () => {
   assert.equal(m.winner, human);
   assert.equal(io._for(human, 'tournament_sudden_death').length, 0);
 });
+
+test("a demo's tie with a bot goes to sudden death, not straight through", () => {
+  // How a demo actually reached the draw screen: the game against the bot
+  // reported a tie. That fell through to the bot rule, the player was put
+  // through with no sudden death announced, and the card sat on a countdown
+  // with nothing behind it.
+  const { io, engines, runner, pool, mixed, isBot } = demoBracket();
+  const { m, i } = mixed[0];
+  const human = isBot(m.a) ? m.b : m.a;
+
+  runner.onResult({ poolId: pool.id, round: 0, match: i, winnerId: null, isDraw: true });
+  assert.ok(!m.winner, 'a tied demo match was decided without sudden death');
+  const [ann] = io._for(human, 'tournament_sudden_death');
+  assert.ok(ann && ann.payload.startsAt > Date.now(), 'no countdown was announced');
+
+  const before = engines._made.length;
+  runner.suddenReady(pool.id, human);
+  assert.equal(engines._made.length, before + 1, 'Play sudden death did not start it');
+});

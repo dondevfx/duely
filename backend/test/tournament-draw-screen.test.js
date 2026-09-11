@@ -103,3 +103,20 @@ test('an announced sudden death is a draw on the card, whatever the game said', 
   const drawAt = CARD.indexOf('const isDraw = reportedDraw');
   assert.ok(tourAt > 0 && drawAt > tourAt, 'isDraw is worked out before the bracket has been asked');
 });
+
+test("the card can't miss who the bracket put through", () => {
+  // The result is broadcast in the same instant the game ends, before the card
+  // mounts. A card that missed it sat on the draw screen for a draw that had
+  // already been settled.
+  assert.match(ROUND, /socket\.on\('tournament_result', onDecided\)/,
+    'nothing on the game screen keeps the result for the card');
+  assert.match(ROUND, /setResult\(r\)/);
+  assert.match(RESULT, /getResult\(poolId, tournament\?\.round, tournament\?\.match\)/,
+    'the card only listens for a result that may already have gone past');
+});
+
+test('the card also reads the match from the bracket it polls', () => {
+  // The backstop: whatever was missed, the bracket says who won.
+  assert.match(RESULT, /d\?\.pool\?\.bracket\?\.\[tournament\?\.round\]\?\.\[tournament\?\.match\]/);
+  assert.match(RESULT, /if \(m\?\.winner\) setDecided\(m\.winner\)/);
+});

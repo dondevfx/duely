@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
-import { getSudden, subscribeSudden } from './tournamentSuddenStore';
+import { getSudden, subscribeSudden, getResult, subscribeResult } from './tournamentSuddenStore';
 
 /**
  * What the result card needs to know when the match it is showing was a
@@ -51,7 +51,13 @@ export default function useTournamentResult() {
   // Who the bracket says won THIS match. On a draw the card cannot know — the
   // engine reported a tie — so when sudden death, or the coin flip after a
   // drawn replay, decides it, this is where the card finds out.
-  const [decided, setDecided] = useState(null);
+  const [decided, setDecided] = useState(
+    () => (poolId ? getResult(poolId, tournament?.round, tournament?.match) : null));
+  useEffect(() => subscribeResult((r) => {
+    if (r?.poolId === poolId && r.round === tournament?.round && r.match === tournament?.match) {
+      setDecided(r.winnerId || null);
+    }
+  }), [poolId, tournament?.round, tournament?.match]);
 
   useEffect(() => {
     if (!socket || !poolId) return;
@@ -95,6 +101,10 @@ export default function useTournamentResult() {
       try {
         const d = await api.get(`/tournaments/${poolId}`);
         if (!alive) return;
+        // The match itself, from the bracket — the backstop for a result
+        // broadcast that arrived before anything was listening.
+        const m = d?.pool?.bracket?.[tournament?.round]?.[tournament?.match];
+        if (m?.winner) setDecided(m.winner);
         if (d?.pool?.state === 'complete' && d.pool.awards) {
           setOver({ poolId, awards: d.pool.awards, free: !!d.pool.free });
           return;
