@@ -131,6 +131,30 @@ test('pages load their own code, and the translator does not block the page', ()
   assert.doesNotMatch(html, /<script src="\/\/translate\.google\.com/, 'Google Translate still blocks the page');
 });
 
+test('the home and games grids link to every game with a real link', () => {
+  // The cards were divs that navigated on click: from the home page and
+  // /games there was no link a crawler could follow to any game.
+  const card = fs.readFileSync(FE('src', 'components', 'GameVideoCard.jsx'), 'utf8');
+  assert.match(card, /const Root = available \? Link : 'div';/);
+  for (const page of ['Home.jsx', 'Games.jsx']) {
+    const src = fs.readFileSync(FE('src', 'pages', page), 'utf8');
+    assert.match(src, /<GameVideoCard/, `${page} no longer renders the game cards`);
+  }
+});
+
+test('the home page heading names the site, and the outline has an h2', () => {
+  const home = fs.readFileSync(FE('src', 'pages', 'Home.jsx'), 'utf8');
+  const h1 = home.match(/<h1[\s\S]*?<\/h1>/)[0];
+  assert.match(h1, /<span className="sr-only">Duely — <\/span>/, 'the main heading never says "Duely"');
+  assert.match(h1, /1v1/, 'the visible heading changed');
+  assert.match(home, /<h2 className="font-bold text-white mb-3 xl:mb-2">How Duely Works<\/h2>/);
+});
+
+test('a trailing slash is not a second copy of a page', () => {
+  const v = JSON.parse(fs.readFileSync(FE('vercel.json'), 'utf8'));
+  assert.equal(v.trailingSlash, false, '/game/tower/ and /game/tower both answer 200');
+});
+
 test('the build runs the prerender, and the app keeps titles right after navigation', () => {
   const pkg = JSON.parse(fs.readFileSync(FE('package.json'), 'utf8'));
   assert.match(pkg.scripts.build, /vite build && node scripts\/prerender-seo\.mjs/);

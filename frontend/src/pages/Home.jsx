@@ -63,7 +63,9 @@ const PHONE_HIDE_LG   = PHONE_MINIMAL ? 'hidden' : 'hidden lg:block';
 function HowDuelyWorks() {
   return (
           <div className="bg-surface border border-surfaceLight rounded-2xl p-5 xl:p-4 col-span-2 xl:col-span-1 xl:aspect-square flex flex-col justify-center">
-            <h3 className="font-bold text-white mb-3 xl:mb-2">How Duely Works</h3>
+            {/* h2, not h3: it sits directly under the page's h1 on phones,
+                where the "Games" h2 is hidden. Same classes, same look. */}
+            <h2 className="font-bold text-white mb-3 xl:mb-2">How Duely Works</h2>
             <ul className="text-sm xl:text-[0.8125rem] text-muted space-y-2 xl:space-y-1.5">
               <li className="flex items-start gap-2">
                 <span className="text-primary">•</span>
@@ -153,6 +155,11 @@ export default function Home() {
             {/* Centred at every width: there is nothing beside it to align against. */}
             <div className="flex-1 text-center">
               <h1 className="text-5xl md:text-7xl font-black text-white mb-3 md:mb-6 leading-tight">
+                {/* The name, for search engines and screen readers. The page's
+                    main heading said "1v1 Duels" and never "Duely", so the one
+                    heading that says what a page is about left out whose page
+                    it is. Not shown: the navbar already carries the wordmark. */}
+                <span className="sr-only">Duely — </span>
                 1v1{' '}
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-primary">
                   Duels

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import GameIcon from './GameIcon';
 import GameTitle from './GameTitle';
 
@@ -46,7 +46,6 @@ let mountOrder = 0;
 const STAGGER_MS = 150;
 
 export default function GameVideoCard({ slug, title, route, liveCount = 0, available = true, clipPosition, subtitle = null }) {
-  const navigate = useNavigate();
   const containerRef = useRef(null);
   const videoRef = useRef(null);
   const [videoFailed, setVideoFailed] = useState(false);
@@ -169,25 +168,19 @@ export default function GameVideoCard({ slug, title, route, liveCount = 0, avail
   const posterSrc = `/game-clips/${slug}.jpg`;
   const showVideo = !reducedMotion && !videoFailed;
 
+  // A real link when the game is playable. The card is the only control on it,
+  // and it used to be a div that navigated on click — which a keyboard can
+  // reach only with extra wiring, and which a search engine cannot follow at
+  // all: from the home page and /games there was no link to any game. An <a>
+  // is focusable, announced as a link, opens in a new tab on a middle click,
+  // and is crawlable, with nothing on screen changed.
+  const Root = available ? Link : 'div';
   return (
-    <div
+    <Root
       ref={containerRef}
-      onClick={() => available && navigate(route)}
-      // The card is the only control now that the button is gone, so it has to
-      // BE a control. A div with an onClick cannot be reached by keyboard and
-      // is announced as nothing — removing the button would otherwise have
-      // quietly taken every game on the home screen away from anyone not using
-      // a mouse.
-      role={available ? 'button' : undefined}
-      tabIndex={available ? 0 : undefined}
+      {...(available ? { to: route } : {})}
       aria-label={available ? `Play ${title}` : `${title} — coming soon`}
-      onKeyDown={(e) => {
-        if (!available) return;
-        // Space scrolls the page unless it is stopped, and Enter is what a
-        // screen reader sends for a role="button".
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(route); }
-      }}
-      className={`relative aspect-square rounded-2xl overflow-hidden border transition-all duration-300 ${
+      className={`block relative aspect-square rounded-2xl overflow-hidden border transition-all duration-300 ${
         available
           ? 'border-surfaceLight hover:border-primary/50 hover:shadow-glow cursor-pointer group ' +
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg'
@@ -259,7 +252,9 @@ export default function GameVideoCard({ slug, title, route, liveCount = 0, avail
         // stops the card's own onClick from firing when you're dragging.
         <div
           className="absolute top-2 left-2 right-2 z-20 bg-black/80 rounded-lg px-2 py-1.5 flex items-center gap-2"
-          onClick={(e) => e.stopPropagation()}
+          // preventDefault as well: the card is a link now, and stopping the
+          // event alone does not stop the link from being followed.
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
         >
           <input
             type="range" min="0" max="100" value={debugX}
@@ -299,6 +294,6 @@ export default function GameVideoCard({ slug, title, route, liveCount = 0, avail
           <p className="mt-1 text-xs md:text-sm text-muted">Coming Soon</p>
         )}
       </div>
-    </div>
+    </Root>
   );
 }

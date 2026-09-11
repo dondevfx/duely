@@ -341,17 +341,14 @@ test('a card carries its clip and title, and no Play Now button', () => {
 });
 
 test('the card is reachable by keyboard now that the button is gone', () => {
-  // The button was the only focusable control on the card. A div with an
-  // onClick cannot be tabbed to and is announced as nothing, so removing the
-  // button without this would have taken every game on the home screen away
-  // from anyone not using a mouse.
+  // The button was the only focusable control on the card. The card is now a
+  // real link, which is focusable, activates on Enter and is announced as a
+  // link without any extra wiring — and, unlike a div with an onClick, a
+  // search engine can follow it to the game.
   const code = strip(CARD);
-  assert.match(code, /role=\{available \? 'button' : undefined\}/, 'the card is not announced as a control');
-  assert.match(code, /tabIndex=\{available \? 0 : undefined\}/, 'the card cannot be tabbed to');
-  assert.match(code, /onKeyDown=/, 'Enter and Space do nothing');
-  assert.match(code, /e\.key === 'Enter' \|\| e\.key === ' '/, 'both keys must activate it');
-  assert.match(code, /e\.preventDefault\(\)/,
-    'Space scrolls the page unless it is stopped');
+  assert.match(code, /const Root = available \? Link : 'div';/, 'a playable card is not a link');
+  assert.match(code, /\{\.\.\.\(available \? \{ to: route \} : \{\}\)\}/, 'the link goes nowhere');
+  assert.doesNotMatch(code, /navigate\(route\)/, 'still navigating from a click handler instead of a link');
   assert.match(code, /aria-label=/, 'the card has no accessible name');
   assert.match(code, /focus-visible:ring/,
     'a keyboard user cannot see which card they are on');
