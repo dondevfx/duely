@@ -77,12 +77,11 @@ function noiseBurst(dur, { gain = 0.14, filter = 'highpass', freq = 2200, q = nu
   const ac = getCtx();
   if (!ac || muted) return;
   const t0 = ac.currentTime + start;
-  const frames = Math.max(1, Math.floor(ac.sampleRate * dur));
-  const buffer = ac.createBuffer(1, frames, ac.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < frames; i++) data[i] = Math.random() * 2 - 1;
+  // One second of noise, made once and reused. Filling a fresh buffer on the
+  // main thread for every sound stalled the frame it happened in — which, in
+  // Color Rush, is every tap.
   const src = ac.createBufferSource();
-  src.buffer = buffer;
+  src.buffer = noiseBuffer(ac);
   const biquad = ac.createBiquadFilter();
   biquad.type = filter;
   biquad.frequency.value = freq;
@@ -91,9 +90,21 @@ function noiseBurst(dur, { gain = 0.14, filter = 'highpass', freq = 2200, q = nu
   g.gain.setValueAtTime(gain, t0);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
   src.connect(biquad); biquad.connect(g); g.connect(ac.destination);
-  src.start(t0);
+  // A random start inside the shared buffer, so repeated sounds do not all
+  // begin on the same grain.
+  src.start(t0, Math.random() * Math.max(0, 1 - dur - 0.02));
   src.stop(t0 + dur + 0.02);
   track(src);
+}
+
+let _noise = null;
+function noiseBuffer(ac) {
+  if (_noise && _noise.sampleRate === ac.sampleRate) return _noise;
+  const frames = ac.sampleRate;   // one second
+  _noise = ac.createBuffer(1, frames, ac.sampleRate);
+  const data = _noise.getChannelData(0);
+  for (let i = 0; i < frames; i++) data[i] = Math.random() * 2 - 1;
+  return _noise;
 }
 
 // CSS cubic-bezier(x1,y1,x2,y2) sampled at parameter s → [x(time), y(progress)].

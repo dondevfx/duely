@@ -600,7 +600,12 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
 
     // ── Drawing ─────────────────────────────────────────────────────────────
     const sx = (wx) => W / 2 + (wx - LANE_X) * scale;
-    const sy = (wy) => H - (wy - S.camBottom) * scale;
+    // What is DRAWN is the simulation carried forward by the time left over
+    // after its last fixed step (see render). Drawing the last step as-is
+    // meant a frame could show anywhere up to a step behind, by a different
+    // amount each frame — which on a phone reads as the spin stuttering.
+    let camDraw = 0, yDraw = 0, tDraw = 0;
+    const sy = (wy) => H - (wy - camDraw) * scale;
 
     /**
      * Draw one loop as four color bands.
@@ -665,7 +670,21 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
       }
     }
 
+    // Glow as a soft halo underneath rather than shadowBlur. A blurred shadow
+    // is re-rasterised every frame and is the single most expensive thing a
+    // phone's canvas does — it was on the ball and every diamond, and grew
+    // after each tap, which is where the dropped frames were.
+    function halo(x, y, r, color, alpha) {
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
     function drawDiamond(x, y, r) {
+      halo(x, y, r * 1.35, '#FFFFFF', 0.14);
       ctx.beginPath();
       ctx.moveTo(x, y - r);
       ctx.lineTo(x + r * 0.7, y);
@@ -673,10 +692,7 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
       ctx.lineTo(x - r * 0.7, y);
       ctx.closePath();
       ctx.fillStyle = '#FFFFFF';
-      ctx.shadowColor = 'rgba(255,255,255,0.6)';
-      ctx.shadowBlur = 14;
       ctx.fill();
-      ctx.shadowBlur = 0;
     }
 
     function drawSwitcher(x, y, r, t) {
@@ -696,15 +712,14 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
     }
 
     function drawBall() {
-      const x = sx(LANE_X), y = sy(S.y), r = BALL_R * scale;
+      const x = sx(LANE_X), y = sy(yDraw), r = BALL_R * scale;
       const col = COLORS[S.color];
+      halo(x, y, r * (1.7 + S.pulse * 0.8), col.fill, 0.12);
+      halo(x, y, r * (1.3 + S.pulse * 0.4), col.fill, 0.22);
       ctx.beginPath();
       ctx.arc(x, y, r, 0, TAU);
       ctx.fillStyle = col.fill;
-      ctx.shadowColor = col.fill;
-      ctx.shadowBlur = 16 + S.pulse * 22;
       ctx.fill();
-      ctx.shadowBlur = 0;
     }
 
     // The burst is the ball coming apart, so it is the ball's color.
@@ -742,23 +757,30 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
     }
 
     function render() {
+      // Carried forward by the unsimulated remainder. Drawing only — every
+      // collision and pickup still happens on the fixed step.
+      const ahead = S.started && !S.dead ? acc : 0;
+      tDraw = S.simT + ahead;
+      yDraw = S.y + S.vy * ahead;
+      camDraw = Math.max(S.camBottom, yDraw - VIEW_H * BALL_SCREEN_FRAC);
+
       ctx.fillStyle = BG;
       ctx.fillRect(0, 0, W, H);
 
-      const topY = S.camBottom + VIEW_H;
+      const topY = camDraw + VIEW_H;
       const span = SHAPE_REACH + 60;
-      const first = Math.max(0, Math.floor((S.camBottom - FIRST_Y - span) / OBSTACLE_GAP));
+      const first = Math.max(0, Math.floor((camDraw - FIRST_Y - span) / OBSTACLE_GAP));
       const last  = Math.floor((topY - FIRST_Y + span) / OBSTACLE_GAP);
       for (let i = first; i <= last; i++) {
         if (i < 0) continue;
         const o = obstacleAt(i);
         const cx = sx(LANE_X), cy = sy(o.y);
-        const th = angleOf(o, S.simT);
+        const th = angleOf(o, tDraw);
         for (const loop of o.shape.loops) {
           drawLoop(loop, cx, cy, th * loop.spin, o.offset, o.dotted);
         }
         if (o.diamond)  drawDiamond(cx, cy, 20 * scale);
-        if (o.switcher) drawSwitcher(sx(LANE_X), sy(o.switcherY), SWITCHER_R * scale, S.simT * 0.9);
+        if (o.switcher) drawSwitcher(sx(LANE_X), sy(o.switcherY), SWITCHER_R * scale, tDraw * 0.9);
       }
 
       if (S.dead) drawBits(); else drawBall();
