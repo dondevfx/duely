@@ -33,18 +33,6 @@ export const GAMES = [
     countKey: 'block-blast',
   },
   {
-    slug:     'coin-flip',
-    title:    'Coin Flip',
-    route:    '/game/coin-flip',
-    countKey: 'coin-flip',
-  },
-  {
-    slug:     'car-dash',
-    title:    'Rush Hour',
-    route:    '/game/car-dash',
-    countKey: 'car-dash',
-  },
-  {
     slug:     'color-rush',
     title:    'Color Rush',
     route:    '/game/color-rush',
@@ -56,6 +44,18 @@ export const GAMES = [
     // took over. The poster is now an extracted frame of the clip at its own
     // dimensions, the same as every other game here, so there is nothing left
     // to correct for.
+  },
+  {
+    slug:     'car-dash',
+    title:    'Rush Hour',
+    route:    '/game/car-dash',
+    countKey: 'car-dash',
+  },
+  {
+    slug:     'coin-flip',
+    title:    'Coin Flip',
+    route:    '/game/coin-flip',
+    countKey: 'coin-flip',
   },
   {
     slug:     'tower',

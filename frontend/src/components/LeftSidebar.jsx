@@ -13,9 +13,9 @@ import RankIcon from './RankIcon';
 const GAMES = [
   { game: 'tournament', label: 'Tournaments',  route: '/tournaments',       live: true },
   { game: 'blockBlast', label: 'Block Burst',  route: '/game/block-blast', live: true },
-  { game: 'coin-flip',  label: 'Coin Flip',    route: '/game/coin-flip',   live: true },
-  { game: 'carDash',    label: 'Rush Hour',    route: '/game/car-dash',    live: true },
   { game: 'colorRush',  label: 'Color Rush',   route: '/game/color-rush',  live: true },
+  { game: 'carDash',    label: 'Rush Hour',    route: '/game/car-dash',    live: true },
+  { game: 'coin-flip',  label: 'Coin Flip',    route: '/game/coin-flip',   live: true },
   { game: 'tower',      label: 'Tower',        route: '/game/tower',       live: true },
   { game: 'scrabble',   label: 'Word VS',      route: '/game/scrabble',    live: true },
   { game: 'blackjack',  label: 'Blackjack',    route: '/game/blackjack',   live: true },
