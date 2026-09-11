@@ -647,3 +647,24 @@ test('the coin flip lobby is tight on a phone and ordinary above it', () => {
   // the "o" and the words stack — so it keeps its size.
   assert.match(coin, /text-3xl sm:text-6xl/, 'the coin flip title was resized');
 });
+
+test('a refresh on any tournament screen leaves the tournament and lands on the bet page', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const FE = (...p) => fs.readFileSync(path.join(__dirname, '..', '..', 'frontend', 'src', ...p), 'utf8');
+  const sess = FE('utils', 'tournamentSession.js');
+  const exit = FE('components', 'TournamentReloadExit.jsx');
+  // Read at load, before any screen can clear the marker.
+  assert.match(sess, /export const RELOADED_OUT_OF = .*wasReload\(\)\) \? readMark\(\) : null;/);
+  assert.match(sess, /nav\.type === 'reload'/);
+  // Straight to the bet page, then the same call the Leave button makes.
+  assert.match(exit, /navigate\('\/tournaments', \{ replace: true \}\)/);
+  assert.match(exit, /api\.post\(`\/tournaments\/\$\{RELOADED_OUT_OF\}\/leave`/);
+  assert.match(FE('App.jsx'), /<TournamentReloadExit \/>/);
+  // Every tournament screen marks the tab; the bet page itself does not.
+  assert.match(FE('pages', 'TournamentBracket.jsx'), /markInTournament\(id\)/);
+  assert.match(FE('hooks', 'useTournamentRound.js'), /sessionStorage\.setItem\(KEY, poolId\)/);
+  assert.match(FE('pages', 'Tournaments.jsx'), /clearTournamentMark\(\)/);
+  // A result is not the end: refreshing on the result card still leaves.
+  assert.doesNotMatch(FE('hooks', 'useTournamentRound.js'), /onResult = \(r\) => \{ if \(r\?\.poolId === poolId\) done\(\); \}/);
+});

@@ -54,6 +54,7 @@ const ColorRushCanvas   = lazyPage(() => import('./components/ColorRushCanvas'))
 const TowerGame         = lazyPage(() => import('./pages/TowerGame'));
 const TowerCanvas       = lazyPage(() => import('./components/TowerCanvas'));
 import TournamentClock from './components/TournamentClock';
+import TournamentReloadExit from './components/TournamentReloadExit';
 import PageMeta from './components/PageMeta';
 // Dev-only: lets the game be looked at before the lobby and engine exist.
 // Stripped from production builds by the import.meta.env.DEV guard below.
@@ -356,6 +357,7 @@ function Shell() {
           than added to five game screens. It renders nothing outside a
           tournament. See the component for why the top centre. */}
       <TournamentClock />
+      <TournamentReloadExit />
       {showSaveLogin && <SaveLoginPrompt onDone={() => setShowSaveLogin(false)} />}
     </div>
   );

@@ -10,6 +10,7 @@ import { fmt as fmtClock } from '../components/TournamentClock';
 import TournamentDraw from './TournamentDraw';
 import { api } from '../utils/api';
 import { getSudden } from '../hooks/tournamentSuddenStore';
+import { markInTournament, clearTournamentMark } from '../utils/tournamentSession';
 
 /**
  * The screen a player waits on: who is in, how the bracket stands, and what
@@ -62,6 +63,11 @@ export default function TournamentBracket() {
   navRef.current = navigate;
 
   const me = session?.user?.id || null;
+
+  // This tab is in a tournament from the moment the bracket opens — while it
+  // fills, between rounds, and watching. A refresh from here leaves it; see
+  // utils/tournamentSession.
+  useEffect(() => { markInTournament(id); }, [id]);
 
   // ── A match handed over from the game screen ─────────────────────────────
   // The sudden-death replay arrives while the player is still on the game they
@@ -117,6 +123,7 @@ export default function TournamentBracket() {
         // nothing to watch and no way back in, so they are not left sitting on
         // a bracket that says otherwise.
         if (e?.status === 410 || e?.data?.kicked) {
+          clearTournamentMark();
           if (alive) navRef.current('/tournaments', { replace: true });
           return;
         }
@@ -166,6 +173,7 @@ export default function TournamentBracket() {
     const onOver = (p) => {
       if (!mine(p)) return;
       setDrawing(null);
+      clearTournamentMark();
       navRef.current('/tournaments', { replace: true });
     };
     const onCancelled = (p) => {

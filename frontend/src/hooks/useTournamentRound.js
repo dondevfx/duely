@@ -71,7 +71,10 @@ export default function useTournamentRound(socket) {
     // nobody finishing — so there is nothing to leave this screen otherwise.
     const done = () => { try { sessionStorage.removeItem('tournamentRound'); } catch { /* private mode */ } };
     const onOver = () => done();
-    const onResult = (r) => { if (r?.poolId === poolId) done(); };
+    // Not on a result. A result is not the end of the tournament — a refresh on
+    // the result card is still leaving it, and clearing here let that one
+    // refresh through. A knockout clears the marker by going to the bet page.
+    const onResult = () => {};
     const onExpired = (r) => {
       if (r?.roomId && r.roomId !== roomId) return;
       done();

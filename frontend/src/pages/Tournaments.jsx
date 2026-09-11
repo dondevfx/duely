@@ -10,6 +10,7 @@ import InsufficientModal from '../components/InsufficientModal';
 import GlowButton from '../components/GlowButton';
 import { LockIcon } from '../components/UiIcon';
 import { api } from '../utils/api';
+import { clearTournamentMark } from '../utils/tournamentSession';
 
 /**
  * The tournament bet screen.
@@ -36,6 +37,10 @@ export default function Tournaments() {
   // player and the bot button sent them to the login page.
   const { session, profile } = useAuth();
   useShowBottomBar(true);
+  // Back on the bet page: not in a tournament screen any more, so a refresh
+  // here is just a refresh. (A refresh that brought the player here is read
+  // before this runs — see utils/tournamentSession.)
+  useEffect(() => { clearTournamentMark(); }, []);
 
   const [schedule, setSchedule] = useState(null);
   const [entryFee, setEntryFee] = useState(1);

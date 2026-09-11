@@ -276,6 +276,20 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     const b = playerOf(pool, match.b);
     if (!a || !b) return;
 
+    // Somebody who left is not played. A player who won their round and then
+    // left (a refresh, the Leave button) was already written into this match,
+    // and pools.leave only forfeits the round being played — so the next round
+    // pulled them back off the bet page into a game in a tournament they had
+    // left. Their opponent goes through; if both left, a coin flip.
+    const goneA = pool.kicked?.has(a.userId), goneB = pool.kicked?.has(b.userId);
+    if (goneA || goneB) {
+      st.matches.set(key, { done: false });
+      const winner = goneA && !goneB ? b.userId
+                   : goneB && !goneA ? a.userId
+                   : (Math.random() < 0.5 ? a.userId : b.userId);
+      return onResult({ poolId: pool.id, round, match: index, winnerId: winner, isDraw: false, sudden });
+    }
+
     // Two bots. Nobody is watching a game that is not being played, so it is
     // decided here — after a plausible pause, so a demo bracket resolves
     // around the player over the course of the round rather than the whole

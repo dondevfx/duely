@@ -881,3 +881,23 @@ test("a forfeit written straight into the bracket is followed through on the eng
   runner.onResult({ poolId: pool.id, round: 0, match: 0, winnerId: round[0].b, isDraw: false });
   assert.equal(pool.round, 1, 'the round stalled on a match decided outside the runner');
 });
+
+test('a player who won their round and then left is not played in the next', () => {
+  // Refreshing (or pressing Leave) while waiting for the next round: they were
+  // already written into it, and pools.leave only forfeits the round being
+  // played. The next round then pulled them back into a game.
+  const { runner, pool, pools, io } = drawnRunner({ intermission: 10_000 });
+  const round = pool.bracket[0];
+  runner.onResult({ poolId: pool.id, round: 0, match: 0, winnerId: round[0].a, isDraw: false });
+  const leaver = round[0].a;
+  runner.leave(pool.id, leaver);
+  for (let i = 1; i < round.length; i++) {
+    runner.onResult({ poolId: pool.id, round: 0, match: i, winnerId: round[i].a, isDraw: false });
+  }
+  assert.equal(pool.round, 1);
+  const before = io._for(leaver, 'tournament_match').length;
+  runner.startRound(pool);
+  const next = pool.bracket[1][0];
+  assert.equal(next.winner, next.a === leaver ? next.b : next.a, 'the opponent did not go through');
+  assert.equal(io._for(leaver, 'tournament_match').length, before, 'a player who left was sent into a match');
+});
