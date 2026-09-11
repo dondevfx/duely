@@ -65,7 +65,7 @@ function ResultTimer({ seconds = 10, onTimeout }) {
  */
 export default function ResultScreen({
   isWinner,
-  isDraw = false,
+  isDraw: reportedDraw = false,
   winnerUsername,
   loserUsername,
   // The opponent as the server described them at match_found. Their picture is
@@ -132,6 +132,10 @@ export default function ResultScreen({
   // being told, because there are a dozen call sites and one of them would
   // have been missed.
   const tour = useTournamentResult();
+  // A draw the bracket announced counts as one here even when the game said
+  // otherwise. A demo account's staged draw is reported by the game as the win
+  // it was, and the card has to show the draw screen the bracket is running.
+  const isDraw = reportedDraw || !!tour?.sudden;
   const elo = isWinner ? newWinnerElo : newLoserElo; // undefined = no ELO data yet
 
   // Which picture belongs to a name. There are only ever two players on this

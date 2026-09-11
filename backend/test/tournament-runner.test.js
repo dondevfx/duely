@@ -707,3 +707,66 @@ test('a bot cannot win on the deadline either, whatever the scores read', async 
     assert.equal(m.winner, human.userId, 'a bot knocked a player out on the deadline');
   }
 });
+
+// ── A demo account is shown sudden death ───────────────────────────────────
+//
+// A demo bracket is one player against bots, and a bot is never half of a
+// draw — so a demo could never see the draw screen. Its first match against a
+// bot is staged as a draw instead, once per tournament, and the replay still
+// goes to the player.
+
+function demoBracket(timings = {}) {
+  const pools = createStore(); _store = pools;
+  const io = fakeIo();
+  const engines = fakeEngines();
+  const runner = createRunner({ io, supabase: null, pools, engines, log: { error() {} },
+    timings: { suddenIntro: 10_000, ...timings } });
+  const pool = fill(pools, 16, { entryFee: 1, bots: 8 });
+  pool.demo = true;
+  for (const p of pool.players) if (!p.isBot) io._connect(p.userId);
+  runner.startRound(pool);
+  const isBot = (uid) => !!pool.players.find(p => p.userId === uid)?.isBot;
+  const mixed = pool.bracket[0]
+    .map((m, i) => ({ m, i }))
+    .filter(({ m }) => m.a && m.b && isBot(m.a) !== isBot(m.b));
+  return { io, engines, runner, pool, mixed, isBot };
+}
+
+test("a demo's first win over a bot goes to sudden death instead", () => {
+  const { io, engines, runner, pool, mixed, isBot } = demoBracket();
+  assert.ok(mixed.length >= 2, 'need two player-vs-bot matches to prove "once"');
+  const { m, i } = mixed[0];
+  const human = isBot(m.a) ? m.b : m.a;
+
+  runner.onResult({ poolId: pool.id, round: 0, match: i, winnerId: human, isDraw: false });
+  assert.ok(!m.winner, 'the demo was put through without seeing sudden death');
+  assert.ok(io._for(human, 'tournament_sudden_death')[0], 'the demo was never shown the draw screen');
+
+  const before = engines._made.length;
+  runner.suddenReady(pool.id, human);           // the bot never presses; one human is enough
+  assert.equal(engines._made.length, before + 1, 'pressing go did not start the replay');
+});
+
+test('the staged draw happens once, and the replay still goes to the player', () => {
+  const { runner, pool, mixed, isBot } = demoBracket();
+  const [first, second] = mixed;
+  const humanOf = ({ m }) => (isBot(m.a) ? m.b : m.a);
+
+  runner.onResult({ poolId: pool.id, round: 0, match: first.i, winnerId: humanOf(first), isDraw: false });
+  runner.suddenReady(pool.id, humanOf(first));
+  runner.onResult({ poolId: pool.id, round: 0, match: first.i, winnerId: null, isDraw: true, sudden: true });
+  assert.equal(first.m.winner, humanOf(first), 'a bot won the sudden death');
+
+  runner.onResult({ poolId: pool.id, round: 0, match: second.i, winnerId: humanOf(second), isDraw: false });
+  assert.equal(second.m.winner, humanOf(second), 'every demo match became a draw');
+});
+
+test('an ordinary bracket never stages a draw', () => {
+  const { io, runner, pool, mixed, isBot } = demoBracket();
+  pool.demo = false;
+  const { m, i } = mixed[0];
+  const human = isBot(m.a) ? m.b : m.a;
+  runner.onResult({ poolId: pool.id, round: 0, match: i, winnerId: human, isDraw: false });
+  assert.equal(m.winner, human);
+  assert.equal(io._for(human, 'tournament_sudden_death').length, 0);
+});

@@ -92,3 +92,14 @@ test('go is pressed for the socket\'s own player, never an id the client sends',
   assert.match(body, /suddenReady\(poolId, authenticatedUser\.userId\)/,
     'one player could press go on the other\'s behalf');
 });
+
+test('an announced sudden death is a draw on the card, whatever the game said', () => {
+  // A demo account's staged draw: the game against the bot reported a win,
+  // the bracket announced sudden death. Reading only the game, the card said
+  // Victory and offered the next round while the draw screen was running.
+  assert.match(CARD, /isDraw: reportedDraw = false/, 'the card still reads the game alone');
+  assert.match(CARD, /const isDraw = reportedDraw \|\| !!tour\?\.sudden;/);
+  const tourAt = CARD.indexOf('const tour = useTournamentResult();');
+  const drawAt = CARD.indexOf('const isDraw = reportedDraw');
+  assert.ok(tourAt > 0 && drawAt > tourAt, 'isDraw is worked out before the bracket has been asked');
+});

@@ -172,7 +172,12 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
     // Play vs Bot is a test button and starts at once. A demo account is a
     // showcase, so its bracket fills the way a real one does — see below.
     if (vsBot) fillWithBots(pool, now, pools);
-    else if (demo) fillWithBots(pool, now, pools, { stagger: true, io });
+    else if (demo) {
+      // Marked so the runner can stage one draw for the demo to be shown — see
+      // the demo branch in tournamentRunner's onResult.
+      pool.demo = true;
+      fillWithBots(pool, now, pools, { stagger: true, io });
+    }
 
     // `started` decides whether the client leaves the bet screen. A bot or
     // demo bracket fills instantly and has something to watch; a real entry

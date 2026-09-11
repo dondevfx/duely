@@ -590,6 +590,23 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     const m = pools.matchAt(pool, round, match);
     if (!m || m.winner) return;
 
+    // A demo account is shown sudden death once.
+    //
+    // A demo bracket is the player against bots, and a bot is never half of a
+    // draw — so without this a demo could never see the draw screen, which is
+    // the one part of a tournament that most needs showing. The player's first
+    // match against a bot is turned into a draw, whoever the game said won, and
+    // goes to sudden death exactly as a real one would. The replay is still
+    // against a bot, so it still goes to the player. Once per tournament: the
+    // point is to show it, not to make every round a coin toss.
+    if (pool.demo && !pool.demoDrawn && !sudden && !isDraw) {
+      const pa = playerOf(pool, m.a), pb = playerOf(pool, m.b);
+      if (humanOverBot(pa, pb)) {
+        pool.demoDrawn = true;
+        return announceSuddenDeath(pool, round, match, m);
+      }
+    }
+
     if (isDraw || !winnerId) {
       // Against a bot there is no draw to replay — see humanOverBot.
       const human = humanOverBot(playerOf(pool, m.a), playerOf(pool, m.b));
