@@ -1,4 +1,13 @@
 {
+  "cleanUrls": true,
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "duely.us" }],
+      "destination": "https://www.duely.us/$1",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/go",

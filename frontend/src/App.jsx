@@ -49,6 +49,7 @@ import ColorRushCanvas from './components/ColorRushCanvas';
 import TowerGame from './pages/TowerGame';
 import TowerCanvas from './components/TowerCanvas';
 import TournamentClock from './components/TournamentClock';
+import PageMeta from './components/PageMeta';
 // Dev-only: lets the game be looked at before the lobby and engine exist.
 // Stripped from production builds by the import.meta.env.DEV guard below.
 // Dev-only, same convention as the canvas previews above: the age/terms gate
@@ -351,6 +352,7 @@ export default function App() {
                     reserved height read from it. */}
                 <BottomBarProvider>
                   <ScrollToTop />
+                  <PageMeta />
                   <NotifyToast />
                   <BalanceSync />
                   <ReferralCapture />
