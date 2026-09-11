@@ -599,33 +599,12 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     const m = pools.matchAt(pool, round, match);
     if (!m || m.winner) return;
 
-    // A demo account is shown sudden death once.
-    //
-    // A demo bracket is the player against bots, and a bot is never half of a
-    // draw — so without this a demo could never see the draw screen, which is
-    // the one part of a tournament that most needs showing. The player's first
-    // match against a bot is turned into a draw, whoever the game said won, and
-    // goes to sudden death exactly as a real one would. The replay is still
-    // against a bot, so it still goes to the player. Once per tournament: the
-    // point is to show it, not to make every round a coin toss.
-    // Whether the game reported a win OR a tie. A tie against a bot is the
-    // natural way a demo reaches this, and it used to fall through to the
-    // bot rule below: the player was put straight through, no sudden death
-    // was announced, and the card sat on a draw screen with nothing behind it.
-    if (pool.demo && !pool.demoDrawn && !sudden) {
-      const pa = playerOf(pool, m.a), pb = playerOf(pool, m.b);
-      if (humanOverBot(pa, pb)) {
-        pool.demoDrawn = true;
-        return announceSuddenDeath(pool, round, match, m);
-      }
-    }
-
+    // The game's result stands as reported: a higher score is a win, a tie is
+    // a draw, for a demo account exactly as for anyone. (A demo used to have
+    // its first win turned into a staged draw, and a real tie against a bot
+    // was handed to the player as a win — both read as wrong on the card.)
     if (isDraw || !winnerId) {
-      // Against a bot there is no draw to replay — see humanOverBot.
-      const human = humanOverBot(playerOf(pool, m.a), playerOf(pool, m.b));
-      if (human) {
-        winnerId = human;
-      } else if (!sudden) {
+      if (!sudden) {
         // Sudden death: the same game, thirty seconds, best score takes it.
         //
         // Held back behind the draw screen rather than started at once. It used
@@ -638,7 +617,9 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
         // A drawn replay: nothing else is left that can separate them. Seeded
         // from the match, so every server and every reload agrees on it.
         const rng = seededRng(`${poolId}:${round}:${match}`);
-        winnerId = rng() < 0.5 ? m.a : m.b;
+        // A bot still never knocks a player out on a coin flip.
+        winnerId = humanOverBot(playerOf(pool, m.a), playerOf(pool, m.b))
+          || (rng() < 0.5 ? m.a : m.b);
       }
     }
 
