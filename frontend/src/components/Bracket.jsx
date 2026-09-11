@@ -1,4 +1,4 @@
-import Avatar from './Avatar';
+import { useId } from 'react';
 
 /**
  * A knockout bracket that fits on a phone.
@@ -32,7 +32,45 @@ const MATCH_GAP = 10;    // between matches in a round
 const COL_W = 96;        // a round's column
 const COL_GAP = 26;      // the gutter the connectors live in
 
+/**
+ * A player's picture, drawn the way components/Avatar draws it everywhere
+ * else — a circle, a ring in their profile colour, and their colour-tinted
+ * initial when there is no picture.
+ *
+ * It has to be SVG (the bracket is one scaled drawing), and it used to be its
+ * own design: a rounded SQUARE clipped with a CSS inset() that iOS Safari does
+ * not apply to SVG images — so there it drew the picture as an uncropped
+ * square — no ring, and a white initial on a solid dark disc. None of it
+ * matched the same player's picture anywhere else on the site.
+ */
+function SvgAvatar({ id, cx, cy, r, player }) {
+  const ring = player?.profileColor || '#1250B4';
+  const initial = (player?.username || '?').charAt(0).toUpperCase();
+  return (
+    <g>
+      <circle cx={cx} cy={cy} r={r} fill={`${ring}22`} />
+      {player?.avatarUrl ? (
+        <>
+          <clipPath id={id}><circle cx={cx} cy={cy} r={r} /></clipPath>
+          <image href={player.avatarUrl} x={cx - r} y={cy - r} width={r * 2} height={r * 2}
+                 clipPath={`url(#${id})`} preserveAspectRatio="xMidYMid slice" />
+        </>
+      ) : (
+        <text x={cx} y={cy + r * 0.42} fontSize={r * 1.15} fontWeight={700}
+              textAnchor="middle" fill={ring}>
+          {initial}
+        </text>
+      )}
+      <circle cx={cx} cy={cy} r={r - 0.4} fill="none" stroke={ring} strokeWidth="0.8" />
+    </g>
+  );
+}
+
 export default function Bracket({ bracket, players, currentRound = 0, scores = null, className = '' }) {
+  // A prefix for the clip ids, unique per bracket on the page. useId's colons
+  // are not valid inside url(#...), so they are stripped. Not called `uid`:
+  // that name is the player's id in the row loop below, and would shadow it.
+  const clipPrefix = useId().replace(/:/g, '');
   if (!bracket?.length) return null;
 
   const byId = new Map((players || []).map(p => [p.userId, p]));
@@ -121,22 +159,8 @@ export default function Bracket({ bracket, players, currentRound = 0, scores = n
                         stroke={live ? '#1250B4' : '#1A1A1A'}
                         strokeWidth={live ? 1.2 : 1}
                       />
-                      {p?.avatarUrl && (
-                        <image href={p.avatarUrl} x={x + 3} y={y + 4} width="14" height="14"
-                               clipPath="inset(0 round 7px)" preserveAspectRatio="xMidYMid slice" />
-                      )}
-                      {/* No picture uploaded: their colour and their initial,
-                          which is what every other avatar on the site falls
-                          back to. It was a flat dark circle here, so half a
-                          bracket looked like empty seats rather than people. */}
-                      {!p?.avatarUrl && uid && (
-                        <>
-                          <circle cx={x + 10} cy={y + 11} r="7" fill={p?.profileColor || '#1A1A1A'} />
-                          <text x={x + 10} y={y + 14.5} fontSize="8" fontWeight={800}
-                                textAnchor="middle" fill="#FFFFFF">
-                            {(p?.username || '?').charAt(0).toUpperCase()}
-                          </text>
-                        </>
+                      {uid && (
+                        <SvgAvatar id={`${clipPrefix}-${r}-${i}-${side}`} cx={x + 10} cy={y + 11} r={7} player={p} />
                       )}
                       <text
                         x={x + (uid ? 21 : 6)} y={y + 15}

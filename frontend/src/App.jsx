@@ -123,6 +123,22 @@ function PopupPreview() {
   return <ProfilePopupPreview data={data} />;
 }
 function TowerPreview() { return <div style={{position:'fixed',inset:0}}><TowerCanvas running /></div>; }
+// The bracket's avatars: a real picture, a colour with no picture, and neither.
+// Reaching a real bracket needs sixteen entrants and a running tournament.
+function BracketPreview() {
+  const players = [
+    { userId: 'a', username: 'Picture', avatarUrl: '/icon-192.png', profileColor: '#22c55e' },
+    { userId: 'b', username: 'Colour', avatarUrl: null, profileColor: '#ec4899' },
+    { userId: 'c', username: 'nothing', avatarUrl: null, profileColor: null },
+    { userId: 'bot:p:3', username: 'Botty', avatarUrl: null, profileColor: '#f59e0b' },
+  ];
+  const bracket = [
+    [{ a: 'a', b: 'b', winner: 'a' }, { a: 'c', b: 'bot:p:3', winner: null }],
+    [{ a: 'a', b: null, winner: null }],
+  ];
+  return <div className="p-6 max-w-lg"><Bracket bracket={bracket} players={players} currentRound={0} /></div>;
+}
+const Bracket = lazyPage(() => import('./components/Bracket'));
 function ColorRushPreview() {
   return <div style={{position:'fixed',inset:0}}><ColorRushCanvas seed={12345} onProgress={() => {}} onDeath={() => {}} /></div>;
 }
@@ -301,6 +317,7 @@ function Shell() {
           {import.meta.env.DEV && <Route path="/__popup-preview" element={<PopupPreview />} />}
           {import.meta.env.DEV && <Route path="/__result-preview" element={<ResultPreview />} />}
           {import.meta.env.DEV && <Route path="/__tower-preview" element={<TowerPreview />} />}
+          {import.meta.env.DEV && <Route path="/__bracket-preview" element={<BracketPreview />} />}
           {import.meta.env.DEV && <Route path="/__color-rush-preview" element={<ColorRushPreview />} />}
           <Route path="/game/word-vs"       element={<WordleGame />} />
           <Route path="/spectate/:gameId"   element={<SpectateView />} />
