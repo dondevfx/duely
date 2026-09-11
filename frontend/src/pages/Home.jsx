@@ -345,9 +345,16 @@ export default function Home() {
  * next to a looping clip is noise, and this is a clock, not an alarm.
  */
 function TournamentCountdown({ clock }) {
-  if (!clock) return null;
+  // Nothing at zero: that is the instant between one slot ending and the next
+  // one's times arriving, and a frozen 0:00 read as a timer that had not gone.
+  if (!clock || clock.seconds <= 0) return null;
   return (
     <p
+      // Keyed on the state, so going from "entry open" to "entry closed" puts
+      // down a NEW element instead of restyling the pulsing one. Removing the
+      // animation from the same node left its last painted frame on screen in
+      // Safari, and the next countdown drew on top of the old one.
+      key={clock.joinOpen ? 'open' : 'closed'}
       className={`mt-0.5 font-mono font-black tabular-nums leading-none text-sm md:text-base ${
         clock.joinOpen ? 'text-primary' : 'text-white'
       }`}
