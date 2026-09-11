@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
+import { getSudden, subscribeSudden } from './tournamentSuddenStore';
 
 /**
  * What the result card needs to know when the match it is showing was a
@@ -43,16 +44,31 @@ export default function useTournamentResult() {
   // to forward. The socket is where the number came from, so it is asked
   // directly too.
   const [pays, setPays] = useState(tournament?.pays || null);
+  // The draw screen's countdown, from the store the game page writes to. See
+  // tournamentSuddenStore for why it cannot be listened for here.
+  const [sudden, setSuddenState] = useState(() => getSudden(poolId));
+  useEffect(() => subscribeSudden((p) => { if (p?.poolId === poolId) setSuddenState(p); }), [poolId]);
+  // Who the bracket says won THIS match. On a draw the card cannot know — the
+  // engine reported a tie — so when sudden death, or the coin flip after a
+  // drawn replay, decides it, this is where the card finds out.
+  const [decided, setDecided] = useState(null);
 
   useEffect(() => {
     if (!socket || !poolId) return;
     const onOver = (p) => { if (p?.poolId === poolId) setOver(p); };
     const onNext = (p) => { if (p?.poolId === poolId) setNextRound(true); };
     const onMatch = (m) => { if (m?.poolId === poolId && m.pays !== undefined) setPays(m.pays); };
+    const onDecided = (r) => {
+      if (r?.poolId === poolId && r.round === tournament?.round && r.match === tournament?.match) {
+        setDecided(r.winnerId || null);
+      }
+    };
+    socket.on('tournament_result', onDecided);
     socket.on('tournament_over', onOver);
     socket.on('tournament_round_starting', onNext);
     socket.on('tournament_match', onMatch);
     return () => {
+      socket.off('tournament_result', onDecided);
       socket.off('tournament_over', onOver);
       socket.off('tournament_round_starting', onNext);
       socket.off('tournament_match', onMatch);
@@ -110,6 +126,19 @@ export default function useTournamentResult() {
     award: over?.awards?.find(a => a.userId === session?.user?.id) || null,
     awards: over?.awards || [],
     free: !!over?.free,
+    // The draw screen, for this match only. A stale announcement — another
+    // match's, or this match's first draw once the replay is being shown — is
+    // not one to count down to.
+    sudden: sudden && sudden.round === tournament.round && sudden.match === tournament.match
+      && !tournament.sudden ? sudden : null,
+    // This card is showing the replay itself, so a draw here is settled by the
+    // coin flip rather than sent round again.
+    isSuddenRound: !!tournament.sudden,
+    decided,
+    // Whether the bracket has this player through, once it has said. Null
+    // until then, so the card falls back on the game's own reading.
+    iWon: decided ? decided === session?.user?.id : null,
+    suddenReady: () => socket?.emit('tournament_sudden_ready', { poolId }),
     toBracket: () => navigate(`/tournaments/${poolId}`, { replace: true }),
     toLobby: () => navigate('/tournaments', { replace: true }),
   };

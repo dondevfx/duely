@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { useShowBottomBar } from '../components/BottomNav';
@@ -9,6 +9,7 @@ import Bracket from '../components/Bracket';
 import { fmt as fmtClock } from '../components/TournamentClock';
 import TournamentDraw from './TournamentDraw';
 import { api } from '../utils/api';
+import { getSudden } from '../hooks/tournamentSuddenStore';
 
 /**
  * The screen a player waits on: who is in, how the bracket stands, and what
@@ -46,7 +47,11 @@ export default function TournamentBracket() {
   // The round about to start: { round, game, at }. Present only between
   // rounds, which is exactly when the draw is worth showing.
   const [drawing, setDrawing] = useState(null);
-  const [sudden, setSudden] = useState(null);
+  // Seeded from the store: a draw decided at the deadline sends the player here
+  // from the game screen a moment AFTER sudden death was announced, and a
+  // banner that only listened would never show it.
+  const [sudden, setSudden] = useState(() => getSudden(id));
+  const { state: navState } = useLocation();
   // What every match in the round currently reads, sampled by the server.
   // The bracket a knocked-out player is watching has to move.
   const [scores, setScores] = useState(null);
@@ -57,6 +62,20 @@ export default function TournamentBracket() {
   navRef.current = navigate;
 
   const me = session?.user?.id || null;
+
+  // ── A match handed over from the game screen ─────────────────────────────
+  // The sudden-death replay arrives while the player is still on the game they
+  // drew. That screen cannot restart itself, so it sends the match here and
+  // this sends them straight on into it — the same route every other match
+  // takes, which is what mounts the game fresh.
+  useEffect(() => {
+    const m = navState?.pending;
+    if (!m?.game || !m?.roomId) return;
+    navRef.current(`/game/${m.game}`, {
+      replace: true,
+      state: { tournament: { ...m, poolId: id, sudden: !!m.sudden } },
+    });
+  }, [navState, id]);
 
   // ── The poll, underneath everything ──────────────────────────────────────
   useEffect(() => {
@@ -317,6 +336,22 @@ export default function TournamentBracket() {
             {[sudden.players?.[0], sudden.players?.[1]].map(u => byId.get(u)?.username || '—').join(' vs ')}
             {' · '}{sudden.seconds}s
           </div>
+          {/* The two players in it get the same countdown and button the
+              result card has — they land here instead of on a card when the
+              draw was decided at the deadline. */}
+          {me && sudden.players?.includes(me) && sudden.startsAt > now && (
+            <>
+              <div className="my-1 text-4xl font-black text-white tabular-nums">
+                {Math.max(0, Math.ceil((sudden.startsAt - now) / 1000))}
+              </div>
+              <button
+                onClick={() => socket?.emit('tournament_sudden_ready', { poolId: id })}
+                className="w-full mt-1 py-2.5 rounded-xl font-black text-sm bg-primary text-white hover:bg-blue-500 transition-all"
+              >
+                Play sudden death
+              </button>
+            </>
+          )}
         </div>
       )}
 

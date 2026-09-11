@@ -67,6 +67,9 @@ const DEFAULT_TIMINGS = {
   intermission: INTERMISSION_MS, grace: CONNECT_GRACE_MS,
   reel: REEL_MS,
   ready: 6000, overrun: 3000,
+  // The draw screen: five seconds of countdown before the sudden-death replay,
+  // cut short the moment both players press to go.
+  suddenIntro: 5000,
 };
 
 function createRunner({ io, supabase, pools, engines = ENGINES, log = console, timings = {} } = {}) {
@@ -556,6 +559,15 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
         else if (sb > sa) winner = b.userId;
       }
     } catch (e) { log.error('[tournament] force read:', e.message); }
+    // A bot is never half of a draw — it goes out, whatever the scores read.
+    //
+    // The engines pin a bot's score just behind the player's, but only when
+    // the game ENDS. A room cut off at the deadline never reached that, so a
+    // player who had not finished read level with the bot, the draw sent them
+    // to sudden death they never saw, and the replay's own deadline decided it
+    // on scores that were never pinned at all — which is how a demo account
+    // was told it had lost to a bot.
+    winner = humanOverBot(a, b) || winner;
 
     hook.forget(roomId);
     try { engine.del?.(roomId); } catch { /* the room may already be gone */ }
@@ -579,16 +591,25 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     if (!m || m.winner) return;
 
     if (isDraw || !winnerId) {
-      // Sudden death, then a coin flip. Knockout has to knock somebody out,
-      // and a bracket that cannot resolve a tie is a bracket that never pays.
-      if (!sudden) {
-        broadcast(pool, 'tournament_sudden_death', {
-          poolId, round, match, seconds: Math.round(T.sudden / 1000), players: [m.a, m.b],
-        });
-        return startMatch(pool, match, m, pool.roundGames[round], { sudden: true });
+      // Against a bot there is no draw to replay — see humanOverBot.
+      const human = humanOverBot(playerOf(pool, m.a), playerOf(pool, m.b));
+      if (human) {
+        winnerId = human;
+      } else if (!sudden) {
+        // Sudden death: the same game, thirty seconds, best score takes it.
+        //
+        // Held back behind the draw screen rather than started at once. It used
+        // to start in the same instant the draw was reported, while both
+        // players were still on their result card — which does not listen for
+        // a new match — so the replay began with nobody in it and its deadline
+        // settled it on scores of zero.
+        return announceSuddenDeath(pool, round, match, m);
+      } else {
+        // A drawn replay: nothing else is left that can separate them. Seeded
+        // from the match, so every server and every reload agrees on it.
+        const rng = seededRng(`${poolId}:${round}:${match}`);
+        winnerId = rng() < 0.5 ? m.a : m.b;
       }
-      const rng = seededRng(`${poolId}:${round}:${match}`);
-      winnerId = rng() < 0.5 ? m.a : m.b;
     }
 
     const res = pools.reportResult(poolId, round, match, winnerId, forced ? { forced: true } : null);
@@ -603,6 +624,63 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     pushPool(pool);
 
     if (pools.pendingMatches(pool).length === 0) roundSettled(pool);
+  }
+
+  /** The human, when exactly one side of a match is a bot. */
+  function humanOverBot(a, b) {
+    if (!a || !b || !!a.isBot === !!b.isBot) return null;
+    return a.isBot ? b.userId : a.userId;
+  }
+
+  /**
+   * The draw screen, then the replay.
+   *
+   * Both players are told the replay starts in five seconds and are shown a
+   * button to go now. It starts when both have pressed it or when the five
+   * seconds are up, whichever comes first — a player who has walked away
+   * cannot hold the other one on a countdown forever.
+   */
+  function announceSuddenDeath(pool, round, match, m) {
+    const st = stateOf(pool.id);
+    const key = `${round}:${match}`;
+    if (st.suddenPending?.has(key)) return;
+    (st.suddenPending ||= new Map());
+
+    const startsAt = Date.now() + T.suddenIntro;
+    const pending = { round, match, players: [m.a, m.b], pressed: new Set(), started: false };
+    pending.start = () => {
+      if (pending.started) return;
+      pending.started = true;
+      st.suddenPending.delete(key);
+      // Only if nothing else has decided it in the meantime — a forfeit, most
+      // likely, from someone who closed the tab on the draw screen.
+      const live = pools.matchAt(pool, round, match);
+      if (pool.state !== 'running' || !live || live.winner) return;
+      startMatch(pool, match, live, pool.roundGames[round], { sudden: true });
+    };
+    st.suddenPending.set(key, pending);
+
+    broadcast(pool, 'tournament_sudden_death', {
+      poolId: pool.id, round, match,
+      game: pool.roundGames[round],
+      seconds: Math.round(T.sudden / 1000),
+      startsAt,
+      players: [m.a, m.b],
+    });
+    later(pool.id, pending.start, T.suddenIntro);
+  }
+
+  /** A player pressed "Play sudden death" on the draw screen. */
+  function suddenReady(poolId, userId) {
+    const st = live.get(poolId);
+    if (!st?.suddenPending) return;
+    const pool = pools.get(poolId);
+    for (const pending of st.suddenPending.values()) {
+      if (!pending.players.includes(userId)) continue;
+      pending.pressed.add(userId);
+      const humans = pending.players.filter(uid => !playerOf(pool, uid)?.isBot);
+      if (humans.every(uid => pending.pressed.has(uid))) pending.start();
+    }
   }
 
   /**
@@ -767,7 +845,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
   });
 
   return {
-    tick, ready, onResult, beginPool, startRound, settle, sampleScores, playerGone,
+    tick, ready, suddenReady, onResult, beginPool, startRound, settle, sampleScores, playerGone,
     _live: live,
     timings: T,
   };

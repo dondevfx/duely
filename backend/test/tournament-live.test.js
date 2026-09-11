@@ -40,11 +40,11 @@ function fakeIo() {
   };
 }
 
-function boot({ bots = 0 } = {}) {
+function boot({ bots = 0, timings = {} } = {}) {
   hook._reset();
   const pools = createStore();
   const io = fakeIo();
-  const runner = createRunner({ io, supabase: null, pools, engines: ENGINES, log: { error() {} } });
+  const runner = createRunner({ io, supabase: null, pools, engines: ENGINES, log: { error() {} }, timings });
   const now = Date.now();
   const { pool } = pools.join({ userId: 'p0', username: 'p0', entryFee: 1, now });
   for (let i = 1; i < 16; i++) {
@@ -88,7 +88,9 @@ test('a real Block Burst room reports its winner back into the bracket', async (
 });
 
 test('a real drawn room sends the round to sudden death rather than stalling', async () => {
-  const { runner, pool, io } = boot();
+  // The replay is held behind the draw screen's countdown; zeroed here so the
+  // test is about the real room reporting a draw, not about waiting.
+  const { runner, pool, io } = boot({ timings: { suddenIntro: 0 } });
   pool.roundGames = pool.roundGames.map(() => 'block-blast');
   runner.startRound(pool);
 
@@ -104,6 +106,7 @@ test('a real drawn room sends the round to sudden death rather than stalling', a
   await bb.handleBlockBlastComplete(io, null, roomId, s2, 500);
 
   assert.ok(!pool.bracket[0][0].winner, 'a tie decided the match');
+  await new Promise(r => setTimeout(r, 20));
   const replay = [...hook._rooms.values()].filter(r => r.match === 0 && r.sudden);
   assert.equal(replay.length, 1, 'no sudden-death replay was created');
   assert.equal(io._for('p0', 'tournament_sudden_death').length, 1);

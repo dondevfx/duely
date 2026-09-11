@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { setSudden } from './tournamentSuddenStore';
 
 /**
  * The three lines every game screen needs to be playable inside a bracket.
@@ -86,6 +87,34 @@ export default function useTournamentRound(socket) {
       socket.off('tournament_match_expired', onExpired);
       socket.off('tournament_over', onOver);
       socket.off('tournament_result', onResult);
+    };
+  }, [socket, poolId, roomId, navigate]);
+
+  /**
+   * A draw, and the sudden-death replay that follows it.
+   *
+   * The announcement is written to a store rather than handled here, because
+   * the thing that has to show it — the result card's countdown — mounts in
+   * response to the draw and would miss an event that arrived alongside it.
+   *
+   * The replay is a new match for this pool while the player is still on this
+   * screen. The game pages set themselves up from the route they were entered
+   * on, so a replay cannot be started by updating this one in place: it goes
+   * through the bracket, which is the one screen that already knows how to
+   * send a player into a match, and that navigation mounts a fresh game.
+   */
+  useEffect(() => {
+    if (!socket || !poolId) return;
+    const onSudden = (p) => { if (p?.poolId === poolId) setSudden(p); };
+    const onMatch = (m) => {
+      if (m?.poolId !== poolId || !m.roomId || m.roomId === roomId) return;
+      navigate(`/tournaments/${poolId}`, { replace: true, state: { pending: m } });
+    };
+    socket.on('tournament_sudden_death', onSudden);
+    socket.on('tournament_match', onMatch);
+    return () => {
+      socket.off('tournament_sudden_death', onSudden);
+      socket.off('tournament_match', onMatch);
     };
   }, [socket, poolId, roomId, navigate]);
 

@@ -420,7 +420,19 @@ export default function ResultScreen({
               nothing here says "return to lobby" while a tournament the
               player is still in carries on without them. */}
           {tour ? (
-            tour.over ? (
+            // A draw is not a result in a knockout. The first one goes to
+            // sudden death: the countdown and a button to go, and nothing else
+            // — the card above already says it was a draw.
+            isDraw && !tour.isSuddenRound && !tour.decided ? (
+              <SuddenDeathPanel sudden={tour.sudden} onGo={tour.suddenReady} />
+            ) : isDraw && !tour.decided ? (
+              // A drawn replay. Nothing is left to separate them but the coin
+              // flip, which the bracket is doing now — so this waits for it
+              // rather than calling the result itself.
+              <p className="mt-3 sm:mt-4 text-center text-sm text-muted">
+                Still level — settled by a coin flip.
+              </p>
+            ) : tour.over ? (
               // No second panel here.
               //
               // It said "You won the tournament" and printed the payout again,
@@ -437,7 +449,7 @@ export default function ResultScreen({
                   Return to lobby
                 </button>
               </>
-            ) : isWinner ? (
+            ) : (tour.iWon ?? isWinner) ? (
               <>
                 {/* Only once there is somewhere to go.
                     Winning the final and winning a quarter-final look
@@ -524,3 +536,38 @@ export default function ResultScreen({
   );
 }
 
+/**
+ * The draw screen inside a bracket: a countdown from five and a button.
+ *
+ * The replay starts when both players press or when the countdown ends —
+ * whichever is first — and it is the SAME game, thirty seconds, best score
+ * takes it. The button is the only thing here that does anything; the
+ * countdown is what happens if nobody presses it.
+ */
+function SuddenDeathPanel({ sudden, onGo }) {
+  const [now, setNow] = useState(() => Date.now());
+  const [pressed, setPressed] = useState(false);
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 200);
+    return () => clearInterval(t);
+  }, []);
+  // Counted to the instant the server sent, so a card that mounted a moment
+  // late shows the real time left rather than starting its own five.
+  const left = sudden ? Math.max(0, Math.ceil((sudden.startsAt - now) / 1000)) : null;
+  return (
+    <div className="mt-3 sm:mt-4 text-center">
+      <div className="text-xs font-black uppercase tracking-widest text-accent">Sudden death</div>
+      <div className="my-1 text-5xl font-black text-white tabular-nums" aria-live="polite">
+        {left ?? 5}
+      </div>
+      <button
+        onClick={() => { setPressed(true); onGo?.(); }}
+        disabled={pressed}
+        className="w-full mt-2 py-3 rounded-xl font-black text-base bg-primary text-white hover:bg-blue-500 transition-all disabled:opacity-60 disabled:cursor-default"
+        style={{ boxShadow: '0 0 18px rgba(18,80,180,0.35)' }}
+      >
+        {pressed ? 'Waiting for your opponent…' : 'Play sudden death'}
+      </button>
+    </div>
+  );
+}

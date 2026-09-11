@@ -204,11 +204,11 @@ test('a free bracket pays nobody', async () => {
   assert.equal(captured.filter(c => c.table === 'matches').length, 0, 'a free entry is not a wager');
 });
 
-test('a draw goes to sudden death rather than stopping the round', () => {
+test('a draw goes to sudden death rather than stopping the round', async () => {
   const pools = createStore(); _store = pools;
   const io = fakeIo();
   const engines = fakeEngines();
-  const runner = createRunner({ io, supabase: null, pools, engines, log: { error() {} } });
+  const runner = createRunner({ io, supabase: null, pools, engines, log: { error() {} }, timings: { suddenIntro: 0 } });
 
   const pool = fill(pools, 16, { entryFee: 1 });
   for (const p of pool.players) io._connect(p.userId);
@@ -216,6 +216,7 @@ test('a draw goes to sudden death rather than stopping the round', () => {
 
   const before = engines._made.length;
   runner.onResult({ poolId: pool.id, round: 0, match: 0, winnerId: null, isDraw: true });
+  await new Promise(r => setTimeout(r, 20));
 
   assert.ok(!pool.bracket[0][0].winner, 'a draw decided the match');
   assert.equal(engines._made.length, before + 1, 'no replay was created');
@@ -592,4 +593,117 @@ test('a free bracket promises nothing, because it pays nothing', () => {
   runner.startRound(pool);
   const sent = io._for(pool.bracket[3][0].a, 'tournament_match').at(-1).payload;
   assert.equal(sent.pays, null, 'a practice bracket offered a prize');
+});
+
+// ── The draw screen ────────────────────────────────────────────────────────
+//
+// A drawn match used to start its replay in the same instant it was reported,
+// while both players were still on their result card — which does not listen
+// for a new match. The replay ran with nobody in it and its deadline settled
+// it on zero-zero, so a draw read as a loss with no sudden death ever seen.
+
+const wait = (ms) => new Promise(r => setTimeout(r, ms));
+
+function drawnRunner(timings = {}) {
+  const pools = createStore(); _store = pools;
+  const io = fakeIo();
+  const engines = fakeEngines();
+  const runner = createRunner({ io, supabase: null, pools, engines, log: { error() {} },
+    timings: { suddenIntro: 60, ...timings } });
+  const pool = fill(pools, 16, { entryFee: 1 });
+  for (const p of pool.players) io._connect(p.userId);
+  runner.startRound(pool);
+  return { pools, io, engines, runner, pool };
+}
+
+test('a draw is announced with a countdown, and the replay waits for it', async () => {
+  const { io, engines, runner, pool } = drawnRunner();
+  const before = engines._made.length;
+  runner.onResult({ poolId: pool.id, round: 0, match: 0, winnerId: null, isDraw: true });
+
+  const [ann] = io._for(pool.players[0].userId, 'tournament_sudden_death');
+  assert.ok(ann, 'nobody was told about the draw');
+  assert.ok(ann.payload.startsAt > Date.now(), 'the countdown has nothing to count to');
+  assert.equal(ann.payload.game, pool.roundGames[0], 'the replay is not the same game');
+  assert.equal(ann.payload.seconds, 30);
+  assert.equal(engines._made.length, before, 'the replay started under the draw screen');
+
+  await wait(100);
+  assert.equal(engines._made.length, before + 1, 'the countdown ended and nothing started');
+});
+
+test('both players pressing go starts it at once', () => {
+  const { engines, runner, pool } = drawnRunner({ suddenIntro: 10_000 });
+  const before = engines._made.length;
+  const m = pool.bracket[0][0];
+  runner.onResult({ poolId: pool.id, round: 0, match: 0, winnerId: null, isDraw: true });
+
+  runner.suddenReady(pool.id, m.a);
+  assert.equal(engines._made.length, before, 'one player pressing started it for both');
+  runner.suddenReady(pool.id, m.b);
+  assert.equal(engines._made.length, before + 1, 'both pressed and it still waited');
+});
+
+test('pressing go from outside the match does nothing', () => {
+  const { engines, runner, pool } = drawnRunner({ suddenIntro: 10_000 });
+  const before = engines._made.length;
+  const m = pool.bracket[0][0];
+  runner.onResult({ poolId: pool.id, round: 0, match: 0, winnerId: null, isDraw: true });
+  runner.suddenReady(pool.id, m.a);
+  runner.suddenReady(pool.id, pool.bracket[0][1].a);   // somebody else's player
+  assert.equal(engines._made.length, before, 'a player from another match started this one');
+});
+
+test('the replay is not started twice when the countdown ends after both pressed', async () => {
+  const { engines, runner, pool } = drawnRunner({ suddenIntro: 30 });
+  const before = engines._made.length;
+  const m = pool.bracket[0][0];
+  runner.onResult({ poolId: pool.id, round: 0, match: 0, winnerId: null, isDraw: true });
+  runner.suddenReady(pool.id, m.a);
+  runner.suddenReady(pool.id, m.b);
+  await wait(80);
+  assert.equal(engines._made.length, before + 1, 'the countdown started a second replay');
+});
+
+function botBracket(timings) {
+  const pools = createStore(); _store = pools;
+  const io = fakeIo();
+  const engines = fakeEngines();
+  const runner = createRunner({ io, supabase: null, pools, engines, log: { error() {} }, timings });
+  const pool = fill(pools, 16, { entryFee: 1, bots: 8 });
+  for (const p of pool.players) if (!p.isBot) io._connect(p.userId);
+  runner.startRound(pool);
+  return { pools, io, engines, runner, pool };
+}
+
+test('a bot is never half of a draw — the player goes through', () => {
+  const { io, runner, pool } = botBracket();
+  const isBot = (uid) => !!pool.players.find(p => p.userId === uid)?.isBot;
+  const i = pool.bracket[0].findIndex(m => m.a && m.b && isBot(m.a) !== isBot(m.b));
+  assert.ok(i >= 0, 'no player faced a bot, so this proves nothing');
+  const m = pool.bracket[0][i];
+  const human = isBot(m.a) ? m.b : m.a;
+
+  runner.onResult({ poolId: pool.id, round: 0, match: i, winnerId: null, isDraw: true });
+  assert.equal(m.winner, human, 'a draw with a bot did not go to the player');
+  assert.equal(io._for(human, 'tournament_sudden_death').length, 0,
+    'a player was sent to sudden death against a bot');
+});
+
+test('a bot cannot win on the deadline either, whatever the scores read', async () => {
+  // The case that reached a demo account: the room was cut off before the
+  // engine pinned the bot behind, and the old path decided it on raw scores.
+  const { engines, pool } = botBracket({ match: 20, overrun: 0, ready: 1 });
+  const mixed = engines._made.filter(({ p1, p2 }) => p1.isBot !== p2.isBot);
+  assert.ok(mixed.length > 0, 'no player faced a bot, so this proves nothing');
+  for (const { roomId, p1, p2 } of mixed) {
+    const bot = p1.isBot ? p1 : p2;
+    engines._rooms.get(roomId).scores[bot.socketId] = 999;
+  }
+  await wait(80);
+  for (const { p1, p2 } of mixed) {
+    const human = p1.isBot ? p2 : p1;
+    const m = pool.bracket[0].find(x => x.a === human.userId || x.b === human.userId);
+    assert.equal(m.winner, human.userId, 'a bot knocked a player out on the deadline');
+  }
 });

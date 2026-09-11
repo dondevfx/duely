@@ -428,6 +428,15 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       tournaments.runner.ready(poolId, roomId, authenticatedUser.userId);
     });
 
+    // "Play sudden death" on the draw screen. The runner starts the replay once
+    // both players have pressed it, or when the five-second countdown ends.
+    // Keyed on the socket's own user — never an id the client sends — so one
+    // player cannot press it on the other's behalf.
+    socket.on('tournament_sudden_ready', ({ poolId } = {}) => {
+      if (!authenticatedUser || !tournaments?.runner?.suddenReady) return;
+      tournaments.runner.suddenReady(poolId, authenticatedUser.userId);
+    });
+
     // Send current player counts snapshot to new connection
     socket.emit('player_counts', { counts: _buildPlayerCounts() });
     socket.emit('bet_counts', { counts: { ...betCounts } });
