@@ -156,7 +156,7 @@ test('the diamond currency is drawn, not an emoji, wherever it labels an amount'
 test('the games are in the same order everywhere they are listed', () => {
   // Tournaments leads, where Quick Match used to. It is the headline mode now,
   // and it is the one entry whose route is not under /game/ — it is not a game.
-  const ORDER = ['tournament', 'block-blast', 'car-dash', 'coin-flip', 'color-rush', 'tower', 'scrabble', 'blackjack'];
+  const ORDER = ['tournament', 'block-blast', 'coin-flip', 'car-dash', 'color-rush', 'tower', 'scrabble', 'blackjack'];
 
   const grid = [...fe('data', 'games.js').matchAll(/slug:\s*'([a-z-]+)'/g)].map(m => m[1]);
   assert.deepEqual(grid, ORDER, 'the home and games grid is out of order');

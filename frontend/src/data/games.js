@@ -33,16 +33,16 @@ export const GAMES = [
     countKey: 'block-blast',
   },
   {
-    slug:     'car-dash',
-    title:    'Rush Hour',
-    route:    '/game/car-dash',
-    countKey: 'car-dash',
-  },
-  {
     slug:     'coin-flip',
     title:    'Coin Flip',
     route:    '/game/coin-flip',
     countKey: 'coin-flip',
+  },
+  {
+    slug:     'car-dash',
+    title:    'Rush Hour',
+    route:    '/game/car-dash',
+    countKey: 'car-dash',
   },
   {
     slug:     'color-rush',
