@@ -111,6 +111,15 @@ export default function LeftSidebar() {
         ))}
       </div>
 
+      {/* The site's own pages, as plain links. About, Terms, Privacy and
+          Support were linked only from Profile and Wallet — signed-in pages a
+          search engine never sees — so nothing public led to them. */}
+      <div className="px-5 pb-4 flex flex-wrap gap-x-3 gap-y-1 text-[0.6875rem]">
+        {[['/about', 'About'], ['/tos', 'Terms'], ['/privacy', 'Privacy'], ['/support', 'Support']].map(([to, label]) => (
+          <NavLink key={to} to={to} className="text-muted hover:text-white transition-colors">{label}</NavLink>
+        ))}
+      </div>
+
       {/* Profile mini */}
       {profile && (
         <>

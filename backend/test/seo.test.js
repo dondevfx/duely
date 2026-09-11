@@ -155,6 +155,38 @@ test('a trailing slash is not a second copy of a page', () => {
   assert.equal(v.trailingSlash, false, '/game/tower/ and /game/tower both answer 200');
 });
 
+test('an About page explains Duely, and public pages link to it', async () => {
+  const about = fs.readFileSync(FE('src', 'pages', 'About.jsx'), 'utf8');
+  assert.match(about, /<h1 className="text-4xl font-black text-white mb-2">About Duely<\/h1>/);
+  assert.match(about, /<h2 className="text-lg font-bold text-white mb-2">The games<\/h2>/);
+  assert.match(about, /<Link to=\{g\.route\}/, 'the About page does not link to the games');
+  // No claims the product cannot back.
+  assert.doesNotMatch(about, /guarantee|legal in|licensed|casino|sportsbook/i);
+
+  const { SEO_PAGES } = await load('src', 'data', 'seo.js');
+  assert.ok(SEO_PAGES.some(p => p.path === '/about'), 'About is not in the sitemap');
+  const app = fs.readFileSync(FE('src', 'App.jsx'), 'utf8');
+  assert.match(app, /<Route path="\/about"/);
+
+  const side = fs.readFileSync(FE('src', 'components', 'LeftSidebar.jsx'), 'utf8');
+  for (const p of ['/about', '/tos', '/privacy', '/support']) {
+    assert.ok(side.includes(`'${p}'`), `the sidebar does not link to ${p}`);
+  }
+});
+
+test('sign-in and sign-up pages have a heading', () => {
+  for (const f of ['Login.jsx', 'Signup.jsx']) {
+    const src = fs.readFileSync(FE('src', 'pages', f), 'utf8');
+    assert.match(src, /<h1 className="text-muted mt-2">/, `${f} has no h1`);
+  }
+});
+
+test('the wallet library is loaded on connect, not with every page', () => {
+  const src = fs.readFileSync(FE('src', 'context', 'WalletContext.jsx'), 'utf8');
+  assert.doesNotMatch(src, /^import .* from 'ethers';/m, 'ethers is back in the main bundle');
+  assert.match(src, /await import\('ethers'\)/);
+});
+
 test('the build runs the prerender, and the app keeps titles right after navigation', () => {
   const pkg = JSON.parse(fs.readFileSync(FE('package.json'), 'utf8'));
   assert.match(pkg.scripts.build, /vite build && node scripts\/prerender-seo\.mjs/);

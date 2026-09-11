@@ -198,7 +198,7 @@ export default function Login() {
             <Link to="/" className="text-3xl font-black">
               <span className="text-white">Duely</span>
             </Link>
-            <p className="text-muted mt-2">One last step — pick a username</p>
+            <h1 className="text-muted mt-2">One last step — pick a username</h1>
           </div>
 
           <div className="bg-surface border border-surfaceLight rounded-2xl p-6">
@@ -286,7 +286,9 @@ export default function Login() {
           <Link to="/" className="text-3xl font-black">
             <span className="text-white">Duely</span>
           </Link>
-          <p className="text-muted mt-2">Sign in to your account</p>
+          {/* The page's heading. It was a <p>, so the sign-in page had no h1;
+              same classes, and the base styles reset an h1 to look like this. */}
+          <h1 className="text-muted mt-2">Sign in to your account</h1>
         </div>
 
         <div className="bg-surface border border-surfaceLight rounded-2xl p-6">

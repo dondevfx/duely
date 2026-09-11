@@ -135,6 +135,7 @@ const ResetPassword = lazyPage(() => import('./pages/ResetPassword'));
 const ToS           = lazyPage(() => import('./pages/ToS'));
 const Privacy       = lazyPage(() => import('./pages/Privacy'));
 const Support       = lazyPage(() => import('./pages/Support'));
+const About         = lazyPage(() => import('./pages/About'));
 const Admin         = lazyPage(() => import('./pages/Admin'));
 const SpectateView  = lazyPage(() => import('./pages/SpectateView'));
 import ForfeitToast from './components/ForfeitToast';
@@ -314,6 +315,7 @@ function Shell() {
           <Route path="/tos"                element={<ToS />} />
           <Route path="/privacy"            element={<Privacy />} />
           <Route path="/support"            element={<Support />} />
+          <Route path="/about"              element={<About />} />
           <Route path="/admin"              element={<ProtectedRoute><Admin /></ProtectedRoute>} />
           <Route path="*"                   element={<Navigate to="/" replace />} />
         </Routes>

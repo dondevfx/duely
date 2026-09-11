@@ -137,6 +137,14 @@ export const SEO_PAGES = [
     priority: 0.3,
   },
   {
+    path: '/about',
+    title: 'About Duely — How 1v1 Games & Tournaments Work',
+    description: 'How Duely works: live 1v1 games against players, friends or bots, knockout tournaments every twenty minutes, ratings, and Coins and Diamonds.',
+    heading: 'About Duely',
+    body: 'Duely is a site for 1v1 games. Every match is two players, live, playing the same game at the same time — against another player, a friend you invite, or a bot for practice. The server keeps score and decides every result. Tournaments open every twenty minutes: sixteen players, four knockout rounds, a different game each round. Diamonds are free to claim; Coins are the paid currency.',
+    priority: 0.6,
+  },
+  {
     path: '/support',
     title: 'Support — Duely',
     description: 'Get help with your Duely account, matches and payments.',

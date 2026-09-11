@@ -1,5 +1,8 @@
 ﻿import { createContext, useContext, useState, useCallback } from 'react';
-import { ethers } from 'ethers';
+// ethers is loaded when someone connects a wallet, not with the app. It is
+// most of a megabyte and only this one call uses it, so importing it at the
+// top put it in front of every page for everyone — including the nearly all
+// visitors who never press Connect.
 
 const WalletContext = createContext(null);
 
@@ -42,7 +45,8 @@ export function WalletProvider({ children }) {
     setConnecting(true);
     setError(null);
     try {
-      const ethProvider = new ethers.BrowserProvider(window.ethereum);
+      const { BrowserProvider } = await import('ethers');
+      const ethProvider = new BrowserProvider(window.ethereum);
       await ethProvider.send('eth_requestAccounts', []);
       const signer = await ethProvider.getSigner();
       const address = await signer.getAddress();

@@ -75,7 +75,8 @@ export default function Signup() {
           <Link to="/" className="text-3xl font-black">
             <span className="text-white">Duely</span>
           </Link>
-          <p className="text-muted mt-2">Create your account — it's free</p>
+          {/* The page's heading — see the same note on Login. */}
+          <h1 className="text-muted mt-2">Create your account — it's free</h1>
         </div>
 
         <div className="bg-surface border border-surfaceLight rounded-2xl p-6">

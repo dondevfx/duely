@@ -26,6 +26,7 @@
     { "source": "/tos", "destination": "/index.html" },
     { "source": "/privacy", "destination": "/index.html" },
     { "source": "/support", "destination": "/index.html" },
+    { "source": "/about", "destination": "/index.html" },
     { "source": "/admin", "destination": "/index.html" },
     { "source": "/tournaments", "destination": "/index.html" },
     { "source": "/tournaments/:path*", "destination": "/index.html" },
