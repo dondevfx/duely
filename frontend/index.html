@@ -66,8 +66,8 @@
         // Card order on Home, so the ones above the fold are requested first.
         // Card order on Home. Tournaments leads the grid but has no clip —
         // it is not one game — so there is no poster of it to preload.
-        var slugs = ['block-blast', 'car-dash', 'coin-flip',
-                     'color-rush', 'tower', 'scrabble', 'blackjack'];
+        var slugs = ['block-blast', 'color-rush', 'car-dash',
+                     'coin-flip', 'tower', 'scrabble', 'blackjack'];
         for (var i = 0; i < slugs.length; i++) {
           var l = document.createElement('link');
           l.rel = 'preload';
@@ -198,7 +198,17 @@
       function googleTranslateElementInit() {
         new google.translate.TranslateElement({ pageLanguage: 'en', autoDisplay: false }, 'google_translate_element');
       }
+      // Loaded after the page rather than in the middle of it. It was a
+      // blocking script from a third-party host, so every visitor — nearly all
+      // of whom read English — waited on it before the page could finish. The
+      // language itself is still set by the googtrans cookie above, so a
+      // translated visitor still gets their language, a moment later.
+      window.addEventListener('load', function () {
+        var s = document.createElement('script');
+        s.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
+        s.async = true;
+        document.body.appendChild(s);
+      });
     </script>
-    <script src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
   </body>
 </html>

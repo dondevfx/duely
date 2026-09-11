@@ -18,8 +18,9 @@
     }
   } catch {}
 })();
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { lazyPage, prefetchPages } from './utils/lazyPage';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider, useSocket } from './context/SocketContext';
 import { WalletProvider } from './context/WalletContext';
@@ -28,26 +29,30 @@ import Navbar from './components/Navbar';
 import BottomNav, { BottomBarProvider, useShowsBottomNav } from './components/BottomNav';
 import LeftSidebar from './components/LeftSidebar';
 import ChatSidebar from './components/ChatSidebar';
+// The two pages people land on stay in the main bundle so the first paint does
+// not wait on a second request. Everything else is its own file, fetched when
+// opened — and in the background right after the first page loads. See
+// utils/lazyPage.
 import Home from './pages/Home';
 import Games from './pages/Games';
-import ChallengeJoin from './pages/ChallengeJoin';
-import Leaderboard from './pages/Leaderboard';
-import Profile from './pages/Profile';
-import Wallet from './pages/Wallet';
-import Tip from './pages/Tip';
-import BlockBlastGame from './pages/BlockBlastGame';
-import QuickMatch from './pages/QuickMatch';
-import Tournaments from './pages/Tournaments';
-import TournamentBracket from './pages/TournamentBracket';
-import AddFriend from './pages/AddFriend';
-import WordleGame from './pages/WordleGame';
-import CoinFlipGame from './pages/CoinFlipGame';
-import BlackjackGame from './pages/BlackjackGame';
-import CarDashGame from './pages/CarDashGame';
-import ColorRushGame from './pages/ColorRushGame';
-import ColorRushCanvas from './components/ColorRushCanvas';
-import TowerGame from './pages/TowerGame';
-import TowerCanvas from './components/TowerCanvas';
+const ChallengeJoin     = lazyPage(() => import('./pages/ChallengeJoin'));
+const Leaderboard       = lazyPage(() => import('./pages/Leaderboard'));
+const Profile           = lazyPage(() => import('./pages/Profile'));
+const Wallet            = lazyPage(() => import('./pages/Wallet'));
+const Tip               = lazyPage(() => import('./pages/Tip'));
+const BlockBlastGame    = lazyPage(() => import('./pages/BlockBlastGame'));
+const QuickMatch        = lazyPage(() => import('./pages/QuickMatch'));
+const Tournaments       = lazyPage(() => import('./pages/Tournaments'));
+const TournamentBracket = lazyPage(() => import('./pages/TournamentBracket'));
+const AddFriend         = lazyPage(() => import('./pages/AddFriend'));
+const WordleGame        = lazyPage(() => import('./pages/WordleGame'));
+const CoinFlipGame      = lazyPage(() => import('./pages/CoinFlipGame'));
+const BlackjackGame     = lazyPage(() => import('./pages/BlackjackGame'));
+const CarDashGame       = lazyPage(() => import('./pages/CarDashGame'));
+const ColorRushGame     = lazyPage(() => import('./pages/ColorRushGame'));
+const ColorRushCanvas   = lazyPage(() => import('./components/ColorRushCanvas'));
+const TowerGame         = lazyPage(() => import('./pages/TowerGame'));
+const TowerCanvas       = lazyPage(() => import('./components/TowerCanvas'));
 import TournamentClock from './components/TournamentClock';
 import PageMeta from './components/PageMeta';
 // Dev-only: lets the game be looked at before the lobby and engine exist.
@@ -121,24 +126,26 @@ function TowerPreview() { return <div style={{position:'fixed',inset:0}}><TowerC
 function ColorRushPreview() {
   return <div style={{position:'fixed',inset:0}}><ColorRushCanvas seed={12345} onProgress={() => {}} onDeath={() => {}} /></div>;
 }
-import Transactions from './pages/Transactions';
-import Rewards from './pages/Rewards';
-import Login from './pages/Login';
-import Signup from './pages/Signup';
-import AuthCallback from './pages/AuthCallback';
-import ResetPassword from './pages/ResetPassword';
-import ToS from './pages/ToS';
-import Privacy from './pages/Privacy';
-import Support from './pages/Support';
-import Admin from './pages/Admin';
-import SpectateView from './pages/SpectateView';
+const Transactions  = lazyPage(() => import('./pages/Transactions'));
+const Rewards       = lazyPage(() => import('./pages/Rewards'));
+const Login         = lazyPage(() => import('./pages/Login'));
+const Signup        = lazyPage(() => import('./pages/Signup'));
+const AuthCallback  = lazyPage(() => import('./pages/AuthCallback'));
+const ResetPassword = lazyPage(() => import('./pages/ResetPassword'));
+const ToS           = lazyPage(() => import('./pages/ToS'));
+const Privacy       = lazyPage(() => import('./pages/Privacy'));
+const Support       = lazyPage(() => import('./pages/Support'));
+const Admin         = lazyPage(() => import('./pages/Admin'));
+const SpectateView  = lazyPage(() => import('./pages/SpectateView'));
 import ForfeitToast from './components/ForfeitToast';
 import NotifyToast from './components/NotifyToast';
 import ReconnectOverlay from './components/ReconnectOverlay';
 import AgeToSModal, { useTosAccepted } from './components/AgeToSModal';
-import ResultScreen from './components/ResultScreen';
-import CreateRoomModal from './components/CreateRoomModal';
-import AdminChart from './components/AdminChart';
+// Only the dev previews use these three here; the pages that need them
+// import them themselves.
+const ResultScreen    = lazyPage(() => import('./components/ResultScreen'));
+const CreateRoomModal = lazyPage(() => import('./components/CreateRoomModal'));
+const AdminChart      = lazyPage(() => import('./components/AdminChart'));
 import { ProfilePopupPreview } from './components/ChatSidebar';
 import SignupRewardModal from './components/SignupRewardModal';
 import SaveLoginPrompt from './components/SaveLoginPrompt';
@@ -179,6 +186,8 @@ function Shell() {
   // Same answer the bar itself uses, so the reserved height and the bar can
   // never disagree about whether there is one.
   const barShows = useShowsBottomNav(location.pathname);
+  // Every page's code, fetched in the background once this one has loaded.
+  useEffect(() => { prefetchPages(); }, []);
   // Interactive game pages must NOT be inside the TV zoom wrapper — CSS `zoom`
   // on an ancestor breaks position:fixed drag math (e.g. Block Burst's drag
   // ghost jumps away from the cursor when the browser is zoomed out).
@@ -256,6 +265,10 @@ function Shell() {
             style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         <div className={isGamePage ? '' : 'tv-scale'}>
         <ErrorBoundary resetKey={location.pathname}>
+        {/* Nothing as the fallback: every page's file is prefetched right after
+            the first load, so this only shows for the instant a page is first
+            opened before that finishes — and the shell stays up around it. */}
+        <Suspense fallback={null}>
         <Routes>
           <Route path="/"                  element={<Home />} />
           <Route path="/games"              element={<Games />} />
@@ -304,6 +317,7 @@ function Shell() {
           <Route path="/admin"              element={<ProtectedRoute><Admin /></ProtectedRoute>} />
           <Route path="*"                   element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
         </ErrorBoundary>
         </div>
       </main>

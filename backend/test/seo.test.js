@@ -75,6 +75,62 @@ test('robots.txt points at the sitemap and keeps personal pages out', () => {
   }
 });
 
+test('an address that is not a page gets a real 404, and people still land home', async () => {
+  const { render404 } = await load('scripts', 'prerender-seo.mjs');
+  const out = render404(fs.readFileSync(FE('index.html'), 'utf8'));
+  assert.match(out, /<meta name="robots" content="noindex" \/>/);
+  assert.doesNotMatch(out, /rel="canonical"/, 'a 404 claiming to be the home page is the duplicate it exists to avoid');
+  assert.match(out, /<span class="boot-mark">Duely<\/span>/, 'the 404 must still be the app');
+
+  // Only the app's real routes go to the app; anything else falls to 404.html.
+  const v = JSON.parse(fs.readFileSync(FE('vercel.json'), 'utf8'));
+  assert.ok(!v.rewrites.some(r => r.source === '/(.*)'), 'a catch-all still answers every address with a 200');
+  const app = fs.readFileSync(FE('src', 'App.jsx'), 'utf8');
+  const routes = [...app.matchAll(/<Route path="([^"*]+)"/g)].map(m => m[1]).filter(p => !p.startsWith('/__'));
+  const covered = (p) => v.rewrites.some(r => {
+    if (r.source === p) return true;
+    const base = r.source.replace(/\/:path\*$/, '');
+    return r.source.endsWith(':path*') && p.startsWith(base + '/');
+  });
+  for (const p of routes) {
+    const concrete = p.replace(/:[^/]+/g, 'x');
+    assert.ok(covered(concrete), `${p} is a real page but would be served as a 404`);
+  }
+});
+
+test('game pages describe themselves as games, with a breadcrumb', async () => {
+  const { renderPage, structuredData } = await load('scripts', 'prerender-seo.mjs');
+  const { SEO_PAGES } = await load('src', 'data', 'seo.js');
+  const tower = SEO_PAGES.find(p => p.path === '/game/tower');
+  const data = structuredData(tower);
+  const game = data['@graph'].find(x => x['@type'] === 'VideoGame');
+  assert.equal(game.name, 'Tower');
+  assert.equal(game.url, 'https://www.duely.us/game/tower');
+  assert.ok(!('offers' in game), 'no prices in the game description');
+  assert.ok(data['@graph'].some(x => x['@type'] === 'BreadcrumbList'));
+  assert.match(renderPage(fs.readFileSync(FE('index.html'), 'utf8'), tower), /"@type":"VideoGame"/);
+  assert.equal(structuredData(SEO_PAGES.find(p => p.path === '/leaderboard')), null);
+});
+
+test('every game shares its own image, and the image exists', async () => {
+  const { SEO_PAGES, OG_IMAGES } = await load('src', 'data', 'seo.js');
+  for (const [route, slug] of Object.entries(OG_IMAGES)) {
+    assert.ok(fs.existsSync(FE('public', 'og', `${slug}.jpg`)), `public/og/${slug}.jpg is missing`);
+    assert.equal(SEO_PAGES.find(p => p.path === route).image, `https://www.duely.us/og/${slug}.jpg`);
+  }
+});
+
+test('pages load their own code, and the translator does not block the page', () => {
+  const app = fs.readFileSync(FE('src', 'App.jsx'), 'utf8');
+  assert.match(app, /const TowerGame\s+= lazyPage\(\(\) => import\('\.\/pages\/TowerGame'\)\)/);
+  assert.match(app, /<Suspense fallback=\{null\}>/);
+  assert.match(app, /prefetchPages\(\)/, 'pages would load on first click instead of in the background');
+  const lp = fs.readFileSync(FE('src', 'utils', 'lazyPage.js'), 'utf8');
+  assert.match(lp, /window\.location\.reload\(\)/, 'a tab from before a deploy would break on its next page');
+  const html = fs.readFileSync(FE('index.html'), 'utf8');
+  assert.doesNotMatch(html, /<script src="\/\/translate\.google\.com/, 'Google Translate still blocks the page');
+});
+
 test('the build runs the prerender, and the app keeps titles right after navigation', () => {
   const pkg = JSON.parse(fs.readFileSync(FE('package.json'), 'utf8'));
   assert.match(pkg.scripts.build, /vite build && node scripts\/prerender-seo\.mjs/);

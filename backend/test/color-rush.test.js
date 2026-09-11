@@ -30,7 +30,8 @@ const PAGE     = strip(fe('pages', 'ColorRushGame.jsx'));
 test('the game is registered everywhere a game has to be registered', () => {
   const sites = [
     ['App route',        fe('App.jsx'),                          /path="\/game\/color-rush"/],
-    ['App import',       fe('App.jsx'),                          /import ColorRushGame/],
+    // A page is its own file now, loaded through lazyPage — see utils/lazyPage.
+    ['App import',       fe('App.jsx'),                          /import ColorRushGame|const ColorRushGame\s*=\s*lazyPage\(\(\) => import\('\.\/pages\/ColorRushGame'\)\)/],
     ['games list',       fe('data', 'games.js'),                 /slug:\s*'color-rush'/],
     // Not the navbar: its game list lived only in the hamburger drawer and
     // went with it when that became the bottom bar.

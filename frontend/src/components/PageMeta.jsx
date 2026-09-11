@@ -37,6 +37,9 @@ export default function PageMeta() {
     setMeta('meta[property="og:url"]', 'content', url);
     setMeta('meta[property="og:title"]', 'content', title);
     setMeta('meta[property="og:description"]', 'content', description);
+    const image = page?.image || HOME.image;
+    setMeta('meta[property="og:image"]', 'content', image);
+    setMeta('meta[name="twitter:image"]', 'content', image);
 
     const hidden = NOINDEX_PREFIXES.some(p => clean === p.replace(/\/$/, '') || clean.startsWith(p));
     const robots = document.head.querySelector('meta[name="robots"]');

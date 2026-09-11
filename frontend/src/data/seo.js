@@ -162,6 +162,26 @@ export const SEO_PAGES = [
   },
 ];
 
+// The share image for each page: a 1200x630 card per game (made from its
+// poster — scripts/make-og.mjs), the site image for everything else.
+const OG_SLUG = {
+  '/tournaments': 'tournament',
+  '/game/block-blast': 'block-blast',
+  '/game/color-rush': 'color-rush',
+  '/game/car-dash': 'car-dash',
+  '/game/coin-flip': 'coin-flip',
+  '/game/tower': 'tower',
+  '/game/scrabble': 'scrabble',
+  '/game/blackjack': 'blackjack',
+};
+export const OG_IMAGES = OG_SLUG;
+for (const p of SEO_PAGES) {
+  p.image = OG_SLUG[p.path] ? `${SITE}/og/${OG_SLUG[p.path]}.jpg` : DEFAULT_IMAGE;
+}
+
+// The pages that are one game each — described to search engines as such.
+export const isGamePage = (p) => p.path.startsWith('/game/') && p.path !== '/game/quick-match';
+
 // Routes that are the same page as a listed one under another name.
 export const ALIASES = { '/game/word-vs': '/game/scrabble' };
 

@@ -9,14 +9,29 @@
     }
   ],
   "rewrites": [
-    {
-      "source": "/go",
-      "destination": "/go.html"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "source": "/go", "destination": "/go.html" },
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/games", "destination": "/index.html" },
+    { "source": "/leaderboard", "destination": "/index.html" },
+    { "source": "/login", "destination": "/index.html" },
+    { "source": "/signup", "destination": "/index.html" },
+    { "source": "/auth/callback", "destination": "/index.html" },
+    { "source": "/profile", "destination": "/index.html" },
+    { "source": "/wallet", "destination": "/index.html" },
+    { "source": "/tip", "destination": "/index.html" },
+    { "source": "/transactions", "destination": "/index.html" },
+    { "source": "/rewards", "destination": "/index.html" },
+    { "source": "/reset-password", "destination": "/index.html" },
+    { "source": "/tos", "destination": "/index.html" },
+    { "source": "/privacy", "destination": "/index.html" },
+    { "source": "/support", "destination": "/index.html" },
+    { "source": "/admin", "destination": "/index.html" },
+    { "source": "/tournaments", "destination": "/index.html" },
+    { "source": "/tournaments/:path*", "destination": "/index.html" },
+    { "source": "/game/:path*", "destination": "/index.html" },
+    { "source": "/challenge/:path*", "destination": "/index.html" },
+    { "source": "/spectate/:path*", "destination": "/index.html" },
+    { "source": "/add-friend/:path*", "destination": "/index.html" }
   ],
   "headers": [
     {
