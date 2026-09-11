@@ -120,3 +120,10 @@ test('the card also reads the match from the bracket it polls', () => {
   assert.match(RESULT, /d\?\.pool\?\.bracket\?\.\[tournament\?\.round\]\?\.\[tournament\?\.match\]/);
   assert.match(RESULT, /if \(m\?\.winner\) setDecided\(m\.winner\)/);
 });
+
+test('leaving the old screen for the replay does not forfeit the replay', () => {
+  const at = HANDLERS.indexOf("socket.on('player_forfeit'");
+  const body = HANDLERS.slice(at, HANDLERS.indexOf('_handleForfeit(', at));
+  assert.match(body, /if \(room\.awaitingPlayers\) \{ forfeited = true; break; \}/,
+    'the unmount forfeit kills a sudden-death room before it starts');
+});

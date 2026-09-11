@@ -343,6 +343,14 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
       room.soloRun = false;
       if (room.isSolo) room.demoWin = true;
       room.feesDeducted = true;
+      // Seated but not started. The sockets join this room before the game
+      // screen for it exists — and for a sudden-death replay, while the
+      // previous game's screen is still up. That screen's unmount sends a
+      // forfeit, which landed on THIS room and killed the replay before it
+      // began, leaving the player on the game's betting page. Until go(),
+      // a forfeit here is ignored; the ready fallback and the deadline still
+      // settle a player who has genuinely gone.
+      room.awaitingPlayers = true;
     }
 
     hook.register(roomId, { poolId: pool.id, round, match: index, a: a.userId, b: b.userId, sudden });
@@ -395,6 +403,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     const go = () => {
       if (rec.begun || rec.done) return;
       rec.begun = true;
+      if (room) room.awaitingPlayers = false;
       // vsBot is deliberately false even when it is one. The bots fill a
       // bracket nobody else entered and are disguised as players everywhere
       // else in it; telling the game screen otherwise makes it draw the match

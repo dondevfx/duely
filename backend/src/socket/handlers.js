@@ -2243,6 +2243,9 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         const { room } = found;
         // 'finished' = already settled — just clean up
         if (room.state === 'finished') { delFn(found.roomId); continue; }
+        // A bracket room the runner has seated but not started — the
+        // previous screen unmounting on its way INTO this match. Not a leave.
+        if (room.awaitingPlayers) { forfeited = true; break; }
         // 'waiting' rooms (countdown not yet started) still need forfeit notification to stayer
         await _handleForfeit(io, supabase, found, socket.id, delFn, gameType);
         // Clean up queue tracking so player can re-enter lobby cleanly

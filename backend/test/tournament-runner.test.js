@@ -789,3 +789,19 @@ test("a demo's tie with a bot goes to sudden death, not straight through", () =>
   runner.suddenReady(pool.id, human);
   assert.equal(engines._made.length, before + 1, 'Play sudden death did not start it');
 });
+
+test('a seated room ignores a forfeit until both screens report in', () => {
+  // The previous game screen unmounts on its way into a sudden-death replay
+  // and sends a forfeit; the socket is already in the new room by then.
+  const { engines, runner, pool } = drawnRunner({ suddenIntro: 10_000 });
+  const m = pool.bracket[0][0];
+  runner.onResult({ poolId: pool.id, round: 0, match: 0, winnerId: null, isDraw: true });
+  runner.suddenReady(pool.id, m.a);
+  runner.suddenReady(pool.id, m.b);
+  const { roomId } = engines._made[engines._made.length - 1];
+  const room = engines._rooms.get(roomId);
+  assert.equal(room.awaitingPlayers, true, 'the replay can be forfeited before it starts');
+  runner.ready(pool.id, roomId, m.a);
+  runner.ready(pool.id, roomId, m.b);
+  assert.equal(room.awaitingPlayers, false, 'a started match still shrugs off a real forfeit');
+});
