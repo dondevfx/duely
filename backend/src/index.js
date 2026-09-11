@@ -133,6 +133,8 @@ const tournamentTick = setInterval(() => {
   }
 }, 1000);
 if (tournamentTick.unref) tournamentTick.unref();
+// The Leave route needs the runner (created after the routes are mounted).
+app.locals.tournamentRunner = tournamentRunner;
 
 registerSocketHandlers(io, supabase, { pools: tournamentPools, runner: tournamentRunner });
 

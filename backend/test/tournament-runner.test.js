@@ -739,7 +739,7 @@ function demoBracket(timings = {}) {
   const mixed = pool.bracket[0]
     .map((m, i) => ({ m, i }))
     .filter(({ m }) => m.a && m.b && isBot(m.a) !== isBot(m.b));
-  return { io, engines, runner, pool, mixed, isBot };
+  return { io, engines, runner, pool, pools, mixed, isBot };
 }
 
 test("a demo's win is a win, never turned into a draw", () => {
@@ -800,4 +800,84 @@ test('a seated room ignores a forfeit until both screens report in', () => {
   runner.ready(pool.id, roomId, m.a);
   runner.ready(pool.id, roomId, m.b);
   assert.equal(room.awaitingPlayers, false, 'a started match still shrugs off a real forfeit');
+});
+
+// ── Audit: forfeits always follow through, and payouts always happen ───────
+
+test('a forfeit in the last match of a round still moves the tournament on', async () => {
+  const { runner, pool, pools } = drawnRunner({ intermission: 10_000 });
+  const round = pool.bracket[0];
+  // Every match but the first decided normally.
+  for (let i = 1; i < round.length; i++) {
+    runner.onResult({ poolId: pool.id, round: 0, match: i, winnerId: round[i].a, isDraw: false });
+  }
+  // The last one is forfeited: pools.leave writes the bracket itself.
+  runner.leave(pool.id, round[0].a);
+  assert.equal(round[0].winner, round[0].b, 'the forfeit went nowhere');
+  assert.equal(pool.round, 1, 'the round stalled on a match decided by forfeit');
+  // And a late engine report of the same match changes nothing.
+  runner.onResult({ poolId: pool.id, round: 0, match: 0, winnerId: round[0].a, isDraw: false });
+  assert.equal(round[0].winner, round[0].b);
+});
+
+test('a forfeit in the final still pays the tournament out', async () => {
+  const { runner, pool, pools } = drawnRunner({ intermission: 10_000 });
+  // Play it down to the final, deciding every match for side a.
+  while (pool.round < pool.bracket.length - 1) {
+    for (const { m, i } of pools.pendingMatches(pool)) {
+      runner.onResult({ poolId: pool.id, round: pool.round, match: i, winnerId: m.a, isDraw: false });
+    }
+  }
+  const tp = pool.thirdPlace;
+  runner.onResult({ poolId: pool.id, round: pool.round, match: -1, winnerId: tp.a, isDraw: false });
+  const final = pool.bracket[pool.round][0];
+  runner.leave(pool.id, final.a);
+  assert.equal(pool.state, 'complete');
+  await wait(20);
+  assert.ok(pool.awards?.length, 'a tournament completed by forfeit paid nobody');
+  assert.equal(pool.awards.find(a => a.place === 1)?.userId, final.b);
+});
+
+test('leaving the third-place playoff forfeits it', () => {
+  const { runner, pool, pools } = drawnRunner({ intermission: 10_000 });
+  while (pool.round < pool.bracket.length - 1) {
+    for (const { m, i } of pools.pendingMatches(pool)) {
+      runner.onResult({ poolId: pool.id, round: pool.round, match: i, winnerId: m.a, isDraw: false });
+    }
+  }
+  const tp = pool.thirdPlace;
+  runner.leave(pool.id, tp.a);
+  assert.equal(tp.winner, tp.b, 'the playoff waited for its deadline after a player left');
+});
+
+test('a demo bracket pays the advertised sixteen-player table', async () => {
+  const { runner, pool, pools, mixed } = demoBracket();
+  const F = require('../src/services/tournamentFormat');
+  const advertised = F.prizesFor(pool.entryFee).prizes;
+  while (pool.state === 'running') {
+    const pend = pools.pendingMatches(pool);
+    if (!pend.length) break;
+    for (const { m, i } of pend) {
+      const human = [m.a, m.b].find(u => !pool.players.find(p => p.userId === u)?.isBot);
+      runner.onResult({ poolId: pool.id, round: pool.round, match: i, winnerId: human || m.a, isDraw: false });
+    }
+  }
+  await wait(20);
+  const champ = pool.awards.find(a => a.place === 1);
+  assert.ok(champ, 'the demo won and nothing was recorded');
+  assert.equal(champ.amount, advertised[0], 'a demo was paid a pot of two, not what the lobby showed');
+});
+
+test("a forfeit written straight into the bracket is followed through on the engine's report", () => {
+  // pools.leave records the winner itself; the engine's forfeit report then
+  // arrives for a match already decided. That report used to be dropped, so a
+  // round waiting on it never moved on.
+  const { runner, pool, pools } = drawnRunner({ intermission: 10_000 });
+  const round = pool.bracket[0];
+  for (let i = 1; i < round.length; i++) {
+    runner.onResult({ poolId: pool.id, round: 0, match: i, winnerId: round[i].a, isDraw: false });
+  }
+  pools.leave(pool.id, round[0].a);
+  runner.onResult({ poolId: pool.id, round: 0, match: 0, winnerId: round[0].b, isDraw: false });
+  assert.equal(pool.round, 1, 'the round stalled on a match decided outside the runner');
 });

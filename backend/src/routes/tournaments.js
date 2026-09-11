@@ -118,7 +118,8 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
 
     // Two goes per tournament. Checked before the fee is taken, so a refused
     // entry never has to be refunded.
-    if (!vsBot && pools.ticketsLeft(slot.startsAt, req.user.id) <= 0) {
+    // A demo account is a showcase and is not rationed.
+    if (!vsBot && !demo && pools.ticketsLeft(slot.startsAt, req.user.id) <= 0) {
       return res.status(400).json({
         error: 'You have used both your goes at this tournament. The next one resets them.',
         tickets: 0,
@@ -237,9 +238,16 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
    */
   router.post('/:id/leave', requireAuth, async (req, res) => {
     if (!pools) return res.status(503).json({ error: 'Tournaments are not available right now.' });
-    const result = pools.leave(req.params.id, req.user.id);
+    // Through the runner when there is one, so a forfeit is announced, moves
+    // the round on and pays out a finished pool — pools.leave alone only
+    // writes the bracket, and a round waiting on that match stalled.
+    const runner = req.app.locals.tournamentRunner;
+    let refundDue = 0;
+    const result = runner
+      ? runner.leave(req.params.id, req.user.id, (_pool, _uid, fee) => { refundDue = fee; })
+      : pools.leave(req.params.id, req.user.id);
     if (!result.ok) return res.status(400).json({ error: 'You are not in that tournament.' });
-    if (result.refund) await refund(supabase, req.user.id, result.entryFee);
+    if (result.refund) await refund(supabase, req.user.id, runner ? refundDue : result.entryFee);
     res.json({ ok: true, refunded: !!result.refund, forfeited: result.state === 'running' });
   });
 

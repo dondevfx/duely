@@ -188,6 +188,9 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
       // the right place instead of restarting the sequence.
       reelAt: st.nextRoundAt - T.reel,
     });
+    // The pool as well: the last push went out before the round advanced, so
+    // screens held the old round and ignored the draw until the next poll.
+    pushPool(pool);
     later(pool.id, () => startRound(pool), delay);
   }
 
@@ -217,7 +220,9 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
    * from what it took. Bots pay nothing in and so count for nothing here.
    */
   function prizeTable(pool) {
-    const paying = pool.players.filter(p => !p.isBot).length;
+    // A demo bracket is one account and fifteen bots, shown as a real
+    // tournament — so it pays the table the lobby advertised, not a pot of two.
+    const paying = pool.demo ? F.POOL_SIZE : pool.players.filter(p => !p.isBot).length;
     return F.prizesFor(pool.entryFee, Math.max(paying, 2)).prizes;
   }
 
@@ -511,28 +516,42 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     for (const pool of pools.pools.values()) {
       if (pool.state !== 'running' && pool.state !== 'filling') continue;
       if (!pool.players.some(p => p.userId === userId && !p.isBot)) continue;
-
-      const wasRunning = pool.state === 'running';
-      const result = pools.leave(pool.id, userId);
-      if (!result.ok) continue;
-
-      if (result.refund && onRefund) onRefund(pool, userId, result.entryFee);
-      if (!wasRunning) continue;
-
-      // Marked so the bracket cannot be opened again. They are out, and a
-      // screen that lets them keep watching reads as though they might still
-      // be in it.
-      (pool.kicked ||= new Set()).add(userId);
-      broadcast(pool, 'tournament_update', { pool: require('../routes/tournaments').publicPool(pool) });
-      if (result.forfeited) {
-        onResult({
-          poolId: pool.id, round: pool.round, match: result.forfeited.match,
-          winnerId: result.forfeited.winner, isDraw: false,
-        });
-      } else if (pools.pendingMatches(pool).length === 0) {
-        roundSettled(pool);
-      }
+      leavePool(pool, userId, onRefund);
     }
+  }
+
+  /**
+   * One player out of one pool — the Leave button and a lost connection both
+   * come through here, so a forfeit is always followed through: announced,
+   * the round moved on, and the pool paid if it was the last thing left.
+   */
+  function leavePool(pool, userId, onRefund) {
+    const wasRunning = pool.state === 'running';
+    const round = pool.round;
+    const result = pools.leave(pool.id, userId);
+    if (!result.ok) return result;
+
+    if (result.refund && onRefund) onRefund(pool, userId, result.entryFee);
+    if (!wasRunning) return result;
+
+    // Marked so the bracket cannot be opened again. They are out, and a
+    // screen that lets them keep watching reads as though they might still
+    // be in it.
+    (pool.kicked ||= new Set()).add(userId);
+    if (result.forfeited) {
+      afterDecided(pool, round, result.forfeited.match, result.forfeited.winner, null);
+    } else {
+      pushPool(pool);
+      if (pool.state === 'complete') settle(pool);
+      else if (pools.pendingMatches(pool).length === 0) roundSettled(pool);
+    }
+    return result;
+  }
+
+  function leave(poolId, userId, onRefund) {
+    const pool = pools.get(poolId);
+    if (!pool) return { ok: false };
+    return leavePool(pool, userId, onRefund);
   }
 
   /** Somebody's game screen has loaded and is listening. */
@@ -590,14 +609,26 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
   // ── Results ──────────────────────────────────────────────────────────────
   function onResult({ poolId, round, match, winnerId, isDraw, sudden = false, forced = false }) {
     const pool = pools.get(poolId);
-    if (!pool || pool.state !== 'running') return;
+    if (!pool) return;
+    // Completed by a forfeit before this arrived: still announce and pay.
+    if (pool.state === 'complete') {
+      const m = pools.matchAt(pool, round, match);
+      if (m?.winner) afterDecided(pool, round, match, m.winner, null);
+      return;
+    }
+    if (pool.state !== 'running') return;
 
     const st = stateOf(poolId);
     const rec = st.matches.get(`${round}:${match}${sudden ? ':sd' : ''}`);
     if (rec) rec.done = true;
 
     const m = pools.matchAt(pool, round, match);
-    if (!m || m.winner) return;
+    if (!m) return;
+    // Decided already — most often by pools.leave, which records a forfeit
+    // straight into the bracket. Returning here used to skip everything that
+    // follows a result: nobody was told, and if it was the last match of the
+    // round the round never moved on, so the tournament stalled for good.
+    if (m.winner) return afterDecided(pool, round, match, m.winner, rec);
 
     // The game's result stands as reported: a higher score is a win, a tie is
     // a draw, for a demo account exactly as for anyone. (A demo used to have
@@ -625,8 +656,21 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
 
     const res = pools.reportResult(poolId, round, match, winnerId, forced ? { forced: true } : null);
     if (!res) return;
+    afterDecided(pool, round, match, winnerId, rec);
+  }
 
-    broadcast(pool, 'tournament_result', { poolId, round, match, winnerId });
+  /**
+   * Everything that follows a match being decided, exactly once per match,
+   * however it was decided — played, forced at the deadline, or forfeited.
+   */
+  function afterDecided(pool, round, match, winnerId, rec) {
+    const st = stateOf(pool.id);
+    const key = `${round}:${match}`;
+    (st.announced ||= new Set());
+    if (st.announced.has(key)) return;
+    st.announced.add(key);
+
+    broadcast(pool, 'tournament_result', { poolId: pool.id, round, match, winnerId });
     // A real player has just finished theirs. Everyone else left in the round
     // is a bot on a timer of its own, and a player watching an empty bracket
     // tick for another minute is a player who thinks it has hung — so the rest
@@ -634,7 +678,11 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     if (!rec?.bots) finishBotsSoon(pool);
     pushPool(pool);
 
-    if (pools.pendingMatches(pool).length === 0) roundSettled(pool);
+    // A forfeit in the final (or the playoff beside it) completes the pool
+    // inside pools.reportResult, so it is paid from here rather than waiting
+    // for a round to settle that has nothing left in it.
+    if (pool.state === 'complete') return void settle(pool);
+    if (pool.state === 'running' && pools.pendingMatches(pool).length === 0) roundSettled(pool);
   }
 
   /** The human, when exactly one side of a match is a bot. */
@@ -848,6 +896,9 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
       if (pool.state === 'running' && stateOf(pool.id).phase === 'idle') {
         beginPool(pool).catch(e => log.error('[tournament] begin:', e.message));
       }
+      // The backstop for payouts: a pool that completed by any route and was
+      // never settled is settled here. settle() is idempotent.
+      if (pool.state === 'complete' && !stateOf(pool.id).settling) settle(pool);
     }
   }
 
@@ -856,7 +907,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
   });
 
   return {
-    tick, ready, suddenReady, onResult, beginPool, startRound, settle, sampleScores, playerGone,
+    tick, ready, suddenReady, onResult, beginPool, startRound, settle, sampleScores, playerGone, leave,
     _live: live,
     timings: T,
   };

@@ -2332,6 +2332,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
 
     // ── Disconnect ────────────────────────────────────────────────────
+    const TOURNAMENT_RECONNECT_MS = 15 * 1000;
     socket.on('disconnect', async () => {
       if (authenticatedUser) { unlockUser(authenticatedUser.userId); userQueues.delete(authenticatedUser.userId); }
       cleanupSocket(socket.id);
@@ -2343,13 +2344,22 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       //
       // Only once every socket is gone — a second tab must not knock somebody
       // out of a bracket they are still playing in the first one.
+      // After a short grace, not at once: a phone switching networks or an app
+      // switch drops the socket for a moment, and that knocked players out of
+      // a bracket they were still in. A game in progress still has its own
+      // engine forfeit; this is only about the seat in the tournament.
       if (authenticatedUser && tournaments?.runner
           && _socketsForUser(authenticatedUser.userId).length === 0) {
-        try {
-          tournaments.runner.playerGone(authenticatedUser.userId, (pool, userId, fee) => {
-            refundTournamentEntry(supabase, userId, fee);
-          });
-        } catch (e) { console.error('[tournament] disconnect:', e.message); }
+        const uid = authenticatedUser.userId;
+        const t = setTimeout(() => {
+          if (_socketsForUser(uid).length > 0) return;   // came back
+          try {
+            tournaments.runner.playerGone(uid, (pool, userId, fee) => {
+              refundTournamentEntry(supabase, userId, fee);
+            });
+          } catch (e) { console.error('[tournament] disconnect:', e.message); }
+        }, TOURNAMENT_RECONNECT_MS);
+        if (t.unref) t.unref();
       }
 
       // Withdraw any rematch offer this player was part of, but only once

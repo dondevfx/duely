@@ -136,6 +136,10 @@ export default function ResultScreen({
   // otherwise. A demo account's staged draw is reported by the game as the win
   // it was, and the card has to show the draw screen the bracket is running.
   const isDraw = reportedDraw || !!tour?.sudden;
+  // What the final or the playoff pays is decided by the bracket, not by the
+  // game's own reading — after sudden death or the deadline the two differ.
+  const tourWon = tour?.iWon ?? isWinner;
+  const tourPay = tour?.pays ? (tourWon ? tour.pays.win : tour.pays.lose) : 0;
   const elo = isWinner ? newWinnerElo : newLoserElo; // undefined = no ELO data yet
 
   // Which picture belongs to a name. There are only ever two players on this
@@ -366,21 +370,20 @@ export default function ResultScreen({
                 should not have to wait for settlement to be told what they
                 just won. Second place is a payout too, which is why this does
                 not ask who won. */}
-            {tour?.pays != null && (
+            {/* Not while a draw is still being settled — who is paid what is
+                not known yet. */}
+            {tour?.pays != null && !(isDraw && !tour.decided) && (
               <div className="border-t border-surfaceLight/40 pt-3 mt-1 text-center">
                 <div className="text-xs text-muted mb-1 uppercase tracking-widest font-semibold">
-                  {(isWinner ? tour.pays.win : tour.pays.lose) > 0 ? 'Payout' : 'No payout'}
+                  {tourPay > 0 ? 'Payout' : 'No payout'}
                 </div>
                 <div
-                  className={`text-4xl font-black ${
-                    (isWinner ? tour.pays.win : tour.pays.lose) > 0 ? 'text-success' : 'text-muted'
-                  }`}
-                  style={(isWinner ? tour.pays.win : tour.pays.lose) > 0
-                    ? { textShadow: '0 0 20px rgba(74,222,128,0.6)' } : undefined}
+                  className={`text-4xl font-black ${tourPay > 0 ? 'text-success' : 'text-muted'}`}
+                  style={tourPay > 0 ? { textShadow: '0 0 20px rgba(74,222,128,0.6)' } : undefined}
                 >
                   <span className="inline-flex items-center gap-1">
-                    {(isWinner ? tour.pays.win : tour.pays.lose) > 0 ? '+' : ''}
-                    {fmt(isWinner ? tour.pays.win : tour.pays.lose)} <CoinIcon size="0.8em" />
+                    {tourPay > 0 ? '+' : ''}
+                    {fmt(tourPay)} <CoinIcon size="0.8em" />
                   </span>
                 </div>
               </div>

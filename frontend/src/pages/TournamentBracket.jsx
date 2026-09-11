@@ -255,7 +255,9 @@ export default function TournamentBracket() {
   // from the bet screen — so it is missed, and missed for good. The pool
   // carries the same fact, so a screen that arrived late still shows the draw
   // instead of sitting on a bracket that never changes.
-  const drawn = drawing?.round === pool.round
+  // `>=`: the announcement for the next round can land before the pool that
+  // says the round has moved on, and it used to be ignored until the poll.
+  const drawn = drawing && drawing.round >= pool.round && pool.state === 'running'
     ? drawing
     : pool.phase === 'intermission' && pool.roundGames?.[pool.round]
       ? { round: pool.round, game: pool.roundGames[pool.round], at: pool.nextRoundAt }
@@ -269,7 +271,10 @@ export default function TournamentBracket() {
   const myMatch = !filling && pool.bracket
     ? (pool.bracket[pool.round] || []).findIndex(m => m.a === me || m.b === me)
     : -1;
-  const knockedOut = !filling && me && myMatch === -1;
+  // A semi-final loser is still playing, for third, beside the final.
+  const tp = pool.thirdPlace;
+  const inPlayoff = !!(me && tp && !tp.winner && (tp.a === me || tp.b === me));
+  const knockedOut = !filling && me && myMatch === -1 && !inPlayoff;
 
   // Its own screen, not a panel on this one. Everything below — the heading,
   // the bracket, the seats — is what you come back to afterwards.
@@ -401,6 +406,15 @@ export default function TournamentBracket() {
         />
       )}
 
+
+      {!filling && tp?.a && tp?.b && (
+        <div className="mt-2 text-center text-xs text-muted">
+          <span className="font-bold uppercase tracking-widest">3rd place</span>{' · '}
+          <span className={tp.winner === tp.a ? 'text-white font-bold' : ''}>{byId.get(tp.a)?.username || '—'}</span>
+          {' vs '}
+          <span className={tp.winner === tp.b ? 'text-white font-bold' : ''}>{byId.get(tp.b)?.username || '—'}</span>
+        </div>
+      )}
 
       {knockedOut && (
         <div className="mt-4 text-center">

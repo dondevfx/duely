@@ -445,8 +445,12 @@ test('the last two matches show their payout on the result card', () => {
   // what this outcome was worth.
   const card = read('components', 'ResultScreen.jsx');
   assert.match(card, /tour\?\.pays != null/, 'the card ignores what the match pays');
-  assert.match(card, /isWinner \? tour\.pays\.win : tour\.pays\.lose/,
+  assert.match(card, /tourWon \? tour\.pays\.win : tour\.pays\.lose/,
     'the loser of a final is not shown their second-place prize');
+  // Who won is the bracket's answer — after sudden death or the deadline the
+  // game's own reading can be the other player.
+  assert.match(card, /const tourWon = tour\?\.iWon \?\? isWinner;/,
+    'the payout is picked from the game result, not the bracket');
   assert.match(card, /text-success/, 'the payout is not green');
 });
 

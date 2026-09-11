@@ -439,6 +439,16 @@ function createStore() {
       reportResult(poolId, pool.round, i, opponent, { forfeit: userId });
       forfeited = { match: i, winner: opponent };
     });
+    // The playoff for third is not in the round array, and a semi-final loser
+    // leaving during it left it undecided until its deadline.
+    const tp = pool.thirdPlace;
+    if (!forfeited && tp && !tp.winner && (tp.a === userId || tp.b === userId)) {
+      const opponent = tp.a === userId ? tp.b : tp.a;
+      if (opponent) {
+        reportResult(poolId, pool.round, THIRD_PLACE, opponent, { forfeit: userId });
+        forfeited = { match: THIRD_PLACE, winner: opponent };
+      }
+    }
     return { ok: true, refund: false, state: 'running', forfeited };
   }
 
