@@ -41,10 +41,33 @@ export default function TowerCanvas({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    // Opaque: the background is painted black every frame anyway, and a canvas
+    // the browser has to blend over the page costs a composite per frame.
+    const ctx = canvas.getContext('2d', { alpha: false });
+
+    // Colour strings per block index, built once. Each visible block used to
+    // format three hsl() strings every frame.
+    const shadeCache = new Map();
+    const shadesOf = (index) => {
+      let c = shadeCache.get(index);
+      if (!c) {
+        const { hue, sat, top, right, left } = faceShades(index);
+        c = {
+          top:   `hsl(${hue} ${sat}% ${top}%)`,
+          right: `hsl(${hue} ${sat}% ${right}%)`,
+          left:  `hsl(${hue} ${sat}% ${left}%)`,
+        };
+        shadeCache.set(index, c);
+      }
+      return c;
+    };
+
+    // The fade into the dark at the bottom, rebuilt only when the size changes.
+    let scrim = null, scrimTop = 0;
 
     let width = 0, height = 0, dpr = 1;
     const resize = () => {
+      scrim = null;
       dpr = Math.min(2, window.devicePixelRatio || 1);
       const r = canvas.getBoundingClientRect();
       width = r.width; height = r.height;
@@ -131,9 +154,20 @@ export default function TowerCanvas({
     canvas.addEventListener('pointerdown', onPointer);
     window.addEventListener('keydown', onKey);
 
+    // Frame pacing: see HighwayCanvas. Raw frame timestamps wobble, and a
+    // slider moved by the raw number steps unevenly across the screen. The
+    // running average is used instead, with the difference paid back slowly
+    // so no time is lost or gained.
+    let est = 0, debt = 0;
     function frame(now) {
-      const dt = clamp((now - last) / 1000, 0, 0.05);   // clamp: a backgrounded
-      last = now;                                        // tab must not teleport
+      const raw = clamp((now - last) / 1000, 0, 0.25);
+      last = now;
+      if (!est || raw > est * 3) { est = raw; debt = 0; }   // first frame, or back from a stall
+      est += (raw - est) * 0.08;
+      debt += raw - est;
+      const pay = clamp(debt * 0.05, -est * 0.2, est * 0.2);
+      debt -= pay;
+      const dt = clamp(est + pay, 0, 0.05);   // clamp: a backgrounded tab must not teleport
       // Pass whether input is live: during the countdown the offcuts and bursts
       // must keep animating, but the slider must NOT move behind the overlay.
       run.step(dt, runningRef.current);
@@ -175,14 +209,14 @@ export default function TowerCanvas({
         // Side lightness is a RATIO of the top rather than a fixed subtraction,
         // so a dark block keeps the same relative shading a light one has
         // instead of flattening into a single silhouette.
-        const { hue, sat, top, right, left } = faceShades(b.index);
+        const c = shadesOf(b.index);
         const f = blockFaces(b, level, view);
         ctx.globalAlpha = alpha;
-        ctx.fillStyle = `hsl(${hue} ${sat}% ${right}%)`;
+        ctx.fillStyle = c.right;
         poly(f.right);
-        ctx.fillStyle = `hsl(${hue} ${sat}% ${left}%)`;
+        ctx.fillStyle = c.left;
         poly(f.left);
-        ctx.fillStyle = `hsl(${hue} ${sat}% ${top}%)`;
+        ctx.fillStyle = c.top;
         poly(f.top);
         ctx.globalAlpha = 1;
       };
@@ -248,11 +282,13 @@ export default function TowerCanvas({
       // Starts well down the screen. At 0.60 it was reaching blocks that had only
       // just been placed and dulling them mid-play, which looked like the colours
       // going wrong rather than like distance.
-      const scrimTop = height * 0.80;
-      const scrim = ctx.createLinearGradient(0, scrimTop, 0, height);
-      scrim.addColorStop(0, 'rgba(0,0,0,0)');
-      scrim.addColorStop(0.45, 'rgba(0,0,0,0.55)');
-      scrim.addColorStop(1, 'rgba(0,0,0,1)');
+      if (!scrim) {
+        scrimTop = height * 0.80;
+        scrim = ctx.createLinearGradient(0, scrimTop, 0, height);
+        scrim.addColorStop(0, 'rgba(0,0,0,0)');
+        scrim.addColorStop(0.45, 'rgba(0,0,0,0.55)');
+        scrim.addColorStop(1, 'rgba(0,0,0,1)');
+      }
       ctx.fillStyle = scrim;
       ctx.fillRect(0, scrimTop, width, height - scrimTop);
 
@@ -305,14 +341,15 @@ export default function TowerCanvas({
           ctx.scale(scale, scale);
           ctx.font = '800 38px system-ui, -apple-system, "Segoe UI", sans-serif';
           if (ctx.letterSpacing !== undefined) ctx.letterSpacing = '2px';
-          // A soft dark halo instead of a hard outline — the tower behind it is
-          // mid-blue, and white on that needs separating without a cartoon
-          // stroke.
-          ctx.shadowColor = 'rgba(0,0,0,0.75)';
-          ctx.shadowBlur = 10;
+          // A dark copy just behind rather than shadowBlur — the tower behind
+          // it is mid-blue and white needs separating, but a blurred shadow is
+          // re-rasterised every frame and this runs right on a perfect drop.
+          const a0 = ctx.globalAlpha;
+          ctx.fillStyle = 'rgba(0,0,0,0.55)';
+          ctx.fillText(label, 1.5, 2);
+          ctx.globalAlpha = a0;
           ctx.fillStyle = '#FFFFFF';
           ctx.fillText(label, 0, 0);
-          ctx.shadowBlur = 0;
           ctx.restore();
         }
       }

@@ -393,7 +393,10 @@ test('the multiplier is drawn above the tower, in white', () => {
   assert.doesNotMatch(src, /#F5C518/, 'the gold version is still there');
   // Its own style: spaced, haloed rather than outlined, with a rule under it.
   assert.match(src, /ctx\.letterSpacing = '2px'/);
-  assert.match(src, /ctx\.shadowColor = 'rgba\(0,0,0,0\.75\)'/);
+  // The halo is a dark copy drawn just behind, not shadowBlur — a blurred
+  // shadow re-rasterises every frame and dropped frames on a perfect drop.
+  assert.match(src, /ctx\.fillStyle = 'rgba\(0,0,0,0\.55\)';\s*ctx\.fillText\(label, 1\.5, 2\);/,
+    'the badge has lost the halo that separates it from the tower');
   // The rule under it is gone — it read as a stray mark at the size the badge
   // is now, and the halo already separates it from the tower.
   assert.doesNotMatch(src, /ctx\.fillRect\(-w \/ 2, 20, w, 1\.5\)/, 'the rule is back');

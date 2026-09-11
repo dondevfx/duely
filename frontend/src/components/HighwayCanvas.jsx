@@ -1797,10 +1797,22 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
 
     // ── Main loop ──
     let raf = 0, last = performance.now();
+    // Frame pacing. The browser's frame timestamps wobble by a few ms even at
+    // a steady 60 or 120Hz, and moving the road by that raw number made it
+    // advance in uneven steps — judder. Each frame moves by the running
+    // average instead, and the difference is paid back a little at a time,
+    // so total time (and therefore distance and score) is conserved.
+    let est = 0, debt = 0;
     function loop(now) {
       raf = requestAnimationFrame(loop);
-      let dt = (now - last) / 1000;
+      const raw = Math.min((now - last) / 1000, 0.25);
       last = now;
+      if (!est || raw > est * 3) { est = raw; debt = 0; }   // first frame, or back from a stall
+      est += (raw - est) * 0.08;
+      debt += raw - est;
+      const pay = clamp(debt * 0.05, -est * 0.2, est * 0.2);
+      debt -= pay;
+      let dt = est + pay;
       dt = Math.min(dt, 1 / 30);
 
       if (!S.dead) {

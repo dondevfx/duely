@@ -455,7 +455,8 @@ test('the plinth is drawn bottom-up, like the tower', () => {
 
 test('the darkness starts low enough not to dull live blocks', () => {
   const src = fe('components', 'TowerCanvas.jsx');
-  const top = +src.match(/const scrimTop = height \* ([\d.]+)/)[1];
+  // Assigned once per size now (the gradient is cached), not declared per frame.
+  const top = +src.match(/scrimTop = height \* ([\d.]+)/)[1];
   assert.ok(top >= 0.75, `the scrim starts at ${top} of the screen — too high`);
 });
 
