@@ -64,10 +64,11 @@ test('no engine passes a fourth argument to applyEloUpdate', () => {
 test('a skipped write reports the stored rating, not the computed one', () => {
   // Otherwise the result card announces a swing the database never took —
   // the same class of bug as the +44-on-a-+22-win this codebase already fixed.
+  // The two solo engines compute no rating for a bot match at all now, so
+  // there is nothing that could be reported and not written. See ratesElo.
   for (const [file, dir] of [['blockBlastEngine', 'services'], ['towerEngine', 'services']]) {
     const src = read('src', dir, `${file}.js`);
-    assert.match(src, /if \(!r\?\.applied\) humanNewElo = (humanEloBefore|eloBefore)/,
-      `${file} reports a rating it did not write`);
+    assert.match(src, /const humanNewElo = null/, `${file} computes a rating for a bot match`);
   }
   assert.match(read('src', 'socket', 'handlers.js'), /if \(!r\?\.applied\) newElo = currentElo/);
 });

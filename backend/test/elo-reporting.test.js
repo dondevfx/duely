@@ -23,10 +23,11 @@ const read = (f) => fs
   .filter(l => !l.trim().startsWith('//') && !l.trim().startsWith('*') && !l.trim().startsWith('/*'))
   .join('\n');
 
+// What each engine calls the answer to "does this match rate?" — see ratesElo.
 const ENGINES = {
-  'blackjackEngine.js':  '(isDraw || isFree)',
-  'coinFlipEngine.js':   'isFree',
-  'blockBlastEngine.js': 'isFree',
+  'blackjackEngine.js':  'rated',
+  'coinFlipEngine.js':   'rated',
+  'blockBlastEngine.js': 'rated',
   'carDashEngine.js':    'ranked',
 };
 
@@ -44,8 +45,8 @@ for (const [file, cond] of Object.entries(ENGINES)) {
 
 test('Word VS only computes a rating when the match is staked', () => {
   const src = read('wordleEngine.js');
-  assert.match(src, /if \(winner && loser && !isFree\)/,
-    'an unstaked Word VS match must not produce a new rating');
+  assert.match(src, /if \(winner && loser && ratesElo\(\{ isFree, vsBot/,
+    'an unstaked Word VS match, or one against a bot, must not produce a rating');
 });
 
 test('Word VS writes a rating only when it has one', () => {

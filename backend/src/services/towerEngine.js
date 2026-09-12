@@ -8,7 +8,7 @@
 const { randomInt } = require('node:crypto');
 const { closestByElo } = require('./queueMatch');
 const { findRoomBySocket } = require('./roomLookup');
-const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings } = require('./eloService');
+const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings, ratesElo } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const { v4: uuidv4 } = require('uuid');
@@ -267,12 +267,15 @@ async function startTowerCountdown(io, supabase, roomId) {
         if (!r || r.state !== 'active') { clearInterval(timer); return; }
         const humanScore = r.pingScores[human.socketId] ?? 0;
         const target = Math.floor(humanScore * r.botRatio);
-        // One block at a time: a bot tower that jumped four blocks between
-        // updates would read as obviously fake next to your own.
-        if (target > botScore) botScore = Math.min(target, botScore + 1);
+        // Climbs steadily, but it must actually GET THERE: the result card
+        // prints this number now, and at one block per 1.2s it was still miles
+        // behind when the run ended — a player on 8 finished against a 2.
+        // A third of the gap, at least one block, twice as often.
+        const gap = target - botScore;
+        if (gap > 0) botScore = Math.min(target, botScore + Math.max(1, Math.ceil(gap / 3)));
         r.pingScores['bot'] = botScore;
         io.to(human.socketId).emit('tower_opponent_score', { score: botScore });
-      }, 1200);
+      }, 600);
       current.botTimers.push(timer);
     }
   }
@@ -350,41 +353,18 @@ async function handleTowerComplete(io, supabase, roomId, socketId, score = 0, ta
       } catch (e) { console.error('[tower] solo settle:', e.message); }
     }
 
-    // Rating and record only when the run cost something — an unloseable free
-    // run that awarded rating would be an infinite ladder.
-    // Reported so the card can show it — a paid bot match rates, in coins or
-    // diamonds, and a payload without the number reads as though it does not.
-    let humanNewElo = null, eloBefore = null;
+    // A bot match never moves a rating, whatever it cost.
+    //
+    // It used to rate as long as something was staked, so a diamond bet
+    // against a bot moved a real rating — an opponent that is not a person,
+    // played as often as you like. Rating is PvP-with-a-stake only now; see
+    // ratesElo in eloService.
+    //
+    // The win/loss counters below are unchanged: a PAID bot match still counts
+    // towards the three placement matches, and a free practice run still stays
+    // out of the record, because it is unloseable.
+    const humanNewElo = null, eloBefore = null;
     if (supabase && !freeSolo) {
-      const BOT_ELO = 1000;
-      // Read the CURRENT rating rather than the one cached on the socket when
-      // the player joined the queue.
-      //
-      // calculateNewRatings returns an absolute value, and writing it derived
-      // from a stale number produces a delta that is not the gain or loss at
-      // all: a socket holding 1020 against a profile of 1000 writes 1020 - 17 =
-      // 1003, and the card reports +3 on a defeat. The swing is only ever
-      // eloGain or eloLoss when it is computed from what the rating actually is
-      // right now.
-      // Same read every other engine now does, through the shared helper —
-      // this was the bespoke copy it was generalised from.
-      const BOT = { isBot: true, elo: BOT_ELO };
-      const r = humanWon
-        ? await freshRatings(supabase, player, BOT)
-        : await freshRatings(supabase, BOT, player);
-      eloBefore = humanWon ? r.winnerBefore : r.loserBefore;
-      const { newWinnerElo, newLoserElo } = r;
-      humanNewElo = humanWon ? newWinnerElo : newLoserElo;
-      // Through applyEloUpdate so the placement guard applies here too. A
-      // raw update skips it, which is how a brand-new account's rating moved
-      // on a bot match while every screen still called it Unranked. When the
-      // guard holds the write back, the reported rating is reset to the one
-      // already stored — otherwise the card announces a swing the database
-      // never took.
-      try {
-        const r = await applyEloUpdate(supabase, player.userId, humanNewElo);
-        if (!r?.applied) humanNewElo = eloBefore;
-      } catch (e) { console.error('[tower] elo:', e.message); }
       try { await supabase.rpc(humanWon ? 'increment_win' : 'increment_loss', { uid: player.userId }); } catch (e) { console.error('[tower] rpc:', e.message); }
       try {
         await supabase.from('matches').insert({
@@ -513,9 +493,10 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
   // rather than printing an unchanged number as if something had happened.
   // A draw moves nobody's rating: there is no winner to gain and no loser to
   // drop, and freshRatings only knows how to compute one of each.
-  const { newWinnerElo, newLoserElo, winnerBefore, loserBefore } = (isFree || isDraw)
-    ? { newWinnerElo: null, newLoserElo: null, winnerBefore: null, loserBefore: null }
-    : await freshRatings(supabase, winner, loser);
+  const rated = ratesElo({ isFree, isDraw, vsBot: !!(winner.isBot || loser.isBot) });
+  const { newWinnerElo, newLoserElo, winnerBefore, loserBefore } = rated
+    ? await freshRatings(supabase, winner, loser)
+    : { newWinnerElo: null, newLoserElo: null, winnerBefore: null, loserBefore: null };
 
   let balanceChange = null;
   if (room.entryFee > 0 && !room.feesDeducted) {
@@ -547,7 +528,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
   let winnerStreak = 0, isFirstWin = false;
   if (supabase && !winner.isBot && !loser.isBot) {
     try {
-      if (!isDraw) ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser));
+      if (!isDraw) ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser, { staked: !isFree }));
     } catch (e) { console.error('[tower] streaks:', e.message); }
   }
 

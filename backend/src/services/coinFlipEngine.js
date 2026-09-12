@@ -8,7 +8,7 @@ const { randomInt } = require('node:crypto');
 const { closestByElo } = require('./queueMatch');
 const { findRoomBySocket } = require('./roomLookup');
 const { v4: uuidv4 } = require('uuid');
-const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings } = require('./eloService');
+const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings, ratesElo } = require('./eloService');
 const { settleMatch, settleCoinFlip, settleMatchDiamonds, settleBotMatch } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const gameEvents = require('./gameEvents');
@@ -108,9 +108,12 @@ async function resolveCoinFlip(io, supabase, roomId) {
   // a rated match that happened to be worth nothing. null means "this mode
   // does not rate", and the card omits the row entirely. Rush Hour already
   // did this; the rest did not.
-  const { newWinnerElo, newLoserElo, winnerBefore, loserBefore } = isFree
-    ? { newWinnerElo: null, newLoserElo: null, winnerBefore: null, loserBefore: null }
-    : await freshRatings(supabase, winner, loser);
+  // PvP with a stake, and nothing else — see ratesElo. A free match is
+  // practice and a bot is not a person, so neither moves a rating.
+  const rated = ratesElo({ isFree, vsBot: !!(winner.isBot || loser.isBot) });
+  const { newWinnerElo, newLoserElo, winnerBefore, loserBefore } = rated
+    ? await freshRatings(supabase, winner, loser)
+    : { newWinnerElo: null, newLoserElo: null, winnerBefore: null, loserBefore: null };
 
   let balanceChange = null;
   if (supabase && room.entryFee > 0 && !room.feesDeducted) {
@@ -142,16 +145,16 @@ async function resolveCoinFlip(io, supabase, roomId) {
     // — so ELO stays gated on the fee while the counters follow the result.
     {
       if (!winner.isBot) {
-        if (!isFree) { try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch {} }
+        if (rated) { try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch {} }
         try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch {}
       }
       if (!loser.isBot) {
-        if (!isFree) { try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch {} }
+        if (rated) { try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch {} }
         try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch {}
       }
       // Streaks are PvP-only; applyMatchStreaks is a no-op when either side
       // is a bot, so no guard is needed here.
-      try { ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser)); } catch {}
+      try { ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser, { staked: !isFree })); } catch {}
     }
 
     try {

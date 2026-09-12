@@ -68,7 +68,7 @@ test('a draw moves no rating, no record and no streak', () => {
       `${file} counts a win on a draw`);
     assert.match(code, /if \(!isDraw\) \{ try \{ await supabase\.rpc\('increment_loss'/,
       `${file} counts a loss on a draw`);
-    assert.ok(/isDraw\)?\s*$|isFree \|\| isDraw|ranked && !isDraw/m.test(code),
+    assert.ok(/isDraw\)?\s*$|isFree \|\| isDraw|ranked && !isDraw|ratesElo\(\{[^}]*isDraw/m.test(code),
       `${file} still rates a draw`);
     assert.ok(!/^\s*try \{ await applyMatchStreaks/m.test(code),
       `${file} moves a streak on a draw`);

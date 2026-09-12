@@ -12,6 +12,21 @@ const randBetween = (min, max) => min + Math.floor(Math.random() * (max - min + 
 function eloGain() { return randBetween(ELO_GAIN_MIN, ELO_GAIN_MAX); }
 function eloLoss() { return randBetween(ELO_LOSS_MIN, ELO_LOSS_MAX); }
 
+/**
+ * Does this match move a rating?
+ *
+ * Player against player, with something staked on it. Nothing else: not a free
+ * match, not a solo run, and not a bot match however it was paid for — a
+ * diamond bet against a bot used to rate, which made a rating something you
+ * could farm against an opponent that is not a person. A draw moves nobody.
+ *
+ * Placement is a separate question and deliberately looser: ANY match counts
+ * towards the three, so a new account can get placed however it likes to play.
+ */
+function ratesElo({ vsBot = false, isFree = false, isDraw = false } = {}) {
+  return !vsBot && !isFree && !isDraw;
+}
+
 function calculateNewRatings(winnerElo, loserElo) {
   return {
     newWinnerElo: (winnerElo || 1000) + eloGain(),
@@ -39,8 +54,11 @@ function calculateNewRatings(winnerElo, loserElo) {
  * @param {object} loser   { userId, isBot }
  * @returns {{winnerStreak:number, isFirstWin:boolean, applied:boolean}}
  */
-async function applyMatchStreaks(supabase, winner, loser) {
-  const isPvp = winner && loser && !winner.isBot && !loser.isBot;
+async function applyMatchStreaks(supabase, winner, loser, { staked = true } = {}) {
+  // A streak is a record of beating PAYING opponents. A free match is practice
+  // — it was building and breaking streaks, so a run could be padded out (or a
+  // real one wiped) in matches with nothing on them.
+  const isPvp = winner && loser && !winner.isBot && !loser.isBot && staked;
   if (!isPvp) return { winnerStreak: 0, isFirstWin: false, applied: false };
 
   let result = { winnerStreak: 0, isFirstWin: false };
@@ -265,4 +283,4 @@ async function freshRatings(supabase, winner, loser) {
 
   return { winnerBefore, loserBefore, newWinnerElo, newLoserElo };
 }
-module.exports = { eloGain, eloLoss, applyMatchStreaks, calculateNewRatings, freshRatings, updateElo, updateStreaks, applyEloUpdate, applyEloAndMeasure, ELO_GAIN_MAX, ELO_LOSS_MAX };
+module.exports = { eloGain, eloLoss, ratesElo, applyMatchStreaks, calculateNewRatings, freshRatings, updateElo, updateStreaks, applyEloUpdate, applyEloAndMeasure, ELO_GAIN_MAX, ELO_LOSS_MAX };

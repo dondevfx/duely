@@ -194,8 +194,11 @@ export default function ResultScreen({
   const totalMatches = (profile?.wins ?? 0) + (profile?.losses ?? 0);
   const ranked = isRanked(profile);
   const placement = placementMatches(profile);
-  // Paid matches always update ELO regardless of placement — show the real number
-  const showElo = ranked || (entryFee > 0 && elo != null);
+  // Only a placed account has a rating to show. It used to show one whenever
+  // the match was paid, so a brand-new account watched a number move that the
+  // server had refused to write (placement holds every rating at 1000) — and
+  // the same screen called them Unranked two rows above.
+  const showElo = ranked;
 
   // The rating row appears only when a rating actually moved.
   //
@@ -203,7 +206,9 @@ export default function ResultScreen({
   // draws — so a missing value means "this mode does not rate", not "not loaded
   // yet". Previously they sent the player's UNCHANGED rating instead, which
   // rendered as "1000 (+0)": a rated match that happened to be worth nothing.
-  const ratingMoved = elo != null;
+  // Free matches, solo runs and every bot match report null: those do not
+  // rate at all (see ratesElo on the server), so there is no row to draw.
+  const ratingMoved = elo != null && ranked;
 
   // A free solo run is neither staked nor rated, so the payout row would be
   // reporting on something that did not happen.

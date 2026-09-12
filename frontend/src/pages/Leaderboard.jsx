@@ -2,7 +2,7 @@
 import { Link } from 'react-router-dom';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
-import { getRank } from '../utils/ranks';
+import { getRank, getDisplayRank, displayElo } from '../utils/ranks';
 import CoinIcon from '../components/CoinIcon';
 import GameIcon from '../components/GameIcon';
 import DiamondIcon from '../components/DiamondIcon';
@@ -148,7 +148,10 @@ export default function Leaderboard() {
 
   function fmtValue(player) {
     const v = player[tab.valueKey] ?? 0;
-    if (tab.id === 'elo') return <span className="inline-flex items-center gap-1"><RankIcon rank={getRank(v)} size={15} />{v} ELO</span>;
+    // The row's own placement decides this, not the stored number: an
+    // unplaced account reads 0 with the Unranked badge, the same as its
+    // profile and the sidebar say.
+    if (tab.id === 'elo') return <span className="inline-flex items-center gap-1"><RankIcon rank={getDisplayRank(player)} size={15} />{displayElo(player)} ELO</span>;
     if (tab.id === 'streak') return player.current_streak >= 1 ? `🔥 ${player.current_streak}` : `0 wins`;
     if (tab.isDiamond) return <span className="inline-flex items-center gap-1"><DiamondIcon size="0.9em" />{Number(v).toLocaleString()}</span>;
     return <span className="inline-flex items-center gap-1"><CoinIcon size="0.85em" /> {Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
@@ -157,7 +160,7 @@ export default function Leaderboard() {
   // Get user's own value from profile for rank banner (works even outside top 500)
   function fmtMyValue() {
     if (!profile) return '';
-    if (tab.id === 'elo') return <span className="inline-flex items-center gap-1"><RankIcon rank={getRank(profile.elo ?? 0)} size={15} />{profile.elo ?? 0} ELO</span>;
+    if (tab.id === 'elo') return <span className="inline-flex items-center gap-1"><RankIcon rank={getDisplayRank(profile)} size={15} />{displayElo(profile)} ELO</span>;
     if (tab.id === 'wagered' || tab.id === 'wagered-diamonds') {
       const myEntry = players.find(p => p.id === profile.id);
       const w = myEntry?.total_wagered ?? current?.userWagered ?? 0;

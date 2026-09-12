@@ -7,7 +7,7 @@
 const { randomInt } = require('node:crypto');
 const { closestByElo } = require('./queueMatch');
 const { findRoomBySocket } = require('./roomLookup');
-﻿const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings } = require('./eloService');
+﻿const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings, ratesElo } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const { v4: uuidv4 } = require('uuid');
@@ -379,30 +379,12 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
       // or diamonds — really does move the rating, but the payload carried no
       // number, so the card had nothing to print and hid the row entirely. That
       // reads as "bot matches are unrated", which is not true.
-      let humanNewElo = null;
-      let humanEloBefore = null;
+      // A bot match never moves a rating, whatever it cost — see ratesElo.
+      // A paid one still counts towards the three placement matches, which is
+      // what the counters below are for.
+      const humanNewElo = null;
+      const humanEloBefore = null;
       if (supabase && !freeSolo) {
-        const BOT_ELO = 1000;
-        // Read the rating as it stands now. player.elo is whatever the socket
-        // cached at queue time, and calculateNewRatings returns an ABSOLUTE
-        // value — writing one derived from a stale baseline lands a few points
-        // above the real rating and reports +4 on a win worth +20.
-        const BOT = { isBot: true, elo: BOT_ELO };
-        const { newWinnerElo, newLoserElo, winnerBefore, loserBefore } = humanWon
-          ? await freshRatings(supabase, player, BOT)
-          : await freshRatings(supabase, BOT, player);
-        humanNewElo = humanWon ? newWinnerElo : newLoserElo;
-        humanEloBefore = humanWon ? winnerBefore : loserBefore;
-        // Through applyEloUpdate so the placement guard applies here too. A
-        // raw update skips it, which is how a brand-new account's rating moved
-        // on a bot match while every screen still called it Unranked. When the
-        // guard holds the write back, the reported rating is reset to the one
-        // already stored — otherwise the card announces a swing the database
-        // never took.
-        try {
-          const r = await applyEloUpdate(supabase, player.userId, humanNewElo);
-          if (!r?.applied) humanNewElo = humanEloBefore;
-        } catch (e) { console.error('[blockBlastEngine] elo update:', e.message); }
         try { await supabase.rpc(humanWon ? 'increment_win' : 'increment_loss', { uid: player.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
         // Beating a bot no longer builds a streak — streaks are a PvP record.
         if (false) {
@@ -530,9 +512,12 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
   // did this; the rest did not.
   // A draw moves nobody's rating either: there is no winner to gain and no
   // loser to drop, and freshRatings only knows how to compute one of each.
-  const { newWinnerElo, newLoserElo, winnerBefore, loserBefore } = (isFree || isDraw)
-    ? { newWinnerElo: null, newLoserElo: null, winnerBefore: null, loserBefore: null }
-    : await freshRatings(supabase, winner, loser);
+  // PvP with a stake, and nothing else — see ratesElo. A free match is
+  // practice and a bot is not a person, so neither moves a rating.
+  const rated = ratesElo({ isFree, isDraw, vsBot: !!(winner.isBot || loser.isBot) });
+  const { newWinnerElo, newLoserElo, winnerBefore, loserBefore } = rated
+    ? await freshRatings(supabase, winner, loser)
+    : { newWinnerElo: null, newLoserElo: null, winnerBefore: null, loserBefore: null };
 
   // Settle wallet immediately so payout is accurate in the result
   let balanceChange = null;
@@ -584,7 +569,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
   // them untouched rather than breaking them.
   let winnerStreak = 0, isFirstWin = false;
   if (supabase && !isDraw && !winner.isBot && !loser.isBot) {
-    try { ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser)); } catch {}
+    try { ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser, { staked: !isFree })); } catch {}
   }
 
   io.to(roomId).emit('block_blast_result', {
@@ -609,14 +594,14 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
     // A free match still counts toward the record — see the note in
     // blackjackEngine. Only the rating is gated on the entry fee.
     if (supabase && !winner.isBot) {
-      if (!isFree) {
+      if (rated) {
         try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
       }
       if (!isDraw) { try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); } }
     }
 
     if (supabase && !loser.isBot) {
-      if (!isFree) {
+      if (rated) {
         try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); }
       }
       if (!isDraw) { try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch (e) { console.error('[blockBlastEngine] RPC failed:', e.message); } }

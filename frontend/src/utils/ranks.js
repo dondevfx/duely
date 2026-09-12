@@ -21,6 +21,19 @@ export function placementMatches(profile) {
   return Math.min(3, (profile?.wins ?? 0) + (profile?.losses ?? 0));
 }
 
+/**
+ * The rating to SHOW for an account.
+ *
+ * Zero until the three placement matches are done. A new account is stored at
+ * 1000 so its first rated match has somewhere to move from, but showing 1000
+ * before anyone has been placed presents a rating they have not earned — and
+ * every screen already calls them Unranked, so the number and the label were
+ * saying different things.
+ */
+export function displayElo(profile) {
+  return isRanked(profile) ? (profile?.elo ?? 1000) : 0;
+}
+
 const UNRANKED = { name: 'Unranked', min: 0, max: Infinity, icon: '❔', color: '#64748b', glow: 'rgba(100,116,139,0.3)' };
 
 /** Returns Unranked badge if player hasn't completed placement (needs profile object) */

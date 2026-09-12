@@ -2,7 +2,7 @@ const { v4: uuidv4 } = require('uuid');
 const { closestByElo } = require('./queueMatch');
 const { findRoomBySocket } = require('./roomLookup');
 const { isValidWord } = require('./wordValidator');
-const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings } = require('./eloService');
+const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings, ratesElo } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const { updateHighscore } = require('./highscoreService');
@@ -447,7 +447,8 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
     //
     // Leaving the rating null for a free match is therefore not just a display
     // change; it is what makes the write below stop happening.
-    if (winner && loser && !isFree) {
+    // PvP with a stake — see ratesElo. A bot match rated here too.
+    if (winner && loser && ratesElo({ isFree, vsBot: !!(winner.isBot || loser.isBot) })) {
       // Current ratings, not the ones cached on the socket at queue time.
       const ratings = await freshRatings(supabase, winner, loser);
       newWinnerElo  = ratings.newWinnerElo;
@@ -518,7 +519,7 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
         await supabase.rpc('increment_win', { uid: winner.userId }).catch(() => {});
         try {
           // Streaks are PvP-only — no-ops on bot matches, and resets the loser.
-          const sd = await applyMatchStreaks(supabase, winner, loser);
+          const sd = await applyMatchStreaks(supabase, winner, loser, { staked: !isFree });
           winnerStreak = sd.winnerStreak;
           isFirstWin   = sd.isFirstWin;
         } catch {}

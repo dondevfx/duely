@@ -31,7 +31,7 @@ const { findRoomBySocket } = require('./roomLookup');
  */
 const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
 const { unlockUser } = require('./lockService');
-const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings } = require('./eloService');
+const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings, ratesElo } = require('./eloService');
 const { updateHighscore } = require('./highscoreService');
 const gameEvents = require('./gameEvents');
 const { v4: uuidv4 } = require('uuid');
@@ -533,7 +533,10 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
   const isFree = (room.entryFee || 0) === 0;
   // ELO / W-L only count when there's something at stake or a real opponent.
   const vsBot = !!(winner.isBot || loser.isBot);
-  const ranked = !isFree || !vsBot;
+  // `&&`, not `||`. As an OR this rated a FREE PvP match and, worse, a
+  // diamond bet against a BOT — a rating farmed off an opponent that is not a
+  // person. See ratesElo.
+  const ranked = ratesElo({ isFree, vsBot });
   // Ratings computed from CURRENT profile values, not the elo cached on the
   // socket at queue time — see freshRatings.
   // A draw moves nobody's rating: there is no winner to gain and no loser to
@@ -592,7 +595,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
   // leaves them untouched rather than breaking them.
   let winnerStreak = 0, isFirstWin = false;
   if (supabase && !isDraw && !winner.isBot && !loser.isBot) {
-    try { ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser)); } catch {}
+    try { ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser, { staked: !isFree })); } catch {}
   }
 
   io.to(roomId).emit('color_rush_result', {

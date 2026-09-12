@@ -110,10 +110,13 @@ test('a real PvP Tower win sends the streak it just recorded', async () => {
     }),
   };
 
-  const p1 = { socketId: 'w1', userId: 'winner', username: 'Ann', entryFee: 0, currency: 'coins' };
-  const p2 = { socketId: 'l1', userId: 'loser',  username: 'Bob', entryFee: 0, currency: 'coins' };
+  // STAKED, because a streak is a record of beating paying opponents: a free
+  // match neither builds one nor breaks one (see applyMatchStreaks).
+  const p1 = { socketId: 'w1', userId: 'winner', username: 'Ann', entryFee: 1, currency: 'coins' };
+  const p2 = { socketId: 'l1', userId: 'loser',  username: 'Bob', entryFee: 1, currency: 'coins' };
   const { roomId } = engine.createDirectTowerRoom(p1, p2);
   const room = engine.getTowerRoom(roomId);
+  room.feesDeducted = true;
   room.state = 'active';
   room.scores = { w1: 12, l1: 5 };
   room.finished = { w1: true, l1: true };

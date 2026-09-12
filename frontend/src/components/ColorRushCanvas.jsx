@@ -714,12 +714,17 @@ export default function ColorRushCanvas({ seed, onProgress, onDeath }) {
     function drawBall() {
       const x = sx(LANE_X), y = sy(yDraw), r = BALL_R * scale;
       const col = COLORS[S.color];
-      halo(x, y, r * (1.7 + S.pulse * 0.8), col.fill, 0.12);
-      halo(x, y, r * (1.3 + S.pulse * 0.4), col.fill, 0.22);
+      // The ball's own glow, as it always was. The cheap two-ring halo that
+      // replaced it read as an outline drawn around the ball, which is not
+      // what it is — it is one light source. It is a single blurred circle a
+      // frame; the diamonds, which there are many of, keep the cheap halo.
       ctx.beginPath();
       ctx.arc(x, y, r, 0, TAU);
       ctx.fillStyle = col.fill;
+      ctx.shadowColor = col.fill;
+      ctx.shadowBlur = 16 + S.pulse * 22;
       ctx.fill();
+      ctx.shadowBlur = 0;
     }
 
     // The burst is the ball coming apart, so it is the ball's color.

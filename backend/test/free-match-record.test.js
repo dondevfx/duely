@@ -65,10 +65,13 @@ const occurrences = (src, needle) => {
 const STAKE = /isFree|freeSolo|\branked\b/;
 
 // The condition each engine uses to mean "this match is rated".
+// The stake check is one shared rule now — ratesElo — read into a `rated` or
+// `ranked` local: PvP, with a stake, and not a draw. A bot match never rates,
+// however it was paid for.
 const RATED_GATE = {
-  'blackjackEngine.js':  /!isFree/,
-  'coinFlipEngine.js':   /!isFree/,
-  'blockBlastEngine.js': /!isFree|!freeSolo/,
+  'blackjackEngine.js':  /\brated\b/,
+  'coinFlipEngine.js':   /\brated\b/,
+  'blockBlastEngine.js': /\brated\b|!freeSolo/,
   'carDashEngine.js':    /\branked\b/,
 };
 
@@ -122,7 +125,7 @@ test('Word VS counted free matches all along, and still does', () => {
 test('Word VS still refuses to rate a free match', () => {
   // The bug fixed alongside this: it wrote ratings regardless of stake.
   const src = body('wordleEngine.js');
-  assert.match(src, /if \(winner && loser && !isFree\)/);
+  assert.match(src, /if \(winner && loser && ratesElo\(/);
   for (const at of occurrences(src, 'update({ elo: new')) {
     assert.ok(enclosingIfs(src, at).some(c => /!= null/.test(c)),
       'a rating write must be gated on actually having a rating');

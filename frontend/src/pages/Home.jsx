@@ -14,6 +14,7 @@ import { GAMES } from '../data/games';
 import useTournamentClock from '../hooks/useTournamentClock';
 import { LockIcon } from '../components/UiIcon';
 import FitText from '../components/FitText';
+import { displayElo } from '../utils/ranks';
 
 // The stripped-back phone Home.
 //
@@ -231,7 +232,7 @@ export default function Home() {
                   <CoinIcon size="0.85em" />
                 </span>
               ) },
-              { label: 'ELO', value: profile.elo ?? 1000 },
+              { label: 'ELO', value: displayElo(profile) },
               { label: 'Wins', value: profile.wins ?? 0 },
               { label: 'Losses', value: profile.losses ?? 0 },
             ].map(stat => (

@@ -53,7 +53,7 @@ test('a free run writes no rating and no win record', () => {
 
   const gate = block.indexOf('if (supabase && !freeSolo)');
   const gated = block.slice(gate);
-  for (const marker of ['elo:', 'increment_win', "from('matches')"]) {
+  for (const marker of ['increment_win', "from('matches')"]) {
     const at = gated.indexOf(marker);
     assert.ok(at > 0, `${marker} should live inside the paid-only branch`);
   }
@@ -61,6 +61,10 @@ test('a free run writes no rating and no win record', () => {
   const before = block.slice(0, gate);
   assert.doesNotMatch(before, /increment_win|increment_loss/);
   assert.doesNotMatch(before, /calculateNewRatings/);
+  // And a bot match computes no rating at ALL now, paid or free: rating is
+  // PvP-with-a-stake only. See ratesElo.
+  assert.doesNotMatch(block, /freshRatings|applyEloUpdate/,
+    'a bot match is rating a player against something that is not a person');
 });
 
 test('a personal best is still recorded for a free run', () => {

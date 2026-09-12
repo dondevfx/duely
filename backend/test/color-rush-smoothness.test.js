@@ -9,11 +9,15 @@ const FE = (...p) => path.join(__dirname, '..', '..', 'frontend', 'src', ...p);
 const canvas = fs.readFileSync(FE('components', 'ColorRushCanvas.jsx'), 'utf8');
 const sound  = fs.readFileSync(FE('utils', 'sound.js'), 'utf8');
 
-test('no blurred shadow is drawn every frame on the ball or the diamonds', () => {
+test('the diamonds cost nothing to glow, and the ball keeps its own', () => {
   const ball = canvas.slice(canvas.indexOf('function drawBall'), canvas.indexOf('function drawBits'));
   const dia  = canvas.slice(canvas.indexOf('function drawDiamond'), canvas.indexOf('function drawSwitcher'));
-  assert.doesNotMatch(ball, /shadowBlur/, 'the ball re-blurs its glow every frame');
-  assert.doesNotMatch(dia,  /shadowBlur/, 'every diamond re-blurs its glow every frame');
+  // There are many diamonds on screen and one ball. Replacing the ball's
+  // blurred glow with flat rings read as an OUTLINE around it rather than as
+  // a light, so the ball keeps the real thing; the diamonds, which are the
+  // volume, keep the cheap halo.
+  assert.doesNotMatch(dia, /shadowBlur/, 'every diamond re-blurs its glow every frame');
+  assert.match(ball, /shadowBlur = 16 \+ S\.pulse \* 22;/, 'the ball glow is gone again');
 });
 
 test('the frame is drawn at the real moment, not the last fixed step', () => {

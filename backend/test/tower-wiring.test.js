@@ -225,10 +225,11 @@ test('the page forfeits on leaving, like the others', () => {
 for (const [file, engineName] of [['towerEngine.js', 'Tower'], ['blockBlastEngine.js', 'Block Burst']]) {
   test(`${engineName} sends the new rating with a bot result`, () => {
     const src = be('services', file);
-    assert.match(src, /newElo:\s+humanNewElo/, `${file} does not report the rating it applied`);
-    // Declared outside the rated branch, so a FREE run still reports null and
-    // the card correctly shows nothing.
-    assert.match(src, /let humanNewElo = null(, eloBefore = null)?;/);
+    assert.match(src, /newElo:\s+humanNewElo/, `${file} reports no rating field at all`);
+    // Always null now: a bot match does not rate, whatever it cost, so the
+    // card shows no rating row. See ratesElo.
+    assert.match(src, /const humanNewElo = null/,
+      `${file} still computes a rating for a bot match`);
   });
 }
 
@@ -560,7 +561,7 @@ test('the shown bot score agrees with the outcome either way', () => {
   assert.match(engine, /if \(!humanWon && botScore <= verified\)/);
 });
 
-test('a bot match rates against the current rating, not a cached one', () => {
+test('a bot match computes no rating at all', () => {
   // calculateNewRatings returns an ABSOLUTE value. Derived from the elo cached
   // on the socket at queue time, it produces a swing that is not the gain or
   // loss at all — a socket holding 1020 against a profile of 1000 writes
@@ -569,13 +570,13 @@ test('a bot match rates against the current rating, not a cached one', () => {
   // eloService.freshRatings and adopted by all six engines — the same flaw was
   // left in the other five and resurfaced as a +4 win in Rush Hour, which is
   // the argument for one implementation rather than six.
-  const solo = engine.slice(engine.indexOf('if (room.isSolo)'));
-  assert.match(solo, /await freshRatings\(supabase, player, BOT\)/,
-    'the current rating must be read before it is changed');
-  assert.match(solo, /await freshRatings\(supabase, BOT, player\)/);
-  const at = solo.indexOf('freshRatings');
-  assert.doesNotMatch(solo.slice(at, at + 200), /player\.elo/,
-    'the cached socket rating must not feed the calculation');
+  // It used to rate whenever the match was paid, so a diamond bet against a
+  // bot moved a real rating. Rating is PvP-with-a-stake only now (ratesElo),
+  // which settles the stale-baseline problem this test was written for by
+  // removing the calculation entirely.
+  const solo = engine.slice(engine.indexOf('if (room.isSolo)'), engine.indexOf('async function _resolve'));
+  assert.doesNotMatch(solo, /freshRatings|applyEloUpdate/,
+    'a bot match still computes or writes a rating');
 });
 
 test('the card is told which number to subtract from', () => {

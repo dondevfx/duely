@@ -8,7 +8,7 @@ const { randomInt } = require('node:crypto');
 const { closestByElo } = require('./queueMatch');
 const { findRoomBySocket } = require('./roomLookup');
 const { v4: uuidv4 } = require('uuid');
-const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings } = require('./eloService');
+const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings, ratesElo } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const gameEvents = require('./gameEvents');
@@ -458,9 +458,12 @@ async function _resolveGame(io, supabase, roomId) {
   // a rated match that happened to be worth nothing. null means "this mode
   // does not rate", and the card omits the row entirely. Rush Hour already
   // did this; the rest did not.
-  const { newWinnerElo, newLoserElo, winnerBefore, loserBefore } = (isDraw || isFree)
-    ? { newWinnerElo: null, newLoserElo: null, winnerBefore: null, loserBefore: null }
-    : await freshRatings(supabase, winner, loser);
+  // PvP with a stake, and nothing else — see ratesElo. A free match is
+  // practice and a bot is not a person, so neither moves a rating.
+  const rated = ratesElo({ isFree, isDraw, vsBot: !!(winner.isBot || loser.isBot || p1.isBot || p2.isBot) });
+  const { newWinnerElo, newLoserElo, winnerBefore, loserBefore } = rated
+    ? await freshRatings(supabase, winner, loser)
+    : { newWinnerElo: null, newLoserElo: null, winnerBefore: null, loserBefore: null };
 
   let balanceChange = null;
   if (supabase && room.entryFee > 0 && !room.feesDeducted) {
@@ -506,13 +509,13 @@ async function _resolveGame(io, supabase, roomId) {
       // the streak follow the result itself.
     if (!isDraw) {
       if (!winner.isBot) {
-        if (!isFree) {
+        if (rated) {
           try { await applyEloUpdate(supabase, winner.userId, newWinnerElo); } catch (eloWinErr) { console.error('[blackjackEngine] elo winner update failed:', eloWinErr.message); }
         }
         try { await supabase.rpc('increment_win', { uid: winner.userId }); } catch (e) { console.error('[blackjackEngine] increment_win:', e.message); }
       }
       if (!loser.isBot) {
-        if (!isFree) {
+        if (rated) {
           try { await applyEloUpdate(supabase, loser.userId, newLoserElo); } catch (eloLoseErr) { console.error('[blackjackEngine] elo loser update failed:', eloLoseErr.message); }
         }
         try { await supabase.rpc('increment_loss', { uid: loser.userId }); } catch (e) { console.error('[blackjackEngine] increment_loss:', e.message); }
@@ -520,7 +523,7 @@ async function _resolveGame(io, supabase, roomId) {
       // Streaks are PvP-only — applyMatchStreaks no-ops on bot matches, and
       // handles both the winner's increment and the loser's reset. A streak is
       // a win record, so it follows the wins rather than the fee.
-      try { ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser)); } catch (e) { console.error('[blackjackEngine] streaks:', e.message); }
+      try { ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser, { staked: !isFree })); } catch (e) { console.error('[blackjackEngine] streaks:', e.message); }
     }
 
     try {
