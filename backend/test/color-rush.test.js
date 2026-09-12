@@ -180,8 +180,13 @@ test('settlement cannot run twice', () => {
 test('a wagered bot match cannot be won by dying instantly', () => {
   assert.match(ENGINE, /BOT_WIN_MIN_MS/);
   const at = ENGINE.indexOf('if (room.isSolo && bot)');
-  const body = ENGINE.slice(at, at + 900);
-  assert.match(body, /cleared[\s\S]{0,300}?hS \+ 2/,
+  const body = ENGINE.slice(at, at + 2200);
+  // The not-cleared branch: under the bar, the bot leads on score AND time.
+  // Read from `} else {` rather than from `cleared`, because the bot's own
+  // death branch now sits between the two. See botDiesAtMs.
+  const elseAt = body.lastIndexOf('} else {');
+  assert.ok(elseAt > 0, 'the pinned-ahead branch is gone');
+  assert.match(body.slice(elseAt, elseAt + 400), /hS \+ 2/,
     'missing the bar, the bot must be pinned ahead on score AND time');
 });
 

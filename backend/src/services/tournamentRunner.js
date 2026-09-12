@@ -361,6 +361,15 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
       room.tournament = { poolId: pool.id, round, match: index };
       room.soloRun = false;
       if (room.isSolo) room.demoWin = true;
+      // demoWin is set HERE, after the engine built the room — so the bot's
+      // own-death roll, which happens at room creation, has already been made
+      // (and made against a room that did not yet know it was a bracket one).
+      // Rolled again here so a bracket bot dies on screen as often as any
+      // other: it changes nothing about who goes through, only what the
+      // player watches. See the note on botDiesAtMs in colorRushEngine.
+      if (room.isSolo && 'botDiesAtMs' in room && Math.random() < 0.33) {
+        room.botDiesAtMs = 27_000 + Math.floor(Math.random() * 6_000);
+      }
       room.feesDeducted = true;
       // Seated but not started. The sockets join this room before the game
       // screen for it exists — and for a sudden-death replay, while the

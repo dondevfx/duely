@@ -243,8 +243,12 @@ async function startBlockBlastCountdown(io, supabase, roomId) {
         const humanScore = r.pingScores[human.socketId] ?? 0;
         // Target = human score * ratio, approached gradually with small random noise
         const target = Math.floor(humanScore * r.botRatio);
-        const step   = Math.floor(Math.random() * 60) + 10;
-        if (target > botDisplayScore) {
+        // Closes a third of the gap, so the shown score is actually AT the
+        // target by the time the run ends — the final card now prints this
+        // number, and a ticker that lagged would print a jump instead.
+        const gap    = target - botDisplayScore;
+        const step   = Math.max(Math.floor(Math.random() * 60) + 10, Math.ceil(gap / 3));
+        if (gap > 0) {
           botDisplayScore = Math.min(target, botDisplayScore + step);
         }
         r.pingScores['bot'] = botDisplayScore;
@@ -345,13 +349,15 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
     const player = room.players.find(p => !p.isBot);
     if (player) {
       room.state = 'finished';
-      // Final bot score = human score * ratio (ensures outcome matches what was shown)
+      // Final bot score = the score the player watched (see `shown` below).
       // A free run is practice: nothing is staked, so there is nothing to lose,
       // and being told you lost to a bot you never bet against just discourages
       // playing. Paid bot matches are untouched — real money is on those.
       const freeSolo = !(room.entryFee > 0);
       const alwaysWin = room.demoWin || freeSolo;
-      let botScore = Math.floor(verifiedScore * (room.botRatio ?? 0.8));
+      // What the player watched all game — see the same note in towerEngine.
+      const shown = room.pingScores['bot'];
+      let botScore = shown != null ? shown : Math.floor(verifiedScore * (room.botRatio ?? 0.8));
       if (alwaysWin && botScore >= verifiedScore) botScore = Math.max(0, verifiedScore - 1);
       const humanWon = alwaysWin ? true : verifiedScore > botScore;
       let balanceChange = null;

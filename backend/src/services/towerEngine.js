@@ -304,7 +304,14 @@ async function handleTowerComplete(io, supabase, roomId, socketId, score = 0, ta
     // Paid bot matches are untouched — real money is on those.
     const freeSolo  = !(room.entryFee > 0);
     const alwaysWin = room.demoWin || freeSolo;
-    let botScore = Math.floor(verified * (room.botRatio ?? 0.8));
+    // The number the player WATCHED, not a fresh calculation of it.
+    //
+    // The live ticker below shows the bot climbing one block at a time, and
+    // the card then printed floor(verified * botRatio) — a different number
+    // from the same inputs. The opponent sat on 20 all game and finished on
+    // 25, which is the moment a bot stops looking like a player.
+    const shown = room.pingScores['bot'];
+    let botScore = shown != null ? shown : Math.floor(verified * (room.botRatio ?? 0.8));
     if (alwaysWin && botScore >= verified) botScore = Math.max(0, verified - 1);
     // On a diamond bet against the bot the target IS the score: clear
     // DIAMOND_BOT_MIN_SCORE and you win, full stop.

@@ -59,9 +59,17 @@ test('the bot no longer posts a fixed fraction of the player time', () => {
   // 0.85x on both time and score, every match: survive 28 seconds and the
   // opponent always died at 24, with a score in the same ratio. A real
   // opponent's run is not a scaled copy of yours.
-  assert.ok(!/Math\.floor\(hT \* 0\.85\)/.test(CARDASH), 'the fixed time ratio is back');
   assert.ok(!/Math\.floor\(hS \* 0\.85\)/.test(CARDASH), 'the fixed score ratio is back');
-  assert.match(CARDASH, /const gap = Math\.max\(1_200, Math\.floor\(hT \* rand\(0\.08, 0\.42\)\)\)/);
+  // The variation now lives on the LIVE BAR rather than being drawn again at
+  // the end: each match has its own trailing pace, and the final time is the
+  // one the bar had reached. Drawing a fresh gap at resolve was what made the
+  // opponent's run change length the moment the player crashed.
+  assert.match(CARDASH, /botTrail: 0\.58 \+ Math\.random\(\) \* 0\.34,/,
+    'the bot trails at one fixed pace in every match');
+  assert.match(CARDASH, /const trail = Math\.max\(0, Math\.floor\(elapsed \* \(r\.botTrail \?\? 0\.85\)\)\);/,
+    'the live bar ignores the per-match pace');
+  assert.match(CARDASH, /const shown = room\.progress\[_botKey\(room\)\] \?\? Math\.floor\(hT \* \(room\.botTrail \?\? 0\.85\)\);/,
+    'the card draws a new time instead of printing the one that was shown');
   assert.match(CARDASH, /scoreFromMs = \(ms\)/,
     "the bot's score must come from its own time, not from the player's score");
 });
@@ -77,7 +85,9 @@ test('the rigged result still holds', () => {
 test('the losing bot never posts an implausible run', () => {
   // A player who crashes at three seconds would otherwise give the bot a
   // sub-second time, which reads as broken rather than as an opponent.
-  assert.match(CARDASH, /Math\.max\(2_000, hT - gap\)/);
+  // Floored at 2s, and kept at least 1.2s behind so a near-tie cannot round
+  // into a draw.
+  assert.match(CARDASH, /Math\.max\(2_000, Math\.min\(shown, hT - 1_200\)\)/);
 });
 
 // ── The profile popup ─────────────────────────────────────────────────────

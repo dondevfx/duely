@@ -105,8 +105,13 @@ test('the bot is pinned in exactly one place', () => {
     require('node:path').join(__dirname, '..', 'src', 'services', 'carDashEngine.js'), 'utf8');
   const pins = (src.match(/room\.times\[_botKey\(room\)\]\s*=/g) || []).length
              + (src.match(/r\.times\[_botKey\(r\)\]\s*=/g) || []).length;
-  assert.equal(pins, 2,
-    'expected exactly the two branches inside _resolveFromTimes (cleared / not cleared)');
+  // Three: the two branches inside _resolveFromTimes (cleared / not cleared),
+  // and the bot's own crash — which only ever fires while the player is still
+  // driving, so the 25-second floor is not in play there. See botDiesAtMs.
+  assert.equal(pins, 3, 'a new place is pinning the bot outside the three known ones');
+  const deathAt = src.indexOf('if (fresh.botDiesAtMs) {');
+  assert.ok(deathAt > 0 && src.slice(deathAt, deathAt + 700).includes('r.times[k] = ms;'),
+    'the third pin is not the bot crash');
   const fn = src.slice(src.indexOf('async function _resolveFromTimes'));
   assert.match(fn, /const cleared = room\.demoWin \|\| hT >= BOT_WIN_MIN_MS;/);
 });

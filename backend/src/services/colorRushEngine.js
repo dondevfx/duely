@@ -131,6 +131,25 @@ function _makeRoom(roomId, p1, p2) {
     soloRun,
     demoWin,
     botTargetMs: isSolo && !demoWin ? 18_000 + Math.floor(Math.random() * 40_000) : 0,
+    // A third of bot matches, the bot's own run ends about half a minute in.
+    //
+    // A bot that never dies is the tell: every match ended with the opponent
+    // still going, whatever the player did. Now the player sometimes watches
+    // them go out and plays on to win it, which is what a real match looks
+    // like. Only where the opponent CAN die on screen, and only for rooms the
+    // player is meant to win anyway (demo and bracket bots) — it decides
+    // nothing that was not already decided.
+    botDiesAtMs: demoWin && Math.random() < 0.33
+      ? 27_000 + Math.floor(Math.random() * 6_000)
+      : 0,
+    // How far behind the bot runs, drawn per match.
+    //
+    // The bar used to trail at a flat 85% and the result card then drew a
+    // fresh random gap — so the opponent's run changed length the moment the
+    // player crashed. The variation belongs HERE, on the thing the player
+    // watches: every match has its own pace, and the final time is whatever
+    // the bar had reached.
+    botTrail: 0.58 + Math.random() * 0.34,
     botTimers: [],
   };
 }
@@ -193,12 +212,33 @@ async function startColorRushCountdown(io, supabase, roomId) {
     const tick = setInterval(() => {
       const r = getColorRushRoom(roomId);
       if (!r || r.state !== 'active') { clearInterval(tick); return; }
+      // Once the bot's run has ended its bar stops, like any other player's.
+      if (r.times[_botKey(r)] != null) { clearInterval(tick); return; }
       const elapsed = Date.now() - r.startedAt;
-      const trail = Math.max(0, Math.floor(elapsed * 0.85));
+      const trail = Math.max(0, Math.floor(elapsed * (r.botTrail ?? 0.85)));
       r.progress[_botKey(r)] = trail;
       if (human) io.to(human.socketId).emit('color_rush_opponent_progress', { ms: trail });
     }, 250);
     fresh.botTimers.push(tick);
+
+    // The bot's own death, for the third of matches that get one. Nothing is
+    // resolved here: the player carries on, and the match ends when THEY die,
+    // by which time they have survived longer and won it on their own run.
+    if (fresh.botDiesAtMs) {
+      const dies = setTimeout(() => {
+        const r = getColorRushRoom(roomId);
+        if (!r || r.state !== 'active') return;
+        const k = _botKey(r);
+        if (r.times[k] != null) return;
+        if (!human || r.times[human.socketId] != null) return;   // player went first
+        const ms = r.botDiesAtMs;
+        r.times[k] = ms;
+        r.progress[k] = ms;
+        r.scores[k] = Math.floor(ms / 1500);
+        io.to(human.socketId).emit('color_rush_opponent_died', { ms });
+      }, fresh.botDiesAtMs);
+      fresh.botTimers.push(dies);
+    }
   }
 }
 
@@ -368,8 +408,18 @@ async function _resolveFromTimes(io, supabase, roomId) {
       const hT = room.times[human.socketId] ?? room.progress[human.socketId] ?? 0;
       const hS = room.scores[human.socketId] ?? 0;
       const cleared = room.demoWin || hT >= BOT_WIN_MIN_MS;
-      if (cleared) {
-        room.times[_botKey(room)]  = Math.max(0, Math.floor(hT * 0.85) - 200);
+      const diedOwn = room.times[_botKey(room)] != null && room.botDiesAtMs
+                      && room.times[_botKey(room)] === room.botDiesAtMs;
+      if (diedOwn) {
+        // It ended its own run in front of the player; that time stands. Only
+        // the score is held under theirs, since score is what decides here.
+        room.scores[_botKey(room)] = Math.max(0, Math.min(room.scores[_botKey(room)] ?? 0, hS - 1));
+      } else if (cleared) {
+        // The time the player WATCHED on the bar — see botTrail, which is
+        // drawn per match. The bar trailed all game and the card then printed
+        // something else, the same jump the scores had.
+        const shown = room.progress[_botKey(room)] ?? Math.floor(hT * (room.botTrail ?? 0.85));
+        room.times[_botKey(room)]  = Math.max(2_000, Math.min(shown, hT - 300));
         room.scores[_botKey(room)] = Math.max(0, hS - 1);
       } else {
         // Pinned ahead on BOTH, since score decides and time breaks a tie —

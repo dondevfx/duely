@@ -147,6 +147,25 @@ function _makeRoom(roomId, p1, p2) {
     demoWin,
     // Non-demo solo: the bot crashes at a fixed, believable time.
     botTargetMs: isSolo && !demoWin ? 18_000 + Math.floor(Math.random() * 40_000) : 0,
+    // A third of bot matches, the bot's own run ends about half a minute in.
+    //
+    // A bot that never dies is the tell: every match ended with the opponent
+    // still going, whatever the player did. Now the player sometimes watches
+    // them go out and plays on to win it, which is what a real match looks
+    // like. Only where the opponent CAN die on screen, and only for rooms the
+    // player is meant to win anyway (demo and bracket bots) — it decides
+    // nothing that was not already decided.
+    botDiesAtMs: demoWin && Math.random() < 0.33
+      ? 27_000 + Math.floor(Math.random() * 6_000)
+      : 0,
+    // How far behind the bot runs, drawn per match.
+    //
+    // The bar used to trail at a flat 85% and the result card then drew a
+    // fresh random gap — so the opponent's run changed length the moment the
+    // player crashed. The variation belongs HERE, on the thing the player
+    // watches: every match has its own pace, and the final time is whatever
+    // the bar had reached.
+    botTrail: 0.58 + Math.random() * 0.34,
     botTimers: [],
   };
 }
@@ -224,12 +243,32 @@ async function startCarDashCountdown(io, supabase, roomId) {
     const tick = setInterval(() => {
       const r = getCarDashRoom(roomId);
       if (!r || r.state !== 'active') { clearInterval(tick); return; }
+      // Once the bot has crashed its bar stops, like any other player's.
+      if (r.times[_botKey(r)] != null) { clearInterval(tick); return; }
       const elapsed = Date.now() - r.startedAt;
-      const trail = Math.max(0, Math.floor(elapsed * 0.85));
+      const trail = Math.max(0, Math.floor(elapsed * (r.botTrail ?? 0.85)));
       r.progress[_botKey(r)] = trail;
       if (human) io.to(human.socketId).emit('car_dash_opponent_progress', { ms: trail });
     }, 250);
     fresh.botTimers.push(tick);
+
+    // The bot's own crash — see the same note in colorRushEngine. The player
+    // drives on and wins it by outlasting them.
+    if (fresh.botDiesAtMs) {
+      const dies = setTimeout(() => {
+        const r = getCarDashRoom(roomId);
+        if (!r || r.state !== 'active') return;
+        const k = _botKey(r);
+        if (r.times[k] != null) return;
+        if (!human || r.times[human.socketId] != null) return;   // player went first
+        const ms = r.botDiesAtMs;
+        r.times[k] = ms;
+        r.progress[k] = ms;
+        r.scores[k] = Math.max(0, Math.floor((ms / 1000) * 50 * (0.9 + Math.random() * 0.22)));
+        io.to(human.socketId).emit('car_dash_opponent_crashed', { ms });
+      }, fresh.botDiesAtMs);
+      fresh.botTimers.push(dies);
+    }
   }
 }
 
@@ -432,7 +471,8 @@ async function _resolveFromTimes(io, supabase, roomId) {
       // at 24, every single match, with a score in the same fixed ratio. A
       // real opponent's run is not a scaled copy of yours.
       //
-      // So the gap is drawn per match, and the bot's score comes from its own
+      // So the pace is drawn per match (botTrail, used by the live bar the
+      // player actually watches), and the bot's score comes from its own
       // survival time at the game's own rate — the same ms-to-points relation
       // used to fill in a missing bot score above — with a little noise for
       // the combos a real run picks up. What is rigged is only WHO wins; the
@@ -440,12 +480,22 @@ async function _resolveFromTimes(io, supabase, roomId) {
       const rand = (lo, hi) => lo + Math.random() * (hi - lo);
       const scoreFromMs = (ms) => Math.max(0, Math.floor((ms / 1000) * 50 * rand(0.9, 1.12)));
 
-      if (cleared) {
-        // Loses by anywhere from a hair to a wide margin, never by a constant.
-        // Floored at 1.2s behind so a near-tie cannot round into a draw, and
-        // at 2s absolute so the bot never posts an implausible sub-second run.
-        const gap = Math.max(1_200, Math.floor(hT * rand(0.08, 0.42)));
-        const bT  = Math.max(2_000, hT - gap);
+      const diedOwn = room.times[_botKey(room)] != null && room.botDiesAtMs
+                      && room.times[_botKey(room)] === room.botDiesAtMs;
+      if (diedOwn) {
+        // It crashed in front of the player; that time stands. The score is
+        // held under theirs, since score is what decides.
+        room.scores[_botKey(room)] = Math.max(0, Math.min(room.scores[_botKey(room)] ?? 0, hS - 1));
+      } else if (cleared) {
+        // The time the player WATCHED on the bar — see botTrail. It used to
+        // draw a fresh gap here, so the opponent's run changed length on the
+        // result card: the bar said 24s and the card said 18s.
+        //
+        // Still never a constant fraction (botTrail is per match), still at
+        // least 1.2s behind so a near-tie cannot round into a draw, and still
+        // floored at 2s so the bot never posts an implausible sub-second run.
+        const shown = room.progress[_botKey(room)] ?? Math.floor(hT * (room.botTrail ?? 0.85));
+        const bT  = Math.max(2_000, Math.min(shown, hT - 1_200));
         room.times[_botKey(room)]  = bT;
         // Kept strictly under the human's, since score is what decides. A
         // generous roll on a close time could otherwise hand the bot the win
