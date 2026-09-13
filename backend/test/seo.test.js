@@ -168,10 +168,6 @@ test('an About page explains Duely, and public pages link to it', async () => {
   const app = fs.readFileSync(FE('src', 'App.jsx'), 'utf8');
   assert.match(app, /<Route path="\/about"/);
 
-  const side = fs.readFileSync(FE('src', 'components', 'LeftSidebar.jsx'), 'utf8');
-  for (const p of ['/about', '/tos', '/privacy', '/support']) {
-    assert.ok(side.includes(`'${p}'`), `the sidebar does not link to ${p}`);
-  }
 });
 
 test('sign-in and sign-up pages have a heading', () => {

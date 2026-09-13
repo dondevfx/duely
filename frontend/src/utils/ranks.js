@@ -31,7 +31,11 @@ export function placementMatches(profile) {
  * saying different things.
  */
 export function displayElo(profile) {
-  return isRanked(profile) ? (profile?.elo ?? 1000) : 0;
+  // Unplaced: 0. Placed: their rating, or the 1000 placement starts them at if
+  // none was ever written — a placed player shown at 0 read as broken.
+  if (!isRanked(profile)) return 0;
+  const elo = Number(profile?.elo);
+  return elo > 0 ? elo : 1000;
 }
 
 const UNRANKED = { name: 'Unranked', min: 0, max: Infinity, icon: '❔', color: '#64748b', glow: 'rgba(100,116,139,0.3)' };

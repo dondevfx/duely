@@ -70,7 +70,10 @@ test('placement is still reached by playing anything', () => {
 
 test('an unplaced account reads 0, not 1000', () => {
   const ranks = fe('utils', 'ranks.js');
-  assert.match(ranks, /export function displayElo\(profile\) \{\s*\n\s*return isRanked\(profile\) \? \(profile\?\.elo \?\? 1000\) : 0;/);
+  // 0 while unplaced; once placed, the stored rating, or the 1000 placement
+  // starts from when none was ever written (see placement-ipad-chat.test.js).
+  assert.ok(ranks.includes('if (!isRanked(profile)) return 0;'));
+  assert.ok(ranks.includes('return elo > 0 ? elo : 1000;'));
   // The leaderboard, the home strip: the number and the badge come from the
   // same place, so they cannot say different things.
   const lb = fe('pages', 'Leaderboard.jsx');

@@ -9,8 +9,17 @@ export default {
       //
       // Nothing else meaningful lives in 720-767: a phone in landscape is
       // already 844pt or wider, so it was getting md: before this change too.
+      //
+      // md and up also require a precise, hovering pointer. iPads matched the
+      // desktop layout by width and it never sat right on them: sidebars, the
+      // floating friends column, the chat rail. A touch tablet now gets the
+      // phone layout at every width, stretched to its screen. Desktops and
+      // laptops with a mouse or trackpad are unchanged. sm stays width-only.
       screens: {
-        md: '720px',
+        md:    { raw: '(min-width: 720px) and (hover: hover) and (pointer: fine)' },
+        lg:    { raw: '(min-width: 1024px) and (hover: hover) and (pointer: fine)' },
+        xl:    { raw: '(min-width: 1280px) and (hover: hover) and (pointer: fine)' },
+        '2xl': { raw: '(min-width: 1536px) and (hover: hover) and (pointer: fine)' },
       },
       colors: {
         bg:           '#000000',

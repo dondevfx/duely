@@ -52,7 +52,10 @@ function calcScore(hand) {
 
 // Responsive card size — bigger on desktop, noticeably smaller on mobile so
 // the hand + HIT/STAND buttons all fit on screen without scrolling.
-const IS_MOBILE_SCREEN = typeof window !== 'undefined' && window.innerWidth < 768;
+// A touch tablet counts as mobile too: it gets the phone layout (see
+// tailwind.config.js), so the cards are sized for it.
+const IS_MOBILE_SCREEN = typeof window !== 'undefined' && (window.innerWidth < 768
+  || !!window.matchMedia?.('(hover: none) and (pointer: coarse)').matches);
 const CARD_W = typeof window !== 'undefined'
   ? Math.round(Math.min(98, Math.floor((window.innerWidth - 48) / 4)) * (IS_MOBILE_SCREEN ? 0.74 : 1))
   : 98;

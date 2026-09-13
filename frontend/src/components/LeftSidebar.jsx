@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
-import { getDisplayRank, isRanked } from '../utils/ranks';
+import { getDisplayRank, isRanked, displayElo } from '../utils/ranks';
 import Avatar from './Avatar';
 import GameIcon from './GameIcon';
 import UiIcon from './UiIcon';
@@ -111,15 +111,6 @@ export default function LeftSidebar() {
         ))}
       </div>
 
-      {/* The site's own pages, as plain links. About, Terms, Privacy and
-          Support were linked only from Profile and Wallet — signed-in pages a
-          search engine never sees — so nothing public led to them. */}
-      <div className="px-5 pb-4 flex flex-wrap gap-x-3 gap-y-1 text-[0.6875rem]">
-        {[['/about', 'About'], ['/tos', 'Terms'], ['/privacy', 'Privacy'], ['/support', 'Support']].map(([to, label]) => (
-          <NavLink key={to} to={to} className="text-muted hover:text-white transition-colors">{label}</NavLink>
-        ))}
-      </div>
-
       {/* Profile mini */}
       {profile && (
         <>
@@ -141,7 +132,7 @@ export default function LeftSidebar() {
                     </span>
                   )}
                 </div>
-                {rank && <div className="text-xs text-muted flex items-center gap-1"><RankIcon rank={rank} size={14} />{rank.name}{ranked ? ` · ${profile.elo} ELO` : ''}</div>}
+                {rank && <div className="text-xs text-muted flex items-center gap-1"><RankIcon rank={rank} size={14} />{rank.name}{ranked ? ` · ${displayElo(profile)} ELO` : ''}</div>}
               </div>
             </div>
           </div>

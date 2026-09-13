@@ -90,7 +90,19 @@ module.exports = function leaderboardRoutes(supabase) {
       'avatar_url');
     if (error) return res.status(500).json({ error: error.message });
 
-    const players = stripDemos(data).map((p, i) => ({ rank: i + 1, ...p }));
+    // Placed accounts only. Somebody still in their three placement matches
+    // has no rating yet — the list showed them at 0 ELO, ranked among people
+    // who have one. Placement ends at 1000: a placed account whose stored
+    // rating was never written (placed entirely through matches that do not
+    // rate) is shown and ordered at that 1000, not at the 0 it defaulted to.
+    const PLACEMENT = 3;
+    const placed = (p) => ((p.wins ?? 0) + (p.losses ?? 0)) >= PLACEMENT;
+    const rated = (p) => ({ ...p, elo: Number(p.elo) > 0 ? Number(p.elo) : 1000 });
+    const players = stripDemos(data)
+      .filter(placed)
+      .map(rated)
+      .sort((a, b) => b.elo - a.elo)
+      .map((p, i) => ({ rank: i + 1, ...p }));
 
     let userRank = null;
     if (req.query.userId) {

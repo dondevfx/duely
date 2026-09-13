@@ -7,6 +7,7 @@ import { getDisplayRank } from '../utils/ranks';
 import CoinIcon from './CoinIcon';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
+import { useShowsBottomNav } from './BottomNav';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
 import { fmtCoins, fmtDiamonds, fmtExact } from '../utils/format';
@@ -659,6 +660,7 @@ export default function ChatSidebar({ open, onToggle }) {
   const { profile } = useAuth();
   const location = useLocation();
   const isHome = location.pathname === '/';
+  const showsNav = useShowsBottomNav(location.pathname);
   const [messages, setMessages] = useState([
     { id: 'sys-1', system: true, message: 'Welcome to World Chat!', timestamp: Date.now() },
   ]);
@@ -930,11 +932,14 @@ export default function ChatSidebar({ open, onToggle }) {
           the page IS its width, so that is the number kept small. A message
           bubble rather than a chevron, because an arrow says which direction
           something moves while this has to say what it opens. */}
-      {!mobileOpen && isHome && (
+      {/* Above the bottom bar. It sat at bottom-5, and the bar added later is
+          3.5rem tall at the same edge, so it was underneath it and gone. Shown
+          wherever the bar is, not only on Home. */}
+      {!mobileOpen && showsNav && (
         <button
           onClick={() => setMobileOpen(true)}
           aria-label="Open World Chat"
-          className="lg:hidden fixed bottom-5 right-0 z-40 flex items-center justify-center w-6 h-9 rounded-l-lg bg-surface border border-r-0 border-primary/40 hover:border-primary text-white shadow-lg transition-all"
+          className="lg:hidden fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.75rem)] md:bottom-5 right-0 z-40 flex items-center justify-center w-6 h-9 rounded-l-lg bg-surface border border-r-0 border-primary/40 hover:border-primary text-white shadow-lg transition-all"
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF"
             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
