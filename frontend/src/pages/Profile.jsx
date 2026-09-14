@@ -348,7 +348,11 @@ function SelfExclusionSection({ profile, refreshProfile }) {
                 min={localDate(tomorrow)}
                 max={localDate(latest)}
                 onChange={(e) => { setUntil(e.target.value); setConfirming(false); setMsg(null); }}
-                className="w-full min-w-0 bg-surface border border-surfaceLight rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary [color-scheme:dark]"
+                // appearance: none, because iPhone Safari draws a date input
+                // at its own built-in width and ignores w-full until its
+                // native styling is removed, which ran it past the panel.
+                className="block w-full max-w-full min-w-0 appearance-none bg-surface border border-surfaceLight rounded-lg px-3 py-2 text-sm text-white text-left focus:outline-none focus:border-primary [color-scheme:dark]"
+                style={{ WebkitAppearance: 'none', minHeight: '2.5rem', boxSizing: 'border-box' }}
               />
 
               {!confirming ? (

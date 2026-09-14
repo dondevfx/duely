@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import DiamondIcon, { DiamondGlyph } from '../components/DiamondIcon';
 import RankIcon from '../components/RankIcon';
@@ -585,16 +585,13 @@ export default function Rewards() {
     <div className="min-h-[calc(100vh-3.5rem)] px-4 py-8">
       <div className="max-w-6xl mx-auto flex flex-col gap-8">
 
-        {/* Referral offer — first thing on the page, on every screen size. */}
-        {session && <ReferralCard />}
-
-        {/* Page title */}
+        {/* Page title, at the very top. */}
         <div className="text-center">
-          <h1 className="text-2xl font-black text-white tracking-widest uppercase">Daily Rewards</h1>
-          <p className="text-sm mt-1" style={{ color: '#64748b' }}>
-            Spin your rank wheels and the daily wheel once every 24 hours to win Diamonds
-          </p>
+          <h1 className="text-2xl font-black text-white tracking-widest uppercase">Rewards</h1>
         </div>
+
+        {/* Referral offer, first thing under the title on every screen size. */}
+        {session && <ReferralCard />}
 
         {/* Guest login prompt */}
         {!session && (

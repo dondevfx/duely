@@ -714,9 +714,19 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     let pix = 1;
 
     function layout() {
-      W = canvas.clientWidth || 360;
-      H = canvas.clientHeight || 640;
-      const devW = Math.floor(W * dpr), devH = Math.floor(H * dpr);
+      // Measured from the CONTAINER. This pins the canvas's own CSS height
+      // below, so reading canvas.clientHeight on the next layout returned that
+      // pinned value: when a phone's browser bar hid and the screen grew, the
+      // canvas never grew with it, and the road stopped short of the bottom
+      // with a black strip under it.
+      const box = canvas.parentElement;
+      const boxW = box?.clientWidth || canvas.clientWidth || 360;
+      H = box?.clientHeight || canvas.clientHeight || 640;
+      // The same aspect cap the JSX applies (maxWidth: height * 0.50).
+      W = Math.min(boxW, Math.floor(H * 0.5)) || 360;
+      // Rounded UP, so the integer-scaled buffer always covers the full height
+      // instead of stopping a device pixel short of it.
+      const devW = Math.ceil(W * dpr), devH = Math.ceil(H * dpr);
       pix = Math.max(1, Math.round(devW / PIX_W));
       // Virtual size follows from the integer factor, so the buffer always maps
       // exactly onto the display with no half-pixel remainder.
@@ -799,6 +809,11 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
     let resizeT = 0;
     const onResize = () => { clearTimeout(resizeT); resizeT = setTimeout(layout, 120); };
     window.addEventListener('resize', onResize);
+    // The container changes size without a window resize when the phone's
+    // browser bar shows or hides (the page is 100dvh tall).
+    const ro = typeof ResizeObserver !== 'undefined' && canvas.parentElement
+      ? new ResizeObserver(onResize) : null;
+    ro?.observe(canvas.parentElement);
 
     // ── Pools ──
     const cars = Array.from({ length: 34 }, () => ({
@@ -1835,6 +1850,7 @@ export default function HighwayCanvas({ seed, onProgress, onCrash }) {
       cancelAnimationFrame(raf);
       clearTimeout(resizeT);
       window.removeEventListener('resize', onResize);
+      ro?.disconnect();
       window.removeEventListener('keydown', onKey);
       canvas.removeEventListener('selectstart', noSelect);
       canvas.removeEventListener('contextmenu', noSelect);

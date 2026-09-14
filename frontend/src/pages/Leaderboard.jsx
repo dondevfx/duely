@@ -1,8 +1,8 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
-import { getRank, getDisplayRank, displayElo } from '../utils/ranks';
+import { getRank, getDisplayRank, displayElo, isRanked } from '../utils/ranks';
 import CoinIcon from '../components/CoinIcon';
 import GameIcon from '../components/GameIcon';
 import DiamondIcon from '../components/DiamondIcon';
@@ -138,7 +138,9 @@ export default function Leaderboard() {
   // hidden (inactive) player sat between two visible ones.
   const players = allPlayers
     .filter(p => {
-      if (tab?.id === 'elo') return (p.wins ?? 0) > 0;
+      // Placed, not "has a win": three losses is still three placement
+      // matches, and that player was hidden from a board they had earned.
+      if (tab?.id === 'elo') return isRanked(p);
       if (tab?.id === 'streak') return (p.current_streak ?? 0) > 0;
       return (p[tab?.valueKey ?? ''] ?? 0) > 0;
     })
@@ -279,8 +281,8 @@ export default function Leaderboard() {
                 ) : (
                   <div className="bg-surface border border-surfaceLight rounded-2xl overflow-hidden">
                     <div className="grid grid-cols-10 px-3 sm:px-5 py-3 text-xs text-muted font-semibold uppercase tracking-wider border-b border-surfaceLight">
-                      <span className="col-span-1">Rank</span>
-                      <span className={gameMeta?.showTime ? 'col-span-4' : 'col-span-6'}>Player</span>
+                      <span className="col-span-2">Rank</span>
+                      <span className={gameMeta?.showTime ? 'col-span-3' : 'col-span-5'}>Player</span>
                       {gameMeta?.showTime && <span className="col-span-2 text-right">Time</span>}
                       <span className="col-span-3 text-right">{gameMeta?.scoreLabel}</span>
                     </div>
@@ -301,10 +303,10 @@ export default function Leaderboard() {
                             ${i === 0 ? 'bg-yellow-500/5' : ''}
                           `}
                         >
-                          <span className="col-span-1 flex items-center">
+                          <span className="col-span-2 flex items-center">
                             <RankBadge rank={player.rank} />
                           </span>
-                          <span className={`${gameMeta?.showTime ? 'col-span-4' : 'col-span-6'} flex items-center min-w-0`}>
+                          <span className={`${gameMeta?.showTime ? 'col-span-3' : 'col-span-5'} flex items-center min-w-0`}>
                             <PlayerTag player={player} isMe={isMe} />
                           </span>
                           {gameMeta?.showTime && (
@@ -356,8 +358,8 @@ export default function Leaderboard() {
               <div className="bg-surface border border-surfaceLight rounded-2xl overflow-hidden">
                 {/* Header */}
                 <div className="grid grid-cols-10 px-3 sm:px-5 py-3 text-xs text-muted font-semibold uppercase tracking-wider border-b border-surfaceLight">
-                  <span className="col-span-1">Rank</span>
-                  <span className="col-span-5 sm:col-span-5">Player</span>
+                  <span className="col-span-2">Rank</span>
+                  <span className="col-span-4">Player</span>
                   <span className="col-span-3 sm:col-span-3 text-right">{tab.label2}</span>
                   <span className="col-span-1 text-right hidden sm:block">W%</span>
                 </div>
@@ -382,11 +384,11 @@ export default function Leaderboard() {
                         ${i === 0 ? 'bg-yellow-500/5' : ''}
                       `}
                     >
-                      <span className="col-span-1 flex items-center">
+                      <span className="col-span-2 flex items-center">
                         <RankBadge rank={player.rank} />
                       </span>
 
-                      <span className="col-span-5 flex items-center min-w-0">
+                      <span className="col-span-4 flex items-center min-w-0">
                         <PlayerTag player={player} isMe={isMe} />
                       </span>
 
