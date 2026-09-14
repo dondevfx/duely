@@ -274,6 +274,123 @@ function MatchRow({ match, myId }) {
   );
 }
 
+// ── Self-exclusion ──────────────────────────────────────────────────────────
+//
+// Lock the account until a date. A button that drops down the date picker, and
+// a confirmation before it is set, because it cannot be undone: the server
+// allows a lock to be extended but never shortened. What a lock blocks is
+// decided server-side (services/selfExclusion); this only sets it.
+function localDate(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+function SelfExclusionSection({ profile, refreshProfile }) {
+  const [open, setOpen] = useState(false);
+  const [until, setUntil] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const lockedUntil = profile?.self_excluded_until ? Date.parse(profile.self_excluded_until) : 0;
+  const locked = lockedUntil > Date.now();
+
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+  const latest = new Date(); latest.setFullYear(latest.getFullYear() + 5);
+  const fmtDay = (ms) => new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+
+  async function lock() {
+    setBusy(true); setMsg(null);
+    try {
+      await api.post('/auth/self-exclude', { until });
+      await refreshProfile();
+      setOpen(false); setConfirming(false); setUntil('');
+    } catch (err) {
+      setMsg(err.message || 'Could not lock your account.');
+      setConfirming(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mb-5">
+      <div className="text-sm font-bold text-white mb-2 flex items-center gap-2"><LockIcon size={15} /> Self-exclusion</div>
+
+      {locked ? (
+        <div className="rounded-xl border border-danger/40 bg-danger/10 px-4 py-3">
+          <div className="text-sm font-bold text-white">Account locked until {fmtDay(lockedUntil)}</div>
+          <div className="text-xs text-muted mt-1">You can still sign in and withdraw. The lock can't be lifted early.</div>
+        </div>
+      ) : (
+        <>
+          <button
+            onClick={() => { setOpen(v => !v); setConfirming(false); setMsg(null); }}
+            className="w-full flex items-center justify-between px-4 py-3 bg-bg border border-surfaceLight rounded-xl text-sm font-semibold text-white hover:border-primary transition-colors"
+            aria-expanded={open}
+          >
+            <span>Take a break</span>
+            <span className="text-muted">{open ? '▲' : '▼'}</span>
+          </button>
+
+          {open && (
+            <div className="mt-2 rounded-xl border border-surfaceLight bg-bg p-4 animate-slide-up">
+              <div className="text-sm font-bold text-white">Lock your account</div>
+              <p className="text-xs text-muted mt-1 mb-3">
+                Choose the date your account stays locked until. Until then you can't play, enter
+                tournaments, tip or deposit. You can still sign in and withdraw.
+              </p>
+              <label className="block text-xs text-muted mb-1" htmlFor="self-exclude-until">Locked until</label>
+              <input
+                id="self-exclude-until"
+                type="date"
+                value={until}
+                min={localDate(tomorrow)}
+                max={localDate(latest)}
+                onChange={(e) => { setUntil(e.target.value); setConfirming(false); setMsg(null); }}
+                className="w-full min-w-0 bg-surface border border-surfaceLight rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary [color-scheme:dark]"
+              />
+
+              {!confirming ? (
+                <button
+                  onClick={() => setConfirming(true)}
+                  disabled={!until}
+                  className="w-full mt-3 py-2.5 rounded-xl text-sm font-bold bg-danger/90 hover:bg-danger text-white disabled:opacity-40 transition-colors"
+                >
+                  Lock my account
+                </button>
+              ) : (
+                <div className="mt-3 rounded-lg border border-danger/40 bg-danger/10 p-3">
+                  <p className="text-xs text-white">
+                    Lock your account until {until ? fmtDay(Date.parse(`${until}T12:00:00Z`)) : ''}? This can't be undone early.
+                  </p>
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={lock}
+                      disabled={busy}
+                      className="flex-1 py-2 rounded-lg text-xs font-bold bg-danger text-white disabled:opacity-50"
+                    >
+                      {busy ? 'Locking…' : 'Yes, lock it'}
+                    </button>
+                    <button
+                      onClick={() => setConfirming(false)}
+                      disabled={busy}
+                      className="flex-1 py-2 rounded-lg text-xs font-bold border border-surfaceLight text-muted hover:text-white"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+              {msg && <p className="text-xs text-danger mt-2">{msg}</p>}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Settings Panel ────────────────────────────────────────────────────────────
 function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, setResetMsg, sendPasswordReset }) {
   const [theme, setThemeState]   = useState(() => localStorage.getItem('theme') || 'dark');
@@ -589,6 +706,11 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
               </p>
             )}
           </div>
+
+          <div className="h-px bg-surfaceLight mb-5" />
+
+          {/* Self-exclusion */}
+          <SelfExclusionSection profile={profile} refreshProfile={refreshProfile} />
 
           <div className="h-px bg-surfaceLight mb-5" />
 
@@ -1895,6 +2017,10 @@ export default function Profile() {
           <span className="text-xs text-muted mx-2">·</span>
           <Link to="/support" className="text-xs text-muted hover:text-white transition-colors underline underline-offset-2">
             Support
+          </Link>
+          <span className="text-xs text-muted mx-2">·</span>
+          <Link to="/faq" className="text-xs text-muted hover:text-white transition-colors underline underline-offset-2">
+            FAQ
           </Link>
         </div>
         <div className="absolute top-0 left-full ml-4 w-64 hidden xl:block">

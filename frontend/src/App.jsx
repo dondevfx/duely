@@ -153,6 +153,7 @@ const ToS           = lazyPage(() => import('./pages/ToS'));
 const Privacy       = lazyPage(() => import('./pages/Privacy'));
 const Support       = lazyPage(() => import('./pages/Support'));
 const About         = lazyPage(() => import('./pages/About'));
+const FAQ           = lazyPage(() => import('./pages/FAQ'));
 const Admin         = lazyPage(() => import('./pages/Admin'));
 const SpectateView  = lazyPage(() => import('./pages/SpectateView'));
 import ForfeitToast from './components/ForfeitToast';
@@ -334,6 +335,7 @@ function Shell() {
           <Route path="/privacy"            element={<Privacy />} />
           <Route path="/support"            element={<Support />} />
           <Route path="/about"              element={<About />} />
+          <Route path="/faq"                element={<FAQ />} />
           <Route path="/admin"              element={<ProtectedRoute><Admin /></ProtectedRoute>} />
           <Route path="*"                   element={<Navigate to="/" replace />} />
         </Routes>

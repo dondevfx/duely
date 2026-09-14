@@ -145,6 +145,14 @@ export const SEO_PAGES = [
     priority: 0.6,
   },
   {
+    path: '/faq',
+    title: 'FAQ — Duely',
+    description: 'Answers about Duely: how 1v1 matches and tournaments work, Coins and Diamonds, ELO and placement, withdrawals and self-exclusion.',
+    heading: 'Frequently asked questions',
+    body: 'How matches are decided, what Coins and Diamonds are, how placement and ELO work, how tournaments run, and how to lock your account with self-exclusion.',
+    priority: 0.5,
+  },
+  {
     path: '/support',
     title: 'Support — Duely',
     description: 'Get help with your Duely account, matches and payments.',

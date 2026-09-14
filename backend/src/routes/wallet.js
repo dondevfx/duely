@@ -1,3 +1,4 @@
+const { rejectIfExcluded } = require('../services/selfExclusion');
 const { Router } = require('express');
 const { requireAuth } = require('../middleware/auth');
 const { isDemo } = require('../services/demoAccounts');
@@ -151,6 +152,7 @@ module.exports = function walletRoutes(supabase, io) {
   // Returns the same address every time for a given user + coin — no expiry.
   // Player sends any amount; webhook credits what arrives after fees.
   router.post('/get-address', requireAuth, async (req, res) => {
+    if (await rejectIfExcluded(supabase, req, res)) return;
     const { coin } = req.body;
     if (!coin || !DEPOSIT_COINS.has(coin.toLowerCase())) {
       return res.status(400).json({ error: 'Invalid or unsupported coin' });
@@ -1018,6 +1020,7 @@ module.exports = function walletRoutes(supabase, io) {
 
   // ── Tip ───────────────────────────────────────────────────────────────
   router.post('/tip', requireAuth, async (req, res) => {
+    if (await rejectIfExcluded(supabase, req, res)) return;
     if (isLocked(req.user.id)) {
       return res.status(400).json({ error: 'Cannot tip while in a queue or active match' });
     }

@@ -1026,3 +1026,12 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE SELECT ON TABLES FROM anon, aut
 --   both of these must now fail with "permission denied"
 --     SELECT credit_coins('<any uuid>'::uuid, 1);
 --     SELECT * FROM profiles LIMIT 1;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 23. Self-exclusion
+-- ═══════════════════════════════════════════════════════════════════════════
+-- A player locks their own account until a date (Settings -> Self-exclusion).
+-- Until this runs the Settings button reports "not available" and nobody is
+-- locked; the rest of the site is unaffected.
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS self_excluded_until timestamptz;

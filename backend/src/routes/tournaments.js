@@ -7,6 +7,7 @@
  * ticket per tournament, and it is the kind of duplication nobody notices
  * until the split changes.
  */
+const { rejectIfExcluded } = require('../services/selfExclusion');
 const express = require('express');
 const { requireAuth, optionalAuth } = require('../middleware/auth');
 const F = require('../services/tournamentFormat');
@@ -60,6 +61,7 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
    * fails, and there is no way to tell that from a player who has.
    */
   router.post('/join', requireAuth, async (req, res) => {
+    if (await rejectIfExcluded(supabase, req, res)) return;
     const entryFee = Number(req.body?.entryFee);
     const vsBot = !!req.body?.vsBot;
     if (!F.ENTRY_FEES.includes(entryFee)) {

@@ -1,4 +1,5 @@
-﻿const { v4: uuidv4 } = require('uuid');
+const selfExclusion = require('../services/selfExclusion');
+const { v4: uuidv4 } = require('uuid');
 const { deleteRoom, getRoomBySocket } = require('../services/matchmaking');
 const {
   createDirectBlockBlastRoom,
@@ -412,6 +413,27 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
 
   io.on('connection', (socket) => {
     let authenticatedUser = null;
+
+    // Self-exclusion. Every event that STARTS something is wrapped once, here,
+    // before any handler registers, so a locked account is refused by the same
+    // check in every game, and a game added later is covered by its event name
+    // alone. See services/selfExclusion.
+    {
+      const _on = socket.on.bind(socket);
+      socket.on = (event, handler) => {
+        if (!selfExclusion.GATED_EVENTS.test(event)) return _on(event, handler);
+        return _on(event, async (...args) => {
+          if (authenticatedUser) {
+            const until = await selfExclusion.excludedUntil(supabase, authenticatedUser.userId);
+            if (until > Date.now()) {
+              socket.emit('error', { message: selfExclusion.lockMessage(until), selfExcluded: true });
+              return;
+            }
+          }
+          return handler(...args);
+        });
+      };
+    }
 
     /**
      * A tournament game screen has mounted and is listening.

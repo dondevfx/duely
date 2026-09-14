@@ -1,3 +1,4 @@
+const selfExclusion = require('../services/selfExclusion');
 const { Router } = require('express');
 const { requireAuth, optionalAuth } = require('../middleware/auth');
 const { isDemo, DEMO_IDS } = require('../services/demoAccounts');
@@ -180,6 +181,43 @@ module.exports = function authRoutes(supabase) {
   ]);
 
   // Update username, wallet address, profile color, or privacy setting
+  /**
+   * Self-exclusion: lock this account until a chosen date (YYYY-MM-DD, UTC).
+   *
+   * At least tomorrow, at most five years. It can be extended, never shortened:
+   * a request for an earlier date than the current lock is refused. See
+   * services/selfExclusion for what a lock blocks.
+   */
+  router.post('/self-exclude', requireAuth, async (req, res) => {
+    const raw = String(req.body?.until || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return res.status(400).json({ error: 'Pick a date.' });
+    // The END of the chosen day, UTC: "locked until the 20th" includes the 20th.
+    const until = Date.parse(`${raw}T23:59:59.999Z`);
+    const DAY = 24 * 60 * 60 * 1000;
+    const now = new Date();
+    const tomorrowStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) + DAY;
+    if (!Number.isFinite(until) || until < tomorrowStart) {
+      return res.status(400).json({ error: 'The date has to be tomorrow or later.' });
+    }
+    if (until > Date.now() + 5 * 366 * DAY) {
+      return res.status(400).json({ error: 'The longest lock is five years.' });
+    }
+    const current = await selfExclusion.excludedUntil(supabase, req.user.id);
+    if (current > Date.now() && until < current) {
+      return res.status(400).json({ error: 'Your account is already locked until a later date. A lock can be extended, not shortened.' });
+    }
+    const { error } = await supabase
+      .from('profiles')
+      .update({ self_excluded_until: new Date(until).toISOString() })
+      .eq('id', req.user.id);
+    if (error) {
+      console.error('[self-exclude] update failed (PENDING_SQL section 23?):', error.message);
+      return res.status(503).json({ error: 'Self-exclusion is not available right now. Contact support.' });
+    }
+    selfExclusion.setExcludedUntil(req.user.id, until);
+    res.json({ ok: true, until: new Date(until).toISOString() });
+  });
+
   router.patch('/me', requireAuth, async (req, res) => {
     const { username, wallet_address, profile_color, is_private, invites_enabled } = req.body;
     const updates = {};
