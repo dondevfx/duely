@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -1538,24 +1538,26 @@ export default function Profile() {
                   <div className="absolute left-0 top-24 z-20 bg-surface border border-border rounded-2xl p-2 shadow-2xl w-52">
                     <button
                       onClick={() => { setShowColors(true); }}
-                      className="w-full text-left px-3 py-2.5 rounded-xl text-sm font-semibold text-white hover:bg-surfaceLight transition-all"
+                      className="w-full text-left px-3 py-2.5 rounded-xl text-sm font-semibold text-white hover:bg-surfaceLight transition-all flex items-center gap-2.5"
                     >
-                      🎨 Change color
+                      <UiIcon name="palette" size={18} /> Change color
                     </button>
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={avatarBusy}
-                      className="w-full text-left px-3 py-2.5 rounded-xl text-sm font-semibold text-white hover:bg-surfaceLight transition-all disabled:opacity-50"
+                      className="w-full text-left px-3 py-2.5 rounded-xl text-sm font-semibold text-white hover:bg-surfaceLight transition-all disabled:opacity-50 flex items-center gap-2.5"
                     >
-                      {avatarBusy ? '⏳ Uploading…' : '🖼️ Upload photo'}
+                      {avatarBusy
+                        ? <><UiIcon name="loading" size={18} /> Uploading…</>
+                        : <><UiIcon name="image" size={18} /> Upload photo</>}
                     </button>
                     {profile.avatar_url && (
                       <button
                         onClick={removePhoto}
                         disabled={avatarBusy}
-                        className="w-full text-left px-3 py-2.5 rounded-xl text-sm font-semibold text-danger hover:bg-danger/10 transition-all disabled:opacity-50"
+                        className="w-full text-left px-3 py-2.5 rounded-xl text-sm font-semibold text-danger hover:bg-danger/10 transition-all disabled:opacity-50 flex items-center gap-2.5"
                       >
-                        ✕ Remove photo
+                        <UiIcon name="trash" size={18} /> Remove photo
                       </button>
                     )}
                     {avatarErr && <p className="text-[0.6875rem] text-danger px-3 py-2">{avatarErr}</p>}
@@ -1590,19 +1592,25 @@ export default function Profile() {
             </div>
             <div className="flex-1 min-w-0">
               {editing ? (
-                <div className="flex gap-2">
+                // Stacked on a phone: the input on its own row, the buttons
+                // under it. In one row the input kept its built-in minimum
+                // width (an input does not shrink below it without min-w-0),
+                // so it and both buttons ran past the edge of the card.
+                <div className="flex flex-col sm:flex-row gap-2 min-w-0">
                   <input
                     value={newUsername}
                     onChange={e => setNewUsername(e.target.value)}
-                    className="flex-1 bg-bg border border-surfaceLight rounded-lg px-3 py-2 text-white text-lg font-bold focus:outline-none focus:border-primary"
+                    className="w-full min-w-0 sm:flex-1 bg-bg border border-surfaceLight rounded-lg px-3 py-2 text-white text-lg font-bold focus:outline-none focus:border-primary"
                     maxLength={20}
                   />
-                  <GlowButton variant="success" size="sm" onClick={saveUsername} disabled={saving}>
-                    {saving ? '...' : 'Save'}
-                  </GlowButton>
-                  <GlowButton variant="ghost" size="sm" onClick={() => setEditing(false)}>
-                    Cancel
-                  </GlowButton>
+                  <div className="flex gap-2 shrink-0">
+                    <GlowButton variant="success" size="sm" onClick={saveUsername} disabled={saving}>
+                      {saving ? '...' : 'Save'}
+                    </GlowButton>
+                    <GlowButton variant="ghost" size="sm" onClick={() => setEditing(false)}>
+                      Cancel
+                    </GlowButton>
+                  </div>
                 </div>
               ) : (
                 <div className="flex items-center gap-3 min-w-0">

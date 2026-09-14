@@ -129,6 +129,37 @@ const ICONS = {
       <path d="M13.8 10.2a3.6 3.6 0 0 0-5.4-.4l-2.8 2.8a3.6 3.6 0 0 0 5.1 5.1l1.6-1.6" />
     </g>
   ),
+  // The profile picture menu. They were 🎨 🖼️ ⏳ ✕ — emoji in a menu whose
+  // text is the site's, drawn in whatever the operating system felt like.
+  palette: () => (
+    <g {...P}>
+      <path d="M12 3.2a8.8 8.8 0 0 0 0 17.6c1.2 0 1.9-.9 1.9-1.9 0-.5-.2-.9-.5-1.3-.3-.3-.5-.8-.5-1.3 0-1 .8-1.9 1.9-1.9h2.2a4.2 4.2 0 0 0 4.2-4.2C21.2 6.8 17.1 3.2 12 3.2z" />
+      <circle cx="7.4" cy="11.4" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="7.3" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="14.6" cy="7.3" r="1.1" fill="currentColor" stroke="none" />
+    </g>
+  ),
+  image: () => (
+    <g {...P}>
+      <rect x="3.4" y="4.6" width="17.2" height="14.8" rx="2.6" />
+      <circle cx="8.8" cy="9.6" r="1.7" />
+      <path d="M20.6 15.4l-4.7-4.7-9.4 8.7" />
+    </g>
+  ),
+  loading: () => (
+    <g {...P}>
+      <path d="M12 3.6a8.4 8.4 0 1 0 8.4 8.4">
+        <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.9s" repeatCount="indefinite" />
+      </path>
+    </g>
+  ),
+  trash: () => (
+    <g {...P}>
+      <path d="M4.4 6.6h15.2M9.6 6.6V4.8c0-.6.5-1 1-1h2.8c.6 0 1 .4 1 1v1.8" />
+      <path d="M6.4 6.6l.9 12.4c.1 1 .9 1.8 1.9 1.8h5.6c1 0 1.8-.8 1.9-1.8l.9-12.4" />
+      <path d="M10.2 10.8v6M13.8 10.8v6" />
+    </g>
+  ),
   share: () => (
     <g {...P}>
       <circle cx="17.6" cy="5.8" r="2.6" />
