@@ -603,7 +603,7 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm font-bold text-white">Private Account</div>
-                <div className="text-xs text-muted">Hide from leaderboard &amp; match history</div>
+                <div className="text-xs text-muted">Hide from Ranked &amp; match history</div>
               </div>
               <button
                 onClick={togglePrivate}
@@ -613,7 +613,7 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
                 <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${isPrivate ? 'translate-x-6' : 'translate-x-0.5'}`} />
               </button>
             </div>
-            {isPrivate && <p className="text-xs text-warning mt-1">You are invisible on leaderboards. You can still receive tips.</p>}
+            {isPrivate && <p className="text-xs text-warning mt-1">You are invisible on Ranked. You can still receive tips.</p>}
           </div>
 
           <div className="h-px bg-surfaceLight mb-5" />
@@ -1845,7 +1845,7 @@ export default function Profile() {
             </div>
 
             {[
-              { label: 'Leaderboard', value: extraStats.rank ? `#${extraStats.rank}` : '-', color: 'text-accent' },
+              { label: 'Ranked', value: extraStats.rank ? `#${extraStats.rank}` : '-', color: 'text-accent' },
               { label: 'Wins', value: profile.wins, color: 'text-success' },
               { label: 'Losses', value: profile.losses, color: 'text-danger' },
               // The coin mark rather than the word. "2,500.00 coins" is the

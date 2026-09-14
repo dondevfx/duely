@@ -29,7 +29,7 @@ const NAV = [
   // simply not somewhere the navigation sends you.
   { ui: 'profile',     label: 'Profile',     route: '/profile' },
   { ui: 'rewards',     label: 'Rewards',     route: '/rewards' },
-  { ui: 'leaderboard', label: 'Leaderboard', route: '/leaderboard' },
+  { ui: 'leaderboard', label: 'Ranked', route: '/leaderboard' },
   { ui: 'wallet',      label: 'Wallet',      route: '/wallet' },
   // No Tip entry. Tipping is something you do TO a person, so it belongs on
   // the person — the profile popup has it. As a nav item it opened a page

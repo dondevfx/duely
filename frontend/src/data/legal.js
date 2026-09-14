@@ -106,7 +106,7 @@ export const PRIVACY_SECTIONS = [
   },
   {
     title: '9. Public Information',
-    body: 'Some information is visible to other players by design. Your username, ELO, rank, win and loss record, current streak and profile color appear on leaderboards, in matches, and on your public profile. Live and recent matches may show your username and the stake. Your email address, balance, transaction history and wallet addresses are never shown to other users.',
+    body: 'Some information is visible to other players by design. Your username, ELO, rank, win and loss record, current streak and profile color appear on Ranked, in matches, and on your public profile. Live and recent matches may show your username and the stake. Your email address, balance, transaction history and wallet addresses are never shown to other users.',
   },
   {
     title: '10. How Long We Keep It',

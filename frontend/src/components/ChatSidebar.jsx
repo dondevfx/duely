@@ -36,7 +36,7 @@ const BOT_LINES = [
   "💎 Diamond bets vs bot pay full 2x on a win — no house fee.",
   "🎡 Six spin wheels on the Rewards page. Spin them all daily.",
   "⚡ Power-ups in Block Burst change the whole game. Watch the grid.",
-  "🔥 Win streaks show on your profile, chat, and the leaderboard.",
+  "🔥 Win streaks show on your profile, chat, and Ranked.",
   "🔤 Word VS: short words score fast — save the long ones for premium squares.",
   "🏅 Rakeback pays you back just for playing — claim it every day.",
   "🟡 Coin Flip: pick Heads or Tails and you'll be matched with someone on the other side.",

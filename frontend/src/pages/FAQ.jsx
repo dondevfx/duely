@@ -56,7 +56,7 @@ const SECTIONS = [
     items: [
       {
         q: 'How does ELO work?',
-        a: 'Your first three matches are placement matches, and any match counts towards them. When they are done you start at 1000 ELO and appear on the leaderboard. Until then you show as Unranked.',
+        a: 'Your first three matches are placement matches, and any match counts towards them. When they are done you start at 1000 ELO and appear on Ranked. Until then you show as Unranked.',
       },
       {
         q: 'Which matches change my ELO?',

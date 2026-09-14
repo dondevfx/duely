@@ -106,9 +106,9 @@ export const SEO_PAGES = [
   },
   {
     path: '/leaderboard',
-    title: 'Leaderboard — Top Players | Duely',
+    title: 'Ranked — Top Players | Duely',
     description: 'The top-ranked players on Duely, by rating and wins.',
-    heading: 'Leaderboard',
+    heading: 'Ranked',
     body: 'The highest-rated players on Duely. Ranked matches move your rating after your first three placement games.',
     priority: 0.6,
   },

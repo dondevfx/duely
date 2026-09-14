@@ -187,7 +187,7 @@ export default function Leaderboard() {
     <div className="min-h-screen bg-bg pt-16" style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.35s ease' }}>
       <div className="max-w-3xl mx-auto px-4 py-4 sm:py-12">
         <div className="mb-6 text-center">
-          <h1 className="text-4xl font-black text-white mb-2">Leaderboard</h1>
+          <h1 className="text-4xl font-black text-white mb-2">Ranked</h1>
           <p className="text-muted">Top 500 players</p>
           {/* Only the two wagered boards actually reset: they count the
               current week's matches from Monday (see weekStart in the

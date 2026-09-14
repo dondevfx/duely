@@ -168,7 +168,7 @@ export default function Home() {
               </h1>
               <p className={`${PHONE_HIDE} text-lg md:text-xl text-muted max-w-2xl mx-auto md:mx-0 mb-5 md:mb-10`}>
                 Challenge opponents in real-time player vs player games. Wager{' '}
-                <span className="text-primary font-semibold whitespace-nowrap"><CoinIcon size="1em" /> Coins</span>, climb the leaderboard,
+                <span className="text-primary font-semibold whitespace-nowrap"><CoinIcon size="1em" /> Coins</span>, climb Ranked,
                 and prove you're the best.
               </p>
               <div className={`${PHONE_HIDE_FLEX} flex-wrap md:flex-nowrap items-center justify-center md:justify-start gap-4`}>

@@ -24,7 +24,7 @@ import UiIcon from './UiIcon';
 const ITEMS = [
   { ui: 'home',        label: 'Home',        to: '/' },
   { ui: 'rewards',     label: 'Rewards',     to: '/rewards' },
-  { ui: 'leaderboard', label: 'Leaderboard', to: '/leaderboard' },
+  { ui: 'leaderboard', label: 'Ranked', to: '/leaderboard' },
   { ui: 'wallet',      label: 'Wallet',      to: '/wallet' },
   { ui: 'profile',     label: 'Profile',     to: '/profile' },
 ];

@@ -40,8 +40,8 @@ const SECTIONS = [
     body: 'A tournament opens every twenty minutes, with five minutes to enter. Sixteen players, four knockout rounds, and a different game each round. A drawn match goes to a thirty-second sudden-death replay of the same game. Entry is 1, 5 or 10 Coins, and the top three places share the prize pool after a 5% platform fee — 50%, 30% and 20%. A tournament that does not fill is cancelled and every entry is returned.',
   },
   {
-    title: 'Ratings and the leaderboard',
-    body: 'Ranked matches move your ELO rating, which is what the leaderboard orders players by. Your first three matches are placement matches.',
+    title: 'Ratings and Ranked',
+    body: 'Ranked matches move your ELO rating, which is what Ranked orders players by. Your first three matches are placement matches.',
   },
   {
     title: 'Coins and Diamonds',
