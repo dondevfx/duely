@@ -57,6 +57,14 @@ const crypto = require('crypto');
 const moneyLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 60,
+  // Reads do not count. Nothing that moves money is a GET (every claim,
+  // deposit, withdrawal, tip and tournament entry is a POST), and screens POLL
+  // their GETs: the tournament waiting room reads its pool every 3 seconds,
+  // which is 100 requests in five minutes. It spent the whole budget in three,
+  // and from then every tournament request (schedule, timer, Play) was refused
+  // until the window passed, which looked like the page breaking after a
+  // refresh. apiLimiter still covers reads.
+  skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {
