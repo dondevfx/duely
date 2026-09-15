@@ -154,6 +154,12 @@ app.use((err, _req, res, _next) => {
 
 // Start background services
 swapPoller.init(supabase);
+// Never-verified email accounts are deleted after 21 days (never ones that
+// held money). See services/unverifiedAccounts.
+require('./services/unverifiedAccounts').startUnverifiedSweep(supabase, {
+  isDemo: require('./services/demoAccounts').isDemo,
+  adminId: process.env.ADMIN_USER_ID || null,
+});
 blockchainMonitor.init(supabase);
 // Registers our Solana deposit addresses with Helius so deposits are pushed
 // rather than polled for. No-ops with a line in the log if it is not

@@ -741,6 +741,7 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
 }
 
 function TwoFactorSection() {
+  const { profile } = useAuth();
   const [factors, setFactors]       = useState(null); // null=loading
   const [step, setStep]             = useState('idle'); // idle | enrolling | disabling
   const [enrollData, setEnrollData] = useState(null);
@@ -855,7 +856,7 @@ function TwoFactorSection() {
             <div className="flex justify-center mb-3">
               <div className="bg-white p-3 rounded-xl inline-block">
                 <QRCode
-                  value={`otpauth://totp/Duely?secret=${enrollData.totp.secret}&issuer=Duely`}
+                  value={`otpauth://totp/Duely:${encodeURIComponent(profile?.username || 'account')}?secret=${enrollData.totp.secret}&issuer=Duely`}
                   size={160}
                 />
               </div>
