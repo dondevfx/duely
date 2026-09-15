@@ -96,3 +96,13 @@ test('Settings has the drop-down, the date, and a confirmation; Profile links th
   assert.ok(fe('App.jsx').includes('<Route path="/faq"'));
   assert.ok(fe('pages', 'FAQ.jsx').includes('<h1 className="text-4xl font-black text-white mb-2">FAQ</h1>'));
 });
+
+test('one game per account: another device of the same account is refused', () => {
+  const h = read('src', 'socket', 'handlers.js');
+  const conn = h.indexOf("io.on('connection', (socket) => {");
+  const gate = h.indexOf('_playingElsewhere(authenticatedUser.userId, socket.id)', conn);
+  assert.ok(gate > conn && gate < h.indexOf("socket.on('", conn), 'the device check is not in the start-event gate');
+  const fn = h.slice(h.indexOf('const _playingElsewhere'), h.indexOf('const _playingElsewhere') + 700);
+  assert.ok(fn.includes('s.id !== socketId && _inLiveRoom(s.id)'), 'only the asking connection is checked');
+  assert.ok(fn.includes('tournaments.pools.isLiveIn(pool, userId)'), 'a running tournament does not count');
+});

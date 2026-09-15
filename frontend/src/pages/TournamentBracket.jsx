@@ -301,7 +301,7 @@ export default function TournamentBracket() {
   }
 
   return (
-    <div className="w-full max-w-lg mx-auto px-3 animate-slide-up pt-4 sm:pt-6">
+    <div className="w-full max-w-lg sm:max-w-xl md:max-w-2xl mx-auto px-3 animate-slide-up pt-4 sm:pt-6">
       <div className="text-center mb-4">
         <div className="text-[0.625rem] sm:text-xs uppercase tracking-widest text-muted font-bold">
           {filling ? 'Waiting for players'
