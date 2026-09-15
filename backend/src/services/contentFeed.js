@@ -299,6 +299,8 @@ function countDuels(matches, { excluded, dayStart }) {
   return validDuels(matches, { excluded }).filter(m => ts(m.played_at) >= dayStart).length;
 }
 
+const isBotNote = (notes) => typeof notes === 'string' && notes.endsWith(' vs Bot');
+
 const MONEY_TYPES = new Set(['match_win', 'match_loss', 'match_draw', 'tournament_entry', 'tournament_refund']);
 
 /** Confirmed coin movements that make up a player's results, deduplicated. */
@@ -306,7 +308,10 @@ function coinMoves(transactions, { excluded }) {
   const valid = (transactions || []).filter(t =>
     t && MONEY_TYPES.has(t.type) && t.status === 'confirmed'
     && t.user_id && !excluded.has(t.user_id)
-    && Number(t.amount_c) > 0 && Number.isFinite(ts(t.created_at)));
+    && Number(t.amount_c) > 0 && Number.isFinite(ts(t.created_at))
+    // Games against a bot are not public results: settleBotMatch writes the
+    // note "<Game> vs Bot". Player-vs-player and tournament rows stay.
+    && !isBotNote(t.notes));
   return dedupe(valid,
     (t) => [t.type, t.user_id, round2(t.amount_c), t.notes ?? ''].join('#'),
     (t) => ts(t.created_at));
@@ -508,7 +513,7 @@ function assertPublicSafe(feed, { forbidden = new Set() } = {}) {
 }
 
 module.exports = {
-  buildFeed, countDuels, coinWins, validDuels, coinMoves, netOf, periods, periodStats, percentChange, audience, gameFromNote, nextTournament,
+  buildFeed, countDuels, coinWins, validDuels, isBotNote, coinMoves, netOf, periods, periodStats, percentChange, audience, gameFromNote, nextTournament,
   resolvePseudonyms, pseudonymDigest, candidateName, assertPublicSafe, collectForbidden,
   utcDayStart, DUPLICATE_WINDOW_MS, RECENT_WINDOW_MS,
 };

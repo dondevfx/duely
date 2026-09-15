@@ -505,6 +505,8 @@ function periodFixture() {
         tx('match_win', TESTER, 100, 'Tower vs x', T(9, 15)),
         tx('match_win', B, 50, 'Tower vs x', T(9, 15, 12), 25, 'pending'),
         tx('match_refund', B, 5, null, T(9, 15, 12)),
+        tx('match_win', A, 95, 'Tower vs Bot', T(9, 15, 9), 50),           // bot game: never counted
+        tx('match_loss', B, 50, 'Tower vs Bot', T(9, 15, 9)),
       ],
       newProfiles: [
         { id: A, created_at: T(9, 15, 1) }, { id: B, created_at: T(9, 14) }, { id: C, created_at: T(9, 3) },
@@ -626,4 +628,14 @@ test('query parameters change nothing', async () => {
       assert.equal(r.text, plain);
     }
   } finally { await s.close(); }
+});
+
+test('games against a bot never count toward money figures or winners', async () => {
+  assert.equal(feed.isBotNote('Tower vs Bot'), true);
+  assert.equal(feed.isBotNote('Tower vs Bobby'), false);
+  const { rows } = periodFixture();
+  const f = await buildP(rows);
+  assert.equal(f.totals.paid_out_today, 9.5);
+  assert.ok(!f.recent_winners.some(r => r.amount === 95));
+  assert.notEqual(f.weekly.biggest_win.amount, 95);
 });

@@ -49,7 +49,7 @@ const GAME_TYPES = ['blockBlast', 'scrabble', 'coin_flip', 'blackjack', 'carDash
       .filter(r => r.player1_id !== r.player2_id && !excluded.has(r.player1_id) && !excluded.has(r.player2_id));
     const w = (await all(() => sb.from('transactions').select('user_id, amount_c, notes, created_at')
       .eq('type', 'match_win').eq('status', 'confirmed').gt('amount_c', 0).gte('created_at', s).lt('created_at', e)))
-      .filter(r => !excluded.has(r.user_id));
+      .filter(r => !excluded.has(r.user_id) && !String(r.notes || '').endsWith(' vs Bot'));
     const np = (await all(() => sb.from('profiles').select('id').gte('created_at', s).lt('created_at', e)))
       .filter(r => !excluded.has(r.id));
     const raw = {
