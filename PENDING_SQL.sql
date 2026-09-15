@@ -1184,3 +1184,29 @@ CREATE TABLE IF NOT EXISTS content_pseudonyms (
 );
 ALTER TABLE content_pseudonyms ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON content_pseudonyms FROM PUBLIC, anon, authenticated;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 28. Supabase linter: pin search_path on every public function; drop the
+--     always-true highscores policy
+-- ═══════════════════════════════════════════════════════════════════════════
+-- A function without a fixed search_path resolves table and function names
+-- through whatever search_path the caller has. Pinning it to public, pg_temp
+-- means a caller cannot shadow `profiles` or `credit_coins` with their own.
+-- Applied to every overload of every function in public, so none is missed.
+DO $$
+DECLARE f record;
+BEGIN
+  FOR f IN
+    SELECT p.oid::regprocedure AS sig
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    LEFT JOIN pg_depend d ON d.objid = p.oid AND d.deptype = 'e'
+    WHERE n.nspname = 'public' AND p.prokind IN ('f', 'p') AND d.objid IS NULL
+  LOOP
+    EXECUTE format('ALTER FUNCTION %s SET search_path = public, pg_temp', f.sig);
+  END LOOP;
+END $$;
+
+-- "Service role full access" applied to PUBLIC with USING (true). The service
+-- role bypasses RLS anyway, so the policy only ever widened access for others.
+DROP POLICY IF EXISTS "Service role full access" ON game_highscores;
