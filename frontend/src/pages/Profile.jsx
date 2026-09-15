@@ -446,6 +446,96 @@ function DemoBalanceSection({ profile, refreshProfile }) {
   );
 }
 
+// Verify the current email, or move the account to a new one. Both go through
+// Supabase Auth: a change only takes effect once the link sent to the new
+// address is opened, so nobody can point an account at an email they do not own.
+function EmailSection({ session }) {
+  const user = session?.user;
+  const verified = !!user?.email_confirmed_at;
+  const pending = user?.new_email || null;
+  const [open, setOpen] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [busy, setBusy] = useState(null); // 'verify' | 'change'
+  const [msg, setMsg] = useState(null);
+
+  async function sendVerify() {
+    if (!user?.email) return;
+    setBusy('verify'); setMsg(null);
+    const { error } = await supabase.auth.resend({ type: 'signup', email: user.email });
+    setBusy(null);
+    setMsg(error
+      ? { type: 'error', text: /rate|seconds/i.test(error.message) ? 'Please wait a minute before sending another email.' : 'Could not send the email. Try again.' }
+      : { type: 'success', text: `Verification email sent to ${user.email}.` });
+  }
+
+  async function changeEmail(e) {
+    e.preventDefault();
+    const next = newEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next)) return setMsg({ type: 'error', text: 'Enter a valid email address.' });
+    if (next === (user?.email || '').toLowerCase()) return setMsg({ type: 'error', text: 'That is already your email.' });
+    setBusy('change'); setMsg(null);
+    const { error } = await supabase.auth.updateUser(
+      { email: next },
+      { emailRedirectTo: window.location.origin + '/auth/callback' },
+    );
+    setBusy(null);
+    if (error) {
+      const taken = /already|registered|exists/i.test(error.message);
+      return setMsg({ type: 'error', text: taken ? 'That email is already used by another account.' : 'Could not change your email. Try again.' });
+    }
+    setNewEmail(''); setOpen(false);
+    setMsg({ type: 'success', text: `Confirmation link sent to ${next}. Your email changes once you open it.` });
+  }
+
+  const field = 'block w-full min-w-0 bg-surface border border-surfaceLight rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary';
+  return (
+    <div className="mb-5">
+      <div className="text-sm font-bold text-white mb-2">Email</div>
+      <div className="rounded-xl border border-surfaceLight bg-bg px-4 py-3">
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <span className="text-sm text-white truncate min-w-0">{user?.email || 'No email'}</span>
+          <span className={`shrink-0 text-[0.625rem] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${verified ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'}`}>
+            {verified ? 'Verified' : 'Not verified'}
+          </span>
+        </div>
+        {pending && <p className="text-xs text-muted mt-1 break-words">Waiting for you to confirm {pending}.</p>}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 mt-2">
+        <button
+          onClick={sendVerify}
+          disabled={verified || busy === 'verify' || !user?.email}
+          className="py-2.5 text-sm font-semibold text-muted border border-surfaceLight hover:border-primary hover:text-white rounded-xl transition-all disabled:opacity-40 disabled:hover:border-surfaceLight disabled:hover:text-muted"
+        >
+          {verified ? 'Verified' : busy === 'verify' ? 'Sending…' : 'Verify email'}
+        </button>
+        <button
+          onClick={() => { setOpen(v => !v); setMsg(null); }}
+          aria-expanded={open}
+          className="py-2.5 text-sm font-semibold text-muted border border-surfaceLight hover:border-primary hover:text-white rounded-xl transition-all"
+        >
+          Change email
+        </button>
+      </div>
+
+      {open && (
+        <form onSubmit={changeEmail} className="mt-2 rounded-xl border border-surfaceLight bg-bg p-4 animate-slide-up">
+          <label className="block text-xs text-muted mb-1" htmlFor="new-email">New email</label>
+          <input id="new-email" type="email" autoComplete="email" value={newEmail}
+            onChange={(e) => { setNewEmail(e.target.value); setMsg(null); }}
+            placeholder="you@example.com" className={field} />
+          <p className="text-xs text-muted mt-2">We'll send a link to the new address. Your email changes once you open it.</p>
+          <button type="submit" disabled={busy === 'change' || !newEmail.trim()}
+            className="w-full mt-3 py-2.5 rounded-xl text-sm font-bold bg-primary text-white disabled:opacity-40 transition-colors">
+            {busy === 'change' ? 'Sending…' : 'Send confirmation link'}
+          </button>
+        </form>
+      )}
+      {msg && <p className={`text-xs mt-2 break-words ${msg.type === 'success' ? 'text-success' : 'text-danger'}`}>{msg.text}</p>}
+    </div>
+  );
+}
+
 // ── Settings Panel ────────────────────────────────────────────────────────────
 function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, setResetMsg, sendPasswordReset }) {
   const [theme, setThemeState]   = useState(() => localStorage.getItem('theme') || 'dark');
@@ -778,6 +868,11 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
 
           {/* 2FA */}
           <TwoFactorSection />
+
+          <div className="h-px bg-surfaceLight mb-5" />
+
+          {/* Email */}
+          <EmailSection session={session} />
 
           <div className="h-px bg-surfaceLight mb-5" />
 
