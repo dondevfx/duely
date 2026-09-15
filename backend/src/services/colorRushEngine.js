@@ -3,7 +3,7 @@
 // edge, so it comes from crypto.randomInt.
 const { randomInt } = require('node:crypto');
 const { closestByElo } = require('./queueMatch');
-const { findRoomBySocket } = require('./roomLookup');
+const { findRoomBySocket, emitRoomResult } = require('./roomLookup');
 /**
  * colorRushEngine.js — "Color Rush"
  *
@@ -29,7 +29,7 @@ const { findRoomBySocket } = require('./roomLookup');
  * the settlement path in one is a mechanical port to the other, which is how
  * the double-ELO bug got fixed everywhere rather than in one engine.
  */
-const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
+const { settleMatch, settleMatchDiamonds, settleBotMatch, refundBotDraw, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings, ratesElo } = require('./eloService');
 const { updateHighscore } = require('./highscoreService');
@@ -449,7 +449,7 @@ async function _resolveFromTimes(io, supabase, roomId) {
       // See carDashEngine: a bracket room is never a practice run.
       tournamentHook.settled(roomId, { isDraw: true });
       setTimeout(() => deleteColorRushRoom(roomId), 5_000);
-      io.to(roomId).emit('color_rush_result', { soloRun: true, ms, score });
+      emitRoomResult(io, room, roomId, 'color_rush_result', { soloRun: true, ms, score });
     }
     return;
   }
@@ -556,9 +556,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
         // match nobody won is a match the house takes nothing from.
         if (winner.isBot || loser.isBot) {
           const humanId = winner.isBot ? loser.userId : winner.userId;
-          if ((room.currency || 'coins') === 'diamonds') await creditDiamonds(supabase, humanId, Math.floor(room.entryFee));
-          else await creditCoins(supabase, humanId, parseFloat(room.entryFee));
-          balanceChange = { winnerPayout: room.entryFee };
+          balanceChange = await refundBotDraw(supabase, humanId, room.entryFee, room.currency || 'coins', { game: GAME_NAME });
         } else {
           balanceChange = (room.currency || 'coins') === 'diamonds'
             ? await settleDrawMatchDiamonds(supabase, winner.userId, loser.userId, room.entryFee)
@@ -598,7 +596,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
     try { ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser, { staked: !isFree })); } catch {}
   }
 
-  io.to(roomId).emit('color_rush_result', {
+  emitRoomResult(io, room, roomId, 'color_rush_result', {
     isDraw,
     winnerStreak, isFirstWin,
     winnerId: winner.userId, loserId: loser.userId,

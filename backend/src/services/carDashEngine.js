@@ -6,7 +6,7 @@
 // timing jitter) is deliberately left alone.
 const { randomInt } = require('node:crypto');
 const { closestByElo } = require('./queueMatch');
-const { findRoomBySocket } = require('./roomLookup');
+const { findRoomBySocket, emitRoomResult } = require('./roomLookup');
 /**
  * carDashEngine.js — "Rush Hour"
  *
@@ -19,7 +19,7 @@ const { findRoomBySocket } = require('./roomLookup');
  * clamped to the wall clock for the same reason. Traffic is generated from a
  * shared seed, so both players face an identical road (pure skill, verifiable).
  */
-const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
+const { settleMatch, settleMatchDiamonds, settleBotMatch, refundBotDraw, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings, ratesElo } = require('./eloService');
 const { updateHighscorePair } = require('./highscoreService');
@@ -530,7 +530,7 @@ async function _resolveFromTimes(io, supabase, roomId) {
       // waiting out its deadline.
       tournamentHook.settled(roomId, { isDraw: true });
       setTimeout(() => deleteCarDashRoom(roomId), 5_000);
-      io.to(roomId).emit('car_dash_result', { soloRun: true, ms, score });
+      emitRoomResult(io, room, roomId, 'car_dash_result', { soloRun: true, ms, score });
     }
     return;
   }
@@ -601,9 +601,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
         // match nobody won is a match the house takes nothing from.
         if (winner.isBot || loser.isBot) {
           const humanId = winner.isBot ? loser.userId : winner.userId;
-          if ((room.currency || 'coins') === 'diamonds') await creditDiamonds(supabase, humanId, Math.floor(room.entryFee));
-          else await creditCoins(supabase, humanId, parseFloat(room.entryFee));
-          balanceChange = { winnerPayout: room.entryFee };
+          balanceChange = await refundBotDraw(supabase, humanId, room.entryFee, room.currency || 'coins', { game: GAME_NAME });
         } else {
           balanceChange = (room.currency || 'coins') === 'diamonds'
             ? await settleDrawMatchDiamonds(supabase, winner.userId, loser.userId, room.entryFee)
@@ -645,7 +643,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerMs, loserMs, 
     try { ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser, { staked: !isFree })); } catch {}
   }
 
-  io.to(roomId).emit('car_dash_result', {
+  emitRoomResult(io, room, roomId, 'car_dash_result', {
     isDraw,
     winnerStreak, isFirstWin,
     winnerId: winner.userId, loserId: loser.userId,

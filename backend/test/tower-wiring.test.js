@@ -349,7 +349,7 @@ test('a PvP win streak reaches the result card', () => {
   // first in the file, so an unscoped search compared the wrong pair.
   const fn = engine.slice(engine.indexOf('async function _resolve(io'));
   const applied = fn.indexOf('applyMatchStreaks');
-  const emit = fn.indexOf("emit('tower_result'");
+  const emit = fn.indexOf("'tower_result', ");
   assert.ok(applied > 0, 'streaks are never applied in the PvP resolve');
   assert.ok(applied < emit, 'streaks must be resolved before the result is emitted');
   // \r?\n, not \n: git checks these files out with CRLF on Windows, so a

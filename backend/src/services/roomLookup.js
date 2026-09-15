@@ -31,4 +31,60 @@ function findRoomBySocket(rooms, socketId) {
   return finished;
 }
 
-module.exports = { findRoomBySocket };
+/**
+ * Move a reconnected player's room state from their old socket id to the new one.
+ *
+ * Every engine keys per-player state by socket id: Blackjack's hands, stood
+ * and busted; the scores, progress and ping maps in the others. A phone that
+ * drops and comes back gets a NEW socket id. The resume handler updated
+ * player.socketId but left all of that behind under the old id, so the
+ * returning player had no hand, no score and no turn: actions were ignored,
+ * the turn timer never finished the round, and the match hung until they left
+ * and forfeited.
+ *
+ * Shallow and generic on purpose: any plain-object or Map property of the room
+ * holding the old id as a key is moved, so an engine that adds a new map is
+ * covered without anyone remembering to list it here.
+ */
+function rekeyRoomSocket(room, oldId, newId) {
+  if (!room || !oldId || !newId || oldId === newId) return;
+  for (const [key, val] of Object.entries(room)) {
+    if (key === 'players' || val === null || typeof val !== 'object') continue;
+    if (val instanceof Map) {
+      if (val.has(oldId)) { val.set(newId, val.get(oldId)); val.delete(oldId); }
+    } else if (!Array.isArray(val) && Object.getPrototypeOf(val) === Object.prototype
+      && Object.prototype.hasOwnProperty.call(val, oldId)) {
+      val[newId] = val[oldId];
+      delete val[oldId];
+    }
+  }
+}
+
+/**
+ * Emit a match result to the room AND keep it on the room.
+ *
+ * A player whose connection dropped at the moment of the result is not in the
+ * socket.io room, so the event never reaches them and their screen waits
+ * forever. Keeping the last result lets the resume handler hand it over when
+ * they come back.
+ */
+function emitRoomResult(io, room, roomId, event, payload) {
+  if (room) room.lastResult = { event, payload };
+  io.to(roomId).emit(event, payload);
+}
+
+/** Per-player variant, for engines that send each player their own result. */
+function emitPlayerResult(io, room, player, event, payload) {
+  if (room && player?.userId) {
+    room.lastResultByUser = room.lastResultByUser || {};
+    room.lastResultByUser[player.userId] = { event, payload };
+  }
+  io.to(player.socketId).emit(event, payload);
+}
+
+/** What a returning player missed, if the match ended while they were away. */
+function missedResultFor(room, userId) {
+  return room?.lastResultByUser?.[userId] || room?.lastResult || null;
+}
+
+module.exports = { findRoomBySocket, rekeyRoomSocket, emitRoomResult, emitPlayerResult, missedResultFor };

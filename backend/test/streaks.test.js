@@ -42,7 +42,7 @@ const ENGINES = {
 test('every game sends the streak with the result', () => {
   for (const [file, event] of Object.entries(ENGINES)) {
     const code = resolveBody(strip(eng(`${file}.js`)));
-    const at = code.indexOf(`emit('${event}'`);
+    const at = code.indexOf(`'${event}', `);
     assert.ok(at > 0, `${file} never emits ${event} from its settle path`);
     // The settle body, not a window after the emit: Word VS builds its payload
     // in a resultFor() helper defined just ABOVE the emit and passes it by
@@ -60,7 +60,7 @@ test('the streak is resolved before the result is sent', () => {
   for (const [file, event] of Object.entries(ENGINES)) {
     const code = resolveBody(strip(eng(`${file}.js`)));
     const applied = code.lastIndexOf('applyMatchStreaks(supabase');
-    const emitted = code.indexOf(`emit('${event}'`);
+    const emitted = code.indexOf(`'${event}', `);
     if (applied === -1 || emitted === -1) continue;
     assert.ok(applied < emitted,
       `${file} works the streak out after the result has already been sent`);

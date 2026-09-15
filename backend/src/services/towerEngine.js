@@ -7,7 +7,7 @@
 // obviously applicable to the other.
 const { randomInt } = require('node:crypto');
 const { closestByElo } = require('./queueMatch');
-const { findRoomBySocket } = require('./roomLookup');
+const { findRoomBySocket, emitRoomResult } = require('./roomLookup');
 const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings, ratesElo } = require('./eloService');
 const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds } = require('./walletService');
 const { unlockUser } = require('./lockService');
@@ -396,7 +396,7 @@ async function handleTowerComplete(io, supabase, roomId, socketId, score = 0, ta
     // Rating and payout stay absent because they genuinely are: the stake
     // was the entry fee and the prize is paid at the end.
     const _tourBot = room.players.find(p => p.isBot);
-    io.to(roomId).emit('tower_result', room.tournament ? {
+    emitRoomResult(io, room, roomId, 'tower_result', room.tournament ? {
       isSolo:         false,
       vsBot:          false,
       winnerId:       humanWon ? player.userId : _tourBot?.userId,
@@ -535,7 +535,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
   io.emit('active_game_ended', { id: roomId });
   gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId) });
   tournamentHook.settled(roomId, { winnerId: isDraw ? null : winner.userId, loserId: isDraw ? null : loser.userId, isDraw, scores: { [winner.userId]: winnerScore, [loser.userId]: loserScore } });
-  io.to(roomId).emit('tower_result', {
+  emitRoomResult(io, room, roomId, 'tower_result', {
     isDraw,
     isSolo: false,
     winnerId: winner.userId, loserId: loser.userId,

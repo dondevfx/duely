@@ -1,9 +1,9 @@
 const { v4: uuidv4 } = require('uuid');
 const { closestByElo } = require('./queueMatch');
-const { findRoomBySocket } = require('./roomLookup');
+const { findRoomBySocket, emitPlayerResult } = require('./roomLookup');
 const { isValidWord } = require('./wordValidator');
 const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings, ratesElo } = require('./eloService');
-const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
+const { settleMatch, settleMatchDiamonds, settleBotMatch, refundBotDraw, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const { updateHighscore } = require('./highscoreService');
 const gameEvents = require('./gameEvents');
@@ -475,9 +475,7 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
       try {
         if (hasBot && human) {
           // Bot draw: the fee was deducted upfront, so hand it straight back.
-          if (currency === 'diamonds') await creditDiamonds(supabase, human.userId, Math.floor(fee));
-          else await creditCoins(supabase, human.userId, parseFloat(fee));
-          balanceChange = { winnerPayout: fee };
+          balanceChange = await refundBotDraw(supabase, human.userId, fee, currency, { game: 'Word VS' });
           unlockUser(human.userId);
         } else {
           balanceChange = currency === 'diamonds'
@@ -584,8 +582,8 @@ async function _settleWordle(io, supabase, room, winnerSocketId) {
       entryFee:          fee,
     };
   }
-  io.to(p1.socketId).emit('wordle_result', resultFor(p1));
-  io.to(p2.socketId).emit('wordle_result', resultFor(p2));
+  emitPlayerResult(io, room, p1, 'wordle_result', resultFor(p1));
+  emitPlayerResult(io, room, p2, 'wordle_result', resultFor(p2));
 
   gameEvents.emit('game_ended', { socketIds: [p1.socketId, p2.socketId] });
   tournamentHook.settled(room.roomId, { winnerId: winnerPlayer?.userId || null, loserId: loserPlayer?.userId || null, isDraw });

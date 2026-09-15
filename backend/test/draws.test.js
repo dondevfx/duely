@@ -96,13 +96,13 @@ test('the client is told, and every page passes it on', () => {
     // into that solo payload in two engines, where the name is not even in
     // scope: a ReferenceError the moment anyone finished a solo run.
     const body = code.slice(code.indexOf('async function _resolve(io'));
-    const at = body.indexOf(`emit('${event}', {`);
+    const at = body.indexOf(`'${event}', {`);
     assert.ok(at > 0, `${file} never emits ${event} from _resolve`);
     assert.ok(body.slice(at, at + 200).includes('isDraw'),
       `${file} does not send isDraw with the result`);
     // And the solo payload must NOT carry it.
     const solo = code.slice(0, code.indexOf('async function _resolve(io'));
-    const soloAt = solo.indexOf(`emit('${event}', {`);
+    const soloAt = solo.indexOf(`'${event}', {`);
     if (soloAt > 0) {
       const soloPayload = solo.slice(soloAt, soloAt + 200);
       assert.ok(!/^\s*isDraw,$/m.test(soloPayload),

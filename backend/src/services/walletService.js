@@ -357,6 +357,28 @@ async function settleBotMatch(supabase, humanUserId, entryFee, currency, humanWo
   }
 }
 
+// A tie against a bot: the stake comes straight back. It used to be credited
+// with no transaction row, so the player saw their stake leave and nothing
+// return in their history, and read it as a game that did not pay.
+async function refundBotDraw(supabase, humanUserId, entryFee, currency, meta = {}) {
+  const note = matchNote(meta.game, 'Bot');
+  if (currency === 'diamonds') {
+    const amount = Math.floor(entryFee);
+    await creditDiamonds(supabase, humanUserId, amount);
+    supabase.from('transactions').insert({
+      user_id: humanUserId, type: 'match_draw', amount_c: 0,
+      crypto_amount: amount, crypto_symbol: 'diamonds', status: 'confirmed', notes: note,
+    }).then().catch(e => console.error('[tx] bot draw insert failed:', e.message));
+    return { winnerPayout: amount };
+  }
+  const amount = parseFloat(entryFee);
+  await creditCoins(supabase, humanUserId, amount);
+  insertTx(supabase, {
+    user_id: humanUserId, type: 'match_draw', amount_c: amount, stake_c: amount, status: 'confirmed', notes: note,
+  });
+  return { winnerPayout: amount };
+}
+
 // Increment deposited column for the given source ('crypto' or 'fiat').
 // Called in webhooks after a successful deposit is credited.
 // Uses RPC for atomic increment to avoid race conditions on concurrent deposits.
@@ -853,6 +875,7 @@ module.exports = {
   forfeitSettleDiamonds,
   forfeitSettleCoins,
   settleBotMatch,
+  refundBotDraw,
   settleDrawMatch,
   settleDrawMatchDiamonds,
   recordDeposit,

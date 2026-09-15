@@ -6,10 +6,10 @@
 // timing jitter) is deliberately left alone.
 const { randomInt } = require('node:crypto');
 const { closestByElo } = require('./queueMatch');
-const { findRoomBySocket } = require('./roomLookup');
+const { findRoomBySocket, emitRoomResult } = require('./roomLookup');
 const { v4: uuidv4 } = require('uuid');
 const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings, ratesElo } = require('./eloService');
-const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
+const { settleMatch, settleMatchDiamonds, settleBotMatch, refundBotDraw, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const gameEvents = require('./gameEvents');
 
@@ -395,13 +395,14 @@ function handleBlackjackSplit(io, supabase, roomId, socketId) {
 function _autoStandAll(io, supabase, roomId) {
   const room = getBlackjackRoom(roomId);
   if (!room || room.state !== 'active') return;
+  let waitingOnReconnect = false;
   for (const p of room.players) {
     // If still on hand1 of a split, complete hand1 and transition
     if (!room.stood[p.socketId]) {
       // Skip players whose socket is gone — the disconnect handler will forfeit them
       if (!p.isBot) {
         const sock = io.sockets.sockets.get(p.socketId);
-        if (!sock || !sock.connected) continue;
+        if (!sock || !sock.connected) { waitingOnReconnect = true; continue; }
       }
       if (room.splitHand[p.socketId]) {
         room.completedHand1[p.socketId] = [...room.hands[p.socketId]];
@@ -410,6 +411,14 @@ function _autoStandAll(io, supabase, roomId) {
       }
       room.stood[p.socketId] = true;
     }
+  }
+  // A player skipped because their connection was dropping gets another look
+  // shortly. This timer used to fire once: if it caught someone mid-reconnect
+  // the round never ended, and the match hung until they left and forfeited.
+  // If they do not come back, the disconnect grace period forfeits them.
+  if (waitingOnReconnect) {
+    if (room.timer) clearTimeout(room.timer);
+    room.timer = setTimeout(() => _autoStandAll(io, supabase, roomId), 2000);
   }
   _checkAllDone(io, roomId, supabase);
 }
@@ -477,12 +486,7 @@ async function _resolveGame(io, supabase, roomId) {
         const humanId = p1.isBot ? p2.userId : p1.userId;
         if (isDraw) {
           // Bot draw: fee already deducted upfront — full refund (bot matches are diamonds-only, no platform fee)
-          if (room.currency === 'diamonds') {
-            await creditDiamonds(supabase, humanId, Math.floor(room.entryFee));
-          } else {
-            await creditCoins(supabase, humanId, parseFloat(room.entryFee));
-          }
-          balanceChange = { winnerPayout: room.entryFee };
+          balanceChange = await refundBotDraw(supabase, humanId, room.entryFee, room.currency, { game: 'Blackjack' });
         } else {
           balanceChange = await settleBotMatch(supabase, humanId, room.entryFee, room.currency, !winner.isBot, { game: 'Blackjack' });
         }
@@ -554,7 +558,7 @@ async function _resolveGame(io, supabase, roomId) {
 
   io.emit('active_game_ended', { id: roomId });
   gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId).filter(Boolean) });
-  io.to(roomId).emit('bj_result', {
+  emitRoomResult(io, room, roomId, 'bj_result', {
     isDraw,
     winnerId: winner.userId,
     loserId: loser.userId,

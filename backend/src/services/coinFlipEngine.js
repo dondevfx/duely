@@ -6,7 +6,7 @@
 // timing jitter) is deliberately left alone.
 const { randomInt } = require('node:crypto');
 const { closestByElo } = require('./queueMatch');
-const { findRoomBySocket } = require('./roomLookup');
+const { findRoomBySocket, emitRoomResult } = require('./roomLookup');
 const { v4: uuidv4 } = require('uuid');
 const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings, ratesElo } = require('./eloService');
 const { settleMatch, settleCoinFlip, settleMatchDiamonds, settleBotMatch } = require('./walletService');
@@ -173,7 +173,7 @@ async function resolveCoinFlip(io, supabase, roomId) {
 
   io.emit('active_game_ended', { id: roomId });
   gameEvents.emit('game_ended', { socketIds: room.players.map(p => p.socketId).filter(Boolean) });
-  io.to(roomId).emit('coin_flip_result', {
+  emitRoomResult(io, room, roomId, 'coin_flip_result', {
     result,
     winnerId: winner.userId,
     loserId: loser.userId,

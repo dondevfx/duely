@@ -109,6 +109,7 @@ const {
   deductCoins, deductDiamonds, deductMatchFees, creditDiamonds, creditCoins,
   settleBotMatch,
 } = require('../services/walletService');
+const { rekeyRoomSocket, missedResultFor } = require('../services/roomLookup');
 const { lockUser, unlockUser, isLocked } = require('../services/lockService');
 const { updateElo: _updateElo } = require('../services/eloService');
 const { verifyToken } = require('../middleware/auth');
@@ -2531,9 +2532,17 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
           await _handleForfeit(io, supabase, stillFound, leaverSocketId, delFn, gameType);
         };
         const updateSocketFn = (newSocket) => {
+          // Per-player state is keyed by socket id in every engine; move it
+          // with the player, or they come back to a match that has forgotten
+          // their hand and score. See rekeyRoomSocket.
+          rekeyRoomSocket(room, leaverSocketId, newSocket.id);
           leaver.socketId = newSocket.id;
           newSocket._authenticatedUserId = leaver.userId;
           newSocket.join(roomId);
+          // The match may have ended while they were away, and the result
+          // went to a room they were not in. Hand it over now.
+          const missed = missedResultFor(room, leaver.userId);
+          if (missed) newSocket.emit(missed.event, missed.payload);
         };
         pendingJobs.push({ forfeitFn, updateSocketFn, cancelled: false });
       }
@@ -2551,6 +2560,13 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       }
     });
   });
+
+  // Names for forfeit history rows, so a quit bot game reads "Blackjack vs Bot"
+  // rather than a blank loss.
+  const GAME_LABELS = {
+    blackjack: 'Blackjack', blockBlast: 'Block Burst', scrabble: 'Word VS', coin_flip: 'Coin Flip',
+    carDash: 'Rush Hour', colorRush: 'Color Rush', tower: 'Tower', reaction: 'Reaction',
+  };
 
   // ── Forfeit handler (called on disconnect from active room) ────────────
   // One player left: stayer wins and gets paid. Both left: deduct both (fees).
@@ -2605,7 +2621,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       // alone: it is a PvP record, and quitting a bot match is not a loss to
       // an opponent.
       try {
-        await settleBotMatch(supabase, leaver.userId, fee, currency, false);
+        await settleBotMatch(supabase, leaver.userId, fee, currency, false, { game: GAME_LABELS[gameType] });
       } catch (e) { console.error('bot forfeit settle error:', e.message); }
     } else if (fee > 0 && !stayer.isBot) {
       const stayerSocket = io.sockets.sockets.get(stayer.socketId);

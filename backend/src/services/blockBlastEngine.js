@@ -6,9 +6,9 @@
 // timing jitter) is deliberately left alone.
 const { randomInt } = require('node:crypto');
 const { closestByElo } = require('./queueMatch');
-const { findRoomBySocket } = require('./roomLookup');
+const { findRoomBySocket, emitRoomResult } = require('./roomLookup');
 ﻿const { calculateNewRatings, applyMatchStreaks, applyEloUpdate, freshRatings, ratesElo } = require('./eloService');
-const { settleMatch, settleMatchDiamonds, settleBotMatch, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
+const { settleMatch, settleMatchDiamonds, settleBotMatch, refundBotDraw, settleDrawMatch, settleDrawMatchDiamonds, creditCoins, creditDiamonds } = require('./walletService');
 const { unlockUser } = require('./lockService');
 const { v4: uuidv4 } = require('uuid');
 const { updateHighscore } = require('./highscoreService');
@@ -421,7 +421,7 @@ async function handleBlockBlastComplete(io, supabase, roomId, socketId, score = 
       // Rating and payout stay absent because they genuinely are: the stake
       // was the entry fee and the prize is paid at the end.
       const _tourBot = room.players.find(p => p.isBot);
-      io.to(roomId).emit('block_blast_result', room.tournament ? {
+      emitRoomResult(io, room, roomId, 'block_blast_result', room.tournament ? {
         isSolo:         false,
         vsBot:          false,
         winnerId:       humanWon ? player.userId : _tourBot?.userId,
@@ -474,7 +474,7 @@ async function _forceResolve(io, supabase, roomId) {
     // isDraw, the same name every other draw uses. This path predates the
     // score-tie draw and had invented its own flag, so the page was reading
     // two different fields for one outcome.
-    io.to(roomId).emit('block_blast_result', { isDraw: true, draw: true, reason: 'timeout' });
+    emitRoomResult(io, room, roomId, 'block_blast_result', { isDraw: true, draw: true, reason: 'timeout' });
     return;
   }
   await _resolveFromScores(io, supabase, roomId);
@@ -532,9 +532,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
         // match nobody won is a match the house takes nothing from.
         if (_hasBot) {
           const _humanId = winner.isBot ? loser.userId : winner.userId;
-          if ((room.currency || 'coins') === 'diamonds') await creditDiamonds(supabase, _humanId, Math.floor(room.entryFee));
-          else await creditCoins(supabase, _humanId, parseFloat(room.entryFee));
-          balanceChange = { winnerPayout: room.entryFee };
+          balanceChange = await refundBotDraw(supabase, _humanId, room.entryFee, room.currency || 'coins', { game: 'Block Burst' });
         } else {
           balanceChange = (room.currency || 'coins') === 'diamonds'
             ? await settleDrawMatchDiamonds(supabase, winner.userId, loser.userId, room.entryFee)
@@ -572,7 +570,7 @@ async function _resolve(io, supabase, roomId, winner, loser, winnerScore, loserS
     try { ({ winnerStreak, isFirstWin } = await applyMatchStreaks(supabase, winner, loser, { staked: !isFree })); } catch {}
   }
 
-  io.to(roomId).emit('block_blast_result', {
+  emitRoomResult(io, room, roomId, 'block_blast_result', {
     isDraw,
     isSolo: false,
     winnerId: winner.userId, loserId: loser.userId,
