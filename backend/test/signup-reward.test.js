@@ -49,12 +49,16 @@ test('the claim is guarded by a conditional UPDATE, not a preceding SELECT', () 
   assert.match(CLAIM, /claimed\.length === 0[\s\S]{0,120}Already claimed/);
 });
 
-test('a failed credit releases the claim', () => {
-  // They got nothing, so they must be able to try again. Fails closed, the
-  // same way the diamond and spin claims do.
+test('a failed-looking credit keeps the claim, and says so', () => {
+  // "They got nothing" was the assumption, and it is not one an error can
+  // prove: a response lost after Postgres committed reports an error for
+  // diamonds that landed, and releasing the stamp then pays the grant twice.
+  // Kept stamped and logged for a person, like every other claim in the app
+  // (economy audit #2, V4).
   const onErr = CLAIM.slice(CLAIM.indexOf('if (credErr)'));
-  assert.match(onErr, /signup_bonus_claimed_at:\s*null/,
-    'a credit failure that keeps the stamp silently eats the grant');
+  assert.doesNotMatch(onErr.slice(0, 600), /signup_bonus_claimed_at:\s*null/,
+    'the claim is released after a credit that may have landed');
+  assert.match(onErr, /SIGNUP CLAIM UNRESOLVED/);
 });
 
 test('the claim is recorded as a transaction', () => {

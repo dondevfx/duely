@@ -152,6 +152,10 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
         avatarUrl: profile?.avatar_url || null,
         profileColor: profile?.profile_color || null,
         entryFee, now, free,
+        // A demo is only ever seated with demos (and its bots). Play vs Bot
+        // makes a private pool that fills at once, so it never waits either.
+        demo: demo && !vsBot,
+        solo: vsBot,
       }));
     } catch (e) {
       // Nothing was taken, so there is nothing to give back.

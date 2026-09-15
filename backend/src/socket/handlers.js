@@ -1487,7 +1487,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       }
       let code;
       do { code = _genPrivateCode(); } while (pendingPrivateRooms.has(code));
-      const p1 = { socketId: socket.id, userId: authenticatedUser.userId, username: authenticatedUser.username, elo: authenticatedUser.elo, entryFee, currency, side };
+      const p1 = { socketId: socket.id, userId: authenticatedUser.userId, username: authenticatedUser.username, elo: authenticatedUser.elo, entryFee, currency, side, isDemo: !!authenticatedUser.isDemo };
       pendingPrivateRooms.set(code, { gameType: canonicalGameType(gameType), p1, createdAt: Date.now() });
       socket.emit('private_room_created', { code });
       // Auto-expire after 10 minutes and unlock
@@ -1631,6 +1631,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       if (!isValidFee(entryFee, currency)) return fail('Invalid entry fee.');
       if (inMatchOrQueue(fromId)) return fail('Finish your current game first.');
       if (!_isUserOnline(friendId)) return fail('That friend is offline.');
+      // See join_private_room: never pair a demo with a real account.
+      if (!!isDemoAccount(friendId) !== !!authenticatedUser.isDemo) return fail('That friend is offline.');
 
       // Must be accepted friends.
       const { data: fr } = await supabase.from('friends').select('id')
@@ -1740,6 +1742,14 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       }
       gameType = canonicalGameType(gameType);
       if (pending.p1.socketId === socket.id) return socket.emit('error', { message: "You can't join your own room." });
+      // A demo and a real account are never paired. A demo sets its own balance
+      // (the tip form), so a Coins room between them turns play money into
+      // real, withdrawable coins for whoever wins. Invites and challenge links
+      // all join here. Answered as a missing room, so the refusal does not
+      // reveal which accounts are demos. (Audit #2, finding V3.)
+      if (!!pending.p1.isDemo !== !!authenticatedUser.isDemo) {
+        return socket.emit('error', { message: 'Room not found. Check the code and try again.' });
+      }
       const p1Socket = io.sockets.sockets.get(pending.p1.socketId);
       if (!p1Socket) { pendingPrivateRooms.delete(key); if ((pending.p1.entryFee || 0) > 0) unlockUser(pending.p1.userId); return socket.emit('error', { message: 'Room host disconnected.' }); }
 
@@ -1758,7 +1768,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         if (inv.code === key) _cleanupInvite(iid);
       }
       const p1 = pending.p1;
-      const p2 = { socketId: socket.id, userId: authenticatedUser.userId, username: profile2.username, elo: profile2.elo, avatarUrl: profile2.avatar_url ?? null, profileColor: profile2.profile_color ?? null, entryFee, currency };
+      const p2 = { socketId: socket.id, userId: authenticatedUser.userId, username: profile2.username, elo: profile2.elo, avatarUrl: profile2.avatar_url ?? null, profileColor: profile2.profile_color ?? null, entryFee, currency, isDemo: !!authenticatedUser.isDemo };
 
       _pairPrivatePlayers(gameType, p1, p2, io, supabase);
     });

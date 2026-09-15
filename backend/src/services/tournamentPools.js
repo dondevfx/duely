@@ -110,9 +110,15 @@ function createStore() {
     for (const key of spent.keys()) if (key < cutoff) spent.delete(key);
   }
 
-  const openPoolsFor = (slotStart, entryFee) =>
+  // Demo and real accounts NEVER share a pool. A demo's balance is play money
+  // it sets itself, and a demo pool is filled with bots and pays the full
+  // sixteen-player prize table, so a real player seated in one was paid from a
+  // pot nobody paid into, and a demo seated in a real pool filled the real
+  // players' bracket with bots and switched it to that table. (Audit #2, V2.)
+  const openPoolsFor = (slotStart, entryFee, demo = false) =>
     [...pools.values()].filter(p =>
-      p.state === 'filling' && p.slotStart === slotStart && p.entryFee === entryFee);
+      p.state === 'filling' && p.slotStart === slotStart && p.entryFee === entryFee
+      && !!p.demo === !!demo);
 
   /**
    * The tournament this player is still IN, in this slot — or null.
@@ -180,7 +186,7 @@ function createStore() {
    * click lands them back on the same bracket rather than entering twice or
    * being refused.
    */
-  function join({ userId, username, avatarUrl, profileColor = null, entryFee, isBot = false, now }) {
+  function join({ userId, username, avatarUrl, profileColor = null, entryFee, isBot = false, now, demo = false, solo = false }) {
     if (!F.ENTRY_FEES.includes(entryFee)) {
       throw new Error(`entry fee must be one of ${F.ENTRY_FEES.join(', ')}`);
     }
@@ -198,8 +204,12 @@ function createStore() {
     // there is nothing to choose between and no ordering to get right — which
     // is also what makes "as many pools as needed" work: the seventeenth
     // player opens the next one and everyone after joins that.
-    const open = openPoolsFor(slot.startsAt, entryFee).filter(p => p.players.length < F.POOL_SIZE);
+    // A solo pool (Play vs Bot) is always a fresh one. Joining whatever pool was
+    // filling put the bots — and the free flag — into real players' waiting
+    // room, turning their tournament into a free bot game. (Audit #2, V5.)
+    const open = solo ? [] : openPoolsFor(slot.startsAt, entryFee, demo).filter(p => p.players.length < F.POOL_SIZE);
     const pool = open[0] || createPool(slot.startsAt, entryFee, now);
+    if (demo) pool.demo = true;
 
     seat(pool, { userId, username, avatarUrl, profileColor, isBot, now });
     return { pool, already: false };

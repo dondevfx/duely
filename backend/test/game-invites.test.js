@@ -85,13 +85,19 @@ test('every queue key a page passes maps to a valid room id', () => {
   }
 });
 
-test('the invite path does not gate on demo accounts', () => {
+test('demo accounts can invite each other, but never a real account', () => {
   // Two demo accounts inviting each other has to work; they can already friend
-  // each other, and an invite is the next thing they would try.
+  // each other, and an invite is the next thing they would try. What is refused
+  // is a demo and a real account (economy audit #2, V3): a demo sets its own
+  // balance, so a Coins match between them turns play money into real coins.
   const at = handlers.indexOf("socket.on('invite_friend'");
   assert.ok(at > 0, 'invite handler not found');
   const body = handlers.slice(at, handlers.indexOf("socket.on('", at + 10));
-  assert.doesNotMatch(body, /isDemo/, 'a demo account must be able to invite another demo account');
+  // The only demo rule is a MISMATCH check, so demo-to-demo passes it.
+  const rules = body.split(/\r?\n/).filter(l => /\bif \(/.test(l) && /isDemo/.test(l));
+  assert.equal(rules.length, 1, `unexpected demo rules on invites: ${rules.join(' | ')}`);
+  assert.match(rules[0], /!!isDemoAccount\(friendId\) !== !!authenticatedUser\.isDemo/,
+    'the invite gate must refuse only demo-to-real, never demo-to-demo');
 });
 
 // ── Accepting an invite has to land you in the match ─────────────────────────

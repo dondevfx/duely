@@ -52,6 +52,14 @@ module.exports = function bonusRoutes(supabase) {
   // Two concurrent requests serialize at the row lock; the second sees the updated
   // timestamp and gets 'already_claimed' from the DB, never double-crediting.
   router.post('/claim', requireAuth, async (req, res) => {
+    // Retired. claim_daily_bonus adds a coin to c_coins with no deposit behind
+    // it, and coins may only enter through the treasury. The site stopped
+    // calling this long ago, but the route still answered: any account could
+    // POST it for a free coin a day, and a farm of accounts could play those
+    // coins through against each other and withdraw them. Refused before the
+    // database is touched. (Audit #2, finding V1.)
+    return res.status(410).json({ error: 'This bonus is no longer available.' });
+    // eslint-disable-next-line no-unreachable
     const { data, error } = await supabase.rpc('claim_daily_bonus', {
       p_user_id: req.user.id,
     });
@@ -164,11 +172,13 @@ module.exports = function bonusRoutes(supabase) {
       user_id: req.user.id, amount: SIGNUP_BONUS,
     });
     if (credErr) {
-      // Clear the stamp — they got nothing, so they must be able to try again.
-      // Fails closed the same way the diamond and spin claims do.
-      await supabase.from('profiles')
-        .update({ signup_bonus_claimed_at: null }).eq('id', req.user.id).then().catch(() => {});
-      return res.status(500).json({ error: 'Could not credit diamonds. Please try again.' });
+      // The stamp STAYS. An error does not prove the credit failed: a response
+      // lost after Postgres committed reports an error for diamonds that
+      // landed, and clearing the stamp then pays the grant twice. Logged for a
+      // person instead, like every other claim. (Audit #2, finding V4.)
+      console.error(`[bonus] SIGNUP CLAIM UNRESOLVED user=${req.user.id} amount=${SIGNUP_BONUS} — ` +
+        `stamped, credit reported "${credErr.message}". Check the balance before re-granting.`);
+      return res.status(500).json({ error: 'Could not credit your diamonds. Support has been notified.' });
     }
 
     supabase.from('transactions').insert({
@@ -233,11 +243,11 @@ module.exports = function bonusRoutes(supabase) {
       });
 
       if (credErr) {
-        console.error('[bonus] credit_diamonds RPC failed:', credErr.message);
-        // Reset cooldown so user can try again — they got nothing.
-        await supabase.from('profiles')
-          .update({ last_spin_claimed: null }).eq('id', req.user.id).then().catch(() => {});
-        return res.status(500).json({ error: 'Could not credit diamonds. Please try again.' });
+        // The cooldown STAYS stamped: clearing it after a credit that committed
+        // but reported an error re-arms a repeatable spin. See the signup claim.
+        console.error(`[bonus] SPIN UNRESOLVED user=${req.user.id} prize=${prize} — ` +
+          `stamped, credit reported "${credErr.message}". Check the balance before re-granting.`);
+        return res.status(500).json({ error: 'Could not credit your prize. Support has been notified.' });
       }
 
       supabase.from('transactions').insert({
