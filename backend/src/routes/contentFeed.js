@@ -12,7 +12,7 @@
 const { Router } = require('express');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
-const { buildFeed } = require('../services/contentFeed');
+const { buildFeed, periods } = require('../services/contentFeed');
 const { DEMO_IDS } = require('../services/demoAccounts');
 
 const CACHE_MS = 10 * 60 * 1000;
@@ -129,9 +129,9 @@ const RECENT_MS = 7 * 24 * 60 * 60 * 1000;
  * balance, so none of it is in memory to leak.
  */
 async function fetchRows(supabase, pools, now, log) {
-  const d = new Date(now);
-  const dayStart = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString();
-  const since = new Date(Math.min(Date.parse(dayStart), now - RECENT_MS)).toISOString();
+  // Back to the start of the previous month or week, whichever is earlier, so
+  // every period and its comparison come from one read.
+  const since = new Date(Math.min(periods(now).earliest, now - RECENT_MS)).toISOString();
 
   const safe = async (name, fn) => {
     try {
@@ -145,7 +145,7 @@ async function fetchRows(supabase, pools, now, log) {
   };
   const pageAll = async (build) => {
     const out = [];
-    for (let from = 0; from < 50_000; from += 1000) {
+    for (let from = 0; from < 500_000; from += 1000) {
       const { data, error } = await build().range(from, from + 999);
       if (error) return { data: null, error };
       out.push(...(data || []));
@@ -157,13 +157,14 @@ async function fetchRows(supabase, pools, now, log) {
   const [matches, transactions, newProfiles, board] = await Promise.all([
     safe('matches', () => pageAll(() => supabase.from('matches')
       .select('player1_id, player2_id, winner_id, game_type, entry_fee_c, entry_fee_diamonds, played_at')
-      .gte('played_at', dayStart).not('player2_id', 'is', null).order('played_at'))),
+      .gte('played_at', since).not('player2_id', 'is', null).order('played_at'))),
     safe('transactions', () => pageAll(() => supabase.from('transactions')
-      .select('user_id, type, amount_c, status, notes, created_at')
-      .eq('type', 'match_win').eq('status', 'confirmed').gt('amount_c', 0)
+      .select('user_id, type, amount_c, stake_c, status, notes, created_at')
+      .in('type', ['match_win', 'match_loss', 'match_draw', 'tournament_entry', 'tournament_refund'])
+      .eq('status', 'confirmed').gt('amount_c', 0)
       .gte('created_at', since).order('created_at'))),
     safe('profiles (new)', () => pageAll(() => supabase.from('profiles')
-      .select('id, created_at').gte('created_at', dayStart).order('created_at'))),
+      .select('id, created_at').gte('created_at', since).order('created_at'))),
     safe('profiles (board)', async () => {
       // Same query as GET /api/leaderboard, without the display columns.
       const run = (cols) => supabase.from('profiles').select(cols)
@@ -180,12 +181,18 @@ async function fetchRows(supabase, pools, now, log) {
   let featureProfiles = null;
   if (transactions) {
     const ids = [...new Set(transactions.map(t => t.user_id).filter(Boolean))];
-    featureProfiles = ids.length ? await safe('profiles (winners)', async () => {
-      const run = (cols) => supabase.from('profiles').select(cols).in('id', ids);
-      let r = await run('id, is_private, banned');
-      if (r.error && /banned/.test(r.error.message || '')) r = await run('id, is_private');
-      return r;
-    }) : [];
+    featureProfiles = [];
+    // In chunks: a month of players does not fit in one URL.
+    for (let i = 0; i < ids.length && featureProfiles; i += 150) {
+      const chunk = ids.slice(i, i + 150);
+      const got = await safe('profiles (winners)', async () => {
+        const run = (cols) => supabase.from('profiles').select(cols).in('id', chunk);
+        let r = await run('id, is_private, banned');
+        if (r.error && /banned/.test(r.error.message || '')) r = await run('id, is_private');
+        return r;
+      });
+      featureProfiles = got ? featureProfiles.concat(got) : null;
+    }
   }
 
   let poolList = null;

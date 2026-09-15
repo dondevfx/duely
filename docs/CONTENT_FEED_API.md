@@ -51,58 +51,107 @@ environment variable. To revoke or rotate it, change the variable in Railway.
 
 ```json
 {
+  "generated_at": "2026-09-15T07:00:00.000Z",
   "updated_at": "2026-09-15T07:00:00.000Z",
-  "totals": {
-    "duels_today": 312,
-    "paid_out_today": 1240.5,
-    "new_players_today": 47
+  "totals": { "duels_today": 31, "paid_out_today": 124.5, "new_players_today": 4 },
+  "weekly": {
+    "period_start": "2026-09-14T00:00:00.000Z",
+    "period_end": "2026-09-21T00:00:00.000Z",
+    "duels": 58, "paid_out": 410.2, "new_players": 9, "active_players": 22, "total_wagered": 436,
+    "biggest_win": { "display_name": "NeonTiger", "game": "Tower", "amount": 47.5 },
+    "top_winners": [ { "display_name": "NeonTiger", "amount_won": 61.3 } ],
+    "top_games": [ { "game": "Color Rush", "duels": 21 }, { "game": "Tower", "duels": 14 } ]
   },
-  "biggest_win": { "display_name": "NeonTiger", "game": "Block Burst", "amount": 125 },
+  "monthly": {
+    "period_start": "2026-09-01T00:00:00.000Z",
+    "period_end": "2026-10-01T00:00:00.000Z",
+    "duels": 240, "paid_out": 1890, "new_players": 35, "active_players": 71, "total_wagered": 2010,
+    "biggest_win": { "display_name": "RapidFox", "game": "Tournament", "amount": 76 },
+    "top_winners": [ { "display_name": "RapidFox", "amount_won": 140.25 } ],
+    "top_games": [ { "game": "Color Rush", "duels": 88 } ]
+  },
+  "comparisons": {
+    "weekly_vs_previous_week": {
+      "compared_period_start": "2026-09-07T00:00:00.000Z",
+      "compared_period_end": "2026-09-08T07:00:00.000Z",
+      "duels_percent_change": 32.1, "paid_out_percent_change": 12.5, "new_players_percent_change": null,
+      "active_players_percent_change": -4.3, "total_wagered_percent_change": 18
+    },
+    "monthly_vs_previous_month": {
+      "compared_period_start": "2026-08-01T00:00:00.000Z",
+      "compared_period_end": "2026-08-15T07:00:00.000Z",
+      "duels_percent_change": 8, "paid_out_percent_change": -2.5, "new_players_percent_change": 40,
+      "active_players_percent_change": 11.1, "total_wagered_percent_change": 6.2
+    }
+  },
+  "biggest_win": { "display_name": "NeonTiger", "game": "Block Burst", "amount": 25, "quote": null },
   "recent_winners": [
-    { "display_name": "RapidFox",  "game": "Color Rush", "amount": 75, "won_at": "2026-09-15T06:41:12.000Z", "quote": null },
-    { "display_name": "NeonTiger", "game": "Tournament", "amount": 50, "won_at": "2026-09-15T05:02:40.000Z", "quote": null }
+    { "display_name": "RapidFox", "game": "Color Rush", "amount": 9.5, "won_at": "2026-09-15T06:41:12.000Z", "quote": null }
   ],
-  "leaderboard": [
-    { "rank": 1, "display_name": "NeonTiger", "elo": 1842 },
-    { "rank": 2, "display_name": "PixelWolf", "elo": 1795 }
-  ],
+  "leaderboard": [ { "rank": 1, "display_name": "NeonTiger", "elo": 1842 } ],
   "next_tournament": {
     "game": null,
     "possible_games": ["Block Burst", "Rush Hour", "Color Rush", "Tower", "Word VS"],
     "start_time": "2026-09-15T07:05:00.000Z",
-    "entry_fee": 5,
-    "entrants": 12,
-    "spots_left": 4,
-    "prize": 76
+    "entry_fee": 5, "entrants": 12, "spots_left": 4, "prize": 76
   }
 }
 ```
 
 *All values above are fake sample data.*
 
-If one data source fails, only its section comes back as `null`. The rest of
-the feed is still returned. Errors have no detail:
+Query parameters are ignored. Nothing in the URL changes what is returned.
+
+If one data source fails, only the figures from that source are `null`. The
+rest of the feed is still returned. Errors have no detail:
 `{"error":"Unauthorized"}`, `{"error":"Feed unavailable"}`,
 `{"error":"Too many requests"}`.
 
+## Periods
+
+All periods use **UTC**. Every window is half-open, `[start, end)`: an event
+exactly on a boundary belongs to the later period only, so nothing is
+counted twice.
+
+| Period | Window |
+|---|---|
+| today | 00:00 UTC today → now |
+| current week | Monday 00:00 UTC → now (`period_end` is next Monday) |
+| previous week | the 7 days before this Monday |
+| current month | the 1st at 00:00 UTC → now (`period_end` is the next 1st) |
+| previous month | the whole previous calendar month |
+
+**Comparisons are like-for-like.** The current period so far is compared with
+the same elapsed time from the start of the previous period, capped at that
+period's end. `compared_period_start` and `compared_period_end` show the
+exact window used. For example, on Tuesday at 07:00 the week is compared with
+last Monday 00:00 → last Tuesday 07:00, not with the whole previous week.
+`*_percent_change` is `(current − previous) / previous × 100`, rounded to one
+decimal. It is **null when the previous value is 0**.
+
 ## Fields
 
-"Today" means the current **UTC** calendar day. Amounts are in **Coins**. Diamond
-play is not money, so it is never included.
+Amounts are in **Coins**. Diamond play is not money, so it is never included in
+money figures.
 
 | Field | Meaning | Source |
 |---|---|---|
-| `totals.duels_today` | Completed player-vs-player results today. Excludes bot matches, tournament entry rows, demo, admin and test accounts, and any status other than completed. Identical rows within 10 seconds count once. Cancelled or abandoned matches never write a result row. | `matches` |
-| `totals.paid_out_today` | **Gross winnings credited to players today**: the full payout a winner received, stake included. Covers PvP wins, wins against a bot and tournament prizes. Confirmed rows only; duplicates within 10 seconds count once. **Not withdrawals.** Private and banned players are counted here but never named. | `transactions` type `match_win` (`amount_c` > 0) |
-| `totals.new_players_today` | Accounts created today, excluding demo, admin and test accounts. | `profiles.created_at` |
-| `biggest_win` | The largest single credited coin win today by a player who can be featured. | same as `paid_out_today` |
-| `recent_winners` | Up to 5 of the latest coin wins in the last 7 days by players who can be featured. `game` is `"Tournament"` for tournament prizes. | same |
-| `recent_winners[].quote` | Always `null`. Duely has no player quote or testimonial field, so none are ever made up. | — |
-| `leaderboard` | Top 5 on the site's Ranked board, using the same rules (`services/eloBoard.js`): placed accounts only (at least 3 results), no private, demo or admin accounts, and an unset rating shows as 1000. Banned and test accounts are also removed. | `profiles` |
-| `next_tournament` | The next real tournament taking entries: the busiest bracket in the current joinable slot, or the smallest stake if nobody has entered yet. Demo brackets, free Play-vs-Bot brackets and bots are not counted. | in-memory tournament pools and `tournamentFormat` |
-| `next_tournament.start_time` | When entry closes and play begins. | |
-| `next_tournament.prize` | Total prize money for a full 16-player bracket at that stake, after the 5% fee. | `prizesFor()` |
-| `next_tournament.game` | Always `null`. Each round's game stays secret until that round starts, on the site and here. `possible_games` lists the games it can be drawn from. | |
+| `duels` / `duels_today` | Completed player-vs-player results, both Coin and Diamond. Excludes bot matches, tournament entry rows, demo, admin and test accounts, and any status other than completed. Identical rows within 10 seconds count once. Cancelled or refunded matches never write a result row. | `matches` |
+| `active_players` | Distinct players who took part in those duels. | `matches` |
+| `total_wagered` | Coins staked in those duels: entry fee × 2 per duel. | `matches.entry_fee_c` |
+| `paid_out` / `paid_out_today` | **Gross coin winnings credited**: the full payout, stake included, for PvP wins, wins against a bot and tournament prizes. Confirmed rows only, deduplicated. **Not withdrawals.** Private and banned players are counted but never named. | `transactions` `match_win` |
+| `new_players` / `new_players_today` | Accounts created in the period, excluding demo, admin and test accounts. | `profiles.created_at` |
+| `weekly/monthly.biggest_win` | The largest single credited coin win in the period by a player who can be featured. | `transactions` `match_win` |
+| `top_winners[].amount_won` | Up to 5 featurable players with the highest **net** coin result, shown only if above 0. Net is: win payout − stake; + tournament prizes; − tournament entry fees; + tournament refunds; + draw refund − stake; − losses. The "Tournament entry" loss row is not counted a second time. | `transactions` |
+| `top_games` | Games ranked by duel count, most first; ties are alphabetical. | `matches` |
+| `biggest_win` (top level) | Today's largest featurable coin win. | same |
+| `recent_winners` | Up to 5 of the latest featurable coin wins in the last 7 days. `game` is `"Tournament"` for tournament prizes. | same |
+| `quote` | Always `null`. Duely has no approved quote or testimonial field. | — |
+| `leaderboard` | Top 5 on the site's Ranked board, using the same rules (`services/eloBoard.js`). Banned and test accounts are also removed. | `profiles` |
+| `next_tournament` | The next real tournament taking entries. Bots, demo brackets and free brackets are not counted. `game` is null until round one starts. | tournament pools |
+
+When there is no activity, counts are `0`, `biggest_win` is `null`, and lists
+are empty. Nothing is filled in to cover a gap.
 
 ## Privacy
 

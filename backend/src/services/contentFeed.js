@@ -97,28 +97,6 @@ function dedupe(rows, key, time) {
 }
 
 /**
- * Completed player-vs-player results today.
- *
- * The matches table only receives a row when a result is decided, so an
- * abandoned or cancelled match has no row. Rows that are not duels are left
- * out: bot matches (one side null), a tournament's entry rows (game_type
- * 'tournament'), anything involving a demo, admin or test account, and a row
- * carrying a non-completed status should one ever be added.
- */
-function countDuels(matches, { excluded, dayStart }) {
-  const valid = (matches || []).filter(m =>
-    m && m.player1_id && m.player2_id && m.player1_id !== m.player2_id
-    && GAME_TYPES[m.game_type]
-    && !excluded.has(m.player1_id) && !excluded.has(m.player2_id)
-    && (m.status === undefined || m.status === null || m.status === 'completed')
-    && ts(m.played_at) >= dayStart);
-  return dedupe(valid,
-    (m) => [[m.player1_id, m.player2_id].sort().join('|'), m.game_type,
-            Number(m.entry_fee_c) || 0, Number(m.entry_fee_diamonds) || 0].join('#'),
-    (m) => ts(m.played_at)).length;
-}
-
-/**
  * Coin winnings actually credited: confirmed match_win rows with a coin amount.
  * Covers PvP wins, wins against a bot and tournament prizes. Diamond wins carry
  * amount_c 0 and are not money, so they are not here.
@@ -257,34 +235,168 @@ function nextTournament(poolList, now) {
   };
 }
 
+// ── Periods ────────────────────────────────────────────────────────────────
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Every window is UTC and half-open, [start, end): an event exactly on a
+ * boundary belongs to the later period only, so nothing is counted twice.
+ *
+ *   today           00:00 UTC today -> now
+ *   current week    Monday 00:00 UTC -> now            (period_end = next Monday)
+ *   previous week   the seven days before that Monday
+ *   current month   the 1st 00:00 UTC -> now           (period_end = next 1st)
+ *   previous month  the whole calendar month before
+ *
+ * Comparisons are like-for-like: this period so far against the SAME elapsed
+ * span from the start of the previous period (capped at its end), so a
+ * Tuesday is not compared against a whole previous week.
+ */
+function periods(now) {
+  const d = new Date(now);
+  const dayStart = utcDayStart(now);
+  const weekStart = dayStart - ((d.getUTCDay() + 6) % 7) * DAY_MS;
+  const monthStart = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
+  const monthEnd = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
+  const prevMonthStart = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1);
+  const prevWeekStart = weekStart - 7 * DAY_MS;
+  return {
+    today: { start: dayStart, end: now },
+    week: { start: weekStart, end: now, periodEnd: weekStart + 7 * DAY_MS },
+    prevWeekSoFar: { start: prevWeekStart, end: Math.min(prevWeekStart + (now - weekStart), weekStart) },
+    month: { start: monthStart, end: now, periodEnd: monthEnd },
+    prevMonthSoFar: { start: prevMonthStart, end: Math.min(prevMonthStart + (now - monthStart), monthStart) },
+    earliest: Math.min(prevMonthStart, prevWeekStart),
+  };
+}
+
+const inRange = (t, r) => t >= r.start && t < r.end;
+
+/**
+ * Completed player-vs-player results, deduplicated over the whole dataset
+ * before any period filter.
+ *
+ * The matches table only receives a row when a result is decided, so an
+ * abandoned or cancelled (refunded) match has no row. Left out: bot matches
+ * (one side null), tournament entry rows (game_type 'tournament'), anything
+ * involving a demo, admin or test account, and a non-completed status.
+ */
+function validDuels(matches, { excluded }) {
+  const valid = (matches || []).filter(m =>
+    m && m.player1_id && m.player2_id && m.player1_id !== m.player2_id
+    && GAME_TYPES[m.game_type]
+    && !excluded.has(m.player1_id) && !excluded.has(m.player2_id)
+    && (m.status === undefined || m.status === null || m.status === 'completed')
+    && Number.isFinite(ts(m.played_at)));
+  return dedupe(valid,
+    (m) => [[m.player1_id, m.player2_id].sort().join('|'), m.game_type,
+            Number(m.entry_fee_c) || 0, Number(m.entry_fee_diamonds) || 0].join('#'),
+    (m) => ts(m.played_at));
+}
+
+function countDuels(matches, { excluded, dayStart }) {
+  return validDuels(matches, { excluded }).filter(m => ts(m.played_at) >= dayStart).length;
+}
+
+const MONEY_TYPES = new Set(['match_win', 'match_loss', 'match_draw', 'tournament_entry', 'tournament_refund']);
+
+/** Confirmed coin movements that make up a player's results, deduplicated. */
+function coinMoves(transactions, { excluded }) {
+  const valid = (transactions || []).filter(t =>
+    t && MONEY_TYPES.has(t.type) && t.status === 'confirmed'
+    && t.user_id && !excluded.has(t.user_id)
+    && Number(t.amount_c) > 0 && Number.isFinite(ts(t.created_at)));
+  return dedupe(valid,
+    (t) => [t.type, t.user_id, round2(t.amount_c), t.notes ?? ''].join('#'),
+    (t) => ts(t.created_at));
+}
+
+/**
+ * A player's net coin result from one movement.
+ *   win   payout - stake (a tournament prize counts in full: its entry fee is
+ *         the tournament_entry row)
+ *   draw  refund - stake
+ *   loss  -stake (the per-entrant "Tournament entry" loss row is skipped; the
+ *         tournament_entry row already took it)
+ */
+function netOf(t) {
+  const amt = Number(t.amount_c) || 0;
+  const stake = Number(t.stake_c) || 0;
+  switch (t.type) {
+    case 'match_win': return typeof t.notes === 'string' && t.notes.startsWith('Tournament') ? amt : amt - stake;
+    case 'match_draw': return amt - stake;
+    case 'match_loss': return t.notes === 'Tournament entry' ? 0 : -amt;
+    case 'tournament_entry': return -amt;
+    case 'tournament_refund': return amt;
+    default: return 0;
+  }
+}
+
+const TOP_WINNERS = 5;
+const COMPARED = ['duels', 'paid_out', 'new_players', 'active_players', 'total_wagered'];
+
+function periodStats({ duels, moves, newProfiles, featurable }, range) {
+  const d = (duels || []).filter(m => inRange(ts(m.played_at), range));
+  const active = new Set();
+  const games = new Map();
+  let wagered = 0;
+  for (const m of d) {
+    active.add(m.player1_id); active.add(m.player2_id);
+    const g = GAME_TYPES[m.game_type];
+    games.set(g, (games.get(g) || 0) + 1);
+    wagered += 2 * (Number(m.entry_fee_c) || 0);
+  }
+  const mv = moves ? moves.filter(t => inRange(ts(t.created_at), range)) : null;
+  const wins = mv ? mv.filter(t => t.type === 'match_win') : null;
+  const net = new Map();
+  for (const t of mv || []) net.set(t.user_id, (net.get(t.user_id) || 0) + netOf(t));
+  const biggest = wins && wins.filter(t => featurable.has(t.user_id) && gameFromNote(t.notes))
+    .sort((a, b) => Number(b.amount_c) - Number(a.amount_c) || ts(a.created_at) - ts(b.created_at))[0];
+  return {
+    duels: duels ? d.length : null,
+    active_players: duels ? active.size : null,
+    total_wagered: duels ? round2(wagered) : null,
+    paid_out: wins ? round2(wins.reduce((s, t) => s + Number(t.amount_c), 0)) : null,
+    new_players: newProfiles ? newProfiles.filter(p => inRange(ts(p.created_at), range)).length : null,
+    _biggest: biggest || null,
+    _topWinners: mv ? [...net].filter(([id, n]) => featurable.has(id) && round2(n) > 0)
+      .sort((a, b) => b[1] - a[1]).slice(0, TOP_WINNERS) : null,
+    _topGames: duels ? [...games].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([game, n]) => ({ game, duels: n })) : null,
+  };
+}
+
+/** Percent change, one decimal. Null when the earlier period had nothing. */
+function percentChange(cur, prev) {
+  if (cur === null || prev === null || !(prev > 0)) return null;
+  return Math.round(((cur - prev) / prev) * 1000) / 10;
+}
+
 // ── The feed ───────────────────────────────────────────────────────────────
 
 /**
  * rows: { matches, transactions, newProfiles, boardProfiles, featureProfiles, pools }
- * Any rows value may be null when its source failed; that section is then null.
+ * Any rows value may be null when its source failed; its figures are then null.
  */
 async function buildFeed(rows, { now = Date.now(), demoIds = [], adminId = null, testIds = [], secret, store, log = console }) {
-  const dayStart = utcDayStart(now);
+  const P = periods(now);
   const { excluded, featurable } = audience({ demoIds, adminId, testIds, profiles: rows.featureProfiles || [] });
 
-  const totals = { duels_today: null, paid_out_today: null, new_players_today: null };
-  if (rows.matches) totals.duels_today = countDuels(rows.matches, { excluded, dayStart });
+  const duels = rows.matches ? validDuels(rows.matches, { excluded }) : null;
+  const moves = rows.transactions ? coinMoves(rows.transactions, { excluded }) : null;
+  const newProfiles = rows.newProfiles
+    ? rows.newProfiles.filter(p => p && p.id && !excluded.has(p.id) && Number.isFinite(ts(p.created_at)))
+    : null;
+  const data = { duels, moves, newProfiles, featurable };
 
-  let wins = null;
-  if (rows.transactions) {
-    wins = coinWins(rows.transactions, { excluded });
-    totals.paid_out_today = round2(wins.filter(t => ts(t.created_at) >= dayStart)
-      .reduce((s, t) => s + Number(t.amount_c), 0));
-  }
-  if (rows.newProfiles) {
-    totals.new_players_today = rows.newProfiles
-      .filter(p => p && p.id && !excluded.has(p.id) && ts(p.created_at) >= dayStart).length;
-  }
+  const today = periodStats(data, P.today);
+  const week = periodStats(data, P.week);
+  const month = periodStats(data, P.month);
+  const prevWeek = periodStats(data, P.prevWeekSoFar);
+  const prevMonth = periodStats(data, P.prevMonthSoFar);
 
-  // Featured winners: named only if featurable, and only with a known game.
-  const featured = (wins || []).filter(t => featurable.has(t.user_id) && gameFromNote(t.notes));
-  const biggestRow = featured.filter(t => ts(t.created_at) >= dayStart)
-    .sort((a, b) => Number(b.amount_c) - Number(a.amount_c) || ts(a.created_at) - ts(b.created_at))[0] || null;
+  const featured = (moves || []).filter(t => t.type === 'match_win' && featurable.has(t.user_id) && gameFromNote(t.notes));
   const recentRows = featured.filter(t => now - ts(t.created_at) <= RECENT_WINDOW_MS)
     .sort((a, b) => ts(b.created_at) - ts(a.created_at)).slice(0, RECENT_WINNERS);
 
@@ -295,33 +407,47 @@ async function buildFeed(rows, { now = Date.now(), demoIds = [], adminId = null,
       .slice(0, LEADERBOARD_SIZE);
   }
 
+  // One resolution for everybody, so a player has one name in every section.
   const forbidden = collectForbidden(rows);
-  const names = await resolvePseudonyms(
-    [biggestRow?.user_id, ...recentRows.map(t => t.user_id), ...(boardRows || []).map(p => p.id)],
-    { secret, store, log, avoid: forbidden });
+  const names = await resolvePseudonyms([
+    today._biggest?.user_id, week._biggest?.user_id, month._biggest?.user_id,
+    ...recentRows.map(t => t.user_id),
+    ...(week._topWinners || []).map(([id]) => id), ...(month._topWinners || []).map(([id]) => id),
+    ...(boardRows || []).map(p => p.id),
+  ], { secret, store, log, avoid: forbidden });
 
+  const iso = (ms) => new Date(ms).toISOString();
+  const win = (t) => t ? { display_name: names.get(t.user_id), game: gameFromNote(t.notes), amount: round2(t.amount_c) } : null;
+  const section = (s, range) => ({
+    period_start: iso(range.start),
+    period_end: iso(range.periodEnd),
+    duels: s.duels, paid_out: s.paid_out, new_players: s.new_players,
+    active_players: s.active_players, total_wagered: s.total_wagered,
+    biggest_win: win(s._biggest),
+    top_winners: s._topWinners && s._topWinners.map(([id, n]) => ({ display_name: names.get(id), amount_won: round2(n) })),
+    top_games: s._topGames,
+  });
+  const compare = (cur, prev, range) => ({
+    compared_period_start: iso(range.start),
+    compared_period_end: iso(range.end),
+    ...Object.fromEntries(COMPARED.map(k => [`${k}_percent_change`, percentChange(cur[k], prev[k])])),
+  });
+
+  const generated = iso(now);
+  // Duely has no player quote or testimonial field, so quote is always null.
   const feed = {
-    updated_at: new Date(now).toISOString(),
-    totals,
-    biggest_win: rows.transactions === null ? null : biggestRow && {
-      display_name: names.get(biggestRow.user_id),
-      game: gameFromNote(biggestRow.notes),
-      amount: round2(biggestRow.amount_c),
+    generated_at: generated,
+    updated_at: generated,
+    totals: { duels_today: today.duels, paid_out_today: today.paid_out, new_players_today: today.new_players },
+    weekly: section(week, P.week),
+    monthly: section(month, P.month),
+    comparisons: {
+      weekly_vs_previous_week: compare(week, prevWeek, P.prevWeekSoFar),
+      monthly_vs_previous_month: compare(month, prevMonth, P.prevMonthSoFar),
     },
-    recent_winners: rows.transactions === null ? null : recentRows.map(t => ({
-      display_name: names.get(t.user_id),
-      game: gameFromNote(t.notes),
-      amount: round2(t.amount_c),
-      won_at: new Date(ts(t.created_at)).toISOString(),
-      // Duely has no player quote or testimonial field, so there is never one
-      // to send. A quote is not written for anyone.
-      quote: null,
-    })),
-    leaderboard: boardRows && boardRows.map(p => ({
-      rank: p.rank,
-      display_name: names.get(p.id),
-      elo: Number(p.elo),
-    })),
+    biggest_win: today._biggest ? { ...win(today._biggest), quote: null } : null,
+    recent_winners: moves ? recentRows.map(t => ({ ...win(t), won_at: iso(ts(t.created_at)), quote: null })) : null,
+    leaderboard: boardRows && boardRows.map(p => ({ rank: p.rank, display_name: names.get(p.id), elo: Number(p.elo) })),
     next_tournament: rows.pools ? nextTournament(rows.pools, now) : null,
   };
   assertPublicSafe(feed, { forbidden });
@@ -382,7 +508,7 @@ function assertPublicSafe(feed, { forbidden = new Set() } = {}) {
 }
 
 module.exports = {
-  buildFeed, countDuels, coinWins, audience, gameFromNote, nextTournament,
+  buildFeed, countDuels, coinWins, validDuels, coinMoves, netOf, periods, periodStats, percentChange, audience, gameFromNote, nextTournament,
   resolvePseudonyms, pseudonymDigest, candidateName, assertPublicSafe, collectForbidden,
   utcDayStart, DUPLICATE_WINDOW_MS, RECENT_WINDOW_MS,
 };

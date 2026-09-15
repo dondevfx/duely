@@ -78,7 +78,7 @@ function fakeSupabase(fx, { fail = new Set(), throwOn = new Set() } = {}) {
       select(cols) { calls.push({ table, op: 'select', cols }); return chain; },
       gte() { return chain; }, gt() { return chain; }, eq() { return chain; }, neq() { return chain; },
       not() { return chain; }, order() { return chain; }, limit() { return chain; },
-      in(_c, ids) { state.inIds = ids; return chain; },
+      in(c, ids) { if (c === 'id' || c === 'digest') state.inIds = ids; else state.inCol = [c, ids]; return chain; },
       insert(row) {
         calls.push({ table, op: 'insert', row });
         if (table !== 'content_pseudonyms') return Promise.resolve({ error: { message: 'denied' } });
@@ -100,6 +100,7 @@ function fakeSupabase(fx, { fail = new Set(), throwOn = new Set() } = {}) {
         return Promise.resolve({ data, error: null });
       }
       let data = rows();
+      if (state.inCol) data = data.filter(r => state.inCol[1].includes(r[state.inCol[0]]));
       if (state.inIds) data = data.filter(r => state.inIds.includes(r.id));
       return Promise.resolve({ data: data.slice(a, b + 1), error: null });
     };
@@ -135,7 +136,7 @@ async function boot({ fx = fixture(), sb, env = {}, limiter, logs = [], poolStor
   const server = app.listen(0);
   await new Promise(r => server.once('listening', r));
   const base = `http://127.0.0.1:${server.address().port}/api/v1/content-feed`;
-  const call = (opts = {}) => fetch(base, opts).then(async r => ({ status: r.status, text: await r.text(), headers: r.headers }));
+  const call = (opts = {}) => fetch(base + (opts.query || ''), opts).then(async r => ({ status: r.status, text: await r.text(), headers: r.headers }));
   return { call, supabase, logs, close: () => new Promise(r => server.close(r)) };
 }
 const auth = (k = KEY) => ({ headers: { Authorization: `Bearer ${k}` } });
@@ -440,11 +441,19 @@ test('response schema is stable', async () => {
   try {
     const body = JSON.parse((await s.call(auth())).text);
     const keys = (o) => Object.keys(o).sort();
-    assert.deepEqual(keys(body), ['biggest_win', 'leaderboard', 'next_tournament', 'recent_winners', 'totals', 'updated_at']);
+    assert.deepEqual(keys(body), ['biggest_win', 'comparisons', 'generated_at', 'leaderboard', 'monthly', 'next_tournament', 'recent_winners', 'totals', 'updated_at', 'weekly']);
+    for (const sec of [body.weekly, body.monthly]) {
+      assert.deepEqual(keys(sec), ['active_players', 'biggest_win', 'duels', 'new_players', 'paid_out', 'period_end', 'period_start', 'top_games', 'top_winners', 'total_wagered']);
+      for (const w of sec.top_winners) assert.deepEqual(keys(w), ['amount_won', 'display_name']);
+      for (const g of sec.top_games) assert.deepEqual(keys(g), ['duels', 'game']);
+    }
+    for (const c of Object.values(body.comparisons)) {
+      assert.deepEqual(keys(c), ['active_players_percent_change', 'compared_period_end', 'compared_period_start', 'duels_percent_change', 'new_players_percent_change', 'paid_out_percent_change', 'total_wagered_percent_change']);
+    }
     assert.match(body.updated_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     assert.deepEqual(keys(body.totals), ['duels_today', 'new_players_today', 'paid_out_today']);
     for (const v of Object.values(body.totals)) assert.equal(typeof v, 'number');
-    assert.deepEqual(keys(body.biggest_win), ['amount', 'display_name', 'game']);
+    assert.deepEqual(keys(body.biggest_win), ['amount', 'display_name', 'game', 'quote']);
     for (const w of body.recent_winners) {
       assert.deepEqual(keys(w), ['amount', 'display_name', 'game', 'quote', 'won_at']);
       assert.equal(typeof w.display_name, 'string'); assert.equal(typeof w.amount, 'number');
@@ -452,5 +461,169 @@ test('response schema is stable', async () => {
     for (const p of body.leaderboard) assert.deepEqual(keys(p), ['display_name', 'elo', 'rank']);
     assert.ok(body.leaderboard.length <= 5);
     assert.ok(body.recent_winners.length <= 5);
+  } finally { await s.close(); }
+});
+
+// ── weekly, monthly, comparisons ───────────────────────────────────────────
+// NOW is Tuesday 2026-09-15 18:00 UTC. Week from Monday 09-14; the compared
+// span is 09-07 00:00 -> 09-08 18:00. Month from 09-01; compared 08-01 -> 08-15 18:00.
+function periodFixture() {
+  const A = U(1), B = U(2), C = U(3), D = U(7), E = U(8);
+  const T = (mo, d, h = 0, mi = 0, s = 0) => new Date(Date.UTC(2026, mo - 1, d, h, mi, s)).toISOString();
+  const m = (p1, p2, game, when, fee, dia = 0) => ({ player1_id: p1, player2_id: p2, winner_id: p1, game_type: game, entry_fee_c: fee, entry_fee_diamonds: dia, played_at: when });
+  const tx = (type, uid, amount, notes, when, stake = null, status = 'confirmed') => ({ user_id: uid, type, amount_c: amount, stake_c: stake, notes, created_at: when, status });
+  return {
+    ids: { A, B, C },
+    rows: {
+      matches: [
+        m(A, B, 'colorRush', T(9, 15, 10), 5),
+        m(A, B, 'colorRush', T(9, 15, 10, 0, 4), 5),     // duplicate
+        m(A, C, 'tower', T(9, 14, 0, 0, 0), 10),          // exactly on the week boundary: this week
+        m(B, C, 'tower', T(9, 13, 23, 59, 59), 1),        // last week, after the compared span
+        m(A, B, 'tower', T(9, 8, 12), 2),                 // compared week span
+        m(A, B, 'tower', T(9, 8, 20), 3),                 // previous week, after the span
+        m(A, B, 'blockBlast', T(8, 10), 4),               // compared month span
+        m(A, B, 'blockBlast', T(8, 20), 4),               // previous month, after the span
+        m(A, DEMO, 'tower', T(9, 15, 11), 50),            // demo
+        m(A, TESTER, 'tower', T(9, 15, 11), 50),          // test
+        m(A, B, 'coin_flip', T(9, 2), 0, 100),            // diamonds: a duel, no coin wager
+      ],
+      transactions: [
+        tx('match_win', A, 9.5, 'Color Rush vs x', T(9, 15, 10), 5),
+        tx('match_win', A, 9.5, 'Color Rush vs x', T(9, 15, 10, 0, 3), 5), // duplicate settlement
+        tx('match_loss', B, 5, 'Color Rush vs y', T(9, 15, 10)),
+        tx('match_win', C, 19, 'Tower vs x', T(9, 14), 10),                // private
+        tx('match_loss', A, 10, 'Tower vs y', T(9, 14)),
+        tx('match_win', B, 3.8, 'Tower vs x', T(9, 8, 12), 2),
+        tx('match_loss', A, 2, 'Tower vs y', T(9, 8, 12)),
+        tx('tournament_entry', A, 5, 'Tournament entry', T(9, 9, 9)),
+        tx('match_loss', A, 5, 'Tournament entry', T(9, 9, 10)),
+        tx('match_win', A, 38, 'Tournament — 1st of 3', T(9, 9, 10), 5),
+        tx('match_win', B, 7.6, 'Block Burst vs x', T(8, 10), 4),
+        tx('match_loss', A, 4, 'Block Burst vs y', T(8, 10)),
+        tx('match_win', DEMO, 100, 'Tower vs x', T(8, 31, 23, 59, 59)),
+        tx('match_win', TESTER, 100, 'Tower vs x', T(9, 15)),
+        tx('match_win', B, 50, 'Tower vs x', T(9, 15, 12), 25, 'pending'),
+        tx('match_refund', B, 5, null, T(9, 15, 12)),
+      ],
+      newProfiles: [
+        { id: A, created_at: T(9, 15, 1) }, { id: B, created_at: T(9, 14) }, { id: C, created_at: T(9, 3) },
+        { id: D, created_at: T(8, 5) }, { id: E, created_at: T(9, 8, 6) }, { id: DEMO, created_at: T(9, 15) },
+        { id: TESTER, created_at: T(9, 15) },
+      ],
+      boardProfiles: [
+        { id: A, elo: 1500, wins: 5, losses: 5, is_private: false },
+        { id: B, elo: 1400, wins: 5, losses: 5, is_private: false },
+      ],
+      featureProfiles: [
+        { id: A, is_private: false, banned: false }, { id: B, is_private: false, banned: false },
+        { id: C, is_private: true, banned: false },
+      ],
+      pools: [],
+    },
+  };
+}
+const buildP = (rows) => feed.buildFeed(rows, { now: NOW, demoIds: [DEMO], adminId: ADMIN, testIds: [TESTER], secret: SECRET });
+
+test('periods are UTC, half-open, and compared like-for-like', () => {
+  const P = feed.periods(NOW);
+  const iso = (ms) => new Date(ms).toISOString();
+  assert.equal(iso(P.today.start), '2026-09-15T00:00:00.000Z');
+  assert.equal(iso(P.week.start), '2026-09-14T00:00:00.000Z');
+  assert.equal(iso(P.week.periodEnd), '2026-09-21T00:00:00.000Z');
+  assert.deepEqual([iso(P.prevWeekSoFar.start), iso(P.prevWeekSoFar.end)], ['2026-09-07T00:00:00.000Z', '2026-09-08T18:00:00.000Z']);
+  assert.equal(iso(P.month.start), '2026-09-01T00:00:00.000Z');
+  assert.equal(iso(P.month.periodEnd), '2026-10-01T00:00:00.000Z');
+  assert.deepEqual([iso(P.prevMonthSoFar.start), iso(P.prevMonthSoFar.end)], ['2026-08-01T00:00:00.000Z', '2026-08-15T18:00:00.000Z']);
+  // A Sunday night belongs to the week that started six days earlier.
+  assert.equal(iso(feed.periods(Date.UTC(2026, 8, 20, 23, 59, 59)).week.start), '2026-09-14T00:00:00.000Z');
+  // March 31 compares against all of February, never past its end.
+  assert.equal(iso(feed.periods(Date.UTC(2026, 2, 31, 12)).prevMonthSoFar.end), '2026-03-01T00:00:00.000Z');
+  // January's previous month is December of the year before.
+  assert.equal(iso(feed.periods(Date.UTC(2027, 0, 3)).prevMonthSoFar.start), '2026-12-01T00:00:00.000Z');
+});
+
+test('weekly and monthly figures from real rows', async () => {
+  const { rows } = periodFixture();
+  const f = await buildP(rows);
+  assert.deepEqual(f.totals, { duels_today: 1, paid_out_today: 9.5, new_players_today: 1 });
+  const w = f.weekly;
+  assert.equal(w.period_start, '2026-09-14T00:00:00.000Z');
+  assert.equal(w.period_end, '2026-09-21T00:00:00.000Z');
+  assert.deepEqual([w.duels, w.active_players, w.total_wagered, w.paid_out, w.new_players], [2, 3, 30, 28.5, 2]);
+  assert.deepEqual({ game: w.biggest_win.game, amount: w.biggest_win.amount }, { game: 'Color Rush', amount: 9.5 }); // C's 19 is private
+  assert.deepEqual(w.top_winners, []);
+  assert.deepEqual(w.top_games, [{ game: 'Color Rush', duels: 1 }, { game: 'Tower', duels: 1 }]);
+  const mo = f.monthly;
+  assert.equal(mo.period_start, '2026-09-01T00:00:00.000Z');
+  assert.equal(mo.period_end, '2026-10-01T00:00:00.000Z');
+  assert.deepEqual([mo.duels, mo.active_players, mo.total_wagered, mo.paid_out, mo.new_players], [6, 3, 42, 70.3, 4]);
+  assert.deepEqual({ game: mo.biggest_win.game, amount: mo.biggest_win.amount }, { game: 'Tournament', amount: 38 });
+  // A: +4.5 -10 -2 -5 (entry) +38 = 25.5. The "Tournament entry" loss row is not a second charge.
+  assert.deepEqual(mo.top_winners.map(x => x.amount_won), [25.5]);
+  assert.deepEqual(mo.top_games, [{ game: 'Tower', duels: 4 }, { game: 'Coin Flip', duels: 1 }, { game: 'Color Rush', duels: 1 }]);
+});
+
+test('comparisons from real rows; null when the earlier period had nothing', async () => {
+  const { rows } = periodFixture();
+  const f = await buildP(rows);
+  assert.deepEqual(f.comparisons.weekly_vs_previous_week, {
+    compared_period_start: '2026-09-07T00:00:00.000Z', compared_period_end: '2026-09-08T18:00:00.000Z',
+    duels_percent_change: 100, paid_out_percent_change: 650, new_players_percent_change: 100,
+    active_players_percent_change: 50, total_wagered_percent_change: 650,
+  });
+  assert.deepEqual(f.comparisons.monthly_vs_previous_month, {
+    compared_period_start: '2026-08-01T00:00:00.000Z', compared_period_end: '2026-08-15T18:00:00.000Z',
+    duels_percent_change: 500, paid_out_percent_change: 825, new_players_percent_change: 300,
+    active_players_percent_change: 50, total_wagered_percent_change: 425,
+  });
+  assert.equal(feed.percentChange(5, 0), null);
+  assert.equal(feed.percentChange(0, 0), null);
+  assert.equal(feed.percentChange(null, 3), null);
+  assert.equal(feed.percentChange(0, 4), -100);
+  assert.equal(feed.percentChange(4.32, 3.27), 32.1);
+});
+
+test('no activity: counts are 0, records are null or empty, nothing invented', async () => {
+  const f = await buildP({ matches: [], transactions: [], newProfiles: [], boardProfiles: [], featureProfiles: [], pools: [] });
+  for (const sec of [f.weekly, f.monthly]) {
+    assert.deepEqual([sec.duels, sec.paid_out, sec.new_players, sec.active_players, sec.total_wagered], [0, 0, 0, 0, 0]);
+    assert.equal(sec.biggest_win, null);
+    assert.deepEqual(sec.top_winners, []);
+    assert.deepEqual(sec.top_games, []);
+  }
+  for (const c of Object.values(f.comparisons)) {
+    for (const [k, v] of Object.entries(c)) if (k.endsWith('_percent_change')) assert.equal(v, null, k);
+  }
+  assert.equal(f.biggest_win, null);
+  assert.deepEqual(f.recent_winners, []);
+  assert.deepEqual(f.leaderboard, []);
+});
+
+test('one player, one pseudonym, across daily, weekly, monthly, top winners and the board', async () => {
+  const { rows, ids } = periodFixture();
+  const f = await buildP(rows);
+  const a = (await feed.resolvePseudonyms([ids.A], { secret: SECRET })).get(ids.A);
+  const b = (await feed.resolvePseudonyms([ids.B], { secret: SECRET })).get(ids.B);
+  assert.equal(f.biggest_win.display_name, a);
+  assert.equal(f.weekly.biggest_win.display_name, a);
+  assert.equal(f.monthly.biggest_win.display_name, a);
+  assert.equal(f.monthly.top_winners[0].display_name, a);
+  assert.equal(f.leaderboard[0].display_name, a);
+  assert.equal(f.leaderboard[1].display_name, b);
+  assert.notEqual(a, b);
+  for (const r of f.recent_winners) assert.ok([a, b].includes(r.display_name));
+  assert.doesNotMatch(JSON.stringify(f), /[0-9a-f]{8}-[0-9a-f]{4}-/);
+});
+
+test('query parameters change nothing', async () => {
+  const s = await boot();
+  try {
+    const plain = (await s.call(auth())).text;
+    for (const q of ['?include_private=1', '?user_id=' + U(3), '?fields=username,email', '?raw=true&debug=1']) {
+      const r = await s.call({ ...auth(), query: q });
+      assert.equal(r.status, 200);
+      assert.equal(r.text, plain);
+    }
   } finally { await s.close(); }
 });
