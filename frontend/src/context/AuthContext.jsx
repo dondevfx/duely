@@ -295,10 +295,14 @@ export function AuthProvider({ children }) {
       throw new Error('Could not check two-factor authentication. Please try again.');
     }
 
-    _applySession(sess);
-    // Before fetchProfile, not after: on a first sign-in there is no profile to
-    // fetch yet, and this is what creates it.
+    // The profile must exist BEFORE the app is told it is signed in. Applying
+    // the session first set off the Terms check and the welcome-gift check
+    // while a brand-new Google account still had no profile row: both got a
+    // 404, showed nothing, and only appeared after a refresh. storeSession
+    // alone gives the API call its token without announcing the sign-in.
+    storeSession(sess);
     await api.post('/auth/oauth-profile', {});
+    _applySession(sess);
     await fetchProfile();
     return sess;
   }

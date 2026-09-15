@@ -324,7 +324,8 @@ test('a Google sign-in to an account with 2FA asks for the code before any sessi
   assert.match(fn, /return \{ mfaRequired: true \}/);
   // Fails closed when the check itself fails.
   assert.match(fn.slice(gate), /catch \(e\) \{[\s\S]*signOut\(\)[\s\S]*throw new Error/);
-  assert.match(read('pages', 'AuthCallback.jsx'), /r\?\.mfaRequired \? '\/login' : '\/'/);
+  assert.match(read('pages', 'AuthCallback.jsx'), /if \(r\?\.mfaRequired\) navigate\('\/login'/);
+  assert.ok(fn.indexOf("aal?.nextLevel === 'aal2'") < fn.indexOf('storeSession(sess)'), '2FA is checked before the session is stored');
   assert.match(ctx, /if \(creds\.fromOAuth\) \{/);
 });
 
@@ -332,4 +333,14 @@ test('sign-up for an email that already has an account says so instead of waitin
   const src = read('pages', 'Signup.jsx');
   assert.match(src, /data\.user\?\.identities\) && data\.user\.identities\.length === 0/);
   assert.match(src, /An account with this email already exists/);
+});
+
+test('a new Google account gets its Terms and welcome-gift popups without a refresh', () => {
+  const ctx = read('context', 'AuthContext.jsx');
+  const fn = ctx.slice(ctx.indexOf('async function completeOAuthLogin'), ctx.indexOf('async function signIn('));
+  const profile = fn.indexOf("api.post('/auth/oauth-profile'");
+  const announce = fn.indexOf('_applySession(sess)');
+  assert.ok(fn.indexOf('storeSession(sess)') < profile, 'the API call needs the token first');
+  assert.ok(profile > 0 && announce > profile, 'the profile must exist before the app is told it is signed in');
+  assert.match(read('pages', 'AuthCallback.jsx'), /window\.location\.replace\('\/'\)/);
 });

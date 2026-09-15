@@ -47,7 +47,13 @@ export default function AuthCallback() {
 
     completeOAuthLogin({ access_token, refresh_token })
       // An account with 2FA stops here; the sign-in page asks for the code.
-      .then((r) => navigate(r?.mfaRequired ? '/login' : '/', { replace: true }))
+      // A full page load into the app, the same as email sign-in (see enterApp
+      // in Login.jsx): the socket, Terms check, welcome gift and balances all
+      // start already knowing who is signed in, instead of catching up in place.
+      .then((r) => {
+        if (r?.mfaRequired) navigate('/login', { replace: true });
+        else window.location.replace('/');
+      })
       .catch((e) => setError(e?.message || 'Google sign-in failed. Please try again.'));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
