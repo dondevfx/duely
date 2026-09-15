@@ -69,12 +69,14 @@ const join = (port, body) =>
     body: JSON.stringify(body),
   }).then(async r => ({ status: r.status, body: await r.json() }));
 
-test('entering takes the stake and seats the player', async () => {
+test('entering seats the player and takes nothing yet', async () => {
+  // The entry is taken when the bracket fills and starts
+  // (tournamentRunner.beginPool), never on Play: the waiting room can be left.
   const { server, port, pools, calls } = boot();
   try {
     const res = await join(port, { entryFee: 5 });
     assert.equal(res.status, 200);
-    assert.deepEqual(calls.deducted, [5], 'the entry fee was not taken');
+    assert.deepEqual(calls.deducted, [], 'pressing Play took the entry');
     const pool = pools.get(res.body.poolId);
     assert.equal(pool.players.length, 1);
     assert.equal(pool.entryFee, 5);
@@ -100,14 +102,13 @@ test('too few coins is refused before anything is taken', async () => {
   } finally { server.close(); }
 });
 
-test('a failed deduction does not seat anyone', async () => {
-  // Seating first and charging after leaves a player in a bracket they have
-  // not paid for, and nothing can tell them apart from one who has.
-  const { server, port, pools } = boot({ deductFails: true });
+test('an entry you cannot afford is refused and seats nobody', async () => {
+  const { server, port, pools, calls } = boot({ balance: 1 });
   try {
     const res = await join(port, { entryFee: 5 });
-    assert.equal(res.status, 500);
-    assert.equal(pools.pools.size, 0, 'a player who did not pay got a seat');
+    assert.equal(res.status, 400);
+    assert.equal(pools.pools.size, 0, 'a player without the entry got a seat');
+    assert.deepEqual(calls.deducted, []);
   } finally { server.close(); }
 });
 
@@ -118,7 +119,7 @@ test('a second click returns the same seat rather than charging again', async ()
     const again = await join(port, { entryFee: 1 });
     assert.equal(again.body.poolId, first.body.poolId);
     assert.equal(again.body.already, true);
-    assert.deepEqual(calls.deducted, [1], 'the second click charged a second time');
+    assert.deepEqual(calls.deducted, [], 'a click in the waiting room charged');
   } finally { server.close(); }
 });
 
@@ -177,13 +178,13 @@ async function waitFor(cond, ms) {
   return false;
 }
 
-test('a demo account still pays its entry — only the filling is faked', async () => {
-  // The bracket filling instantly is a convenience; not charging would make
-  // the demo a different product from the one it is demonstrating.
+test('a demo account pays like anyone else: when its bracket starts, not on Play', async () => {
+  // Only the filling is faked. The charge itself happens in the runner when
+  // the bracket begins, the same as for a real entry (see tournament-runner).
   const { server, port, calls } = boot({ demo: true });
   try {
     await join(port, { entryFee: 5 });
-    assert.deepEqual(calls.deducted, [5]);
+    assert.deepEqual(calls.deducted, []);
   } finally { server.close(); }
 });
 
@@ -245,26 +246,26 @@ test('a second click reports the same state, not a blank one', async () => {
 // ── Changing your mind about the stake ─────────────────────────────────────
 
 
-test('picking a different stake moves you and refunds the first', async () => {
+test('picking a different stake moves you, and nothing is charged for either', async () => {
   const { server, port, pools, calls } = boot();
   try {
     const first = await join(port, { entryFee: 5 });
     const second = await join(port, { entryFee: 1 });
     assert.notEqual(second.body.poolId, first.body.poolId, 'it kept the old pool');
     assert.equal(second.body.entryFee, 1, 'the new stake was not applied');
-    assert.deepEqual(calls.deducted, [5, 1], 'the new stake was not charged');
-    assert.deepEqual(calls.credited, [5], 'the first entry was not refunded');
+    assert.deepEqual(calls.deducted, [], 'a waiting room was charged');
+    assert.deepEqual(calls.credited, [], 'a refund was paid for money never taken');
     assert.equal(pools.get(first.body.poolId), null, 'the abandoned pool was left behind');
   } finally { server.close(); }
 });
 
-test('picking the SAME stake twice still charges once', async () => {
+test('picking the SAME stake twice charges nothing', async () => {
   const { server, port, calls } = boot();
   try {
     const a = await join(port, { entryFee: 5 });
     const b = await join(port, { entryFee: 5 });
     assert.equal(b.body.poolId, a.body.poolId);
-    assert.deepEqual(calls.deducted, [5]);
+    assert.deepEqual(calls.deducted, []);
     assert.deepEqual(calls.credited, []);
   } finally { server.close(); }
 });
@@ -278,15 +279,16 @@ test('the response says which stake was actually taken', async () => {
   } finally { server.close(); }
 });
 
-test('leaving gives the entry back before it starts', async () => {
+test('leaving before it starts costs nothing, because nothing was taken', async () => {
   const { server, port, calls } = boot();
   try {
     const res = await join(port, { entryFee: 5 });
+    assert.deepEqual(calls.deducted, [], 'pressing Play took the entry');
     const out = await fetch(`http://127.0.0.1:${port}/api/tournaments/${res.body.poolId}/leave`,
       { method: 'POST' }).then(r => r.json());
     assert.equal(out.ok, true);
-    assert.equal(out.refunded, true);
-    assert.deepEqual(calls.credited, [5]);
+    assert.equal(out.refunded, false);
+    assert.deepEqual(calls.credited, []);
   } finally { server.close(); }
 });
 
@@ -328,6 +330,6 @@ test('a second click on a bracket still filling is not a second entry', async ()
     const again = await join(port, { entryFee: 5 });
     assert.equal(again.status, 200);
     assert.equal(again.body.already, true);
-    assert.deepEqual(calls.deducted, [5], 'the second click charged again');
+    assert.deepEqual(calls.deducted, [], 'a click in the waiting room charged');
   } finally { server.close(); }
 });

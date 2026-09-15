@@ -11,7 +11,6 @@ const { rejectIfExcluded } = require('../services/selfExclusion');
 const express = require('express');
 const { requireAuth, optionalAuth } = require('../middleware/auth');
 const F = require('../services/tournamentFormat');
-const { deductCoins } = require('../services/walletService');
 const { isDemo, randomFunnyName, disguisedFace, PROFILE_COLORS } = require('../services/demoAccounts');
 const { TICKETS_PER_SLOT } = require('../services/tournamentPools');
 
@@ -114,8 +113,8 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
       // hand back the seat they already had — so the screen said "5 coin
       // entry" however the slider was set, and the only way out was to wait
       // twenty minutes for the slot to pass.
-      const left = pools.leave(existing.id, req.user.id);
-      if (left.ok && left.refund) await refund(supabase, req.user.id, left.entryFee);
+      // Nothing was taken for the old seat, so there is nothing to give back.
+      pools.leave(existing.id, req.user.id);
     }
 
     // Two goes per tournament. Checked before the fee is taken, so a refused
@@ -135,16 +134,13 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
     // bracket end to end without sixteen people, so charging for it would make
     // testing cost real money.
     const free = vsBot;
+    // The balance is CHECKED here and taken when the bracket fills and starts
+    // (tournamentRunner.beginPool). Taking it on Play charged people for a
+    // waiting room they could leave, in a tournament that might never start.
     if (!free) {
       const balance = parseFloat(profile?.c_coins) || 0;
       if (balance < entryFee) {
         return res.status(400).json({ error: `You need ${entryFee} coins to enter.` });
-      }
-      try {
-        await deductCoins(supabase, req.user.id, entryFee);
-      } catch (e) {
-        console.error('[tournament] entry fee failed:', e.message);
-        return res.status(500).json({ error: 'Could not take the entry fee.' });
       }
     }
 
@@ -158,8 +154,7 @@ module.exports = function tournamentRoutes(supabase, io, pools) {
         entryFee, now, free,
       }));
     } catch (e) {
-      // The seat could not be given, so the fee goes straight back.
-      if (!free) await refund(supabase, req.user.id, entryFee);
+      // Nothing was taken, so there is nothing to give back.
       return res.status(400).json({ error: e.message });
     }
 
@@ -391,7 +386,9 @@ module.exports.publicPool = publicPool;
 // Exported for the runner's clock, which is what discovers a pool that never
 // filled — the routes never see that moment.
 module.exports.refundPool = async function refundPool(supabase, pool) {
-  if (pool.free || !(pool.entryFee > 0)) return;
+  // Only a pool whose entries were actually taken has anything to give back:
+  // a pool that never filled, or one dropped before it began, took nothing.
+  if (pool.free || !(pool.entryFee > 0) || !pool.charged) return;
   for (const p of pool.players) {
     if (p.isBot) continue;
     await refund(supabase, p.userId, pool.entryFee);

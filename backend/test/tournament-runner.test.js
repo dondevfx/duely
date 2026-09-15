@@ -422,6 +422,10 @@ test('a tournament that is dropped by a restart gives every entry back', async (
   const supabase = fakeSupabase(captured);
 
   const pool = fill(pools, 16, { entryFee: 5, bots: 4 });
+  // A pool that never began took nothing, and a restart owes it nothing.
+  await refundPool(supabase, { ...pool, state: 'abandoned' });
+  assert.equal(captured.filter(c => c.rpc === 'credit_coins').length, 0, 'money never taken was paid back');
+  pool.charged = true;   // it began, and the entries were taken
   const owing = pools.drainForShutdown();
   assert.equal(owing.length, 1, 'the live pool was not drained');
   assert.equal(owing[0].state, 'abandoned');
@@ -900,4 +904,54 @@ test('a player who won their round and then left is not played in the next', () 
   const next = pool.bracket[1][0];
   assert.equal(next.winner, next.a === leaver ? next.b : next.a, 'the opponent did not go through');
   assert.equal(io._for(leaver, 'tournament_match').length, before, 'a player who left was sent into a match');
+});
+
+
+// ── The entry is taken when the bracket starts, not on Play ─────────────────
+
+test('beginning a full paid pool charges every real player once, and bots nothing', async () => {
+  const pools = createStore(); _store = pools;
+  const captured = [];
+  const runner = createRunner({ io: fakeIo(), supabase: fakeSupabase(captured), pools, engines: fakeEngines(), log: { error() {} },
+    timings: { pick: 60_000 } });
+  const pool = fill(pools, 16, { entryFee: 5, bots: 4 });
+  await runner.beginPool(pool);
+  const charges = captured.filter(c => c.rpc === 'deduct_coins');
+  assert.equal(charges.length, pool.players.filter(p => !p.isBot).length);
+  assert.ok(charges.every(c => c.args.amount === 5));
+  assert.equal(pool.charged, true);
+  await runner.beginPool(pool);
+  assert.equal(captured.filter(c => c.rpc === 'deduct_coins').length, charges.length, 'charged twice');
+});
+
+test('if anyone cannot pay, the rest are refunded and the pool goes back to filling', async () => {
+  const pools = createStore(); _store = pools;
+  const captured = [];
+  const sb = fakeSupabase(captured);
+  const realRpc = sb.rpc;
+  sb.rpc = (name, args) => (name === 'deduct_coins' && args.user_id === 'u3')
+    ? Promise.resolve({ error: { message: 'insufficient' } })
+    : realRpc(name, args);
+  const io = fakeIo();
+  io._connect('u3');
+  const runner = createRunner({ io, supabase: sb, pools, engines: fakeEngines(), log: { error() {} },
+    timings: { pick: 60_000 } });
+  const pool = fill(pools, 16, { entryFee: 5 });
+  assert.equal(pool.state, 'running');
+  await runner.beginPool(pool);
+
+  assert.equal(pool.state, 'filling', 'a bracket began with somebody who had not paid');
+  assert.ok(!pool.players.some(p => p.userId === 'u3'), 'the player who could not pay kept their seat');
+  assert.equal(pool.players.length, 15);
+  assert.equal(pool.bracket, null);
+  const charged = captured.filter(c => c.rpc === 'deduct_coins').length;
+  const refunded = captured.filter(c => c.rpc === 'credit_coins').length;
+  assert.equal(refunded, charged, 'someone was charged for a tournament that did not start');
+  assert.ok(io._for('u3', 'tournament_cancelled')[0], 'the removed player was not told');
+  assert.equal(pools.ticketsLeft(pool.slotStart, 'u1'), 2, 'a go was spent on a tournament that did not start');
+  assert.ok(!captured.some(c => c.table === 'matches'), 'wager rows were written for a tournament that did not start');
+
+  // The seat is open again, and the next start is a fresh attempt.
+  pools.seat(pool, { userId: 'u99', username: 'late', now: Date.now() });
+  assert.equal(pool.state, 'running');
 });

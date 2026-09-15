@@ -31,7 +31,7 @@
 const F = require('./tournamentFormat');
 const hook = require('./tournamentHook');
 const ENGINES = require('./tournamentEngines');
-const { creditCoins } = require('./walletService');
+const { creditCoins, deductCoins } = require('./walletService');
 const { seededRng, THIRD_PLACE } = require('./tournamentPools');
 
 // How long a round's game is given before it is decided on whatever is known.
@@ -130,6 +130,43 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     const st = stateOf(pool.id);
     if (st.phase !== 'idle') return;
     setPhase(pool, 'starting');
+
+    // The entry fee is taken HERE, when the bracket has filled and begins —
+    // never when a seat is taken. Taking it on Play put money on the line in a
+    // waiting room anyone could walk out of, for a tournament that might never
+    // start.
+    //
+    // Everyone is charged together. If anyone cannot pay (their balance moved
+    // while they waited), whoever WAS charged is paid straight back, the ones
+    // who could not pay are taken out, and the pool goes back to filling with
+    // their seats open. Nobody is left in a bracket they did not pay for, and
+    // nobody pays for one that does not start.
+    if (supabase && !pool.free && pool.entryFee > 0 && !pool.charged) {
+      const humans = pool.players.filter(p => !p.isBot);
+      const results = await Promise.all(humans.map(p =>
+        deductCoins(supabase, p.userId, pool.entryFee)
+          .then(() => ({ p, ok: true }), (e) => ({ p, ok: false, e }))));
+      const failed = results.filter(r => !r.ok);
+      if (failed.length) {
+        for (const r of results.filter(x => x.ok)) {
+          try { await creditCoins(supabase, r.p.userId, pool.entryFee); }
+          catch (e) { log.error(`[tournament] REFUND FAILED ${r.p.userId} ${pool.entryFee} coins:`, e.message); }
+        }
+        const gone = failed.map(r => r.p.userId);
+        pools.unstart(pool, gone);
+        for (const uid of gone) {
+          toPlayer(uid, 'tournament_cancelled', {
+            poolId: pool.id,
+            reason: 'You did not have enough coins when the tournament filled, so you were taken out of it. Nothing was taken from your balance.',
+          });
+        }
+        st.phase = 'idle';
+        pool.phase = null;
+        if (pools.get(pool.id)) pushPool(pool);
+        return;
+      }
+      pool.charged = true;
+    }
 
     if (supabase && !pool.free && pool.entryFee > 0) {
       const rows = pool.players.filter(p => !p.isBot).map(p => ({
@@ -907,7 +944,7 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     for (const pool of refunded) {
       broadcast(pool, 'tournament_cancelled', {
         poolId: pool.id,
-        reason: 'The bracket did not fill in time — your entry has been returned.',
+        reason: 'The bracket did not fill in time. Nothing was taken from your balance.',
       });
       if (onRefund) onRefund(pool);
     }

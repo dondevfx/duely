@@ -316,6 +316,9 @@ export default function TournamentBracket() {
         <div className="text-xs text-muted mt-1">
           {pool.entryFee} coin entry
           {filling && seatsLeft > 0 && ` · ${seatsLeft} seat${seatsLeft === 1 ? '' : 's'} left`}
+          {filling && (
+            <div className="mt-0.5">Taken when the tournament starts. Leave any time before then for free.</div>
+          )}
         </div>
 
         {/* What the round has left to run, directly under the entry line.

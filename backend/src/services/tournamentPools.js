@@ -421,7 +421,9 @@ function createStore() {
       // If everyone has gone, the pool goes with them rather than sitting
       // empty until the window closes and it is "refunded" a second time.
       if (pool.players.length === 0) pools.delete(poolId);
-      return { ok: true, refund: !pool.free, entryFee: pool.entryFee, state: 'filling' };
+      // Nothing to give back: the entry is taken when the bracket STARTS, not
+      // when a seat is taken, so the waiting room never held anyone's money.
+      return { ok: true, refund: false, entryFee: pool.entryFee, state: 'filling' };
     }
 
     if (pool.state !== 'running') return { ok: false };
@@ -453,6 +455,35 @@ function createStore() {
   }
 
   /**
+   * Undo a start: the bracket filled, but somebody could not pay their entry.
+   *
+   * The ones who could not pay are removed, the bracket is torn down, the goes
+   * spent on starting are handed back, and the pool returns to taking entries
+   * with those seats open. A pool left with nobody real in it is deleted.
+   */
+  function unstart(pool, removeUserIds = []) {
+    if (!pool || pool.state !== 'running') return pool;
+    const m = spent.get(pool.slotStart);
+    if (m) {
+      for (const p of pool.players) {
+        if (p.isBot) continue;
+        const n = (m.get(p.userId) ?? 0) - 1;
+        if (n > 0) m.set(p.userId, n); else m.delete(p.userId);
+      }
+    }
+    const drop = new Set(removeUserIds);
+    pool.players = pool.players.filter(p => !drop.has(p.userId));
+    pool.state = 'filling';
+    pool.bracket = null;
+    pool.round = 0;
+    pool.startedAt = null;
+    pool.thirdPlace = null;
+    delete pool.kicked;
+    if (!pool.players.some(p => !p.isBot)) pools.delete(pool.id);
+    return pool;
+  }
+
+  /**
    * Everything still live, for a restart.
    *
    * A tournament does not survive a deploy: its bracket, its sockets and its
@@ -470,7 +501,7 @@ function createStore() {
   return {
     pools,
     join, seat, leave, startPool, ticketsLeft, spentIn, matchAt, isLiveIn, closeWindow, reportResult, pendingMatches, advanceRound,
-    drainForShutdown, entryIn,
+    drainForShutdown, entryIn, unstart,
     get: (id) => pools.get(id) || null,
     clear: () => pools.clear(),
   };

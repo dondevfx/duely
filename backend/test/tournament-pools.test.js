@@ -314,13 +314,13 @@ test('any number of entrants makes a real bracket', () => {
 
 // ── Leaving ────────────────────────────────────────────────────────────────
 
-test('leaving before it starts frees the seat and owes a refund', () => {
+test('leaving before it starts frees the seat and owes nothing', () => {
   const s = createStore();
   fill(s, 3);
   const pool = [...s.pools.values()][0];
   const r = s.leave(pool.id, 'u1');
   assert.equal(r.ok, true);
-  assert.equal(r.refund, true, 'the entry fee is owed back');
+  assert.equal(r.refund, false, 'nothing was taken on joining, so nothing is owed');
   assert.equal(r.entryFee, 1);
   assert.equal(pool.players.length, 2, 'the seat was not freed');
   assert.ok(!pool.players.some(p => p.userId === 'u1'));
