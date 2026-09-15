@@ -237,7 +237,7 @@ export default function TournamentBracket() {
 
   if (error && !pool) {
     return (
-      <div className="w-full max-w-md animate-slide-up pt-6 text-center">
+      <div className="w-full max-w-md mx-auto px-3 animate-slide-up pt-6 text-center">
         <p className="text-muted mb-4">{error}</p>
         <button onClick={() => navigate('/tournaments')}
                 className="px-5 py-2.5 rounded-xl bg-primary text-white font-bold">
@@ -248,7 +248,7 @@ export default function TournamentBracket() {
   }
 
   if (!pool) {
-    return <div className="w-full max-w-md pt-6 text-center text-muted">Loading…</div>;
+    return <div className="w-full max-w-md mx-auto px-3 pt-6 text-center text-muted">Loading…</div>;
   }
 
   const filling = pool.state === 'filling';
@@ -301,7 +301,7 @@ export default function TournamentBracket() {
   }
 
   return (
-    <div className="w-full max-w-lg animate-slide-up pt-4 sm:pt-6">
+    <div className="w-full max-w-lg mx-auto px-3 animate-slide-up pt-4 sm:pt-6">
       <div className="text-center mb-4">
         <div className="text-[0.625rem] sm:text-xs uppercase tracking-widest text-muted font-bold">
           {filling ? 'Waiting for players'

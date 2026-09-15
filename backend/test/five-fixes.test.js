@@ -47,3 +47,10 @@ test('Rush Hour runs to the bottom of the screen, behind a floating browser bar'
   assert.ok(h.includes("height: 'calc(100lvh - 3.5rem)'"), 'the road stops above the floating bar (dvh)');
   assert.ok(h.includes("maxWidth: 'calc((100lvh - 3.5rem) * 0.50)'"), 'the width cap no longer matches the height');
 });
+
+test('the tournament waiting room and bracket are centred, not pinned to the left', () => {
+  const b = fe('pages', 'TournamentBracket.jsx');
+  const boxes = b.match(/className="w-full max-w-(md|lg)[^"]*"/g) || [];
+  assert.ok(boxes.length >= 3);
+  for (const c of boxes) assert.ok(c.includes('mx-auto'), `not centred: ${c}`);
+});
