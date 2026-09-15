@@ -80,6 +80,11 @@ const RPCS = [
 
 // Read probes. Tables that are private by design must be locked; the ones the
 // app never reads from the browser should be locked too (section 22).
+// Functions that were deliberately DROPPED. "Not found" is the pass here, and
+// finding one again is a failure: it means the migration was undone.
+//   claim_daily_bonus — minted a coin a day (audit #2 V1), dropped in section 26.
+const EXPECT_DROPPED = new Set(['claim_daily_bonus']);
+
 const TABLES = [
   'profiles', 'transactions', 'matches', 'deposit_addresses',
   // Added in audit #3.
@@ -120,6 +125,12 @@ async function probe(label, sb) {
   console.log('\nFunctions:');
   for (const [fn, args] of RPCS) {
     const { error } = await sb.rpc(fn, args);
+    if (EXPECT_DROPPED.has(fn)) {
+      if (isMissing(error)) { console.log(`  [ gone ] ${fn} (dropped, as it should be)`); continue; }
+      open++;
+      console.log(`  [ BACK ] ${fn} — this function was dropped and exists again`);
+      continue;
+    }
     if (isMissing(error)) {
       inconclusive++;
       console.log(`  [  ??  ] ${fn} — did not resolve; the probe's argument names are wrong, or it is not deployed`);
