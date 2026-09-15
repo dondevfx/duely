@@ -207,6 +207,16 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     return false;
   }
   const chatBanned = new Set(); // userId → banned from chat
+  // The last hour of world chat, so someone who refreshes or signs in sees the
+  // conversation instead of an empty panel. In memory: a restart clears it.
+  const CHAT_HISTORY_MS = 60 * 60 * 1000;
+  const CHAT_HISTORY_MAX = 300;
+  const chatHistory = [];
+  const recentChat = () => {
+    const cutoff = Date.now() - CHAT_HISTORY_MS;
+    while (chatHistory.length && chatHistory[0].timestamp < cutoff) chatHistory.shift();
+    return chatHistory;
+  };
   const lastChatAt = new Map(); // userId → last chat message timestamp (flood control)
   const CHAT_MIN_INTERVAL_MS = 750;
 
@@ -621,7 +631,7 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
       let mMatch;
       while ((mMatch = mentionRe.exec(trimmed)) !== null) mentions.push(mMatch[1].toLowerCase());
       const messageId = `${authenticatedUser.userId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      io.emit('chat_message', {
+      const chatMsg = {
         messageId,
         userId:   authenticatedUser.userId,
         username: authenticatedUser.username,
@@ -631,7 +641,15 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
         mentions,
         timestamp: Date.now(),
         currentStreak: authenticatedUser.current_streak || 0,
-      });
+      };
+      recentChat().push(chatMsg);
+      if (chatHistory.length > CHAT_HISTORY_MAX) chatHistory.splice(0, chatHistory.length - CHAT_HISTORY_MAX);
+      io.emit('chat_message', chatMsg);
+    });
+
+    // Anyone, signed in or not: the chat panel asks once it is listening.
+    socket.on('chat_history_request', () => {
+      socket.emit('chat_history', { messages: recentChat() });
     });
 
     // ── Profile color sync ────────────────────────────────────────────
@@ -646,6 +664,8 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
     socket.on('admin_delete_message', ({ messageId }) => {
       if (!authenticatedUser) return;
       if (authenticatedUser.userId !== process.env.ADMIN_USER_ID) return;
+      const i = chatHistory.findIndex(m => m.messageId === messageId);
+      if (i !== -1) chatHistory.splice(i, 1);
       io.emit('message_deleted', { messageId });
     });
 

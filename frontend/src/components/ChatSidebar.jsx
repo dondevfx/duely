@@ -706,44 +706,36 @@ export default function ChatSidebar({ open, onToggle }) {
       ]);
     };
 
+    // The last hour of chat, so a refresh or a fresh sign-in is not an empty
+    // panel. Merged by id with anything that already arrived live.
+    const onHistory = ({ messages: past = [] } = {}) => {
+      setMessages(prev => {
+        const seen = new Set(prev.map(m => m.id));
+        const older = past
+          .map(m => ({ ...m, id: m.messageId || `${m.userId}-${m.timestamp}` }))
+          .filter(m => !seen.has(m.id));
+        const system = prev.filter(m => m.system);
+        const live = prev.filter(m => !m.system);
+        return [...system, ...older, ...live].slice(-MAX_MESSAGES);
+      });
+    };
+
     socket.on('chat_message',    onMessage);
     socket.on('message_deleted', onDeleted);
     socket.on('chat_system',     onSystem);
     socket.on('chat_banned',     onBanned);
+    socket.on('chat_history',    onHistory);
+    socket.emit('chat_history_request');
 
     return () => {
       socket.off('chat_message',    onMessage);
       socket.off('message_deleted', onDeleted);
       socket.off('chat_system',     onSystem);
       socket.off('chat_banned',     onBanned);
+      socket.off('chat_history',    onHistory);
     };
   }, [socket]);
 
-  // ── Duely Bot interval ────────────────────────────────────────────────────
-  useEffect(() => {
-    function scheduleBot() {
-      const delay = 30000 + Math.random() * 90000; // 30–120s
-      botTimerRef.current = setTimeout(() => {
-        const line = BOT_LINES[Math.floor(Math.random() * BOT_LINES.length)];
-        setMessages(prev => [
-          ...prev.slice(-MAX_MESSAGES + 1),
-          {
-            id: `bot-${Date.now()}`,
-            userId:        BOT_ID,
-            username:      BOT_NAME,
-            color:         BOT_COLOR,
-            message:       line,
-            timestamp:     Date.now(),
-            isBot:         true,
-            currentStreak: 100,
-          },
-        ]);
-        scheduleBot();
-      }, delay);
-    }
-    scheduleBot();
-    return () => clearTimeout(botTimerRef.current);
-  }, []);
 
   useEffect(() => {
     if (open) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });

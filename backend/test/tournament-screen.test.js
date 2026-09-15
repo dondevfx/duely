@@ -664,7 +664,8 @@ test('a refresh on any tournament screen leaves the tournament and lands on the 
   // Every tournament screen marks the tab; the bet page itself does not.
   assert.match(FE('pages', 'TournamentBracket.jsx'), /markInTournament\(id\)/);
   assert.match(FE('hooks', 'useTournamentRound.js'), /sessionStorage\.setItem\(KEY, poolId\)/);
-  assert.match(FE('pages', 'Tournaments.jsx'), /clearTournamentMark\(\)/);
+  // Leaving the screens clears the marker in one place, after telling the server.
+  assert.match(FE('components', 'TournamentReloadExit.jsx'), /clearTournamentMark\(\);\s*api\.post\(`\/tournaments\/\$\{mark\}\/leave`/);
   // A result is not the end: refreshing on the result card still leaves.
   assert.doesNotMatch(FE('hooks', 'useTournamentRound.js'), /onResult = \(r\) => \{ if \(r\?\.poolId === poolId\) done\(\); \}/);
 });

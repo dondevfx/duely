@@ -55,7 +55,8 @@ export default function useTournamentRound(socket) {
     let left = null;
     try { left = sessionStorage.getItem(KEY); } catch { /* private mode */ }
     if (!left) return;
-    try { sessionStorage.removeItem(KEY); } catch { /* private mode */ }
+    // The marker is left for TournamentReloadExit, which tells the server the
+    // player has left before clearing it.
     navigate('/tournaments', { replace: true });
   }, [poolId, navigate]);
 

@@ -592,7 +592,12 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
     if (!result.ok) return result;
 
     if (result.refund && onRefund) onRefund(pool, userId, result.entryFee);
-    if (!wasRunning) return result;
+    if (!wasRunning) {
+      // Tell the waiting room at once. It used to find out only on its next
+      // 3-second poll, so a player who left still showed in the seats.
+      if (pools.get(pool.id)) pushPool(pool);
+      return result;
+    }
 
     // Marked so the bracket cannot be opened again. They are out, and a
     // screen that lets them keep watching reads as though they might still

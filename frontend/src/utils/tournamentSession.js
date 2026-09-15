@@ -29,6 +29,8 @@ function readMark() {
   try { return sessionStorage.getItem(KEY); } catch { return null; }
 }
 
+export function readTournamentMark() { return readMark(); }
+
 function wasReload() {
   try {
     const nav = performance.getEntriesByType?.('navigation')?.[0];

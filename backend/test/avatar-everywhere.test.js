@@ -54,7 +54,8 @@ test('chat messages carry the sender avatar', () => {
   // Chat renders from the socket payload, not from a profile fetch, so the
   // URL has to travel with the message itself.
   const src = strip(be('socket', 'handlers.js'));
-  const emit = src.slice(src.indexOf("io.emit('chat_message'"), src.indexOf("io.emit('chat_message'") + 500);
+  // Built once as chatMsg (it also goes into the last-hour history), then emitted.
+  const emit = src.slice(src.indexOf("const chatMsg = {"), src.indexOf("io.emit('chat_message', chatMsg)"));
   assert.match(emit, /avatarUrl/, 'chat_message must include the sender avatar');
 });
 
