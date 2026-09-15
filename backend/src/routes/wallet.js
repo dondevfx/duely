@@ -1032,6 +1032,36 @@ module.exports = function walletRoutes(supabase, io) {
     }
   });
 
+  // ── Demo balance (Settings) ───────────────────────────────────────────
+  //
+  // Demo accounts set their own play-money Coins and Diamonds. This WRITES the
+  // balance rather than crediting it, so it must never be reachable by a real
+  // account: that would be minting. isDemo is the DEMO_ACCOUNT_IDS allowlist,
+  // nothing a user can set. A real account gets the same 404 as an unknown
+  // route, so the endpoint does not advertise itself.
+  router.post('/demo-balance', requireAuth, async (req, res) => {
+    if (!isDemo(req.user.id)) return res.status(404).json({ error: 'Route not found' });
+    if (isLocked(req.user.id)) {
+      return res.status(400).json({ error: 'Finish your match before changing your balance.' });
+    }
+    const update = {};
+    try {
+      if (req.body?.coins !== undefined && req.body.coins !== '') {
+        update.c_coins = sanitizeAmount(req.body.coins, 0, 1_000_000);
+      }
+      if (req.body?.diamonds !== undefined && req.body.diamonds !== '') {
+        update.diamonds = Math.round(sanitizeDiamondAmount(req.body.diamonds, 0, 1_000_000_000));
+      }
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
+    if (!Object.keys(update).length) return res.status(400).json({ error: 'Enter a Coin or Diamond amount.' });
+    const { error } = await supabase.from('profiles').update(update).eq('id', req.user.id);
+    if (error) return res.status(500).json({ error: 'Could not update your balance.' });
+    console.log(`[demo] balance set ${JSON.stringify(update)} for ${req.user.id}`);
+    res.json({ success: true, ...update });
+  });
+
   // ── Tip ───────────────────────────────────────────────────────────────
   router.post('/tip', requireAuth, async (req, res) => {
     if (await rejectIfExcluded(supabase, req, res)) return;

@@ -395,6 +395,57 @@ function SelfExclusionSection({ profile, refreshProfile }) {
   );
 }
 
+// Demo accounts only: set play-money Coins and Diamonds. The server refuses
+// real accounts, so hiding this is presentation, not the protection.
+function DemoBalanceSection({ profile, refreshProfile }) {
+  const [coins, setCoins] = useState('');
+  const [diamonds, setDiamonds] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  async function save() {
+    setBusy(true); setMsg(null);
+    try {
+      await api.post('/wallet/demo-balance', { coins, diamonds });
+      await refreshProfile();
+      setCoins(''); setDiamonds('');
+      setMsg({ type: 'success', text: 'Balance updated.' });
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message || 'Could not update your balance.' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const field = 'block w-full min-w-0 bg-surface border border-surfaceLight rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary';
+  return (
+    <div className="mb-5">
+      <div className="text-sm font-bold text-white mb-1">Demo balance</div>
+      <p className="text-xs text-muted mb-3">
+        Play money for this demo account. Now: {Number(profile?.c_coins ?? 0).toLocaleString()} Coins,{' '}
+        {Number(profile?.diamonds ?? 0).toLocaleString()} Diamonds.
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="min-w-0">
+          <label className="block text-xs text-muted mb-1" htmlFor="demo-coins">Coins</label>
+          <input id="demo-coins" type="number" inputMode="decimal" min="0" max="1000000" step="0.01"
+            value={coins} onChange={(e) => setCoins(e.target.value)} placeholder="e.g. 500" className={field} />
+        </div>
+        <div className="min-w-0">
+          <label className="block text-xs text-muted mb-1" htmlFor="demo-diamonds">Diamonds</label>
+          <input id="demo-diamonds" type="number" inputMode="numeric" min="0" max="1000000000" step="1"
+            value={diamonds} onChange={(e) => setDiamonds(e.target.value)} placeholder="e.g. 50000" className={field} />
+        </div>
+      </div>
+      <button onClick={save} disabled={busy || (coins === '' && diamonds === '')}
+        className="w-full mt-3 py-2.5 rounded-xl text-sm font-bold bg-primary text-white disabled:opacity-40 transition-colors">
+        {busy ? 'Saving…' : 'Set balance'}
+      </button>
+      {msg && <p className={`text-xs mt-2 ${msg.type === 'success' ? 'text-success' : 'text-danger'}`}>{msg.text}</p>}
+    </div>
+  );
+}
+
 // ── Settings Panel ────────────────────────────────────────────────────────────
 function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, setResetMsg, sendPasswordReset }) {
   const [theme, setThemeState]   = useState(() => localStorage.getItem('theme') || 'dark');
@@ -712,6 +763,13 @@ function SettingsPanel({ onClose, profile, refreshProfile, session, resetMsg, se
           </div>
 
           <div className="h-px bg-surfaceLight mb-5" />
+
+          {profile?.is_demo && (
+            <>
+              <DemoBalanceSection profile={profile} refreshProfile={refreshProfile} />
+              <div className="h-px bg-surfaceLight mb-5" />
+            </>
+          )}
 
           {/* Self-exclusion */}
           <SelfExclusionSection profile={profile} refreshProfile={refreshProfile} />
