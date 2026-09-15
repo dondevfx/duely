@@ -1035,3 +1035,103 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE SELECT ON TABLES FROM anon, aut
 -- Until this runs the Settings button reports "not available" and nobody is
 -- locked; the rest of the site is unaffected.
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS self_excluded_until timestamptz;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 24. Append-only balance ledger  (economy audit #3)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Every change to profiles.c_coins or profiles.diamonds writes a row here, in
+-- the SAME database transaction as the change itself, from a trigger. It does
+-- not matter which code path moved the balance (an RPC, an admin tool, a
+-- direct UPDATE): if the balance changed, there is a row, and if the change
+-- rolled back, so did the row. A crash cannot leave one without the other.
+--
+-- Rows cannot be updated or deleted by anyone (the immutability trigger fires
+-- even for the service role), so the history cannot be edited after the fact.
+--
+-- balance = SUM(coins_delta) for that user, from the opening snapshot on.
+-- scripts/reconcile-ledger.js checks exactly that.
+--
+-- Run as ONE transaction: the table lock stops a balance moving between the
+-- opening snapshot and the trigger starting, which would count it twice or
+-- not at all.
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS balance_ledger (
+  id              bigserial   PRIMARY KEY,
+  user_id         uuid        NOT NULL,
+  kind            text        NOT NULL DEFAULT 'change',   -- 'opening' | 'change' | 'created'
+  coins_before    numeric,
+  coins_after     numeric,
+  coins_delta     numeric     NOT NULL DEFAULT 0,
+  diamonds_before numeric,
+  diamonds_after  numeric,
+  diamonds_delta  numeric     NOT NULL DEFAULT 0,
+  db_role         text        NOT NULL DEFAULT current_user,
+  txid            bigint      NOT NULL DEFAULT txid_current(),
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS balance_ledger_user_idx ON balance_ledger (user_id, id);
+ALTER TABLE balance_ledger ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON balance_ledger FROM PUBLIC, anon, authenticated;
+
+LOCK TABLE profiles IN SHARE ROW EXCLUSIVE MODE;
+
+INSERT INTO balance_ledger (user_id, kind, coins_before, coins_after, coins_delta, diamonds_before, diamonds_after, diamonds_delta)
+SELECT p.id, 'opening', 0, COALESCE(p.c_coins, 0), COALESCE(p.c_coins, 0), 0, COALESCE(p.diamonds, 0), COALESCE(p.diamonds, 0)
+FROM profiles p
+WHERE NOT EXISTS (SELECT 1 FROM balance_ledger b WHERE b.user_id = p.id AND b.kind = 'opening');
+
+CREATE OR REPLACE FUNCTION record_balance_change() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $fn$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    INSERT INTO balance_ledger (user_id, kind, coins_before, coins_after, coins_delta, diamonds_before, diamonds_after, diamonds_delta)
+    VALUES (NEW.id, 'created', 0, COALESCE(NEW.c_coins, 0), COALESCE(NEW.c_coins, 0), 0, COALESCE(NEW.diamonds, 0), COALESCE(NEW.diamonds, 0));
+  ELSIF NEW.c_coins IS DISTINCT FROM OLD.c_coins OR NEW.diamonds IS DISTINCT FROM OLD.diamonds THEN
+    INSERT INTO balance_ledger (user_id, kind, coins_before, coins_after, coins_delta, diamonds_before, diamonds_after, diamonds_delta)
+    VALUES (NEW.id, 'change',
+            OLD.c_coins, NEW.c_coins, COALESCE(NEW.c_coins, 0) - COALESCE(OLD.c_coins, 0),
+            OLD.diamonds, NEW.diamonds, COALESCE(NEW.diamonds, 0) - COALESCE(OLD.diamonds, 0));
+  END IF;
+  RETURN NEW;
+END
+$fn$;
+REVOKE EXECUTE ON FUNCTION record_balance_change() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS profiles_balance_ledger ON profiles;
+CREATE TRIGGER profiles_balance_ledger
+  AFTER INSERT OR UPDATE OF c_coins, diamonds ON profiles
+  FOR EACH ROW EXECUTE FUNCTION record_balance_change();
+
+CREATE OR REPLACE FUNCTION balance_ledger_immutable() RETURNS trigger
+LANGUAGE plpgsql AS $fn$
+BEGIN
+  RAISE EXCEPTION 'balance_ledger is append-only';
+END
+$fn$;
+DROP TRIGGER IF EXISTS balance_ledger_no_edit ON balance_ledger;
+CREATE TRIGGER balance_ledger_no_edit
+  BEFORE UPDATE OR DELETE ON balance_ledger
+  FOR EACH ROW EXECUTE FUNCTION balance_ledger_immutable();
+
+COMMIT;
+
+-- Check (should return no rows once this has run):
+--   SELECT p.id, p.c_coins, SUM(b.coins_delta) AS ledger
+--   FROM profiles p JOIN balance_ledger b ON b.user_id = p.id
+--   GROUP BY p.id, p.c_coins HAVING ABS(p.c_coins - SUM(b.coins_delta)) > 0.005;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 25. One withdrawal in flight per account, across every server  (audit #3)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- The routes' in-memory lock only holds inside one process. This row, keyed
+-- on the user, is the lock the database enforces: a second concurrent
+-- withdrawal on ANY server fails its insert. See services/withdrawalLock.js.
+CREATE TABLE IF NOT EXISTS withdrawal_locks (
+  user_id    uuid        PRIMARY KEY,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE withdrawal_locks ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON withdrawal_locks FROM PUBLIC, anon, authenticated;

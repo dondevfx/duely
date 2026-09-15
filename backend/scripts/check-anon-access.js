@@ -3,7 +3,9 @@
  * What can somebody do with the key that ships in the frontend bundle?
  *
  * Read-only, and safe to run against production: every probe uses an amount of
- * 0 or a read, so nothing moves even where the call is permitted.
+ * 0, a read, or a write aimed at a user id that belongs to nobody. Postgres
+ * checks privileges BEFORE it looks for rows, so a locked table still answers
+ * "permission denied" and an open one changes nothing.
  *
  * It exists because of a real incident. The tables were protected — an anon
  * client is refused on UPDATE profiles and INSERT transactions — but the
@@ -16,10 +18,18 @@
  * An account ended up holding 9,990 coins with no transaction row behind them
  * and withdrew $10 of real money against them.
  *
+ * Two actors:
+ *   anon           always — the public key with no session
+ *   authenticated  when TEST_USER_JWT is set — a real signed-in test account's
+ *                  access token (never a real player's). This is the role a
+ *                  logged-in attacker actually has, and it is granted
+ *                  separately from anon, so passing as anon does not prove it.
+ *
  * Run it after PENDING_SQL section 22, and after any migration that adds a
  * function. Exits non-zero if anything the browser should not reach is open.
  *
  *   railway run node backend/scripts/check-anon-access.js
+ *   TEST_USER_JWT=<token> railway run node backend/scripts/check-anon-access.js
  */
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
@@ -30,7 +40,6 @@ if (!url || !anon) {
   console.error('\n  SUPABASE_URL and SUPABASE_ANON_KEY are needed.\n');
   process.exit(1);
 }
-const sb = createClient(url, anon);
 
 // A uuid that belongs to nobody: if a call somehow succeeds despite the amount
 // being zero, it still lands on no real account.
@@ -64,9 +73,30 @@ const RPCS = [
   ['update_win_streak',            { p_winner_id: NOBODY, p_loser_id: null }],
   ['increment_qualifying_wagered', { user_id: NOBODY, amount: 0 }],
   ['claim_diamond_bonus',          { p_user_id: NOBODY, p_amount: 0 }],
+  // Added in audit #3: the two bank-moving functions were never probed.
+  ['pay_referral_from_bank',       { admin_id: NOBODY, referrer_id: NOBODY, amount: 0 }],
+  ['collect_admin_fees',           { admin_id: NOBODY }],
 ];
 
-const TABLES = ['profiles', 'transactions', 'matches', 'deposit_addresses'];
+// Read probes. Tables that are private by design must be locked; the ones the
+// app never reads from the browser should be locked too (section 22).
+const TABLES = [
+  'profiles', 'transactions', 'matches', 'deposit_addresses',
+  // Added in audit #3.
+  'referral_rewards', 'kyc_submissions', 'support_tickets', 'support_messages',
+  'friends', 'player_reports', 'game_highscores',
+];
+
+// Write probes: each aimed at NOBODY so a permitted write touches no row.
+const WRITES = [
+  ['profiles',        (c) => c.from('profiles').update({ c_coins: 1, diamonds: 1 }).eq('id', NOBODY)],
+  ['transactions',    (c) => c.from('transactions').insert({ user_id: NOBODY, type: 'deposit', amount_c: 0, status: 'confirmed' })],
+  ['transactions (update)', (c) => c.from('transactions').update({ amount_c: 0 }).eq('user_id', NOBODY)],
+  ['transactions (delete)', (c) => c.from('transactions').delete().eq('user_id', NOBODY)],
+  ['matches',         (c) => c.from('matches').update({ winner_id: NOBODY }).eq('id', NOBODY)],
+  ['referral_rewards',(c) => c.from('referral_rewards').update({ status: 'pending' }).eq('referrer_id', NOBODY)],
+  ['game_highscores', (c) => c.from('game_highscores').update({ score: 0 }).eq('user_id', NOBODY)],
+];
 
 // "permission denied" is the only answer that means locked.
 //
@@ -84,15 +114,15 @@ const isMissing = (error) => !!error &&
 let open = 0;
 let inconclusive = 0;
 
-(async () => {
-  console.log('\nWhat the public anon key can reach\n' + '─'.repeat(52));
+async function probe(label, sb) {
+  console.log(`\n══ As ${label} ═════════════════════════════════════════`);
 
   console.log('\nFunctions:');
   for (const [fn, args] of RPCS) {
     const { error } = await sb.rpc(fn, args);
     if (isMissing(error)) {
       inconclusive++;
-      console.log(`  [  ??  ] ${fn} — did not resolve; the probe's argument names are wrong, so this proves nothing`);
+      console.log(`  [  ??  ] ${fn} — did not resolve; the probe's argument names are wrong, or it is not deployed`);
       continue;
     }
     if (isLocked(error))  { console.log(`  [locked] ${fn}`); continue; }
@@ -103,23 +133,36 @@ let inconclusive = 0;
   console.log('\nTables (read):');
   for (const t of TABLES) {
     const { data, error } = await sb.from(t).select('*').limit(1);
-    if (isMissing(error)) { console.log(`  [ n/a  ] ${t}`); continue; }
+    if (isMissing(error)) { console.log(`  [ n/a  ] ${t} (not deployed)`); continue; }
     if (isLocked(error))  { console.log(`  [locked] ${t}`); continue; }
-    open++;
-    console.log(`  [ OPEN ] ${t} — ${(data || []).length} row(s) readable`);
+    // A read the RLS policy filters to nothing is still a grant: for a signed-
+    // in user their own rows are expected, so only anon counts it as open.
+    if (label === 'anon') { open++; console.log(`  [ OPEN ] ${t} — ${(data || []).length} row(s) readable`); }
+    else console.log(`  [ read ] ${t} — ${(data || []).length} row(s) visible (check these are only this user's own)`);
   }
 
   console.log('\nTables (write):');
-  for (const [t, row] of [
-    ['profiles',     { c_coins: 1 }],
-    ['transactions', { user_id: NOBODY, type: 'deposit', amount_c: 0, status: 'confirmed' }],
-  ]) {
-    const { error } = t === 'profiles'
-      ? await sb.from(t).update(row).eq('id', NOBODY)
-      : await sb.from(t).insert(row);
+  for (const [t, run] of WRITES) {
+    const { error } = await run(sb);
+    if (isMissing(error)) { console.log(`  [ n/a  ] ${t} (not deployed)`); continue; }
     if (isLocked(error)) { console.log(`  [locked] ${t}`); continue; }
     open++;
     console.log(`  [ OPEN ] ${t}` + (error ? `  (${error.message.slice(0, 50)})` : ''));
+  }
+}
+
+(async () => {
+  console.log('\nWhat the public anon key can reach' + '\n' + '─'.repeat(52));
+  await probe('anon', createClient(url, anon));
+
+  const jwt = process.env.TEST_USER_JWT;
+  if (jwt) {
+    await probe('authenticated (TEST_USER_JWT)', createClient(url, anon, {
+      global: { headers: { Authorization: `Bearer ${jwt}` } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    }));
+  } else {
+    console.log('\n(authenticated role not probed — set TEST_USER_JWT to a TEST account\'s access token to check it)');
   }
 
   console.log('\n' + '─'.repeat(52));

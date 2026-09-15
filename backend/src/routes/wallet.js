@@ -1,3 +1,4 @@
+const { acquireWithdrawalLock, releaseWithdrawalLock } = require('../services/withdrawalLock');
 const { rejectIfExcluded } = require('../services/selfExclusion');
 const { Router } = require('express');
 const { requireAuth } = require('../middleware/auth');
@@ -393,6 +394,12 @@ module.exports = function walletRoutes(supabase, io) {
     // Acquire the in-flight lock only after all validation has passed, so a
     // rejected request never leaves the user locked. Released in `finally`.
     activeWithdrawals.add(req.user.id);
+    // And the database lock, which is the one that holds across servers.
+    const dbLock = await acquireWithdrawalLock(supabase, req.user.id);
+    if (!dbLock.ok) {
+      activeWithdrawals.delete(req.user.id);
+      return res.status(429).json({ error: 'A withdrawal is already in progress' });
+    }
 
     try {
       // ── Rate limit ───────────────────────────────────────────────────
@@ -770,6 +777,7 @@ module.exports = function walletRoutes(supabase, io) {
       });
     } finally {
       activeWithdrawals.delete(req.user.id);
+      await releaseWithdrawalLock(supabase, req.user.id, dbLock);
     }
   });
 
@@ -830,6 +838,11 @@ module.exports = function walletRoutes(supabase, io) {
     catch (e) { return res.status(400).json({ error: e.message }); }
 
     activeWithdrawals.add(req.user.id);
+    const dbLock = await acquireWithdrawalLock(supabase, req.user.id);
+    if (!dbLock.ok) {
+      activeWithdrawals.delete(req.user.id);
+      return res.status(429).json({ error: 'A withdrawal is already in progress' });
+    }
     try {
       const lastWit = await getLastWithdrawal(supabase, req.user.id);
       if (lastWit && Date.now() - new Date(lastWit).getTime() < WITHDRAW_COOLDOWN_MS) {
@@ -998,6 +1011,7 @@ module.exports = function walletRoutes(supabase, io) {
       });
     } finally {
       activeWithdrawals.delete(req.user.id);
+      await releaseWithdrawalLock(supabase, req.user.id, dbLock);
     }
   });
 

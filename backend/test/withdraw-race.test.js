@@ -50,7 +50,15 @@ test('both withdrawal routes take the lock, and release it', () => {
   const adds    = (SRC.match(/activeWithdrawals\.add\(/g) || []).length;
   const deletes = (SRC.match(/activeWithdrawals\.delete\(/g) || []).length;
   assert.equal(adds, 2, 'the crypto and fiat routes must each take the lock');
-  assert.equal(deletes, adds, 'every acquisition needs a matching release');
+  // Each route releases in its finally, and again on the one early return
+  // after the lock is taken: when the database lock (audit #3) is refused.
+  // Every add is followed by a finally release, and every early return
+  // between the two releases first.
+  const finallyReleases = (SRC.match(/\} finally \{\s*activeWithdrawals\.delete\(req\.user\.id\);/g) || []).length;
+  assert.equal(finallyReleases, adds, 'every acquisition needs a release in its finally');
+  const earlyReleases = (SRC.match(/if \(!dbLock\.ok\) \{\s*activeWithdrawals\.delete\(req\.user\.id\);/g) || []).length;
+  assert.equal(earlyReleases, adds, 'a refused database lock leaves the in-memory lock held');
+  assert.equal(deletes, finallyReleases + earlyReleases, 'a release that is not accounted for');
 });
 
 test('validation runs before the lock is taken', () => {
