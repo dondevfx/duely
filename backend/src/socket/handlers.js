@@ -225,15 +225,15 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
   // running tournament? See the gate installed at the top of each connection.
   const _playingElsewhere = (userId, socketId) => {
     for (const s of _socketsForUser(userId)) {
-      if (s.id !== socketId && _inLiveRoom(s.id)) return true;
+      if (s.id !== socketId && _inLiveRoom(s.id)) return 'device';
     }
     const pools = tournaments?.pools?.pools;
     if (pools) {
       for (const pool of pools.values()) {
-        if (pool.state === 'running' && tournaments.pools.isLiveIn(pool, userId)) return true;
+        if (pool.state === 'running' && tournaments.pools.isLiveIn(pool, userId)) return 'tournament';
       }
     }
-    return false;
+    return null;
   };
   // A room that has already settled (player is sitting on the victory/loss
   // screen) does NOT count as being in a game — otherwise invites stay deferred
@@ -447,8 +447,11 @@ const userQueues = new Set(); // userId → currently in a queue (prevents dual-
             // socket asking, so a second phone or tab on the same account could
             // start a match while the first was mid-game. Every other socket of
             // this account is checked here, and a live tournament counts too.
-            if (_playingElsewhere(authenticatedUser.userId, socket.id)) {
-              socket.emit('error', { message: 'This account is already playing on another device.', otherDevice: true });
+            const busy = _playingElsewhere(authenticatedUser.userId, socket.id);
+            if (busy) {
+              socket.emit('error', busy === 'tournament'
+                ? { message: "You're still in a tournament. Finish or leave it before starting another game.", inTournament: true }
+                : { message: 'This account is already playing on another device.', otherDevice: true });
               return;
             }
           }

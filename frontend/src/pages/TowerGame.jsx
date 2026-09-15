@@ -186,6 +186,18 @@ export default function TowerGame() {
 
     socket.on('tower_queue_joined', onQueueJoined);
     socket.on('match_cancelled', onCancelled);
+    // Tower was the one game page with no error handler: when the server
+    // refused to start a match (already in a tournament, another device, a
+    // lock), the page sat on "Waiting for opponent" forever with nothing said.
+    // Only from the lobby or the queue: an error arriving mid-game must not
+    // throw a running match back to the lobby.
+    const onError = ({ message } = {}) => {
+      if (!message) return;
+      if (phaseRef.current !== 'lobby' && phaseRef.current !== 'queue') return;
+      setStatusMsg(message);
+      setPhase('lobby');
+    };
+    socket.on('error', onError);
     socket.on('tower_match_found', onMatchFound);
     socket.on('tower_countdown', onCountdown);
     socket.on('tower_start', onStart);
@@ -216,6 +228,7 @@ export default function TowerGame() {
     return () => {
       socket.off('tower_queue_joined', onQueueJoined);
       socket.off('match_cancelled', onCancelled);
+      socket.off('error', onError);
       socket.off('tower_match_found', onMatchFound);
       socket.off('tower_countdown', onCountdown);
       socket.off('tower_start', onStart);

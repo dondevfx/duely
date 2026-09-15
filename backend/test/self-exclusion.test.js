@@ -103,6 +103,13 @@ test('one game per account: another device of the same account is refused', () =
   const gate = h.indexOf('_playingElsewhere(authenticatedUser.userId, socket.id)', conn);
   assert.ok(gate > conn && gate < h.indexOf("socket.on('", conn), 'the device check is not in the start-event gate');
   const fn = h.slice(h.indexOf('const _playingElsewhere'), h.indexOf('const _playingElsewhere') + 700);
-  assert.ok(fn.includes('s.id !== socketId && _inLiveRoom(s.id)'), 'only the asking connection is checked');
-  assert.ok(fn.includes('tournaments.pools.isLiveIn(pool, userId)'), 'a running tournament does not count');
+  assert.ok(fn.includes("s.id !== socketId && _inLiveRoom(s.id)) return 'device'"), 'only the asking connection is checked');
+  assert.ok(fn.includes("tournaments.pools.isLiveIn(pool, userId)) return 'tournament'"), 'a running tournament does not count');
+  assert.ok(h.includes("You're still in a tournament."), 'a tournament is reported as another device');
+});
+
+test('Tower shows a refusal instead of waiting forever, but never mid-game', () => {
+  const t = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', '..', 'frontend', 'src', 'pages', 'TowerGame.jsx'), 'utf8');
+  assert.ok(t.includes("socket.on('error', onError);") && t.includes("socket.off('error', onError);"));
+  assert.ok(t.includes("if (phaseRef.current !== 'lobby' && phaseRef.current !== 'queue') return;"), 'an error would end a running match');
 });
