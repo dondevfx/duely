@@ -72,6 +72,15 @@ const DEFAULT_TIMINGS = {
   suddenIntro: 5000,
 };
 
+// Best-effort: the balance change itself is recorded atomically by
+// balance_ledger (PENDING_SQL 24); this row names it. Never throws.
+async function recordTx(supabase, log, row) {
+  try {
+    const { error } = await supabase.from('transactions').insert(row);
+    if (error) log.error(`[tournament] ${row.type} row not written (PENDING_SQL 26?): ${error.message}`);
+  } catch (e) { log.error(`[tournament] ${row.type} row not written: ${e.message}`); }
+}
+
 function createRunner({ io, supabase, pools, engines = ENGINES, log = console, timings = {} } = {}) {
   const T = { ...DEFAULT_TIMINGS, ...timings };
   /** poolId → runtime state that is not part of the bracket itself */
@@ -149,7 +158,10 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
       const failed = results.filter(r => !r.ok);
       if (failed.length) {
         for (const r of results.filter(x => x.ok)) {
-          try { await creditCoins(supabase, r.p.userId, pool.entryFee); }
+          try {
+            await creditCoins(supabase, r.p.userId, pool.entryFee);
+            await recordTx(supabase, log, { user_id: r.p.userId, type: 'tournament_refund', amount_c: pool.entryFee, status: 'confirmed', notes: 'Tournament did not start' });
+          }
           catch (e) { log.error(`[tournament] REFUND FAILED ${r.p.userId} ${pool.entryFee} coins:`, e.message); }
         }
         const gone = failed.map(r => r.p.userId);
@@ -166,6 +178,9 @@ function createRunner({ io, supabase, pools, engines = ENGINES, log = console, t
         return;
       }
       pool.charged = true;
+      for (const p of humans) {
+        await recordTx(supabase, log, { user_id: p.userId, type: 'tournament_entry', amount_c: pool.entryFee, status: 'confirmed', notes: 'Tournament entry' });
+      }
     }
 
     if (supabase && !pool.free && pool.entryFee > 0) {

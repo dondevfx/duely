@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import DiamondIcon from '../components/DiamondIcon';
 import { useAuth } from '../context/AuthContext';
@@ -55,6 +55,8 @@ export default function Tip() {
     setResult(null);
     try {
       const data = await api.post('/wallet/tip', {
+        // One key per press: a re-delivered request cannot send the tip twice.
+        idempotencyKey: crypto.randomUUID(),
         recipientUsername: recipient.trim(),
         amount: tipAmount,
         currency,

@@ -1135,3 +1135,35 @@ CREATE TABLE IF NOT EXISTS withdrawal_locks (
 );
 ALTER TABLE withdrawal_locks ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON withdrawal_locks FROM PUBLIC, anon, authenticated;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 26. Tip idempotency, attribution types, retire the coin bonus  (audit #3)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Every tip carries a one-time key from the client. The server claims it here
+-- BEFORE any coins move; a replayed or re-delivered request fails the primary
+-- key and is refused. See the /tip route.
+CREATE TABLE IF NOT EXISTS tip_requests (
+  key        uuid        PRIMARY KEY,
+  user_id    uuid        NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE tip_requests ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON tip_requests FROM PUBLIC, anon, authenticated;
+
+-- Rows that say WHY a balance moved, for money paths that had none. The
+-- balance itself is covered by balance_ledger (section 24); these name it.
+-- Unknown to coinLots and getWithdrawable, so playthrough is unaffected.
+ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_type_check;
+ALTER TABLE transactions ADD CONSTRAINT transactions_type_check CHECK (type IN (
+  'deposit', 'deposit_raw', 'withdrawal',
+  'match_win', 'match_loss', 'match_draw', 'match_refund',
+  'tip_sent', 'tip_received',
+  'daily_bonus', 'diamond_bonus', 'rewards_spin', 'referral_bonus',
+  'fee_collection', 'admin_adjustment',
+  'tournament_entry', 'tournament_refund', 'rakeback_claim', 'affiliate_payout'
+));
+
+-- The daily coin bonus minted a coin with no deposit (audit #2, V1). The route
+-- is retired; the function goes too, so nothing can call it again.
+DROP FUNCTION IF EXISTS claim_daily_bonus(uuid);

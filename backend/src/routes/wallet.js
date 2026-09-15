@@ -1101,6 +1101,34 @@ module.exports = function walletRoutes(supabase, io) {
     // identifiable, and a distinct error handed that back one guess at a time.
     if (isDemo(recipient.id)) return res.status(404).json({ error: 'User not found' });
 
+    // One-time key: the same tip delivered twice (a retry, a replay) moves coins
+    // once. Claimed BEFORE anything is deducted. Older clients send none and are
+    // unaffected. Before PENDING_SQL section 26 the table is missing and the
+    // tip proceeds, logged. (Audit #3.)
+    const idemKey = req.body?.idempotencyKey;
+    let idemClaimed = false;
+    if (idemKey !== undefined) {
+      if (typeof idemKey !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idemKey)) {
+        return res.status(400).json({ error: 'Invalid request key' });
+      }
+      const { error: idemErr } = await supabase.from('tip_requests').insert({ key: idemKey, user_id: req.user.id });
+      if (idemErr?.code === '23505') {
+        return res.status(409).json({ error: 'This tip was already sent.', duplicate: true });
+      } else if (idemErr && /tip_requests|does not exist|schema cache/i.test(idemErr.message || '')) {
+        console.warn('[tip] tip_requests missing — run PENDING_SQL section 26. Tips are not replay-protected.');
+      } else if (idemErr) {
+        return res.status(500).json({ error: 'Could not send the tip. Please try again.' });
+      } else {
+        idemClaimed = true;
+      }
+    }
+    // A tip that definitely did not happen (not enough balance) frees its key,
+    // so the same button can be pressed again after topping up.
+    const releaseIdem = async () => {
+      if (!idemClaimed) return;
+      try { await supabase.from('tip_requests').delete().eq('key', idemKey); } catch { /* keeps the key; a new press gets a new one */ }
+    };
+
     // A tip is two independent writes: take from the sender, give to the
     // recipient. If the second fails the first has already happened, and the
     // sender's coins are simply gone — nothing refunds them and the only trace
@@ -1169,6 +1197,7 @@ module.exports = function walletRoutes(supabase, io) {
       res.json({ success: true, recipient: recipient.username, amount: tipAmount, currency });
     } catch (err) {
       const isBalanceError = err.message?.includes('Insufficient');
+      if (isBalanceError) await releaseIdem();
       res.status(isBalanceError ? 400 : 500).json({ error: err.message });
     }
   });

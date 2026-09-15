@@ -173,6 +173,16 @@ module.exports = function affiliateRoutes(supabase) {
       });
     }
 
+    // A row naming the payout (PENDING_SQL 26). coinLots reads the profile
+    // counter, not this row, so playthrough is unchanged.
+    try {
+      const { error: txErr } = await supabase.from('transactions')
+        .insert({ user_id: req.user.id, type: 'affiliate_payout', amount_c: earningsC, status: 'confirmed' });
+      if (txErr) console.warn(`[affiliate] payout row not written (PENDING_SQL 26?): ${txErr.message}`);
+    } catch (e) {
+      console.warn(`[affiliate] payout row not written: ${e.message}`);
+    }
+
     res.json({ success: true, collected_c: earningsC });
   });
 

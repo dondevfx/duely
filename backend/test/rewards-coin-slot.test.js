@@ -87,11 +87,13 @@ test('the diamond credit path has no non-atomic fallback', () => {
     'a manual balance read-then-add-then-write must not exist here');
 });
 
-test('a coin win is credited through creditCoins, not the diamond RPC', () => {
+test('a coin win is paid in coins, from the fee balance, not the diamond RPC', () => {
+  // Coins only enter through the treasury (economy audit #3): the coin prize
+  // moves existing coins out of the fee balance rather than creating them.
   const spin = REWARDS.slice(REWARDS.indexOf("router.post('/spin'"));
   assert.match(spin, /roll\.kind === 'coins'/);
-  assert.match(spin, /creditCoins\(supabase, req\.user\.id, roll\.amount\)/,
-    'a coin win must not be paid out as 1 diamond');
+  assert.match(spin, /rpc\('pay_referral_from_bank', \{ admin_id: adminId, referrer_id: req\.user\.id, amount: roll\.amount \}\)/,
+    'a coin win must be paid in coins, out of the fee balance');
 });
 
 test('the response tells the client which currency it is, not just a number', () => {

@@ -103,6 +103,17 @@ module.exports = function rakebackRoutes(supabase) {
     const { error } = await supabase
       .from('profiles').update({ rakeback_claimed_total: total }).eq('id', userId);
     if (error) console.warn(`[rakeback] claim of ${amt} not recorded: ${error.message}`);
+    // And a row naming the credit (PENDING_SQL 26 allows the type). coinLots
+    // reads the counter above, not this row, so playthrough is unchanged.
+    // Never throws: the claim has already paid by now, and a record that fails
+    // to write must not report the claim itself as failed.
+    try {
+      const { error: txErr } = await supabase.from('transactions')
+        .insert({ user_id: userId, type: 'rakeback_claim', amount_c: amt, status: 'confirmed' });
+      if (txErr) console.warn(`[rakeback] claim row not written (PENDING_SQL 26?): ${txErr.message}`);
+    } catch (e) {
+      console.warn(`[rakeback] claim row not written: ${e.message}`);
+    }
   }
 
   // POST /api/rakeback/claim/instant — atomic via Postgres RPC (no race condition)

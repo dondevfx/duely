@@ -342,7 +342,7 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
     setTipSending(true);
     setTipResult(null);
     try {
-      await api.post('/wallet/tip', { recipientUsername: username, amount: amt, currency: tipCurrency });
+      await api.post('/wallet/tip', { recipientUsername: username, amount: amt, currency: tipCurrency, idempotencyKey: crypto.randomUUID() });
       setTipResult({ ok: true, text: `Sent to ${username}!` });
       setTipAmount('');
       await refreshProfile();

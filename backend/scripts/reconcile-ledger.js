@@ -75,11 +75,15 @@ function reconcile({ profiles = [], ledger = null, transactions = [], locks = []
       if (r.kind === 'opening') continue;
       moved.set(r.user_id, (moved.get(r.user_id) || 0) + (Number(r.coins_delta) || 0));
     }
-    const CREDIT = new Set(['deposit', 'match_win', 'match_draw', 'tip_received', 'rewards_spin', 'referral_reward', 'affiliate_payout', 'refund', 'admin_credit', 'rakeback']);
-    const DEBIT  = new Set(['withdrawal', 'match_loss', 'tip_sent', 'admin_debit']);
+    const CREDIT = new Set(['deposit', 'match_win', 'match_draw', 'match_refund', 'tip_received', 'rewards_spin', 'referral_bonus', 'daily_bonus', 'affiliate_payout', 'rakeback_claim', 'tournament_refund']);
+    const DEBIT  = new Set(['withdrawal', 'match_loss', 'tip_sent', 'tournament_entry']);
     const recorded = new Map();
     for (const t of transactions) {
       const amt = Number(t.amount_c) || 0;
+      // Tournament settlement writes a match_loss per losing entrant for the
+      // P&L; the entry itself is already the tournament_entry row, so that one
+      // is not counted a second time.
+      if (t.type === 'match_loss' && t.notes === 'Tournament entry') continue;
       const sign = CREDIT.has(t.type) ? 1 : DEBIT.has(t.type) ? -1 : 0;
       if (!sign) continue;
       recorded.set(t.user_id, (recorded.get(t.user_id) || 0) + sign * amt);
@@ -115,7 +119,7 @@ if (require.main === module) {
     const profiles = await readAll(sb, 'profiles', 'id, c_coins, diamonds');
     if (profiles.error) { console.error('profiles:', profiles.error.message); process.exit(1); }
     const ledger = await readAll(sb, 'balance_ledger', 'user_id, coins_delta, diamonds_delta, kind', (q) => q.order('id'));
-    const txs = await readAll(sb, 'transactions', 'user_id, type, amount_c, tx_hash, status', (q) => q.neq('status', 'failed'));
+    const txs = await readAll(sb, 'transactions', 'user_id, type, amount_c, tx_hash, status, notes', (q) => q.neq('status', 'failed'));
     const locks = await readAll(sb, 'withdrawal_locks', 'user_id, created_at');
 
     if (ledger.error) console.log('\n(balance_ledger not readable — run PENDING_SQL section 24. Checks 2 and 3 skipped.)');

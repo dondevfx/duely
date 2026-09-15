@@ -215,8 +215,20 @@ module.exports = function rewardsRoutes(supabase) {
       // pattern the cooldown stamp already uses correctly.
       let credErr;
       if (roll.kind === 'coins') {
-        try { await creditCoins(supabase, req.user.id, roll.amount); }
-        catch (e) { credErr = e; }
+        // Paid OUT of the fee balance, never created: coins only enter through
+        // the treasury (audit #3). If the bank cannot cover it, the spin is an
+        // ordinary diamond roll instead; an ERROR is not a no, see below.
+        const adminId = process.env.ADMIN_USER_ID;
+        const { data: paid, error } = adminId
+          ? await supabase.rpc('pay_referral_from_bank', { admin_id: adminId, referrer_id: req.user.id, amount: roll.amount })
+          : { data: false, error: null };
+        if (error) credErr = error;
+        else if (!paid) {
+          let reroll;
+          do { reroll = rollPrize(tier); } while (reroll.kind === 'coins');
+          Object.assign(roll, reroll);
+          ({ error: credErr } = await supabase.rpc('credit_diamonds', { user_id: req.user.id, amount: roll.amount }));
+        }
       } else {
         ({ error: credErr } = await supabase.rpc('credit_diamonds', {
           user_id: req.user.id,

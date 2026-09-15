@@ -396,5 +396,8 @@ module.exports.refundPool = async function refundPool(supabase, pool) {
   for (const p of pool.players) {
     if (p.isBot) continue;
     await refund(supabase, p.userId, pool.entryFee);
+    try {
+      await supabase.from('transactions').insert({ user_id: p.userId, type: 'tournament_refund', amount_c: pool.entryFee, status: 'confirmed', notes: 'Tournament abandoned by a restart' });
+    } catch { /* the balance is recorded by balance_ledger either way */ }
   }
 };

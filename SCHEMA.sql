@@ -637,8 +637,10 @@ DROP POLICY IF EXISTS "profiles_select" ON profiles;
 DROP POLICY IF EXISTS "profiles_insert" ON profiles;
 DROP POLICY IF EXISTS "profiles_update" ON profiles;
 CREATE POLICY "profiles_select" ON profiles FOR SELECT USING (true);
-CREATE POLICY "profiles_insert" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
-CREATE POLICY "profiles_update" ON profiles FOR UPDATE USING (auth.uid() = id);
+-- No browser writes to profiles. A policy letting a signed-in user UPDATE
+-- their own row let them set their own c_coins; production revokes these
+-- (PENDING_SQL section 22) and this file now matches it. (Audit #3.)
+REVOKE INSERT, UPDATE, DELETE ON profiles FROM anon, authenticated;
 
 -- matches: public read
 DROP POLICY IF EXISTS "matches_select" ON matches;
@@ -652,9 +654,10 @@ CREATE POLICY "transactions_select" ON transactions FOR SELECT USING (auth.uid()
 DROP POLICY IF EXISTS "highscores_select" ON game_highscores;
 CREATE POLICY "highscores_select" ON game_highscores FOR SELECT USING (true);
 DROP POLICY IF EXISTS "highscores_insert" ON game_highscores;
-CREATE POLICY "highscores_insert" ON game_highscores FOR INSERT WITH CHECK (true);
+-- Written only by the server (service role). (Audit #3.)
+REVOKE INSERT, UPDATE, DELETE ON game_highscores FROM anon, authenticated;
 DROP POLICY IF EXISTS "highscores_update" ON game_highscores;
-CREATE POLICY "highscores_update" ON game_highscores FOR UPDATE USING (true);
+
 
 -- deposit_addresses: owner-only read
 DROP POLICY IF EXISTS "deposit_addresses_select" ON deposit_addresses;
