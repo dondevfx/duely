@@ -1,10 +1,11 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import GlowButton from '../components/GlowButton';
 import { usePageReady } from '../hooks/usePageReady';
 import { takePendingInvite } from '../utils/pendingInvite';
 import { AUTOFOCUS } from '../utils/device';
+import GoogleSignInButton from '../components/GoogleSignInButton';
 
 export default function Signup() {
   const ready = usePageReady();
@@ -24,6 +25,15 @@ export default function Signup() {
     setError(null);
     try {
       const data = await signUp(email, password, username.trim());
+
+      // Supabase answers a sign-up for an email that already has an account
+      // (for example one made with Google) with a user that has no
+      // identities, and sends nothing. That person already has an account:
+      // point them at it instead of a confirmation email that never arrives.
+      if (!data.session && Array.isArray(data.user?.identities) && data.user.identities.length === 0) {
+        setError('An account with this email already exists. Sign in, or use Continue with Google if you signed up with Google. To add a password to it, use Forgot password on the sign-in page.');
+        return;
+      }
 
       if (data.session) {
         // Email confirmation is OFF — logged in immediately. If they got here
@@ -80,6 +90,12 @@ export default function Signup() {
         </div>
 
         <div className="bg-surface border border-surfaceLight rounded-2xl p-6">
+          <GoogleSignInButton />
+          <div className="flex items-center gap-3 my-4" aria-hidden="true">
+            <div className="h-px flex-1 bg-surfaceLight" />
+            <span className="text-xs text-muted">or</span>
+            <div className="h-px flex-1 bg-surfaceLight" />
+          </div>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div>
               <label className="block text-sm text-muted mb-1">Username</label>

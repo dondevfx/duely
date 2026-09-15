@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -10,6 +10,7 @@ import { usePageReady } from '../hooks/usePageReady';
 import { takePendingInvite } from '../utils/pendingInvite';
 import { AUTOFOCUS } from '../utils/device';
 import { LockIcon } from '../components/UiIcon';
+import GoogleSignInButton from '../components/GoogleSignInButton';
 
 // If the user arrived from a shared challenge link, resume it after login.
 const GAME_ROUTES = {
@@ -328,6 +329,12 @@ export default function Login() {
             )
           ) : (
           <>
+          <GoogleSignInButton />
+          <div className="flex items-center gap-3 my-4" aria-hidden="true">
+            <div className="h-px flex-1 bg-surfaceLight" />
+            <span className="text-xs text-muted">or</span>
+            <div className="h-px flex-1 bg-surfaceLight" />
+          </div>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div>
               <label className="block text-sm text-muted mb-1">Email</label>
@@ -352,7 +359,19 @@ export default function Login() {
               />
             </div>
 
-            {error && <p className="text-danger text-sm">{error}</p>}
+            {error && (
+              <div>
+                <p className="text-danger text-sm">{error}</p>
+                {/* An account made with Google has no password until one is
+                    set, so a password sign-in fails with "invalid credentials".
+                    Both ways in reach the same account. */}
+                {/invalid login credentials/i.test(error) && (
+                  <p className="text-xs text-muted mt-1">
+                    Signed up with Google? Use Continue with Google, or Forgot password to add a password to that account.
+                  </p>
+                )}
+              </div>
+            )}
 
             <GlowButton type="submit" disabled={loading} variant="primary" size="lg" className="w-full">
               {loading ? 'Signing in...' : 'Sign In'}

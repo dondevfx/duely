@@ -275,6 +275,26 @@ export function AuthProvider({ children }) {
     if (error) throw error;
     const sess = data?.session;
     if (!sess) throw new Error('Google sign-in did not return a session.');
+
+    // Google signs into the SAME account as the email and password when the
+    // email matches, so an account with 2FA must still ask for its code here.
+    // Without this, Continue with Google would be a way around 2FA.
+    try {
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
+        const { data: factors } = await supabase.auth.mfa.listFactors();
+        const factor = factors?.totp?.find(f => f.status === 'verified') || factors?.totp?.[0];
+        _pendingMfaCreds.current = { fromOAuth: true, factorId: factor?.id ?? null };
+        setMfaPending(true);
+        setMfaFactorId(factor?.id ?? null);
+        return { mfaRequired: true };
+      }
+    } catch (e) {
+      // Fail closed: if we cannot tell whether 2FA is on, do not sign in.
+      await supabase.auth.signOut().catch(() => {});
+      throw new Error('Could not check two-factor authentication. Please try again.');
+    }
+
     _applySession(sess);
     // Before fetchProfile, not after: on a first sign-in there is no profile to
     // fetch yet, and this is what creates it.
@@ -314,7 +334,10 @@ export function AuthProvider({ children }) {
     const creds = _pendingMfaCreds.current;
     if (!creds) throw new Error('Session expired — please sign in again.');
 
-    if (creds.fromSavedSession) {
+    if (creds.fromOAuth) {
+      // The Google session is already in the Supabase client (AAL1); verifying
+      // the code below upgrades it.
+    } else if (creds.fromSavedSession) {
       // Session is in our storage — load it into Supabase in-memory so challengeAndVerify works
       const current = getCurrentSession();
       if (!current) throw new Error('Session expired — please sign in again.');
@@ -349,6 +372,10 @@ export function AuthProvider({ children }) {
 
     if (freshSession && localStorage.getItem(SAVE_LOGIN_KEY)) {
       persistTokens(freshSession.access_token, freshSession.refresh_token);
+    }
+    if (creds.fromOAuth) {
+      await api.post('/auth/oauth-profile', {}).catch(() => {});
+      await fetchProfile();
     }
     if (!creds.fromSavedSession) {
       clearSavedSession();

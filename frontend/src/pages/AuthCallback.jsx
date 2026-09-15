@@ -46,7 +46,8 @@ export default function AuthCallback() {
     }
 
     completeOAuthLogin({ access_token, refresh_token })
-      .then(() => navigate('/', { replace: true }))
+      // An account with 2FA stops here; the sign-in page asks for the code.
+      .then((r) => navigate(r?.mfaRequired ? '/login' : '/', { replace: true }))
       .catch((e) => setError(e?.message || 'Google sign-in failed. Please try again.'));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

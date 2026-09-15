@@ -49,22 +49,6 @@ test('a cancelled Google window is not a crash', () => {
   assert.match(cb, /navigate\('\/login', \{ replace: true \}\)/);
 });
 
-test('the Google button is off both pages while verification is pending', () => {
-  // Taken off the front end, not deleted. Google's OAuth branding check has
-  // not passed for duely.us, and a button that sends people to a consent
-  // screen Google flags as unverified is worse than no button.
-  //
-  // Everything behind it is intact — the component, /auth/callback,
-  // signInWithGoogle, and POST /auth/oauth-profile all still work and are
-  // still covered by the tests around this one. Putting it back is one import
-  // and one <GoogleSignInButton /> per page.
-  for (const page of ['Login.jsx', 'Signup.jsx']) {
-    const src = fe('pages', page);
-    assert.doesNotMatch(src, /<GoogleSignInButton \/>/, `${page} still renders it`);
-    assert.doesNotMatch(src, /import GoogleSignInButton/, `${page} still imports it`);
-  }
-});
-
 test('the machinery behind the button is still there to switch back on', () => {
   // The point of removing only the button: none of this has to be rebuilt.
   assert.match(fe('components', 'GoogleSignInButton.jsx'), /signInWithGoogle/);
@@ -318,4 +302,34 @@ test('signing in again returns the existing profile untouched', async () => {
     assert.equal(body.elo, 1400);
     assert.equal(rows.length, 1, 'a second profile was created');
   } finally { server.close(); }
+});
+
+const read = (...p) => fe(...p);
+
+test('the Google button is on sign-in and sign-up', () => {
+  for (const page of ['Login.jsx', 'Signup.jsx']) {
+    const src = read('pages', page);
+    assert.match(src, /import GoogleSignInButton from '\.\.\/components\/GoogleSignInButton'/, page);
+    assert.match(src, /<GoogleSignInButton \/>/, page);
+  }
+});
+
+test('a Google sign-in to an account with 2FA asks for the code before any session is used', () => {
+  const ctx = read('context', 'AuthContext.jsx');
+  const fn = ctx.slice(ctx.indexOf('async function completeOAuthLogin'), ctx.indexOf('async function signIn('));
+  const gate = fn.indexOf("aal?.nextLevel === 'aal2'");
+  const apply = fn.indexOf('_applySession(sess)');
+  assert.ok(gate > 0 && apply > gate, 'the 2FA check must come before the session is applied');
+  assert.match(fn, /fromOAuth: true/);
+  assert.match(fn, /return \{ mfaRequired: true \}/);
+  // Fails closed when the check itself fails.
+  assert.match(fn.slice(gate), /catch \(e\) \{[\s\S]*signOut\(\)[\s\S]*throw new Error/);
+  assert.match(read('pages', 'AuthCallback.jsx'), /r\?\.mfaRequired \? '\/login' : '\/'/);
+  assert.match(ctx, /if \(creds\.fromOAuth\) \{/);
+});
+
+test('sign-up for an email that already has an account says so instead of waiting for an email', () => {
+  const src = read('pages', 'Signup.jsx');
+  assert.match(src, /data\.user\?\.identities\) && data\.user\.identities\.length === 0/);
+  assert.match(src, /An account with this email already exists/);
 });
