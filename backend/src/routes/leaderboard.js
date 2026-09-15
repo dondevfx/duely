@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const { requireAuth } = require('../middleware/auth');
 const { DEMO_IDS } = require('../services/demoAccounts');
+const { rankEloBoard } = require('../services/eloBoard');
 // weekStart() below calls this. It was used without ever being imported, so
 // both wagered boards threw a ReferenceError on every request — and because
 // Express 4 does not catch a rejected async handler, the request was never
@@ -95,14 +96,8 @@ module.exports = function leaderboardRoutes(supabase) {
     // who have one. Placement ends at 1000: a placed account whose stored
     // rating was never written (placed entirely through matches that do not
     // rate) is shown and ordered at that 1000, not at the 0 it defaulted to.
-    const PLACEMENT = 3;
-    const placed = (p) => ((p.wins ?? 0) + (p.losses ?? 0)) >= PLACEMENT;
-    const rated = (p) => ({ ...p, elo: Number(p.elo) > 0 ? Number(p.elo) : 1000 });
-    const players = stripDemos(data)
-      .filter(placed)
-      .map(rated)
-      .sort((a, b) => b.elo - a.elo)
-      .map((p, i) => ({ rank: i + 1, ...p }));
+    // The rules live in services/eloBoard so the content feed ranks the same way.
+    const players = rankEloBoard(stripDemos(data));
 
     let userRank = null;
     if (req.query.userId) {

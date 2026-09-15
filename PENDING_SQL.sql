@@ -1167,3 +1167,20 @@ ALTER TABLE transactions ADD CONSTRAINT transactions_type_check CHECK (type IN (
 -- The daily coin bonus minted a coin with no deposit (audit #2, V1). The route
 -- is retired; the function goes too, so nothing can call it again.
 DROP FUNCTION IF EXISTS claim_daily_bonus(uuid);
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 27. Content feed pseudonyms  (GET /api/v1/content-feed)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- The public content feed names players with fake names. This table makes each
+-- fake name permanent and unique. It holds NO user id: `digest` is an HMAC of
+-- the user id under CONTENT_FEED_PSEUDONYM_SECRET, which only the server has.
+-- Without this table the feed still works, but names are not guaranteed stable
+-- when two players' first-choice names collide.
+CREATE TABLE IF NOT EXISTS content_pseudonyms (
+  digest     text        PRIMARY KEY,
+  name       text        NOT NULL UNIQUE,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE content_pseudonyms ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON content_pseudonyms FROM PUBLIC, anon, authenticated;

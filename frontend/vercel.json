@@ -11,6 +11,7 @@
   ],
   "rewrites": [
     { "source": "/go", "destination": "/go.html" },
+    { "source": "/api/v1/content-feed", "destination": "https://duely-production-9e3e.up.railway.app/api/v1/content-feed" },
     { "source": "/", "destination": "/index.html" },
     { "source": "/games", "destination": "/index.html" },
     { "source": "/leaderboard", "destination": "/index.html" },

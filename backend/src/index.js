@@ -24,6 +24,7 @@ const kycRoutes      = require('./routes/kyc');
 const avatarRoutes   = require('./routes/avatar');
 const reportRoutes   = require('./routes/reports');
 const supportRoutes = require('./routes/support');
+const contentFeedRoutes = require('./routes/contentFeed');
 // moneyLimiter is per-ACCOUNT and sits in front of everything that can move a
 // balance. Defence in depth: every operation behind it is already safe to
 // repeat, so this makes a burst expensive and visible rather than being the
@@ -106,6 +107,9 @@ app.use('/api/affiliate', moneyLimiter, affiliateRoutes(supabase));
 // and the socket layer, so there is one of it rather than one per consumer.
 const tournamentPools = require('./services/tournamentPools').createStore();
 app.use('/api/tournaments', moneyLimiter, tournamentRoutes(supabase, io, tournamentPools));
+// Read-only public content feed for the marketing pipeline. Its own key, its
+// own rate limit, GET only. See docs/CONTENT_FEED_API.md.
+app.use('/api/v1/content-feed', contentFeedRoutes(supabase, { pools: tournamentPools }));
 app.use('/api/rakeback', moneyLimiter, rakebackRoutes(supabase));
 app.use('/api/kyc', kycRoutes(supabase));
 // /api/avatar is mounted above, before express.json() — see the note there.

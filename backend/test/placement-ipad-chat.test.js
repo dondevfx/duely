@@ -11,7 +11,11 @@ const read = (...p) => fs.readFileSync(path.join(ROOT, ...p), 'utf8');
 
 test('the leaderboard lists placed players only, at their rating or the 1000 placement gives', () => {
   const src = read('backend', 'src', 'routes', 'leaderboard.js');
-  const elo = src.slice(src.indexOf("router.get('/', wrap"), src.indexOf("router.get('/diamonds'"));
+  // The rules moved to services/eloBoard (shared with the content feed); the
+  // route must still use them.
+  const route = src.slice(src.indexOf("router.get('/', wrap"), src.indexOf("router.get('/diamonds'"));
+  assert.ok(route.includes('rankEloBoard(stripDemos(data))'), 'the Ranked route no longer uses the shared rules');
+  const elo = read('backend', 'src', 'services', 'eloBoard.js');
   assert.ok(elo.includes('.filter(placed)'), 'unplaced accounts are still listed at 0 ELO');
   assert.ok(elo.includes('const placed = (p) => ((p.wins ?? 0) + (p.losses ?? 0)) >= PLACEMENT;'));
   assert.ok(elo.includes('elo: Number(p.elo) > 0 ? Number(p.elo) : 1000'), 'a placed player with no rating shows 0');

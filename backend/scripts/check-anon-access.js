@@ -90,6 +90,8 @@ const TABLES = [
   // Added in audit #3.
   'referral_rewards', 'kyc_submissions', 'support_tickets', 'support_messages',
   'friends', 'player_reports', 'game_highscores',
+  // Content feed pseudonyms (section 27): server only.
+  'content_pseudonyms',
 ];
 
 // Write probes: each aimed at NOBODY so a permitted write touches no row.
