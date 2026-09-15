@@ -41,3 +41,9 @@ test('Rush Hour sizes from its container, rounds up, and follows it as it resize
   assert.ok(h.includes('Math.ceil(H * dpr)'), 'the buffer can stop a pixel short');
   assert.ok(h.includes('ro?.observe(canvas.parentElement);') && h.includes('ro?.disconnect();'));
 });
+
+test('Rush Hour runs to the bottom of the screen, behind a floating browser bar', () => {
+  const h = fe('components', 'HighwayCanvas.jsx');
+  assert.ok(h.includes("height: 'calc(100lvh - 3.5rem)'"), 'the road stops above the floating bar (dvh)');
+  assert.ok(h.includes("maxWidth: 'calc((100lvh - 3.5rem) * 0.50)'"), 'the width cap no longer matches the height');
+});
