@@ -126,6 +126,25 @@ async function readJson(res) {
 const TX_CACHE_MAX = 4000;
 const _txCache = new Map();
 
+// Signatures already fetched and found to hold no deposit for us.
+//
+// Every Solana pass asks for the last ten signatures on an address and then
+// fetches each one. Most are not deposits at all — our own forwarding sweeps,
+// token-account rent, an unrelated transfer — and they stay in that window of
+// ten for as long as the address is quiet, so the same transactions were being
+// fetched again on every sweep, forever. One RPC call each, four sweeps a day,
+// per address.
+//
+// Only signatures that produced NO deposit are remembered. A signature that
+// did is left alone, so a deposit whose recording failed is still seen again
+// on the next pass and processDeposit's own tx_hash check decides it.
+const _ruledOut = new Set();
+const RULED_OUT_MAX = 20_000;
+function ruleOut(signature) {
+  if (_ruledOut.size >= RULED_OUT_MAX) _ruledOut.delete(_ruledOut.values().next().value);
+  _ruledOut.add(signature);
+}
+
 async function getSolanaTx(rpc, signature) {
   const hit = _txCache.get(signature);
   if (hit !== undefined) return hit;
@@ -410,9 +429,11 @@ async function fetchSplTxs(walletAddress, coin = 'usdc') {
   const results = [];
   for (const sig of sigs) {
     if (sig.err) continue;
+    if (_ruledOut.has(sig.signature)) continue;
     try {
       const tx = await getSolanaTx(rpc, sig.signature);
       if (!tx) continue;
+      const found = results.length;
 
       // Parse all instructions (including inner) for USDC transfer to our token account
       const allIx = [
@@ -430,6 +451,7 @@ async function fetchSplTxs(walletAddress, coin = 'usdc') {
           if (amount > 0) results.push({ txHash: sig.signature, amount, confirmed: true });
         }
       }
+      if (results.length === found) ruleOut(sig.signature);
     } catch {}
   }
   return results;
@@ -454,6 +476,7 @@ async function fetchSolTxs(address) {
   const results = [];
   for (const sig of sigs) {
     if (sig.err) continue;
+    if (_ruledOut.has(sig.signature)) continue;
     try {
       const tx = await getSolanaTx(rpc, sig.signature);
       if (!tx) continue;
@@ -466,7 +489,7 @@ async function fetchSolTxs(address) {
       const pre  = tx.meta?.preBalances?.[accIdx]  || 0;
       const post = tx.meta?.postBalances?.[accIdx] || 0;
       const lamports = post - pre;
-      if (lamports <= 0) continue;
+      if (lamports <= 0) { ruleOut(sig.signature); continue; }
 
       results.push({
         txHash:    sig.signature,
@@ -1183,6 +1206,10 @@ function markActive(userId, coin) {
   _hot.set(hotKey(userId, coin), Date.now() + HOT_MS);
 }
 
+// Addresses a stablecoin has ever arrived at, so the hourly sweep can keep an
+// eye on them without walking every address every time.
+const _hadStablecoin = new Set();
+
 function isHot(userId, coin) {
   const exp = _hot.get(hotKey(userId, coin));
   if (!exp) return false;
@@ -1268,6 +1295,13 @@ const SWEEP_MAX_PER_RUN = 25;
  * Capped per run because each address costs an RPC round trip or two and there
  * is no deadline here; anything missed is picked up an hour later.
  */
+// A full pass over every stablecoin address costs one RPC call each and finds
+// nothing on almost all of them, every hour, forever. Addresses that have
+// actually received a deposit are checked every run; the rest are checked once
+// a day, which is what the backstop is for.
+let _lastFullStableSweep = 0;
+const FULL_STABLE_SWEEP_MS = 24 * 60 * 60 * 1000;
+
 async function sweepStrandedUsdc(supabase) {
   // Both stablecoins, because both sit in per-user addresses the same way and a
   // backfill that only knew about USDC would let USDT accumulate untouched.
@@ -1278,14 +1312,24 @@ async function sweepStrandedUsdc(supabase) {
     return;
   }
 
+  const full = Date.now() - _lastFullStableSweep >= FULL_STABLE_SWEEP_MS;
+  if (full) _lastFullStableSweep = Date.now();
+  const rows = full ? (data || []) : (data || []).filter(r => isHot(r.user_id, r.coin) || _hadStablecoin.has(`${r.user_id}:${r.coin}`));
+  if (!rows.length) return;
+
   let swept = 0;
   const total = {};
-  for (const row of data || []) {
+  for (const row of rows) {
     if (swept >= SWEEP_MAX_PER_RUN) break;
     try {
       const { privKey } = getAddress(row.user_id, row.coin);
       const res = await sweepSplToken(privKey, row.coin);
-      if (res) { swept++; total[row.coin] = (total[row.coin] || 0) + res.amount; }
+      if (res) {
+        swept++;
+        total[row.coin] = (total[row.coin] || 0) + res.amount;
+        // Somewhere money actually turns up: keep checking it every run.
+        _hadStablecoin.add(`${row.user_id}:${row.coin}`);
+      }
     } catch (e) {
       // Rate limited: stop the whole run rather than working through the rest.
       //

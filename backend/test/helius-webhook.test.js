@@ -236,7 +236,9 @@ test('an unchanged address list is not rewritten', () => {
   // sync runs on every boot and after every new address; an unchanged PUT is
   // a request that buys nothing.
   assert.match(SERVICE, /const same = before\.size === watch\.length && watch\.every/);
-  assert.match(SERVICE, /if \(same\) return \{ unchanged: true/);
+  assert.match(SERVICE, /if \(same\) \{ _registered = new Set\(watch\); return \{ unchanged: true/);
+  // And a list this process already registered is not even re-read.
+  assert.match(SERVICE, /if \(sameSet\(watch, _registered\)\) return \{ unchanged: true, addresses: watch\.length, cached: true \}/);
 });
 
 test('the guard works against the API Helius actually has', async () => {

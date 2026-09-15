@@ -117,6 +117,17 @@ async function solanaAddresses(supabase) {
  * would need somewhere durable to live, and would go stale the moment someone
  * deleted the webhook in the dashboard. The URL is what makes it ours.
  */
+// What this process last registered successfully. Every sync costs two Helius
+// API calls (list, then read the one webhook) even when nothing has changed,
+// and a sync runs after every address issued — a player opening the deposit
+// page pays for a list rewrite that writes the same list back. If the address
+// set has not moved since we last confirmed it, there is nothing to ask.
+let _registered = null;
+
+function sameSet(a, b) {
+  return !!b && a.length === b.size && a.every(x => b.has(x));
+}
+
 async function sync(supabase) {
   if (!isEnabled()) return { skipped: true };
 
@@ -134,6 +145,9 @@ async function sync(supabase) {
                  `${addresses.length - watch.length} left to the polling backstop`);
   }
 
+  // Already registered by this process, and unchanged since: nothing to ask.
+  if (sameSet(watch, _registered)) return { unchanged: true, addresses: watch.length, cached: true };
+
   const existing = await heliusFetch(`${API}?api-key=${apiKey()}`);
   const mine = (existing || []).find(w => w.webhookURL === url);
 
@@ -147,6 +161,7 @@ async function sync(supabase) {
 
   if (!mine) {
     await heliusFetch(`${API}?api-key=${apiKey()}`, { method: 'POST', body: JSON.stringify(payload) });
+    _registered = new Set(watch);
     console.log(`[helius] webhook created for ${watch.length} address(es)`);
     return { created: true, addresses: watch.length };
   }
@@ -168,10 +183,11 @@ async function sync(supabase) {
     .catch(() => null);
   const before = new Set(full?.accountAddresses || mine.accountAddresses || []);
   const same = before.size === watch.length && watch.every(a => before.has(a));
-  if (same) return { unchanged: true, addresses: watch.length };
+  if (same) { _registered = new Set(watch); return { unchanged: true, addresses: watch.length }; }
 
   await heliusFetch(`${API}/${mine.webhookID}?api-key=${apiKey()}`,
     { method: 'PUT', body: JSON.stringify(payload) });
+  _registered = new Set(watch);
   console.log(`[helius] webhook updated: ${before.size} -> ${watch.length} address(es)`);
   return { updated: true, addresses: watch.length };
 }
