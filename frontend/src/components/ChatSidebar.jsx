@@ -655,6 +655,11 @@ function ProfilePopup({ userId, username, isAdmin, onClose, onBan, onUnban, isBa
 export { ProfilePopup };
 
 // ── ChatSidebar ───────────────────────────────────────────────────────────────
+// The phone chat's composer bar, and the page colour behind it while the chat
+// is open. Grey, matching the conversation above it, so nothing black shows
+// between the composer and the keyboard.
+const CHAT_COMPOSER_BG = '#222222';
+
 export default function ChatSidebar({ open, onToggle }) {
   const { socket, authenticated } = useSocket();
   const { profile } = useAuth();
@@ -668,6 +673,19 @@ export default function ChatSidebar({ open, onToggle }) {
   const [popup, setPopup]         = useState(null);
   const [bannedUsers, setBannedUsers] = useState(new Set());
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // While the phone chat is open, the page behind it is grey too. With the
+  // keyboard up, iOS shows a strip of the page's own background between the
+  // composer and the keyboard, and that background is black, so the composer
+  // looked cut off from the keyboard by a black band.
+  useEffect(() => {
+    if (!mobileOpen) return undefined;
+    const html = document.documentElement.style, body = document.body.style;
+    const prev = [html.backgroundColor, body.backgroundColor];
+    html.backgroundColor = CHAT_COMPOSER_BG;
+    body.backgroundColor = CHAT_COMPOSER_BG;
+    return () => { html.backgroundColor = prev[0]; body.backgroundColor = prev[1]; };
+  }, [mobileOpen]);
   const bottomRef      = useRef(null);
   const mobileBottomRef = useRef(null);
   const inputRef       = useRef(null);
@@ -1033,7 +1051,7 @@ export default function ChatSidebar({ open, onToggle }) {
           </div>
 
           {/* Input */}
-          <div className="p-3 border-t border-border shrink-0 pb-safe bg-surface" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+          <div className="p-3 border-t border-border shrink-0 pb-safe" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))', background: CHAT_COMPOSER_BG }}>
             {authenticated ? (
               <div className="flex gap-2">
                 <input ref={mobileInputRef} value={input} onChange={e => setInput(e.target.value)}
