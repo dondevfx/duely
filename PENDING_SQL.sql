@@ -1210,3 +1210,26 @@ END $$;
 -- "Service role full access" applied to PUBLIC with USING (true). The service
 -- role bypasses RLS anyway, so the policy only ever widened access for others.
 DROP POLICY IF EXISTS "Service role full access" ON game_highscores;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 29. Payout send queue across servers
+-- ═══════════════════════════════════════════════════════════════════════════
+-- One crypto payout broadcast at a time per wallet, on every server: the key
+-- is the primary key, so an INSERT is the lock. payout_nonces keeps each EVM
+-- wallet's next nonce so two servers never reuse one. Server-only tables.
+CREATE TABLE IF NOT EXISTS payout_send_locks (
+  key        text        PRIMARY KEY,
+  holder     text        NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE payout_send_locks ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON payout_send_locks FROM PUBLIC, anon, authenticated;
+
+CREATE TABLE IF NOT EXISTS payout_nonces (
+  key        text        PRIMARY KEY,
+  next_nonce bigint      NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE payout_nonces ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON payout_nonces FROM PUBLIC, anon, authenticated;

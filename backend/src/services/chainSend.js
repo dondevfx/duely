@@ -278,8 +278,16 @@ const ETH_RPC_FALLBACK = 'https://ethereum-rpc.publicnode.com';
 // Broadcasts from one wallet now go through a queue, one after another. Only
 // the broadcast is queued, not the wait for a block, so throughput is set by
 // how fast a transaction can be signed and sent, not by block times.
+const { withPayoutLock, readNonce, writeNonce } = require('./payoutSendLock');
+
 const _sendQueues = new Map();
+// In memory first (cheap, and orders sends within this server), then the
+// database lock, which holds across every server. See payoutSendLock.
 function serialized(key, fn) {
+  return inProcess(key, () => withPayoutLock(key, fn));
+}
+
+function inProcess(key, fn) {
   const prev = _sendQueues.get(key) || Promise.resolve();
   const run = prev.catch(() => {}).then(fn);
   const tail = run.catch(() => {});
@@ -303,7 +311,10 @@ async function sendEvm(rpcUrl, privKey, toAddress, amount) {
   try {
     tx = await serialized(key, async () => {
       const chainNonce = await provider.getTransactionCount(wallet.address, 'pending');
-      const nonce = Math.max(chainNonce, _nextNonce.get(key) ?? 0);
+      // The highest of: what the chain reports, what this server last used,
+      // and what ANY server last used (stored in the database).
+      const stored = await readNonce(key);
+      const nonce = Math.max(chainNonce, _nextNonce.get(key) ?? 0, stored ?? 0);
       try {
         const sent = await wallet.sendTransaction({
           to:    toAddress,
@@ -311,6 +322,7 @@ async function sendEvm(rpcUrl, privKey, toAddress, amount) {
           nonce,
         });
         _nextNonce.set(key, nonce + 1);
+        await writeNonce(key, nonce + 1);
         return sent;
       } catch (e) {
         // Unknown whether the node took it: go back to asking the chain.
@@ -686,4 +698,4 @@ async function sendCrypto({ coin, privKey, toAddress, amount }) {
   }
 }
 
-module.exports = { serialized, sendCrypto, sweepUsdc, sweepSplToken, USDC_MINT, USDT_MINT, GAS_RESERVE, PayoutError, checkSolanaSignature, checkPayout, checkEvmTransaction, checkTronTransaction, checkUtxoTransaction, sendAndVerify, derEncode };
+module.exports = { serialized, inProcess, sendCrypto, sweepUsdc, sweepSplToken, USDC_MINT, USDT_MINT, GAS_RESERVE, PayoutError, checkSolanaSignature, checkPayout, checkEvmTransaction, checkTronTransaction, checkUtxoTransaction, sendAndVerify, derEncode };
