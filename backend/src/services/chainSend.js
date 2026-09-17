@@ -266,16 +266,57 @@ const ETH_RPC_FALLBACK = 'https://ethereum-rpc.publicnode.com';
 // chain. The fix is the same: the hash is captured at BROADCAST time and
 // carried on the error, so a caller about to refund can ask the chain what
 // actually happened instead of assuming the worst.
+// ── One send at a time per wallet ─────────────────────────────────────────────
+//
+// Every payout on a chain leaves from the same wallet. Two withdrawals arriving
+// in the same second both asked the node for the wallet's next nonce, both got
+// the same number, and the second broadcast was rejected (or replaced the
+// first). On UTXO chains the same race picks the same unspent outputs twice.
+// Nothing was lost — the failed one refunds — but under real traffic a share
+// of withdrawals would fail for no reason of the player's.
+//
+// Broadcasts from one wallet now go through a queue, one after another. Only
+// the broadcast is queued, not the wait for a block, so throughput is set by
+// how fast a transaction can be signed and sent, not by block times.
+const _sendQueues = new Map();
+function serialized(key, fn) {
+  const prev = _sendQueues.get(key) || Promise.resolve();
+  const run = prev.catch(() => {}).then(fn);
+  const tail = run.catch(() => {});
+  _sendQueues.set(key, tail);
+  tail.then(() => { if (_sendQueues.get(key) === tail) _sendQueues.delete(key); });
+  return run;
+}
+
+// The next nonce this process will use per wallet. The node's own "pending"
+// count can lag a transaction broadcast a moment ago (load-balanced RPCs answer
+// from different machines), so the higher of the two is used.
+const _nextNonce = new Map();
+
 async function sendEvm(rpcUrl, privKey, toAddress, amount) {
   const provider = new ethers.JsonRpcProvider(rpcUrl);
   const wallet   = new ethers.Wallet('0x' + privKey.toString('hex'), provider);
+  const key      = `evm:${rpcUrl}:${wallet.address.toLowerCase()}`;
 
   // Nothing is on the network yet, so a failure here is unambiguous.
   let tx;
   try {
-    tx = await wallet.sendTransaction({
-      to:    toAddress,
-      value: ethers.parseEther(String(amount)),
+    tx = await serialized(key, async () => {
+      const chainNonce = await provider.getTransactionCount(wallet.address, 'pending');
+      const nonce = Math.max(chainNonce, _nextNonce.get(key) ?? 0);
+      try {
+        const sent = await wallet.sendTransaction({
+          to:    toAddress,
+          value: ethers.parseEther(String(amount)),
+          nonce,
+        });
+        _nextNonce.set(key, nonce + 1);
+        return sent;
+      } catch (e) {
+        // Unknown whether the node took it: go back to asking the chain.
+        _nextNonce.delete(key);
+        throw e;
+      }
     });
   } catch (e) {
     throw new PayoutError(e.message, null);
@@ -432,7 +473,13 @@ const BLOCKCYPHER_CHAINS = {
 
 const P2PKH_VERSION = { btc: 0x00, ltc: 0x30, doge: 0x1e };
 
-async function sendUtxoCoin(coin, privKey, toAddress, amount) {
+// Queued per coin for the same reason as EVM sends: two builds at once would
+// spend the same unspent outputs and one broadcast would be rejected.
+function sendUtxoCoin(coin, privKey, toAddress, amount) {
+  return serialized(`utxo:${coin}`, () => sendUtxoCoinNow(coin, privKey, toAddress, amount));
+}
+
+async function sendUtxoCoinNow(coin, privKey, toAddress, amount) {
   // Derive compressed public key and P2PKH from address
   const signingKey    = new ethers.SigningKey('0x' + privKey.toString('hex'));
   const compressedPub = Buffer.from(signingKey.compressedPublicKey.slice(2), 'hex');
@@ -639,4 +686,4 @@ async function sendCrypto({ coin, privKey, toAddress, amount }) {
   }
 }
 
-module.exports = { sendCrypto, sweepUsdc, sweepSplToken, USDC_MINT, USDT_MINT, GAS_RESERVE, PayoutError, checkSolanaSignature, checkPayout, checkEvmTransaction, checkTronTransaction, checkUtxoTransaction, sendAndVerify, derEncode };
+module.exports = { serialized, sendCrypto, sweepUsdc, sweepSplToken, USDC_MINT, USDT_MINT, GAS_RESERVE, PayoutError, checkSolanaSignature, checkPayout, checkEvmTransaction, checkTronTransaction, checkUtxoTransaction, sendAndVerify, derEncode };
