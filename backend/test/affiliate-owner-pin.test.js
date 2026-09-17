@@ -59,13 +59,17 @@ test('renaming a code does not hand your downstream to whoever claims it', async
   assert.equal(owner2, null);
 });
 
-test('an expired code earns nobody, pinned or not', async () => {
+test('an applied code never expires: it earns until the player removes it', async () => {
+  // Codes used to switch off after 30 days. They now stay on until the player
+  // removes or replaces them, so an old expiry date changes nothing.
   const rows = [
     player('alice', { affiliate_code: 'ALICE' }),
     player('carol', { applied_affiliate_code: 'ALICE', applied_code_expires_at: PAST, applied_code_owner_id: 'alice' }),
+    player('dave',  { applied_affiliate_code: null, applied_code_expires_at: FUTURE, applied_code_owner_id: 'alice' }),
   ];
-  const { owner1 } = await resolveAffiliates(stubDb(rows), 'carol', null);
-  assert.equal(owner1, null);
+  assert.equal((await resolveAffiliates(stubDb(rows), 'carol', null)).owner1, 'alice');
+  // Removed (code cleared): nobody earns, whatever else is left on the row.
+  assert.equal((await resolveAffiliates(stubDb(rows), 'dave', null)).owner1, null);
 });
 
 test('nobody earns on their own play', async () => {

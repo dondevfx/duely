@@ -3,7 +3,6 @@ const { requireAuth } = require('../middleware/auth');
 const { validateCode } = require('../services/affiliateService');
 const { creditCoins, creditDiamonds } = require('../services/walletService');
 
-const CODE_TTL_DAYS = 30;
 
 module.exports = function affiliateRoutes(supabase) {
   const router = Router();
@@ -18,14 +17,14 @@ module.exports = function affiliateRoutes(supabase) {
 
     if (error) return res.status(500).json({ error: error.message });
 
-    const now = Date.now();
-    const expiresAt = data.applied_code_expires_at ? new Date(data.applied_code_expires_at).getTime() : 0;
-    const appliedActive = data.applied_affiliate_code && expiresAt > now;
+    // An applied code never runs out. It stays on until the player removes it
+    // or applies a different one.
+    const appliedActive = !!data.applied_affiliate_code;
 
     res.json({
       myCode:           data.affiliate_code || null,
       appliedCode:      appliedActive ? data.applied_affiliate_code : null,
-      appliedExpiresAt: appliedActive ? data.applied_code_expires_at : null,
+      appliedExpiresAt: null,
       earnings_c:       parseFloat(data.affiliate_earnings_c ?? 0),
       earnings_diamonds: parseInt(data.affiliate_earnings_diamonds ?? 0),
     });
@@ -81,7 +80,8 @@ module.exports = function affiliateRoutes(supabase) {
     if (!owner) return res.status(404).json({ error: 'Code not found' });
     if (owner.id === req.user.id) return res.status(400).json({ error: 'You cannot use your own code' });
 
-    const expiresAt = new Date(Date.now() + CODE_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    // No expiry: the code stays until the player removes or replaces it.
+    const expiresAt = null;
 
     // referred_by is the PERMANENT link, used by the referral reward. It is set
     // once and never overwritten: applied_affiliate_code expires and can be

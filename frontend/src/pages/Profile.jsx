@@ -103,7 +103,7 @@ function AffiliateCodeCard() {
       const res = await api.post('/affiliate/apply-code', { code });
       setStatus(s => ({ ...s, appliedCode: res.code, appliedExpiresAt: res.expiresAt }));
       setInput('');
-      setMsg({ type: 'success', text: `Applied! Code is active for 30 days.` });
+      setMsg({ type: 'success', text: 'Applied! Your code stays on until you remove or change it.' });
     } catch (err) {
       setMsg({ type: 'error', text: err.message });
     } finally {
@@ -128,7 +128,7 @@ function AffiliateCodeCard() {
             <span className="font-mono text-sm font-bold text-white">{status.appliedCode}</span>
           </div>
           <p className="text-xs text-muted mb-3">
-            Active until {status.appliedExpiresAt ? new Date(status.appliedExpiresAt).toLocaleDateString() : '?'}
+            Active until you remove or change it
           </p>
           <div className="flex gap-2">
             <input

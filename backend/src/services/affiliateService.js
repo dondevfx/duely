@@ -30,7 +30,7 @@ async function resolveAffiliates(supabase, p1Id, p2Id) {
   const ids = [p1Id, p2Id].filter(Boolean);
   if (ids.length === 0) return { owner1: null, owner2: null };
 
-  const now = new Date().toISOString();
+
 
   const COLS = 'id, applied_affiliate_code, applied_code_expires_at, applied_code_owner_id';
   let { data: players, error } = await supabase.from('profiles').select(COLS).in('id', ids);
@@ -46,10 +46,9 @@ async function resolveAffiliates(supabase, p1Id, p2Id) {
   const p1 = players.find(p => p.id === p1Id);
   const p2 = players.find(p => p.id === p2Id);
 
-  // A code only earns while it is unexpired, whichever way the owner is found.
-  const active = (p) => Boolean(
-    p?.applied_affiliate_code && p?.applied_code_expires_at && p.applied_code_expires_at > now
-  );
+  // An applied code earns for as long as the player keeps it on. Codes do not
+  // expire; only the player removing or replacing one turns it off.
+  const active = (p) => Boolean(p?.applied_affiliate_code);
 
   const pinned = (p) => (active(p) && p.applied_code_owner_id) || null;
   const code   = (p) => (active(p) && !p.applied_code_owner_id ? p.applied_affiliate_code : null);
